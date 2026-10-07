@@ -133,3 +133,43 @@ expected_point_groups = []
 expected_prim_groups = []
 expected_first_p = [0.2777777910232544, -0.2777777910232544, 0.2777777910232544]
 derived = "python3 (scratch, not in repo): python-blosc 1.11.4 decompress of every blosc chunk of the .sc (framing parsed by hand) -> inner bjson, byte-identical to hexe-geo sc_decompress; then independent bjson->JSON decode: top-level pointcount/vertexcount/primitivecount, attributes.*attributes[].name, *groups[].name, P rawpagedata[0:3]; cross-check info.primcount_summary"
+
+[[file]]
+name = "pig-sc"
+path = "pig-sc/pig.bgeo.sc"
+source = "$H/houdini/help/files/ifd_workflows/geo/pig.bgeo.sc"
+bytes = 4305637
+sha256 = "a5b0b536e4098c0537d4e4bd44ec1baf1f23b8e94c2f8ead6ccde6c3be1d22c3"
+container = "blosc-chunked scf1 (.bgeo.sc), lz4 + shuffle"
+gate = true
+expected_points = 207253
+expected_vertices = 880906
+expected_prims = 233202
+expected_point_attrs = ["P"]
+expected_vertex_attrs = []
+expected_prim_attrs = ["name", "shop_materialpath"]
+expected_point_groups = []
+expected_prim_groups = []
+expected_first_p = [0.07994475215673447, -0.0005232678377069533, -0.09207769483327866]
+derived = "python3 (scratch, not in repo): python-blosc 1.11.4 decompress of every blosc chunk (11) of the .sc -> inner bjson (10.7 MB), then independent bjson->JSON decode (bgeo-decoder/bj.py): top-level counts, attributes.*attributes[].name, P rawpagedata[0:3]; cross-check info.primcount_summary = 233,202 Polygons, and primitives = one `run` runtype Poly (varyingfields [vertex], 181300 quads + 51902 tris, 880906 vertices, all contiguous). SIZE EXCEPTION: 4.3 MB > the 2 MB fixture guideline; single allowed exception (smallest shipped file with a vertex-list Poly run)"
+
+[[file]]
+name = "preview-network-1"
+path = "preview-network-1/preview_network_1.bgeo.sc"
+source = "$H/packages/apex_cop/preview_networks/preview_network_1.bgeo.sc"
+bytes = 6623
+sha256 = "e72802df65a359a170534d1ca416b3cc0d94beb091bcede6895db6a6afe39c77"
+container = "blosc-chunked scf1 (.bgeo.sc), lz4 + shuffle"
+gate = true
+expected_points = 9
+expected_vertices = 24
+expected_prims = 12
+expected_point_attrs = ["P", "callback", "Cd", "comment", "name", "parms", "properties", "tags"]
+expected_vertex_attrs = ["portalias", "portindex", "portname"]
+expected_prim_attrs = []
+expected_point_groups = []
+expected_prim_groups = []
+expected_detail_attrs = ["input_layer_cam", "parms", "program_inputs", "program_outputs", "program_unused_inputs", "properties"]
+expected_skipped = ["detail:parms:dict", "detail:program_inputs:dict", "detail:program_outputs:dict", "detail:program_unused_inputs:dict", "detail:properties:dict", "point:parms:dict", "point:properties:dict", "point:tags:stringarray"]
+expected_first_p = [34.139198303222656, -17.592880249023438, 0.0]
+derived = "python3 (scratch, not in repo): python-blosc decompress -> bjson -> independent JSON decode (bj.py): counts, attribute names + `type` per attribute (point: P callback Cd comment name = numeric/string, parms+properties = dict, tags = stringarray; global: program_* parms properties = dict, input_layer_cam numeric), P rawpagedata[0:3]. expected_*_attrs = the FULL oracle list; reader attrs + skipped_attribs must equal it"

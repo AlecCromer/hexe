@@ -1,4 +1,4 @@
-//! hexe-cli: `--version`, `cook <scene.json> --out <file.geo> [--time T]`, `nodes`, `oracle <case> [input]`.
+//! hexe-cli: `--version`, `cook <scene.json> --out <file.geo> [--time T]`, `nodes`, `info <geo>`, `oracle <case> [input]`.
 //! Every command runs behind `catch_unwind` (AGENTS.md §4); every failure is one stderr line + exit 1.
 #![deny(
     clippy::unwrap_used,
@@ -16,7 +16,42 @@ use std::process::ExitCode;
 /// Largest scene file `cook` reads (hostile input is the default).
 const MAX_SCENE_BYTES: u64 = 64 << 20;
 const USAGE: &str =
-    "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | oracle <case> [input]";
+    "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | info <geo-file> | oracle <case> [input]";
+
+/// Largest geometry file `info` reads (hostile input is the default).
+const MAX_GEO_BYTES: u64 = 1 << 30;
+
+fn class_name(c: hexe_geo::AttrClass) -> &'static str {
+    match c {
+        hexe_geo::AttrClass::Point => "point",
+        hexe_geo::AttrClass::Vertex => "vertex",
+        hexe_geo::AttrClass::Prim => "prim",
+        hexe_geo::AttrClass::Detail => "detail",
+    }
+}
+
+/// Geometry bytes (any container `read_geo` sniffs) -> counts, attribute names, and every attribute the reader could
+/// not represent (`skipped class:name:type`; never silent).
+fn info_text(bytes: &[u8]) -> Result<String, String> {
+    let d = hexe_geo::read_geo(bytes).map_err(|e| e.to_string())?;
+    let mut out = format!("points {}\nvertices {}\nprims {}\n", d.point_count, d.vertex_count(), d.prim_count());
+    for a in &d.attrs {
+        let _ = writeln!(out, "attr {}:{}", class_name(a.class), a.name);
+    }
+    for (c, n, t) in &d.skipped_attribs {
+        let _ = writeln!(out, "skipped {}:{n}:{t}", class_name(*c));
+    }
+    Ok(out)
+}
+
+fn info(args: &[String]) -> Result<String, String> {
+    let [path] = args else { return Err("usage: hexe-cli info <geo-file>".into()) };
+    let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
+    if meta.len() > MAX_GEO_BYTES {
+        return Err(format!("{path}: larger than {MAX_GEO_BYTES} bytes"));
+    }
+    info_text(&std::fs::read(path).map_err(|e| format!("{path}: {e}"))?).map_err(|e| format!("{path}: {e}"))
+}
 
 /// Oracle entry point: `xtask oracle` runs `hexe-cli <case.toml cmd…>` (see fixtures/README.md) and compares the
 /// result with `expected`. Add one arm per fixture family as ledger rows land.
@@ -115,6 +150,7 @@ fn dispatch(args: &[String]) -> Result<String, String> {
         Some("--version" | "-V") => Ok(format!("hexe {}\n", env!("CARGO_PKG_VERSION"))),
         Some("cook") => cook(&args[1..]),
         Some("nodes") => Ok(nodes()),
+        Some("info") => info(&args[1..]),
         Some("oracle") => match args.get(1) {
             Some(case) => oracle(case, args.get(2).map(String::as_str)),
             None => Err("usage: hexe-cli oracle <case> [input]".into()),
@@ -192,6 +228,16 @@ mod tests {
         assert!(cook_scene(r#"{"nodes":[],"display":"q"}"#, 0.0).is_err());
         assert!(dispatch(&s(&["cook", "/nonexistent/scene.json", "--out", "x.geo"])).is_err());
         assert!(dispatch(&s(&["bogus"])).is_err());
+    }
+
+    #[test]
+    fn info_prints_skipped_attribs() {
+        let g = r#"{"pointcount":1,"vertexcount":0,"primitivecount":0,"attributes":{"pointattributes":[
+          [{"name":"P","type":"numeric"},{"values":{"size":3,"storage":"fpreal32","tuples":[[0,0,0]]}}],
+          [{"name":"tags","type":"stringarray"},{"strings":[],"indices":[[]]}]]}}"#;
+        let out = info_text(g.as_bytes()).unwrap();
+        assert!(out.contains("attr point:P\n") && out.contains("skipped point:tags:stringarray\n"), "{out}");
+        assert!(info(&[]).is_err() && info(&s(&["/nonexistent/x.bgeo"])).is_err());
     }
 
     #[test]

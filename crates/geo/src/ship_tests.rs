@@ -32,6 +32,20 @@ fn names(d: &Detail, c: AttrClass) -> Vec<String> {
     v.sort();
     v
 }
+fn cls(c: AttrClass) -> &'static str {
+    match c {
+        AttrClass::Point => "point",
+        AttrClass::Vertex => "vertex",
+        AttrClass::Prim => "prim",
+        AttrClass::Detail => "detail",
+    }
+}
+fn all_names(d: &Detail, c: AttrClass) -> Vec<String> {
+    let mut v = names(d, c);
+    v.extend(d.skipped_attribs.iter().filter(|s| s.0 == c).map(|s| s.1.clone()));
+    v.sort();
+    v
+}
 fn gnames(d: &Detail, c: AttrClass) -> Vec<String> {
     let mut v: Vec<String> = d.groups.iter().filter(|g| g.class == c).map(|g| g.name.clone()).collect();
     v.sort();
@@ -50,9 +64,16 @@ fn houdini_ship_gated_files_match_oracle() {
         assert_eq!(i64::from(d.point_count), int(r, "expected_points"), "{name}: points");
         assert_eq!(i64::from(d.vertex_count()), int(r, "expected_vertices"), "{name}: vertices");
         assert_eq!(i64::from(d.prim_count()), int(r, "expected_prims"), "{name}: prims");
-        assert_eq!(names(&d, AttrClass::Point), strs(r, "expected_point_attrs"), "{name}: point attrs");
-        assert_eq!(names(&d, AttrClass::Vertex), strs(r, "expected_vertex_attrs"), "{name}: vertex attrs");
-        assert_eq!(names(&d, AttrClass::Prim), strs(r, "expected_prim_attrs"), "{name}: prim attrs");
+        assert_eq!(all_names(&d, AttrClass::Point), strs(r, "expected_point_attrs"), "{name}: point attrs");
+        assert_eq!(all_names(&d, AttrClass::Vertex), strs(r, "expected_vertex_attrs"), "{name}: vertex attrs");
+        assert_eq!(all_names(&d, AttrClass::Prim), strs(r, "expected_prim_attrs"), "{name}: prim attrs");
+        if r.contains_key("expected_detail_attrs") {
+            assert_eq!(all_names(&d, AttrClass::Detail), strs(r, "expected_detail_attrs"), "{name}: detail attrs");
+        }
+        let mut skipped: Vec<String> = d.skipped_attribs.iter().map(|(c, n, t)| format!("{}:{n}:{t}", cls(*c))).collect();
+        skipped.sort();
+        let want_skipped = if r.contains_key("expected_skipped") { strs(r, "expected_skipped") } else { Vec::new() };
+        assert_eq!(skipped, want_skipped, "{name}: skipped_attribs");
         assert_eq!(gnames(&d, AttrClass::Point), strs(r, "expected_point_groups"), "{name}: point groups");
         assert_eq!(gnames(&d, AttrClass::Prim), strs(r, "expected_prim_groups"), "{name}: prim groups");
         let want: Vec<f64> = r

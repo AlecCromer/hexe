@@ -331,5 +331,5 @@ area = "B"
 tier = "P1"
 status = "shipped"
 commands = []
-evidence = ["crates/geo/src/blosc_tests.rs::sphere_decompresses_to_bjson_with_oracle_size", "crates/geo/src/blosc_tests.rs::header_lies_are_syntax_or_toolarge", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle"]
-notes = "Only observed codec (LZ4, flags 0x21, typesize 4) implemented; blosclz/snappy/zlib/zstd/bitshuffle -> Unsupported. 11 shipped .sc decompress byte-identical to python-blosc; 3 gated. Index/trailer semantics inferred from corpus."
+evidence = ["crates/geo/src/blosc_tests.rs::sphere_decompresses_to_bjson_with_oracle_size", "crates/geo/src/blosc_tests.rs::header_lies_are_syntax_or_toolarge", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle", "crates/geo/src/fidelity_tests.rs::poly_run_with_vertex_lists_reads", "crates/geo/src/fidelity_tests.rs::dict_and_stringarray_attribs_are_recorded_as_skipped"]
+notes = "H12: pig-sc + preview-network-1 gated (Poly-run vertex lists; dict/stringarray attrs recorded in Detail.skipped_attribs, printed by `hexe-cli info`, never silent). Only observed codec (LZ4, flags 0x21, typesize 4) implemented; blosclz/snappy/zlib/zstd/bitshuffle -> Unsupported. 11 shipped .sc decompress byte-identical to python-blosc; 5 gated. Index/trailer semantics inferred from corpus."
