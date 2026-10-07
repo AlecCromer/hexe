@@ -76,7 +76,7 @@ fn unmodelled_type_is_unsupported_with_hex_name() {
 #[test]
 fn other_versions_are_unsupported() {
     let mut b = bin();
-    b[8] = 5;
+    b[8] = 9;
     assert!(matches!(read_geo(&b), Err(GeoError::Unsupported(_))));
 }
 
@@ -133,6 +133,7 @@ fn wide_indices_for_65536_points_parse() {
     b.push(b':');
     b.extend(70_000u32.wrapping_sub(5000).to_be_bytes());
     b.extend(65535u32.to_be_bytes());
+    b.extend([0u8, 0xff]);
     let d = read_geo(&b).expect("parse");
     assert_eq!((d.point_count, d.vertex_point.clone()), (65536, vec![65000, 65535]));
 }
@@ -145,7 +146,7 @@ fn installed_legacy_files_do_not_panic() {
         return;
     }
     let mut stack = vec![base.to_path_buf()];
-    let mut seen = 0;
+    let mut seen = std::collections::BTreeMap::new();
     while let Some(d) = stack.pop() {
         let Ok(rd) = std::fs::read_dir(&d) else { continue };
         for e in rd.flatten() {
@@ -155,16 +156,14 @@ fn installed_legacy_files_do_not_panic() {
             } else if p.extension().is_some_and(|x| x == "bgeo") && e.metadata().is_ok_and(|m| m.len() < 2_000_000) {
                 let Ok(bytes) = std::fs::read(&p) else { continue };
                 if bytes.starts_with(b"BgeoV") {
-                    seen += 1;
-                    let r = read_geo(&bytes);
-                    eprintln!(
-                        "legacy {}: {:?}",
-                        p.file_name().map(|s| s.to_string_lossy()).unwrap_or_default(),
-                        r.map(|d| (d.point_count, d.vertex_count(), d.prim_count()))
-                    );
+                    let name = p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                    let r = read_geo(&bytes).map(|d| (d.point_count, d.vertex_count(), d.prim_count()));
+                    seen.insert(name, format!("{r:?}"));
                 }
             }
         }
     }
-    eprintln!("legacy files seen: {seen}");
+    for (n, r) in &seen {
+        eprintln!("legacy {n}: {r}");
+    }
 }

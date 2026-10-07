@@ -88,8 +88,8 @@ struct Def {
     kind: Kind,
     flat: Vec<f64>,
 }
-/// Type enum: 0 float (decoded from the sample); 1 int, 4 vector, 5 index (table = `i32 n, n x string`) are from the
-/// HDK enum order, UNVERIFIED (no sample).
+/// Type enum: 0 float (all.bgeo), 4 index (fabric.bgeo: `i32 n, n x string`, no default); 1 int / 5 vector are by
+/// enum order, UNVERIFIED (no sample).
 fn read_dict(c: &mut Cur<'_>, n: usize) -> Result<Vec<Def>, GeoError> {
     c.need("attribute dictionary", n, 8)?;
     let mut out = Vec::with_capacity(n);
@@ -102,8 +102,8 @@ fn read_dict(c: &mut Cur<'_>, n: usize) -> Result<Vec<Def>, GeoError> {
         let kind = match c.i32()? {
             0 => Kind::Float,
             1 => Kind::Int,
-            4 => Kind::Vector,
-            5 => {
+            5 => Kind::Vector,
+            4 => {
                 let k = c.count("index table")?;
                 c.need("index table", k, 2)?;
                 let mut tab = Vec::with_capacity(k);
@@ -114,9 +114,7 @@ fn read_dict(c: &mut Cur<'_>, n: usize) -> Result<Vec<Def>, GeoError> {
             }
             other => return Err(GeoError::Unsupported(format!("legacy bgeo attribute type {other}"))),
         };
-        if matches!(kind, Kind::Index(_)) {
-            c.i32()?;
-        } else {
+        if !matches!(kind, Kind::Index(_)) {
             c.need("attribute default", size, 4)?;
             c.take(size * 4)?; // default value, unused
         }
@@ -373,9 +371,8 @@ impl Ctx<'_> {
         self.prims.push(Prim { kind, verts });
         Ok(())
     }
-    /// `u16 len, name, i32 nbits, ceil(nbits/32) x u32 words (bit i of word w = element 32w+i)`, then either an ordered
-    /// list (`i32 count, count x i32`) + `u8 0`, or the single byte `u8 1` (unordered). List-vs-flag is inferred from ONE
-    /// sample (UNVERIFIED): a list is taken iff its count fits and the byte right after the list is 0.
+    /// `u16 len, name, i32 nbits, ceil(nbits/32) x u32 words (bit i of word w = element 32w+i)`. No per-group tail
+    /// (head_poly.bgeo: 3 groups back to back).
     fn group(&mut self, n: usize) -> Result<(String, Vec<bool>), GeoError> {
         let name = self.c.string()?;
         let nbits = self.c.count("group size")?;
@@ -393,20 +390,23 @@ impl Ctx<'_> {
                 }
             }
         }
-        let rest = self.c.b.get(self.c.pos..).unwrap_or(&[]);
-        let cnt = rest.get(..4).and_then(|s| <[u8; 4]>::try_from(s).ok()).map(|a| u32::from_be_bytes(a) as usize);
-        let list = cnt.is_some_and(|k| {
-            k <= nbits && k.checked_mul(4).and_then(|x| x.checked_add(4)).is_some_and(|e| rest.get(e) == Some(&0))
-        });
-        if list {
+        Ok((name, mask))
+    }
+    /// After the groups: [point-group section byte `01` iff point groups exist] ... [ordered lists `i32 k, k x i32`]
+    /// then `00 ff`. Section byte / list framing inferred from all.bgeo + head_poly + deflamp (UNVERIFIED beyond that).
+    fn tail(&mut self, nbits_max: usize) -> Result<(), GeoError> {
+        while self.c.left() > 2 {
             let k = self.c.count("ordered list")?;
+            if k > nbits_max {
+                return Err(GeoError::Count("ordered list longer than its group".into()));
+            }
             self.c.need("ordered list", k, 4)?;
             self.c.take(k * 4)?;
-            self.c.u8()?;
-        } else if self.c.u8()? != 1 {
-            return Err(GeoError::Syntax(format!("group `{name}` tail byte")));
         }
-        Ok((name, mask))
+        if self.c.take(2)? != [0, 0xff] {
+            return Err(GeoError::Unsupported("legacy bgeo extra section".into()));
+        }
+        Ok(())
     }
 }
 
@@ -426,8 +426,8 @@ pub fn read_geo_bgeo_legacy(bytes: &[u8]) -> Result<Detail, GeoError> {
     let nva = c.count("nvertexattrib")?;
     let nqa = c.count("nprimattrib")?;
     let nda = c.count("ndetailattrib")?;
-    if version != 2 {
-        return Err(GeoError::Unsupported(format!("legacy bgeo version {version} (only v2 decoded)")));
+    if !(2..=5).contains(&version) {
+        return Err(GeoError::Unsupported(format!("legacy bgeo version {version} (v2..v5 decoded)")));
     }
     c.need("points", np, 16)?;
     c.need("prims", nq, 4)?;
@@ -464,10 +464,14 @@ pub fn read_geo_bgeo_legacy(bytes: &[u8]) -> Result<Detail, GeoError> {
         let (name, mask) = x.group(np)?;
         groups.push(Group { name, class: AttrClass::Point, mask });
     }
+    if npg > 0 && x.c.u8()? != 1 {
+        return Err(GeoError::Syntax("point group section byte".into()));
+    }
     for _ in 0..nqg {
         let (name, mask) = x.group(nq)?;
         groups.push(Group { name, class: AttrClass::Prim, mask });
     }
+    x.tail(np.max(nq))?;
     let mut d =
         Detail { point_count: np as u32, vertex_point: x.vert_point, prims: x.prims, groups, ..Detail::default() };
     d.attrs.push(Attribute {
