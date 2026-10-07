@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::path::Path;
 use std::sync::Arc;
 
 /// Why a scene failed to load. Message only; never a panic.
@@ -82,8 +83,19 @@ pub fn load_scene(json: &str) -> Result<(Graph<Detail>, NodeId), SceneError> {
     Ok((l.graph, l.display))
 }
 
+/// Like `load_scene`, resolving relative `file` paths against `base` (the scene file's directory) when the file exists there;
+/// otherwise the path stays as written (resolved against the cwd at cook time).
+pub fn load_scene_in(json: &str, base: Option<&Path>) -> Result<(Graph<Detail>, NodeId), SceneError> {
+    let l = load_scene_with_base(json, &registry(), base)?;
+    Ok((l.graph, l.display))
+}
 /// Load against an explicit registry (tests, custom node sets).
 pub fn load_scene_with(json: &str, reg: &Registry) -> Result<Loaded, SceneError> {
+    load_scene_with_base(json, reg, None)
+}
+/// Node types whose string param is an input path: `(type, param)`.
+const INPUT_PATHS: &[(&str, &str)] = &[("file", "file")];
+pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> Result<Loaded, SceneError> {
     let def: SceneDef = serde_json::from_str(json).map_err(|e| SceneError(format!("invalid scene JSON: {e}")))?;
     let mut graph: Graph<Detail> = Graph::new();
     let mut names: BTreeMap<String, NodeId> = BTreeMap::new();
@@ -98,7 +110,17 @@ pub fn load_scene_with(json: &str, reg: &Registry) -> Result<Loaded, SceneError>
         let node: Box<SopNode> = reg
             .create(&n.ty)
             .ok_or_else(|| SceneError(format!("node `{}`: unknown type `{}` (see `hexe-cli nodes`)", n.name, n.ty)))?;
-        let overrides = overrides_for(&n.name, &n.ty, node.params(), &n.params)?;
+        let mut overrides = overrides_for(&n.name, &n.ty, node.params(), &n.params)?;
+        if let Some(base) = base {
+            for (_, token) in INPUT_PATHS.iter().filter(|(t, _)| *t == n.ty) {
+                if let Some(rel) = overrides.string(token).filter(|s| Path::new(s).is_relative()) {
+                    let joined = base.join(rel);
+                    if joined.exists() {
+                        overrides = overrides.with(token, ParamValue::S(joined.to_string_lossy().into_owned()));
+                    }
+                }
+            }
+        }
         let inputs = node.inputs().len();
         let id = graph.add_boxed(node, overrides).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
         n_inputs.insert(id, inputs);

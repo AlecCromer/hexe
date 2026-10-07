@@ -24,6 +24,8 @@ mod fuse_sop;
 //
 mod facet_sop;
 //
+mod file_sop;
+//
 mod grid_sop;
 //
 mod group_sop;
@@ -47,6 +49,8 @@ mod polyextrude_sop;
 mod resample_sop;
 //
 mod reverse_sop;
+//
+mod rop_geometry_sop;
 //
 mod scatter_sop;
 //
@@ -82,6 +86,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("facet", facet_sop::spec, facet_sop::new);
     //
+    r.register("file", file_sop::spec, file_sop::new);
+    //
     r.register("grid", grid_sop::spec, grid_sop::new);
     //
     r.register("group", group_sop::spec, group_sop::new);
@@ -103,6 +109,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("resample", resample_sop::spec, resample_sop::new);
     //
     r.register("reverse", reverse_sop::spec, reverse_sop::new);
+    //
+    r.register("rop_geometry", rop_geometry_sop::spec, rop_geometry_sop::new);
     //
     r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
