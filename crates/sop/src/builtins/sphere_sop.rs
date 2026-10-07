@@ -299,10 +299,15 @@ impl Node<Detail> for Sphere {
                 if menu(p, "surftype")? != SURF_QUADS {
                     return Err(CookError::BadParam("sphere: polymesh supports surftype quads only".into()));
                 }
-                let (r, c) = (usize::try_from(rows).map_err(|_| bad("rows"))?, usize::try_from(cols).map_err(|_| bad("cols"))?);
+                let (r, c) =
+                    (usize::try_from(rows).map_err(|_| bad("rows"))?, usize::try_from(cols).map_err(|_| bad("cols"))?);
                 polymesh(r, c, toggle(p, "upole")?, toggle(p, "triangularpoles")?, &xf, t)?
             }
-            other => return Err(CookError::BadParam(format!("sphere: type {other} (mesh/nurbs/bezier/polysoup) not supported"))),
+            other => {
+                return Err(CookError::BadParam(format!(
+                    "sphere: type {other} (mesh/nurbs/bezier/polysoup) not supported"
+                )));
+            }
         };
         Ok(Arc::new(d))
     }
@@ -420,7 +425,8 @@ mod tests {
         let (rad, t) = ([1.5f32, 2.0, 0.5], [3.0f32, -1.0, 2.0]);
         let d = cook(r#"{"type":1,"freq":3,"rad":[1.5,2,0.5],"t":[3,-1,2]}"#);
         for q in d.p() {
-            let s = ((q[0] - t[0]) / rad[0]).powi(2) + ((q[1] - t[1]) / rad[1]).powi(2) + ((q[2] - t[2]) / rad[2]).powi(2);
+            let s =
+                ((q[0] - t[0]) / rad[0]).powi(2) + ((q[1] - t[1]) / rad[1]).powi(2) + ((q[2] - t[2]) / rad[2]).powi(2);
             assert!((s - 1.0).abs() < 1e-5, "{q:?} -> {s}");
         }
     }
@@ -429,7 +435,9 @@ mod tests {
         for (o, axis) in [(0, 0usize), (1, 1), (2, 2)] {
             let d = cook(&format!(r#"{{"type":1,"orient":{o}}}"#));
             for s in [1.0f32, -1.0] {
-                assert!(d.p().iter().any(|q| (q[axis] - s).abs() < 1e-6 && q[(axis + 1) % 3].abs() < 1e-6 && q[(axis + 2) % 3].abs() < 1e-6));
+                assert!(d.p().iter().any(|q| (q[axis] - s).abs() < 1e-6
+                    && q[(axis + 1) % 3].abs() < 1e-6
+                    && q[(axis + 2) % 3].abs() < 1e-6));
             }
             assert_closed_outward_unit_sphere(&d, true); // cyclic permutation keeps handedness
         }
@@ -544,7 +552,10 @@ mod tests {
         d.add_points(1);
         d.p_mut()[0] = [1.0, 2.0, 3.0];
         d.vertex_point.push(0);
-        d.prims.push(Prim { kind: PrimKind::Sphere { xform: [2.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0] }, verts: 0..1 });
+        d.prims.push(Prim {
+            kind: PrimKind::Sphere { xform: [2.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0] },
+            verts: 0..1,
+        });
         d
     }
     /// Icosahedron by degrees, faces literal, f=2 via edge midpoints (map keyed by sorted vertex pair).
@@ -561,8 +572,26 @@ mod tests {
         }
         u.push([0.0, -1.0, 0.0]);
         let faces: [[usize; 3]; 20] = [
-            [0, 2, 1], [1, 2, 6], [6, 10, 1], [6, 7, 11], [0, 3, 2], [2, 3, 7], [7, 6, 2], [7, 8, 11], [0, 4, 3], [3, 4, 8],
-            [8, 7, 3], [8, 9, 11], [0, 5, 4], [4, 5, 9], [9, 8, 4], [9, 10, 11], [0, 1, 5], [5, 1, 10], [10, 9, 5], [10, 6, 11],
+            [0, 2, 1],
+            [1, 2, 6],
+            [6, 10, 1],
+            [6, 7, 11],
+            [0, 3, 2],
+            [2, 3, 7],
+            [7, 6, 2],
+            [7, 8, 11],
+            [0, 4, 3],
+            [3, 4, 8],
+            [8, 7, 3],
+            [8, 9, 11],
+            [0, 5, 4],
+            [4, 5, 9],
+            [9, 8, 4],
+            [9, 10, 11],
+            [0, 1, 5],
+            [5, 1, 10],
+            [10, 9, 5],
+            [10, 6, 11],
         ];
         let mut mids: HashMap<(usize, usize), usize> = HashMap::new();
         let mut mid = |u: &mut Vec<[f64; 3]>, a: usize, b: usize| -> u32 {
@@ -585,7 +614,10 @@ mod tests {
             polys.extend([vec![a, mab, mac], vec![mab, mbc, mac], vec![mab, b, mbc], vec![mac, mbc, c]]);
         }
         let (rad, t) = ([1.0, 2.0, 3.0], [0.5, 0.0, -1.0]);
-        let pts: Vec<[f32; 3]> = u.iter().map(|q| [(q[0] * rad[0] + t[0]) as f32, (q[1] * rad[1] + t[1]) as f32, (q[2] * rad[2] + t[2]) as f32]).collect();
+        let pts: Vec<[f32; 3]> = u
+            .iter()
+            .map(|q| [(q[0] * rad[0] + t[0]) as f32, (q[1] * rad[1] + t[1]) as f32, (q[2] * rad[2] + t[2]) as f32])
+            .collect();
         build(&pts, &polys)
     }
     /// 13 point rows from latitude +90deg..-90deg; the two polar rows collapse to one point each (rows 0 and 12).
@@ -628,7 +660,11 @@ mod tests {
         assert!(a.attrs.iter().all(|x| x.class != AttrClass::Detail));
     }
     fn cases() -> [(&'static str, Detail); 3] {
-        [("sphere-prim", expected_prim()), ("sphere-poly-f2", expected_poly_f2()), ("sphere-polymesh-default", expected_polymesh_default())]
+        [
+            ("sphere-prim", expected_prim()),
+            ("sphere-poly-f2", expected_poly_f2()),
+            ("sphere-polymesh-default", expected_polymesh_default()),
+        ]
     }
     /// `cargo test -p hexe-sop -- --ignored write_fixture` writes the analytical expecteds.
     #[test]
