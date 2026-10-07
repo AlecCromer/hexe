@@ -1,7 +1,7 @@
 //! Params pane: selected node's params (registry defaults + scene overrides), F/I/S/V3/B/Menu widgets.
 use crate::Scene;
 use egui::Ui;
-use hexe_graph::ParamValue;
+use hexe_graph::{NodeId, ParamValue};
 
 /// Edit widget for one value; `true` when changed.
 fn edit(ui: &mut Ui, v: &mut ParamValue, range: Option<(f32, f32)>) -> bool {
@@ -26,8 +26,8 @@ fn edit(ui: &mut Ui, v: &mut ParamValue, range: Option<(f32, f32)>) -> bool {
 }
 
 /// `Ok(true)` = a param changed (caller re-cooks). `Err` = the graph rejected the value (shown in the status bar).
-pub fn show(ui: &mut Ui, scene: &mut Scene, selected: usize) -> Result<bool, String> {
-    let Some(node) = scene.nodes.get(selected) else { return Ok(false) };
+pub fn show(ui: &mut Ui, scene: &mut Scene, active: Option<NodeId>) -> Result<bool, String> {
+    let Some(node) = scene.nodes.iter().find(|n| Some(n.id) == active) else { return Ok(false) };
     let (id, title) = (node.id, format!("{} ({})", node.name, node.ty));
     ui.label(title);
     ui.separator();

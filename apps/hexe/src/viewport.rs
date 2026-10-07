@@ -87,16 +87,42 @@ impl Camera {
     }
 }
 
+/// Most point/prim number labels drawn per frame.
+const MAX_LABELS: usize = 500;
+
+/// Viewport display toggles: `W` wireframe/shaded, `P` point numbers, `N` primitive numbers.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Opts {
+    pub wire: bool,
+    pub point_nums: bool,
+    pub prim_nums: bool,
+}
+
+impl Opts {
+    /// Status-bar summary of the active toggles.
+    pub fn label(&self) -> String {
+        let mut s = String::from(if self.wire { "wireframe" } else { "shaded" });
+        for (on, n) in [(self.point_nums, "P"), (self.prim_nums, "N")] {
+            if on {
+                s.push_str(" +");
+                s.push_str(n);
+            }
+        }
+        s
+    }
+}
+
 struct Face {
     depth: f32,
     start: usize,
     len: usize,
     closed: bool,
     shade: f32,
+    index: usize,
 }
 
 /// Orbit/pan/dolly input, then draw `detail` (points + polygon edges) and the axis gizmo.
-pub fn show(ui: &mut Ui, cam: &mut Camera, detail: Option<&Detail>) {
+pub fn show(ui: &mut Ui, cam: &mut Camera, detail: Option<&Detail>, opts: &mut Opts) {
     let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
     let rect = resp.rect;
     painter.rect_filled(rect, 0.0, Color32::from_gray(38));
@@ -113,21 +139,28 @@ pub fn show(ui: &mut Ui, cam: &mut Camera, detail: Option<&Detail>) {
             cam.pitch = (cam.pitch + d.y * 0.01).clamp(-1.5, 1.5);
         }
     }
+    if resp.hovered() && !ui.ctx().egui_wants_keyboard_input() {
+        ui.input(|i| {
+            opts.wire ^= i.key_pressed(egui::Key::W);
+            opts.point_nums ^= i.key_pressed(egui::Key::P);
+            opts.prim_nums ^= i.key_pressed(egui::Key::N);
+        });
+    }
     if resp.hovered() {
         let s = ui.input(|i| i.smooth_scroll_delta.y);
         cam.dist = (cam.dist * (-s * 0.005).exp()).clamp(1e-3, 1e6);
     }
     let v = cam.view(rect);
     if let Some(d) = detail {
-        draw_detail(&painter, &v, d);
+        draw_detail(&painter, &v, d, opts);
     }
     gizmo(&painter, &v, rect);
 }
 
-fn draw_detail(painter: &egui::Painter, v: &View, d: &Detail) {
+fn draw_detail(painter: &egui::Painter, v: &View, d: &Detail, opts: &Opts) {
     let pts: Vec<Option<(Pos2, f32)>> = d.p().iter().map(|&p| v.project(p)).collect();
     let (mut flat, mut faces): (Vec<Pos2>, Vec<Face>) = (Vec::new(), Vec::new());
-    for prim in d.prims.iter().take(MAX_FACES) {
+    for (pi, prim) in d.prims.iter().enumerate().take(MAX_FACES) {
         let closed = match prim.kind {
             PrimKind::Poly { closed } => closed,
             PrimKind::Polyline => false,
@@ -160,13 +193,19 @@ fn draw_detail(painter: &egui::Painter, v: &View, d: &Detail) {
             n[2] += (p[0] - q[0]) * (p[1] + q[1]);
         }
         let shade = dot(norm(n), v.fwd).abs();
-        faces.push(Face { depth, start, len: flat.len() - start, closed, shade });
+        faces.push(Face { depth, start, len: flat.len() - start, closed, shade, index: pi });
     }
     faces.sort_by(|a, b| b.depth.total_cmp(&a.depth));
     let edge = Stroke::new(1.0, Color32::from_rgb(235, 235, 245));
     for f in &faces {
         let Some(poly) = flat.get(f.start..f.start + f.len) else { continue };
-        if f.closed && f.len >= 3 {
+        if opts.wire {
+            painter.add(if f.closed {
+                Shape::closed_line(poly.to_vec(), edge)
+            } else {
+                Shape::line(poly.to_vec(), edge)
+            });
+        } else if f.closed && f.len >= 3 {
             let g = 55.0 + 150.0 * f.shade;
             painter.add(Shape::convex_polygon(
                 poly.to_vec(),
@@ -179,6 +218,22 @@ fn draw_detail(painter: &egui::Painter, v: &View, d: &Detail) {
     }
     for (s, _) in pts.iter().flatten().take(MAX_POINTS) {
         painter.circle_filled(*s, 2.2, Color32::from_rgb(255, 170, 60));
+    }
+    let label = |at: Pos2, text: String, col: Color32| {
+        painter.text(at + vec2(4.0, -4.0), egui::Align2::LEFT_BOTTOM, text, egui::FontId::monospace(10.0), col);
+    };
+    if opts.point_nums {
+        for (i, (s, _)) in pts.iter().enumerate().filter_map(|(i, p)| p.map(|p| (i, p))).take(MAX_LABELS) {
+            label(s, i.to_string(), Color32::from_rgb(255, 200, 100));
+        }
+    }
+    if opts.prim_nums {
+        // nearest-first so the cap keeps the faces the user is looking at
+        for f in faces.iter().rev().take(MAX_LABELS) {
+            let Some(poly) = flat.get(f.start..f.start + f.len).filter(|p| !p.is_empty()) else { continue };
+            let c = poly.iter().fold(vec2(0.0, 0.0), |a, p| a + p.to_vec2()) / poly.len() as f32;
+            label(c.to_pos2(), f.index.to_string(), Color32::from_rgb(120, 230, 255));
+        }
     }
 }
 
