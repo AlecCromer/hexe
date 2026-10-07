@@ -352,6 +352,68 @@ evidence = [
 ]
 notes = "H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). NOT modelled: Houdini noise-pattern menu, turbulence/fractal, rest, normals, groups. UNVERIFIED vs Houdini (hython blocked): noise streams, remap/amp semantics, default ranges. Example: examples/attribnoise.json."
 
+
+[[feature]]
+id = "sop-normal"
+title = "Normal SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["normal"]
+evidence = [
+  "crates/sop/src/builtins/normal_sop.rs::params_and_defaults",
+  "crates/sop/src/builtins/normal_sop.rs::box_prim_normals_are_the_six_axes_exact",
+  "crates/sop/src/builtins/normal_sop.rs::box_point_normals_uniform_are_normalized_corner_diagonals",
+  "crates/sop/src/builtins/normal_sop.rs::grid_3x3_flat_every_point_normal_is_the_plane_normal_from_p",
+  "crates/sop/src/builtins/normal_sop.rs::box_vertex_cusp_60_is_face_normal_cusp_100_is_corner_averaged",
+  "crates/sop/src/builtins/normal_sop.rs::detail_normal_of_closed_box_is_zero_and_of_a_quad_is_its_normal",
+  "crates/sop/src/builtins/normal_sop.rs::angle_weighting_differs_from_area_on_unequal_faces",
+  "crates/sop/src/builtins/normal_sop.rs::group_limits_processing_and_preserves_existing_n",
+  "crates/sop/src/builtins/normal_sop.rs::hostile_degenerate_open_and_bad_params",
+  "crates/sop/src/builtins/normal_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H15: type(point|vertex|prim|detail, default vertex) cusp_angle(60) weighting(area|angle|uniform, default area) add_normals_to(prim group). Face N = unit Newell; point N = weighted sum of incident faces, normalised, zero-area -> 0; vertex N = same restricted to faces within cusp of the vertex own face (point-local test, NOT edge-connectivity). Closed-form oracle: box prim N = 6 axes exact, box corner N = (+-1,+-1,+-1)/sqrt3, grid 3x3 flat = plane normal derived from P, cusp 60 -> face normals, cusp 100 -> corner average. NOT modelled: edge-connected cusp, N on open/non-poly prims, Houdini default weighting (angle) - ours is area per task. UNVERIFIED vs Houdini (hython blocked). Example: examples/normal.json."
+
+[[feature]]
+id = "sop-fuse"
+title = "Fuse SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["fuse"]
+evidence = [
+  "crates/sop/src/builtins/fuse_sop.rs::params_and_defaults",
+  "crates/sop/src/builtins/fuse_sop.rs::two_quads_sharing_an_edge_with_8_points_fuse_to_6_points_2_prims",
+  "crates/sop/src/builtins/fuse_sop.rs::box_from_6_separate_quads_24_points_fuses_to_8",
+  "crates/sop/src/builtins/fuse_sop.rs::distance_0_on_already_shared_geometry_is_unchanged_and_shares_the_arc",
+  "crates/sop/src/builtins/fuse_sop.rs::grid_3x3_with_distance_10_collapses_to_1_point_0_prims",
+  "crates/sop/src/builtins/fuse_sop.rs::partial_merge_drops_only_degenerate_prims_and_keeps_triangles",
+  "crates/sop/src/builtins/fuse_sop.rs::snap_average_vs_lowest_point_and_attribute_reduction",
+  "crates/sop/src/builtins/fuse_sop.rs::clustering_is_leader_centred_not_transitive",
+  "crates/sop/src/builtins/fuse_sop.rs::group_restricts_fusing_vertex_prim_attrs_follow",
+  "crates/sop/src/builtins/fuse_sop.rs::hostile_params_nan_positions_open_prims_and_empty",
+  "crates/sop/src/builtins/fuse_sop.rs::linear_time_on_a_large_lattice",
+  "crates/sop/src/builtins/fuse_sop.rs::example_scene_welds_the_extruded_box_soup",
+]
+notes = "H15: distance(0.001) snap(average|lowest-point) group(point). Grid-hash O(n) leader-centred clustering (NOT transitive; ascending ptnum leaders), output points ordered by leader; average = float attrs incl P mean, lowest = leader; int/string attrs copy leader. Prims touching a merged point drop consecutive duplicate verts, deleted at <3 (closed) / <2 (open); verbatim otherwise; nothing merged -> input Arc shared. Oracle: 2 quads/8 pts -> 6 pts/2 prims; 6-quad soup box 24 -> 8 pts; distance 0 on shared = same Arc; grid 3x3 d10 -> 1 pt 0 prims; 80k pts linear-time. NOT modelled: Houdini unique-point / consolidate-only modes, attribute-aware snap, prim-group, tolerance on attribs. UNVERIFIED vs Houdini (hython blocked): clustering order, degenerate-prim rule. Example: examples/fuse.json."
+
+[[feature]]
+id = "sop-reverse"
+title = "Reverse SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["reverse"]
+evidence = [
+  "crates/sop/src/builtins/reverse_sop.rs::params_and_defaults",
+  "crates/sop/src/builtins/reverse_sop.rs::box_reversed_negates_every_prim_normal_exactly",
+  "crates/sop/src/builtins/reverse_sop.rs::reversed_twice_is_byte_equal_to_input",
+  "crates/sop/src/builtins/reverse_sop.rs::vertex_attrs_and_groups_travel_with_their_vertex",
+  "crates/sop/src/builtins/reverse_sop.rs::group_limits_reversal_and_shares_arc_when_nothing_selected",
+  "crates/sop/src/builtins/reverse_sop.rs::hostile_short_and_foreign_prims_pass_through",
+  "crates/sop/src/builtins/reverse_sop.rs::scene_loader_and_registry",
+]
+notes = "H15: group(prim). Full in-place vertex-order reversal of selected Poly/Polyline prims; vertex attrs + vertex groups travel with their vertex; nothing selected -> input Arc shared. Oracle: box reversed -> every prim Newell exactly negated; reversed twice == input (Detail eq incl. vertex attrs/groups). NOT modelled: Houdini reverse modes (sort/sequence), keep-first-vertex variant, curve/NURBS prims. UNVERIFIED vs Houdini (hython blocked)."
 [[feature]]
 id = "core.cook-model"
 title = "SOP cook model (lazy, dirty flags, time dependence)"

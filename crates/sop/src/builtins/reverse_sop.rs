@@ -211,7 +211,7 @@ mod tests {
             let orig = b[vi] as usize;
             assert_eq!(src.vertex_point[orig], *vp, "vertex {vi}");
             assert_eq!(a[orig], b[vi]);
-            assert_eq!(gm[vi], orig % 4 == 0);
+            assert_eq!(gm[vi], orig.is_multiple_of(4));
         }
     }
     #[test]
