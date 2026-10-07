@@ -96,7 +96,7 @@ Confirmed ✓: `autobind` on, `groupautobind` on, `groupbindings` multiparm (`bi
 | N3 | Range Values: Positive/Zero Centered/Negative (3) | **6**: `positive zcentered custom(Min/Max) negative minplusrange midplusminusrange`; default positive |
 | N4 | "Offset (2×: translate / seed)" | `offset` float (+ `offsetv` vector via per-component strip `offsettype`), default 0 |
 | N5 | "Output Raw Value" off [implied] / Make Unit Length | `outputraw` default **on**; `normalize` off; `updatenmls` default on |
-| N6 | basis list "Perlin Cloud/Simplex Cloud/… [?]" | `basis` default **simplex**; menu tokens incl. `value_fast sparse alligator perlin flow simplex worleyFA… pcloud scloud fscloud` (full list in table) |
+| N6 | basis list "Perlin Cloud/Simplex Cloud/Fast Simplex Cloud/… [?]" | list CONFIRMED+completed: tokens `value_fast sparse alligator perlin flow simplex worleyFA worleyFB mworleyFA mworleyFB cworleyFA cworleyFB pcloud scloud fscloud`; default **simplex** |
 Confirmed ✓: `animated` off + `pulseduration`; `locationattrib` default `P`; `elementsize` default 1; fractal menu `none fBm mfT hmfT` default fBm, `oct` 3, `lac` 2.01234, `rough` 0.5; blend (`doblend`,`blendweight` 1,`blendmode` value/attrib).
 
 ## DOC-DRIFT (help vs binary)
