@@ -914,6 +914,7 @@ dependencies = [
  "glam",
  "hexe-geo",
  "hexe-graph",
+ "hexe-vex",
  "serde",
  "serde_json",
 ]

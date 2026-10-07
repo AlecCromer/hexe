@@ -26,7 +26,7 @@ mod sphere_sop;
 //
 mod transform_sop;
 //
-// mod wrangle_sop;
+mod wrangle_sop;
 
 /// One `r.register("<type>", <mod>::spec, <mod>::new);` per SOP.
 pub(crate) fn builtins(r: &mut Registry) {
@@ -52,7 +52,7 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("xform", transform_sop::spec, transform_sop::new);
     //
-    // r.register("wrangle", wrangle_sop::spec, wrangle_sop::new);
+    r.register("wrangle", wrangle_sop::spec, wrangle_sop::new);
 }
 
 #[cfg(test)]

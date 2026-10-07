@@ -252,8 +252,10 @@ id = "sop-wrangle"
 title = "Attribute Wrangle SOP"
 area = "A"
 tier = "P1"
-status = "planned"
-notes = "Wave 2 via rhai (not VEX). 12 doc-labelled params + snippet; doc-derived; observed_in 20.5.487 (docs only)"
+status = "partial"
+commands = ["wrangle"]
+evidence = ["crates/sop/src/builtins/wrangle_sop.rs::oracle_p_y_plus_one", "crates/vex/src/tests.rs::builtins_oracles"]
+notes = "VEX subset v0 (crates/vex, clean-room, own lexer/parser/interp; supersedes the rhai plan). point|prim|vertex|detail, @attr typed prefixes, control flow, ~35 builtins, addpoint/removepoint/addprim/setpointattrib/point/npoints. Missing: arrays, user functions, matrices, other geometry handles, most of the VEX stdlib, point-group snippet filter, Houdini-exact rand/noise streams (UNVERIFIED). removepoint also drops prims using the point (guess)"
 
 [[feature]]
 id = "sop-noise"
