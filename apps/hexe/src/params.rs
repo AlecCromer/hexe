@@ -13,7 +13,13 @@ fn edit(ui: &mut Ui, v: &mut ParamValue, range: Option<(f32, f32)>) -> bool {
         ParamValue::B(x) => ui.checkbox(x, "").changed(),
         ParamValue::S(s) => ui.text_edit_singleline(s).changed(),
         ParamValue::V3(c) => ui
-            .horizontal(|ui| c.iter_mut().fold(false, |ch, x| ui.add(egui::DragValue::new(x).speed(speed)).changed() || ch))
+            .horizontal(|ui| {
+                let mut ch = false;
+                for x in c.iter_mut() {
+                    ch |= ui.add(egui::DragValue::new(x).speed(speed)).changed();
+                }
+                ch
+            })
             .inner,
     }
 }
