@@ -20,7 +20,7 @@ mod null_sop;
 //
 // mod scatter_sop;
 //
-// mod sphere_sop;
+mod sphere_sop;
 //
 // mod transform_sop;
 //
@@ -44,7 +44,7 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     // r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
-    // r.register("sphere", sphere_sop::spec, sphere_sop::new);
+    r.register("sphere", sphere_sop::spec, sphere_sop::new);
     //
     // r.register("transform", transform_sop::spec, transform_sop::new);
     //
