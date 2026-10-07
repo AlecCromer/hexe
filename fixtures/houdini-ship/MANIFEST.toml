@@ -81,6 +81,55 @@ path = "sphere-sc/sphere.bgeo.sc"
 source = "$H/houdini/help/files/pdg_examples/top_houdinipipeline/input/sphere.bgeo.sc"
 bytes = 13968
 sha256 = "8d065f6f3e4f71e310a3f3814c12be0fa17dcd3a03e76d0260eba6c966fbdda5"
-container = "blosc-chunked scf1 (.bgeo.sc)"
-gate = false
-derived = "no twin ships: all expected_* UNVERIFIED-from-reader (reader cannot open it)"
+container = "blosc-chunked scf1 (.bgeo.sc), lz4 + shuffle"
+gate = true
+expected_points = 1106
+expected_vertices = 4416
+expected_prims = 1104
+expected_point_attrs = ["P"]
+expected_vertex_attrs = []
+expected_prim_attrs = []
+expected_point_groups = []
+expected_prim_groups = []
+expected_first_p = [-4.1963087227259166e-08, 0.9976337552070618, -1.0647076109648879e-08]
+derived = "python3 (scratch, not in repo): python-blosc 1.11.4 decompress of every blosc chunk of the .sc (framing parsed by hand) -> inner bjson, byte-identical to hexe-geo sc_decompress; then independent bjson->JSON decode: top-level pointcount/vertexcount/primitivecount, attributes.*attributes[].name, *groups[].name, P rawpagedata[0:3]; cross-check info.primcount_summary"
+
+
+[[file]]
+name = "bear-sc"
+path = "bear-sc/bear_with_vel.bgeo.sc"
+source = "$H/houdini/help/files/ifd_workflows/geo/bear_with_vel.bgeo.sc"
+bytes = 1883
+sha256 = "a7975a040523a9baa083bfe4828a83c14b8bca8a1bcc6638fd82b55f6bb78a6a"
+container = "blosc-chunked scf1 (.bgeo.sc), lz4 + shuffle"
+gate = true
+expected_points = 1
+expected_vertices = 1
+expected_prims = 1
+expected_point_attrs = ["P", "v"]
+expected_vertex_attrs = []
+expected_prim_attrs = ["path"]
+expected_point_groups = []
+expected_prim_groups = []
+expected_first_p = [0.008303803391754627, 0.1861395239830017, 0.34130680561065674]
+derived = "python3 (scratch, not in repo): python-blosc 1.11.4 decompress of every blosc chunk of the .sc (framing parsed by hand) -> inner bjson, byte-identical to hexe-geo sc_decompress; then independent bjson->JSON decode: top-level pointcount/vertexcount/primitivecount, attributes.*attributes[].name, *groups[].name, P rawpagedata[0:3]; cross-check info.primcount_summary"
+
+
+[[file]]
+name = "box-sc"
+path = "box-sc/box.bgeo.sc"
+source = "$H/houdini/help/files/pdg_examples/top_houdinipipeline/input/box.bgeo.sc"
+bytes = 1254
+sha256 = "30acd1b4048cbd58d39833a5fca5f4969b7bf29a1ddbd8362adfeaba11b95612"
+container = "blosc-chunked scf1 (.bgeo.sc), lz4 + shuffle"
+gate = true
+expected_points = 26
+expected_vertices = 96
+expected_prims = 24
+expected_point_attrs = ["P"]
+expected_vertex_attrs = []
+expected_prim_attrs = []
+expected_point_groups = []
+expected_prim_groups = []
+expected_first_p = [0.2777777910232544, -0.2777777910232544, 0.2777777910232544]
+derived = "python3 (scratch, not in repo): python-blosc 1.11.4 decompress of every blosc chunk of the .sc (framing parsed by hand) -> inner bjson, byte-identical to hexe-geo sc_decompress; then independent bjson->JSON decode: top-level pointcount/vertexcount/primitivecount, attributes.*attributes[].name, *groups[].name, P rawpagedata[0:3]; cross-check info.primcount_summary"
