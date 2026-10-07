@@ -176,7 +176,7 @@ impl eframe::App for Shell {
         let Shell { app, sets } = self;
         egui::Panel::top("open").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label("File ▸ Open");
+                ui.label("File: Open");
                 let r = ui.add(egui::TextEdit::singleline(&mut app.path).desired_width(360.0));
                 let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 if ui.button("Open").clicked() || enter {
