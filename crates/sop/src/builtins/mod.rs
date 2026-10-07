@@ -12,7 +12,7 @@ mod null_sop;
 //
 // mod copytopoints_sop;
 //
-// mod grid_sop;
+mod grid_sop;
 //
 // mod line_sop;
 //
@@ -36,7 +36,7 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     // r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
     //
-    // r.register("grid", grid_sop::spec, grid_sop::new);
+    r.register("grid", grid_sop::spec, grid_sop::new);
     //
     // r.register("line", line_sop::spec, line_sop::new);
     //
