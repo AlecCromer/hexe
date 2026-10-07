@@ -255,10 +255,10 @@ pub fn read_ply(bytes: &[u8]) -> Result<Detail, GeoError> {
                 for _ in 0..e.count {
                     for (pi, q) in e.props.iter().enumerate() {
                         src.prop(q, &mut buf)?;
-                        if let (Some(v), None) = (buf.first(), q.list) {
-                            if let Some(r) = row.get_mut(pi) {
-                                *r = *v;
-                            }
+                        if let (Some(v), None) = (buf.first(), q.list)
+                            && let Some(r) = row.get_mut(pi)
+                        {
+                            *r = *v;
                         }
                     }
                     let g = |i: usize| row.get(i).copied().unwrap_or(0.0) as f32;

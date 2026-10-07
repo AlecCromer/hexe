@@ -66,7 +66,7 @@ fn ply_ascii_roundtrip_cube() {
 }
 /// Hand-built `binary_little_endian` twin of `cube()`.
 fn cube_ply_binary(c: &Detail) -> Vec<u8> {
-    let mut b = format!("ply\nformat binary_little_endian 1.0\nelement vertex 8\nproperty float x\nproperty float y\nproperty float z\nelement face 6\nproperty list uchar int vertex_indices\nend_header\n").into_bytes();
+    let mut b = "ply\nformat binary_little_endian 1.0\nelement vertex 8\nproperty float x\nproperty float y\nproperty float z\nelement face 6\nproperty list uchar int vertex_indices\nend_header\n".to_string().into_bytes();
     for q in c.p() {
         for v in q {
             b.extend(v.to_le_bytes());
@@ -164,10 +164,10 @@ fn hostile_ply() {
     assert!(read_ply(face("2 0 1").as_bytes()).is_err());
     assert!(read_ply(face("3 0 1").as_bytes()).is_err());
     // binary list count past the data
-    let mut b = format!(
+    let mut b =
         "ply\nformat binary_little_endian 1.0\nelement face 1\nproperty list uint int vertex_indices\nend_header\n"
-    )
-    .into_bytes();
+            .to_string()
+            .into_bytes();
     b.extend(u32::MAX.to_le_bytes());
     assert!(read_ply(&b).is_err());
     for junk in [&b""[..], b"ply", b"ply\nend_header\n", b"plx\nformat ascii 1.0\nend_header\n"] {
