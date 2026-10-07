@@ -10,6 +10,8 @@ mod add_sop;
 //
 mod attribnoise_sop;
 //
+mod blast_sop;
+//
 mod box_sop;
 //
 mod circle_sop;
@@ -23,6 +25,12 @@ mod fuse_sop;
 mod facet_sop;
 //
 mod grid_sop;
+//
+mod group_sop;
+//
+mod groupdelete_sop;
+//
+mod grouppromote_sop;
 //
 mod line_sop;
 //
@@ -60,6 +68,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("attribnoise", attribnoise_sop::spec, attribnoise_sop::new);
     //
+    r.register("blast", blast_sop::spec, blast_sop::new);
+    //
     r.register("box", box_sop::spec, box_sop::new);
     //
     r.register("circle", circle_sop::spec, circle_sop::new);
@@ -73,6 +83,12 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("facet", facet_sop::spec, facet_sop::new);
     //
     r.register("grid", grid_sop::spec, grid_sop::new);
+    //
+    r.register("group", group_sop::spec, group_sop::new);
+    //
+    r.register("groupdelete", groupdelete_sop::spec, groupdelete_sop::new);
+    //
+    r.register("grouppromote", grouppromote_sop::spec, grouppromote_sop::new);
     //
     r.register("line", line_sop::spec, line_sop::new);
     //

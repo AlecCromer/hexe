@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "top", "type": "group", "params": { "groupname": "top", "grouptype": 1, "normal": true, "dir": [0, 1, 0], "angle": 10 } },
+    { "name": "promote", "type": "grouppromote", "params": { "group": "top", "fromtype": 1, "totype": 0, "method": 0, "newname": "toppts" } },
+    { "name": "keep", "type": "blast", "params": { "group": "toppts", "grouptype": 0, "negate": true } },
+    { "name": "cleanup", "type": "groupdelete", "params": { "group": "toppts" } }
+  ],
+  "edges": [["box1", 0, "top", 0], ["top", 0, "promote", 0], ["promote", 0, "keep", 0], ["keep", 0, "cleanup", 0]],
+  "display": "cleanup"
+}
