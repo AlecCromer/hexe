@@ -133,15 +133,24 @@ commands = ["grid"]
 evidence = [
   "crates/sop/src/builtins/grid_sop.rs::default_is_100_points_81_quads_on_zx_plane",
   "crates/sop/src/builtins/grid_sop.rs::closed_form_counts_for_every_surftype",
-  "crates/sop/src/builtins/grid_sop.rs::rows_and_cols_connectivity_follow_point_lattice",
-  "crates/sop/src/builtins/grid_sop.rs::orient_size_and_center_map_points_by_closed_form",
+  "crates/sop/src/builtins/grid_sop.rs::first_quad_winding_is_0_1_cols_plus_1_cols_for_every_orient",
   "crates/sop/src/builtins/grid_sop.rs::quad_normals_follow_the_orient_plane_normal",
+  "crates/sop/src/builtins/grid_sop.rs::corner_positions_for_each_orient_size_and_center",
+  "crates/sop/src/builtins/grid_sop.rs::interior_points_are_evenly_spaced",
+  "crates/sop/src/builtins/grid_sop.rs::rotate_param_turns_the_plane_about_the_center",
+  "crates/sop/src/builtins/grid_sop.rs::triangle_surftypes_split_cells_by_closed_form",
+  "crates/sop/src/builtins/grid_sop.rs::rows_cols_rowcol_connectivity_follow_point_lattice",
+  "crates/sop/src/builtins/grid_sop.rs::points_type_has_rows_times_cols_points_and_no_prims",
+  "crates/sop/src/builtins/grid_sop.rs::polysoup_has_poly_topology",
+  "crates/sop/src/builtins/grid_sop.rs::mesh_is_one_prim_over_every_point_and_roundtrips",
+  "crates/sop/src/builtins/grid_sop.rs::nurbs_and_bezier_are_unsupported_never_a_fallback",
+  "crates/sop/src/builtins/grid_sop.rs::all_twelve_parms_are_declared",
   "crates/sop/src/builtins/grid_sop.rs::params_by_token_override_defaults",
-  "crates/sop/src/builtins/grid_sop.rs::unsupported_menu_items_are_bad_param",
-  "crates/sop/src/builtins/grid_sop.rs::hostile_rows_cols_are_errors",
+  "crates/sop/src/builtins/grid_sop.rs::hostile_params_are_errors",
+  "crates/sop/src/builtins/grid_sop.rs::wrong_typed_params_are_errors",
   "crates/sop/src/builtins/grid_sop.rs::fixtures_match_sop_output",
 ]
-notes = "PARTIAL scope: type=poly; surftype rows/cols/triangles/quads (rowcol, alttriangles, revtriangles, other types, r, orderu/v, interpu/v NOT implemented: BadParam / undeclared). Fixtures grid-default, grid-tri-3x3 are ANALYTICAL, not Houdini-observed. UNVERIFIED vs Houdini: axis mapping (cols->first in-plane axis over size[0], rows->second over size[1]; zx: X cols, Z rows), ascending point order from -size/2, quad/tri winding and triangle split diagonal, rows/cols polyline direction, N attr absent, negative size accepted (flips), rows/cols<2 rejected (DS hard min is 1! per parms-grid.md, behaviour spec says >=2), size declared V3 (no V2 variant; z ignored), 2^20 point cap is ours."
+notes = "All 12 parms declared+honoured: type poly|polysoup|mesh|points implemented, nurbs|bezier -> CookError::Unsupported (new variant, never a fallback); surftype rows cols rowcol triangles quads alttriangles revtriangles; orient xy/yz/zx; size, t, r (Rx,Ry,Rz deg about center), rows, cols (hard min 1, 1-sample axis = center); orderu/orderv/interpu/interpv typed+ignored (nurbs/bezier only). Fixtures grid-default, grid-tri-3x3 are ANALYTICAL, not Houdini-observed. UNVERIFIED vs Houdini: zx row axis along -Z (row 0 at +Z, point 0=(-5,0,5)) so ONE winding (0,1,cols+1,cols) holds for every orient, yz axes (cols=Y, rows=Z) and size[0]/size[1] axis assignment, triangle diagonals (triangles a-cc, revtriangles b-dd, alttriangles checkerboard from even), rows/cols polyline direction, rowcol order (rows then cols), polysoup emitted as ordinary polys (no POLYSOUP prim kind; Houdini = 1 soup prim), mesh = one Unknown{Mesh} prim w/ json body layout invented (vertex,ucount,vcount,uwrap,vwrap,connectivity), r order/pivot, N attr absent, negative size accepted (flips), size declared V3 (z ignored), 2^20 point cap is ours."
 
 [[feature]]
 id = "sop-sphere"

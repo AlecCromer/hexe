@@ -47,6 +47,8 @@ pub struct CookCtx<'a> {
 pub enum CookError {
     Failed(String),
     BadParam(String),
+    /// A valid request for a feature this port does not implement yet (never a silent fallback).
+    Unsupported(String),
 }
 
 impl fmt::Display for CookError {
@@ -54,6 +56,7 @@ impl fmt::Display for CookError {
         match self {
             CookError::Failed(m) => write!(f, "cook failed: {m}"),
             CookError::BadParam(m) => write!(f, "bad parameter: {m}"),
+            CookError::Unsupported(m) => write!(f, "unsupported: {m}"),
         }
     }
 }
