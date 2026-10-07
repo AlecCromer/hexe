@@ -251,6 +251,10 @@ fn read_attr(entry: &Value, class: AttrClass, count: usize) -> Result<Option<Att
             let Some(iv) = find(&data, "indices") else {
                 return syn(format!("string attribute `{name}` without indices"));
             };
+            // Houdini writes an empty string attribute (e.g. detail `varmap`) with `size 0`, no strings, no data: all unset.
+            if table.is_empty() && kv(iv).and_then(|k| find(&k, "size").and_then(Value::as_i64)) == Some(0) {
+                return Ok(Some(attr(AttrData::Str { idx: vec![-1; count], table }, TypeInfo::None)));
+            }
             let (size, _, d) = read_values(iv, count)?;
             if size != 1 {
                 return syn("string indices must have size 1");
@@ -269,6 +273,21 @@ fn read_attr(entry: &Value, class: AttrClass, count: usize) -> Result<Option<Att
     }
 }
 
+fn expand_count_bool_rle(v: &Value, n: usize) -> Option<Vec<bool>> {
+    let a = v.as_array()?;
+    if a.is_empty() || a.len() % 2 != 0 || !a.chunks(2).all(|c| c[0].is_u64() && c[1].is_boolean()) {
+        return None;
+    }
+    let mut m = Vec::with_capacity(n);
+    for c in a.chunks(2) {
+        let cnt = usize::try_from(c[0].as_u64()?).ok()?;
+        if m.len().checked_add(cnt)? > n {
+            return None;
+        }
+        m.resize(m.len() + cnt, c[1].as_bool()?);
+    }
+    (m.len() == n).then_some(m)
+}
 fn expand_rle(arr: &[i64], n: usize) -> Option<Vec<bool>> {
     fn sum(mut it: impl Iterator<Item = i64>) -> Option<i64> {
         it.try_fold(0i64, |a, b| if b < 0 { None } else { a.checked_add(b) })
@@ -317,6 +336,11 @@ fn read_groups(v: &Value, class: AttrClass, n: usize, out: &mut Vec<Group>) -> R
             if let Some(u) = find(&sk, "unordered") {
                 let uk = need_kv(u, "unordered")?;
                 if let Some(r) = find(&uk, "boolRLE") {
+                    // Houdini 20.5 (seen in shipped .bgeo): `[count, bool, count, bool, ...]` with real JSON booleans.
+                    if let Some(m) = expand_count_bool_rle(r, n) {
+                        out.push(Group { name: name.to_string(), class, mask: m });
+                        continue;
+                    }
                     let a = ints(r)?;
                     mask = expand_rle(&a, n).ok_or_else(|| {
                         GeoError::Count(format!("group `{name}` boolRLE does not cover {n} elements"))
