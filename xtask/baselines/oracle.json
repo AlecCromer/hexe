@@ -1,3 +1,5 @@
 {
-  "null-passthrough": 1.0
+  "null-passthrough": 1.0,
+  "xform-rot90y": 1.0,
+  "xform-translate": 1.0
 }
