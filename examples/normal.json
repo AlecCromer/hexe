@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "normal1", "type": "normal", "params": { "type": 1, "cusp_angle": 60 } }
+  ],
+  "edges": [["box1", 0, "normal1", 0]],
+  "display": "normal1"
+}

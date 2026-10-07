@@ -18,15 +18,21 @@ mod copytopoints_sop;
 //
 mod curve_sop;
 //
+mod fuse_sop;
+//
 mod grid_sop;
 //
 mod line_sop;
 //
 mod merge_sop;
 //
+mod normal_sop;
+//
 mod polyextrude_sop;
 //
 mod resample_sop;
+//
+mod reverse_sop;
 //
 mod scatter_sop;
 //
@@ -52,15 +58,21 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("curve", curve_sop::spec, curve_sop::new);
     //
+    r.register("fuse", fuse_sop::spec, fuse_sop::new);
+    //
     r.register("grid", grid_sop::spec, grid_sop::new);
     //
     r.register("line", line_sop::spec, line_sop::new);
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
     //
+    r.register("normal", normal_sop::spec, normal_sop::new);
+    //
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
     //
     r.register("resample", resample_sop::spec, resample_sop::new);
+    //
+    r.register("reverse", reverse_sop::spec, reverse_sop::new);
     //
     r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
