@@ -1,0 +1,287 @@
+//! Shared helpers of the mesh-editing SOPs (`subdivide`, `smooth`, `peak`, `facet`): param access, f64 geometry,
+//! point-normal averaging, and the attribute remap (`rebuild`) that carries every attribute / group onto a re-topologised
+//! mesh. Not a SOP itself.
+use hexe_geo::{AttrClass, AttrData, Attribute, Detail, Group, Prim, PrimKind};
+use hexe_graph::{CookError, ParamSet};
+
+/// Output allocation cap per element class (AGENTS.md section 4).
+pub(super) const MAX_ELEMS: u64 = 1 << 22;
+/// Newell magnitudes at or below this are degenerate faces.
+const MIN_NEWELL: f64 = 1e-12;
+pub(super) type V3 = [f64; 3];
+
+pub(super) fn bad(m: impl Into<String>) -> CookError {
+    CookError::BadParam(m.into())
+}
+pub(super) fn failed(op: &str, m: &str) -> CookError {
+    CookError::Failed(format!("{op}: {m}"))
+}
+pub(super) fn toggle(p: &ParamSet, n: &str) -> Result<bool, CookError> {
+    p.toggle(n).ok_or_else(|| bad(format!("`{n}`: missing or not a toggle")))
+}
+pub(super) fn float(p: &ParamSet, n: &str) -> Result<f64, CookError> {
+    match p.float(n) {
+        Some(v) if v.is_finite() => Ok(f64::from(v)),
+        _ => Err(bad(format!("`{n}`: missing or not a finite float"))),
+    }
+}
+pub(super) fn int(p: &ParamSet, n: &str) -> Result<i32, CookError> {
+    p.int(n).ok_or_else(|| bad(format!("`{n}`: missing or not an int")))
+}
+pub(super) fn sub(a: V3, b: V3) -> V3 {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+pub(super) fn add(a: V3, b: V3) -> V3 {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+pub(super) fn scale(a: V3, s: f64) -> V3 {
+    [a[0] * s, a[1] * s, a[2] * s]
+}
+pub(super) fn dot(a: V3, b: V3) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+fn cross(a: V3, b: V3) -> V3 {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+/// `P` as f64, one entry per point (missing entries are the origin).
+pub(super) fn positions(d: &Detail) -> Vec<V3> {
+    let p = d.p();
+    (0..d.point_count as usize)
+        .map(|i| p.get(i).map_or([0.0; 3], |q| [f64::from(q[0]), f64::from(q[1]), f64::from(q[2])]))
+        .collect()
+}
+/// f64 -> f32 positions; `Failed` when a finite coordinate overflows f32.
+pub(super) fn to_f32(op: &str, p: &[V3]) -> Result<Vec<[f32; 3]>, CookError> {
+    let mut out = Vec::with_capacity(p.len());
+    for q in p {
+        let r = [q[0] as f32, q[1] as f32, q[2] as f32];
+        if q.iter().all(|c| c.is_finite()) && r.iter().any(|c| !c.is_finite()) {
+            return Err(failed(op, "position overflows f32"));
+        }
+        out.push(r);
+    }
+    Ok(out)
+}
+/// Point ids of a closed poly with >= 3 corners, all ids in range; `None` otherwise.
+pub(super) fn closed_poly_pts(d: &Detail, prim: &Prim) -> Option<Vec<usize>> {
+    if !matches!(prim.kind, PrimKind::Poly { closed: true }) {
+        return None;
+    }
+    let (lo, hi) = (usize::try_from(prim.verts.start).ok()?, usize::try_from(prim.verts.end).ok()?);
+    let np = d.point_count as usize;
+    let pts: Vec<usize> = d
+        .vertex_point
+        .get(lo..hi)?
+        .iter()
+        .map(|&p| usize::try_from(p).ok().filter(|&p| p < np))
+        .collect::<Option<_>>()?;
+    (pts.len() >= 3).then_some(pts)
+}
+/// Unit Newell normal of the polygon `pts` (right-handed in corner order); `None` when degenerate / non-finite.
+pub(super) fn unit_newell(pos: &[V3], pts: &[usize]) -> Option<V3> {
+    let o = *pos.get(*pts.first()?)?;
+    let mut nw = [0.0; 3];
+    for (i, &a) in pts.iter().enumerate() {
+        let b = *pts.get((i + 1) % pts.len())?;
+        nw = add(nw, cross(sub(*pos.get(a)?, o), sub(*pos.get(b)?, o)));
+    }
+    let l = dot(nw, nw).sqrt();
+    (l.is_finite() && l > MIN_NEWELL).then(|| scale(nw, 1.0 / l))
+}
+/// Uniform-averaged point normals: per point, normalise the plain sum of the unit Newell normals of the closed polys
+/// that use it (every corner counts once). Points without a usable face get `[0; 3]`.
+pub(super) fn point_normals(d: &Detail, pos: &[V3]) -> Vec<V3> {
+    let mut acc = vec![[0.0f64; 3]; pos.len()];
+    for pr in &d.prims {
+        let Some(pts) = closed_poly_pts(d, pr) else { continue };
+        let Some(n) = unit_newell(pos, &pts) else { continue };
+        for &p in &pts {
+            if let Some(a) = acc.get_mut(p) {
+                *a = add(*a, n);
+            }
+        }
+    }
+    acc.into_iter()
+        .map(|a| {
+            let l = dot(a, a).sqrt();
+            if l.is_finite() && l > MIN_NEWELL { scale(a, 1.0 / l) } else { [0.0; 3] }
+        })
+        .collect()
+}
+/// Prim-group selection (union of space-separated names); `None` = every prim.
+pub(super) fn selection(op: &str, src: &Detail, names: &str) -> Result<Option<Vec<bool>>, CookError> {
+    let names: Vec<&str> = names.split_whitespace().collect();
+    if names.is_empty() {
+        return Ok(None);
+    }
+    let mut sel = vec![false; src.prims.len()];
+    for n in names {
+        let g: &Group =
+            src.group(AttrClass::Prim, n).ok_or_else(|| failed(op, &format!("unknown primitive group `{n}`")))?;
+        for (s, m) in sel.iter_mut().zip(&g.mask) {
+            *s |= *m;
+        }
+    }
+    Ok(Some(sel))
+}
+/// Element `i` of every entry of `idx` (`None` -> default element). Total: short sources default-fill.
+pub(super) fn gather(d: &AttrData, idx: &[Option<usize>]) -> AttrData {
+    fn pick<T: Copy>(v: &[T], idx: &[Option<usize>], def: T) -> Vec<T> {
+        idx.iter().map(|i| i.and_then(|i| v.get(i).copied()).unwrap_or(def)).collect()
+    }
+    fn pick_n<T: Copy>(v: &[T], size: u32, idx: &[Option<usize>], def: T) -> Vec<T> {
+        let s = size as usize;
+        let mut o = Vec::with_capacity(idx.len().saturating_mul(s));
+        for i in idx {
+            let chunk = i.and_then(|i| v.get(i.checked_mul(s)?..i.checked_add(1)?.checked_mul(s)?));
+            match chunk {
+                Some(c) => o.extend_from_slice(c),
+                None => o.extend(std::iter::repeat_n(def, s)),
+            }
+        }
+        o
+    }
+    match d {
+        AttrData::F32(v) => AttrData::F32(pick(v, idx, 0.0)),
+        AttrData::I32(v) => AttrData::I32(pick(v, idx, 0)),
+        AttrData::V2(v) => AttrData::V2(pick(v, idx, [0.0; 2])),
+        AttrData::V3(v) => AttrData::V3(pick(v, idx, [0.0; 3])),
+        AttrData::V4(v) => AttrData::V4(pick(v, idx, [0.0; 4])),
+        AttrData::Str { idx: si, table } => AttrData::Str { idx: pick(si, idx, -1), table: table.clone() },
+        AttrData::FN { size, data } => AttrData::FN { size: *size, data: pick_n(data, *size, idx, 0.0) },
+        AttrData::IN { size, data } => AttrData::IN { size: *size, data: pick_n(data, *size, idx, 0) },
+    }
+}
+/// Mean of `size`-wide float tuples over each source list (one source = exact copy; no valid source = zeros).
+fn avg_flat(v: &[f32], size: usize, srcs: &[Vec<usize>]) -> Vec<f32> {
+    let mut out = Vec::with_capacity(srcs.len().saturating_mul(size));
+    for s in srcs {
+        let rows: Vec<&[f32]> =
+            s.iter().filter_map(|&i| v.get(i.checked_mul(size)?..i.checked_add(1)?.checked_mul(size)?)).collect();
+        if let ([one], 1) = (rows.as_slice(), s.len()) {
+            out.extend_from_slice(one);
+            continue;
+        }
+        for j in 0..size {
+            let sum: f64 = rows.iter().map(|r| r.get(j).copied().map_or(0.0, f64::from)).sum();
+            out.push(if rows.is_empty() { 0.0 } else { (sum / rows.len() as f64) as f32 });
+        }
+    }
+    out
+}
+/// New-point attribute values from source points: float types average the sources, int / string types copy the first.
+pub(super) fn blend(d: &AttrData, srcs: &[Vec<usize>]) -> AttrData {
+    let first: Vec<Option<usize>> = srcs.iter().map(|s| s.first().copied()).collect();
+    let chunk = |f: Vec<f32>, n: usize| -> Vec<Vec<f32>> { f.chunks_exact(n.max(1)).map(<[f32]>::to_vec).collect() };
+    match d {
+        AttrData::F32(v) => AttrData::F32(avg_flat(v, 1, srcs)),
+        AttrData::V2(v) => {
+            let flat: Vec<f32> = v.iter().flatten().copied().collect();
+            AttrData::V2(chunk(avg_flat(&flat, 2, srcs), 2).iter().map(|c| [c[0], c[1]]).collect())
+        }
+        AttrData::V3(v) => {
+            let flat: Vec<f32> = v.iter().flatten().copied().collect();
+            AttrData::V3(chunk(avg_flat(&flat, 3, srcs), 3).iter().map(|c| [c[0], c[1], c[2]]).collect())
+        }
+        AttrData::V4(v) => {
+            let flat: Vec<f32> = v.iter().flatten().copied().collect();
+            AttrData::V4(chunk(avg_flat(&flat, 4, srcs), 4).iter().map(|c| [c[0], c[1], c[2], c[3]]).collect())
+        }
+        AttrData::FN { size, data } => AttrData::FN { size: *size, data: avg_flat(data, *size as usize, srcs) },
+        AttrData::I32(_) | AttrData::IN { .. } | AttrData::Str { .. } => gather(d, &first),
+    }
+}
+/// How an output mesh derives from its source: per output point the source points it blends, per output vertex /
+/// prim the source element it copies (`None` = default-filled).
+#[derive(Default)]
+pub(super) struct Remap {
+    pub point_src: Vec<Vec<usize>>,
+    pub vert_src: Vec<Option<usize>>,
+    pub prim_src: Vec<Option<usize>>,
+}
+/// Output `Detail` from new topology + positions; every attribute and group of `src` follows `rm`.
+pub(super) fn rebuild(
+    op: &str,
+    src: &Detail,
+    vertex_point: Vec<u32>,
+    prims: Vec<Prim>,
+    rm: &Remap,
+    p: Vec<[f32; 3]>,
+) -> Result<Detail, CookError> {
+    let point_count = u32::try_from(rm.point_src.len()).map_err(|_| failed(op, "point id overflow"))?;
+    let mut out = Detail {
+        point_count,
+        vertex_point,
+        prims,
+        attrs: Vec::with_capacity(src.attrs.len()),
+        groups: Vec::with_capacity(src.groups.len()),
+        skipped_attribs: src.skipped_attribs.clone(),
+    };
+    for a in &src.attrs {
+        let data = match a.class {
+            AttrClass::Point => blend(&a.data, &rm.point_src),
+            AttrClass::Vertex => gather(&a.data, &rm.vert_src),
+            AttrClass::Prim => gather(&a.data, &rm.prim_src),
+            AttrClass::Detail => a.data.clone(),
+        };
+        out.attrs.push(Attribute { name: a.name.clone(), class: a.class, data, type_info: a.type_info });
+    }
+    for g in &src.groups {
+        let at = |i: Option<usize>| i.and_then(|i| g.mask.get(i).copied()).unwrap_or(false);
+        let mask: Vec<bool> = match g.class {
+            // a blended point is in the group only when every source point is
+            AttrClass::Point => rm.point_src.iter().map(|s| !s.is_empty() && s.iter().all(|&i| at(Some(i)))).collect(),
+            AttrClass::Vertex => rm.vert_src.iter().map(|&i| at(i)).collect(),
+            AttrClass::Prim => rm.prim_src.iter().map(|&i| at(i)).collect(),
+            AttrClass::Detail => continue,
+        };
+        out.groups.push(Group { name: g.name.clone(), class: g.class, mask });
+    }
+    *out.p_mut() = p;
+    Ok(out)
+}
+
+#[cfg(test)]
+pub(super) mod testkit {
+    use crate::SopNode;
+    use hexe_geo::Detail;
+    use hexe_graph::{CookCtx, CookError, ParamSet};
+    use std::sync::Arc;
+    /// Node defaults as a `ParamSet`.
+    pub fn defaults(n: &SopNode) -> ParamSet {
+        n.params().iter().fold(ParamSet::new(), |p, s| p.with(&s.name, s.default.clone()))
+    }
+    pub fn cook_arc(n: &SopNode, d: &Arc<Detail>, p: &ParamSet) -> Result<Arc<Detail>, CookError> {
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: p, log: &|_| {} };
+        n.cook(&ctx, std::slice::from_ref(d))
+    }
+    pub fn cook(n: &SopNode, d: Detail, p: &ParamSet) -> Result<Arc<Detail>, CookError> {
+        cook_arc(n, &Arc::new(d), p)
+    }
+    /// Unit box (corners +-0.5, 8 shared points), 6 outward-wound quads.
+    pub fn cube() -> Detail {
+        let mut d = Detail::default();
+        d.add_points(8);
+        let c = |b: u32, i: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
+        *d.p_mut() = (0..8).map(|i| [c(2, i), c(1, i), c(0, i)]).collect();
+        for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+            d.add_poly(&f, true);
+        }
+        d
+    }
+    /// 3x3 POINTS (2x2 quads), z = 0, +Z normals, points row-major.
+    pub fn grid3() -> Detail {
+        let mut d = Detail::default();
+        d.add_points(9);
+        *d.p_mut() = (0..9).map(|i| [(i % 3) as f32, (i / 3) as f32, 0.0]).collect();
+        for (r, c) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+            let a = r * 3 + c;
+            d.add_poly(&[a, a + 1, a + 4, a + 3], true);
+        }
+        d
+    }
+    pub fn prim_pts(d: &Detail, i: usize) -> Vec<[f32; 3]> {
+        let pr = &d.prims[i];
+        d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| d.p()[p as usize]).collect()
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "sub1", "type": "subdivide", "params": { "iterations": 1, "algorithm": 0 } }
+  ],
+  "edges": [["box1", 0, "sub1", 0]],
+  "display": "sub1"
+}

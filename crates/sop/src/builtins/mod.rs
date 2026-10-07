@@ -20,6 +20,8 @@ mod curve_sop;
 //
 mod fuse_sop;
 //
+mod facet_sop;
+//
 mod grid_sop;
 //
 mod line_sop;
@@ -27,6 +29,10 @@ mod line_sop;
 mod merge_sop;
 //
 mod normal_sop;
+//
+mod meshutil;
+//
+mod peak_sop;
 //
 mod polyextrude_sop;
 //
@@ -36,7 +42,11 @@ mod reverse_sop;
 //
 mod scatter_sop;
 //
+mod smooth_sop;
+//
 mod sphere_sop;
+//
+mod subdivide_sop;
 //
 mod transform_sop;
 //
@@ -60,6 +70,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("fuse", fuse_sop::spec, fuse_sop::new);
     //
+    r.register("facet", facet_sop::spec, facet_sop::new);
+    //
     r.register("grid", grid_sop::spec, grid_sop::new);
     //
     r.register("line", line_sop::spec, line_sop::new);
@@ -67,6 +79,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("merge", merge_sop::spec, merge_sop::new);
     //
     r.register("normal", normal_sop::spec, normal_sop::new);
+    //
+    r.register("peak", peak_sop::spec, peak_sop::new);
     //
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
     //
@@ -76,7 +90,11 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
+    r.register("smooth", smooth_sop::spec, smooth_sop::new);
+    //
     r.register("sphere", sphere_sop::spec, sphere_sop::new);
+    //
+    r.register("subdivide", subdivide_sop::spec, subdivide_sop::new);
     //
     r.register("xform", transform_sop::spec, transform_sop::new);
     //
