@@ -12,7 +12,7 @@ use hexe_geo::Detail;
 use hexe_graph::{CookCtx, CookError, Graph, InputSpec, Node, NodeId, ParamSet, ParamSpec, ParamValue};
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
@@ -40,6 +40,15 @@ struct SceneDef {
     #[serde(default)]
     edges: Vec<(String, usize, String, usize)>,
     display: String,
+    /// Editor-only data (node positions); the cook ignores it.
+    #[serde(default)]
+    ui: UiDef,
+}
+
+#[derive(Deserialize, Default)]
+struct UiDef {
+    #[serde(default)]
+    pos: BTreeMap<String, [f32; 2]>,
 }
 
 #[derive(Deserialize)]
@@ -57,6 +66,8 @@ pub struct Loaded {
     pub graph: Graph<Detail>,
     pub display: NodeId,
     pub names: BTreeMap<String, NodeId>,
+    /// `ui.pos` of the file: node name -> editor position (unknown names dropped, non-finite dropped).
+    pub pos: BTreeMap<String, [f32; 2]>,
 }
 
 /// Hidden generator feeding unconnected inputs.
@@ -99,7 +110,6 @@ pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> 
     let def: SceneDef = serde_json::from_str(json).map_err(|e| SceneError(format!("invalid scene JSON: {e}")))?;
     let mut graph: Graph<Detail> = Graph::new();
     let mut names: BTreeMap<String, NodeId> = BTreeMap::new();
-    let mut n_inputs: BTreeMap<NodeId, usize> = BTreeMap::new();
     for n in &def.nodes {
         if n.name.is_empty() {
             return err("node with empty name");
@@ -121,37 +131,98 @@ pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> 
                 }
             }
         }
-        let inputs = node.inputs().len();
         let id = graph.add_boxed(node, overrides).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
-        n_inputs.insert(id, inputs);
+        graph.rename(id, &n.name).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
         names.insert(n.name.clone(), id);
     }
     let find = |name: &str| names.get(name).copied().ok_or_else(|| SceneError(format!("edge: unknown node `{name}`")));
-    let mut wired: BTreeSet<(NodeId, usize)> = BTreeSet::new();
     for (src, out, dst, input) in &def.edges {
         let (s, d) = (find(src)?, find(dst)?);
         graph.connect(s, *out, d, *input).map_err(|e| SceneError(format!("edge {src}:{out} -> {dst}:{input}: {e}")))?;
-        wired.insert((d, *input));
     }
-    let mut empty: Option<NodeId> = None;
-    for (&id, &count) in &n_inputs {
-        for input in (0..count).filter(|i| !wired.contains(&(id, *i))) {
+    fill_unwired(&mut graph)?;
+    let display = find(&def.display).map_err(|_| SceneError(format!("display: unknown node `{}`", def.display)))?;
+    graph.set_display(Some(display)).map_err(|e| SceneError(format!("display: {e}")))?;
+    let pos =
+        def.ui.pos.into_iter().filter(|(k, p)| names.contains_key(k) && p.iter().all(|c| c.is_finite())).collect();
+    Ok(Loaded { graph, display, names, pos })
+}
+
+/// Feed every unconnected input of every named node from the hidden empty source (created on first need), so a
+/// lone `null` or a half-wired node cooks to empty geometry instead of `MissingInput`. Idempotent; the editor
+/// calls it after every structural edit.
+pub fn fill_unwired(graph: &mut Graph<Detail>) -> Result<(), SceneError> {
+    let he = |e: hexe_graph::GraphError| SceneError(format!("hidden empty source: {e}"));
+    let mut empty = graph.node_ids().into_iter().find(|&id| graph.node_type(id) == Some(EmptySource.type_name()));
+    let named: Vec<NodeId> = graph.node_ids().into_iter().filter(|&id| graph.name(id).is_some()).collect();
+    for id in named {
+        let open: Vec<usize> =
+            graph.input_sources(id).iter().enumerate().filter(|(_, s)| s.is_none()).map(|(i, _)| i).collect();
+        for input in open {
             let src = match empty {
                 Some(e) => e,
                 None => {
-                    let e = graph
-                        .add_node(EmptySource, ParamSet::new())
-                        .map_err(|e| SceneError(format!("hidden empty source: {e}")))?;
+                    let e = graph.add_node(EmptySource, ParamSet::new()).map_err(he)?;
                     empty = Some(e);
                     e
                 }
             };
-            graph.connect(src, 0, id, input).map_err(|e| SceneError(format!("hidden empty source: {e}")))?;
+            graph.connect(src, 0, id, input).map_err(he)?;
         }
     }
-    let display = find(&def.display).map_err(|_| SceneError(format!("display: unknown node `{}`", def.display)))?;
-    graph.set_display(Some(display)).map_err(|e| SceneError(format!("display: {e}")))?;
-    Ok(Loaded { graph, display, names })
+    Ok(())
+}
+
+/// `ParamValue` -> JSON, the inverse of `param_value` (f32 via its shortest decimal so reload is bit-exact).
+fn param_json(v: &ParamValue) -> Value {
+    let num = |x: f32| {
+        format!("{x}").parse::<f64>().ok().and_then(serde_json::Number::from_f64).map_or(Value::Null, Value::Number)
+    };
+    match v {
+        ParamValue::F(x) => num(*x),
+        ParamValue::I(x) => Value::from(*x),
+        ParamValue::B(x) => Value::Bool(*x),
+        ParamValue::V3(c) => Value::Array(c.iter().map(|x| num(*x)).collect()),
+        ParamValue::S(s) => Value::String(s.clone()),
+        ParamValue::Menu(m) => Value::from(*m),
+    }
+}
+
+/// Graph -> scene JSON in the exact schema `load_scene_with` reads: named nodes (creation order), non-default
+/// params only, typed edges (the hidden empty source is not written), display (falls back to the first node),
+/// plus `"ui": {"pos": ..}` from `pos` (entries for unknown names are dropped). Errors on an empty graph.
+pub fn save_scene(graph: &Graph<Detail>, pos: &BTreeMap<String, [f32; 2]>) -> Result<String, SceneError> {
+    let named: Vec<(NodeId, &str)> =
+        graph.node_ids().into_iter().filter_map(|id| Some((id, graph.name(id)?))).collect();
+    let Some(&(first, _)) = named.first() else { return err("nothing to save: the graph has no nodes") };
+    let (mut nodes, mut edges) = (Vec::new(), Vec::new());
+    for &(id, name) in &named {
+        let ty = graph.node_type(id).unwrap_or_default();
+        let mut params = serde_json::Map::new();
+        for spec in graph.param_specs(id) {
+            if let Some(v) = graph.param(id, &spec.name).filter(|v| **v != spec.default) {
+                params.insert(spec.name.clone(), param_json(v));
+            }
+        }
+        let mut node = serde_json::json!({ "name": name, "type": ty });
+        if !params.is_empty() {
+            node["params"] = Value::Object(params);
+        }
+        nodes.push(node);
+        for (port, src) in graph.input_sources(id).into_iter().enumerate() {
+            if let Some(s) = src.and_then(|s| graph.name(s)) {
+                edges.push(serde_json::json!([s, 0, name, port]));
+            }
+        }
+    }
+    let display = graph.display().and_then(|d| graph.name(d)).or_else(|| graph.name(first)).unwrap_or_default();
+    let pos: serde_json::Map<String, Value> = pos
+        .iter()
+        .filter(|(k, p)| graph.node_by_name(k).is_some() && p.iter().all(|c| c.is_finite()))
+        .map(|(k, p)| (k.clone(), Value::Array(p.iter().map(|c| param_json(&ParamValue::F(*c))).collect())))
+        .collect();
+    let doc = serde_json::json!({ "nodes": nodes, "edges": edges, "display": display, "ui": { "pos": pos } });
+    serde_json::to_string_pretty(&doc).map_err(|e| SceneError(format!("serialize: {e}")))
 }
 
 fn overrides_for(
@@ -336,6 +407,66 @@ mod tests {
         fails(&format!(r#"{two}[["a",1,"b",0]]}}"#), "no output 1");
         fails(&format!(r#"{two}[["a",0,"b",0],["b",0,"a",0]]}}"#), "cycle");
         fails(&format!(r#"{two}[["a",0]]}}"#), "invalid scene JSON");
+    }
+
+    fn counts(l: &mut Loaded) -> (u32, u32) {
+        let d = l.graph.cook(l.display, 0.0).expect("cooks");
+        (d.point_count, d.prim_count())
+    }
+
+    /// load -> save -> load again: same cook counts, same params; second save is a fixed point.
+    #[test]
+    fn save_round_trips_examples() {
+        for src in [
+            include_str!("../../../examples/copytopoints.json"),
+            include_str!("../../../examples/polyextrude.json"),
+            include_str!("../../../examples/scatter.json"),
+            include_str!("../../../examples/attribnoise.json"),
+        ] {
+            let mut a = load(src).expect("loads");
+            let json = save_scene(&a.graph, &a.pos).expect("saves");
+            let mut b = load(&json).expect("saved scene reloads");
+            assert_eq!(counts(&mut a), counts(&mut b));
+            assert!(counts(&mut a).0 > 0, "example cooks to something");
+            assert_eq!(save_scene(&b.graph, &b.pos).expect("saves"), json, "save is a fixed point");
+            assert_eq!(a.names.keys().collect::<Vec<_>>(), b.names.keys().collect::<Vec<_>>());
+        }
+    }
+
+    #[test]
+    fn ui_pos_persists_and_hostile_ui_is_dropped() {
+        let s = r#"{"nodes":[{"name":"a","type":"null"}],"display":"a","ui":{"pos":{"a":[10.5,-3],"ghost":[1,1]}}}"#;
+        let l = load(s).expect("ui accepted");
+        assert_eq!(l.pos.get("a"), Some(&[10.5, -3.0]));
+        assert!(!l.pos.contains_key("ghost"), "pos of an unknown node is dropped");
+        let again = load(&save_scene(&l.graph, &l.pos).expect("saves")).expect("reloads");
+        assert_eq!(again.pos, l.pos);
+        fails(&s.replace("[10.5,-3]", "[1]"), "invalid scene JSON");
+        assert!(load(&s.replace("\"ui\"", "\"junk\"")).is_err(), "other unknown top-level keys stay errors");
+    }
+
+    #[test]
+    fn edited_graph_saves_and_cooks() {
+        let mut l = load(include_str!("../../../examples/polyextrude.json")).expect("loads");
+        let before = counts(&mut l);
+        let reg = registry();
+        let b2 = l.graph.add_boxed(reg.create("box").expect("box"), ParamSet::new()).expect("adds");
+        let nm = l.graph.unique_name("box");
+        assert_eq!(nm, "box2");
+        l.graph.rename(b2, &nm).expect("names");
+        fill_unwired(&mut l.graph).expect("fills");
+        let pe = l.graph.node_by_name("pe1").expect("pe1");
+        l.graph.connect(b2, 0, pe, 0).expect("connects");
+        let mut json_l = load(&save_scene(&l.graph, &BTreeMap::new()).expect("saves")).expect("reloads");
+        assert_eq!(counts(&mut json_l).1, before.1, "rewired to the second box: same topology");
+        assert_eq!(json_l.names.len(), 3);
+        // removing a node leaves its dependent with an empty-source input after fill_unwired
+        l.graph.remove_node(b2).expect("removes");
+        fill_unwired(&mut l.graph).expect("fills");
+        assert_eq!(l.graph.cook(pe, 0.0).expect("cooks empty").point_count, 0);
+        assert!(save_scene(&l.graph, &BTreeMap::new()).expect("saves").contains("pe1"));
+        assert!(!save_scene(&l.graph, &BTreeMap::new()).expect("saves").contains("(empty)"));
+        assert!(save_scene(&Graph::<Detail>::new(), &BTreeMap::new()).is_err());
     }
 
     /// The oracle fixture's `expected.geo` is the analytical answer: an empty Detail written by our writer.

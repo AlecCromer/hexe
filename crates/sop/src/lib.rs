@@ -13,7 +13,9 @@ mod builtins;
 mod registry;
 mod scene;
 pub use registry::{CtorFn, Registry, SopNode, SpecFn};
-pub use scene::{Loaded, SceneError, load_scene, load_scene_in, load_scene_with, load_scene_with_base};
+pub use scene::{
+    Loaded, SceneError, fill_unwired, load_scene, load_scene_in, load_scene_with, load_scene_with_base, save_scene,
+};
 
 /// Registry of every built-in SOP (`builtins.rs`).
 pub fn registry() -> Registry {
