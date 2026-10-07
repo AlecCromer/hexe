@@ -9,11 +9,11 @@
 )]
 
 mod bjson;
+#[cfg(test)]
+mod bjson_tests;
 mod blosc;
 #[cfg(test)]
 mod blosc_tests;
-#[cfg(test)]
-mod bjson_tests;
 mod detail;
 mod error;
 mod gpd;

@@ -94,7 +94,7 @@ fn blosc_chunk(c: &[u8], out: &mut Vec<u8>) -> Result<(), GeoError> {
     if nbytes > cb.saturating_mul(MAX_RATIO) {
         return syn("nbytes implausible for cbytes");
     }
-    if flags & 0x1c != 0 && flags & 0x1c != 0x2 {
+    if flags & 0x1c != 0 {
         return Err(GeoError::Unsupported("scf1: bitshuffle/delta blosc flags".into()));
     }
     let (shuffle, memcpy, codec) = (flags & 1 != 0, flags & 2 != 0, flags >> 5);
@@ -126,7 +126,8 @@ fn blosc_chunk(c: &[u8], out: &mut Vec<u8>) -> Result<(), GeoError> {
     out.resize(base + nbytes, 0);
     let mut tmp = vec![0u8; blocksize];
     for i in 0..nblocks {
-        let Some(start) = u32le(c, CHUNK_HEAD + i * 4).map(|v| v as usize).filter(|s| *s >= starts_end && *s < cb) else {
+        let Some(start) = u32le(c, CHUNK_HEAD + i * 4).map(|v| v as usize).filter(|s| *s >= starts_end && *s < cb)
+        else {
             return syn("block start out of range");
         };
         let is_left = leftover != 0 && i + 1 == nblocks;
@@ -151,7 +152,9 @@ fn blosc_chunk(c: &[u8], out: &mut Vec<u8>) -> Result<(), GeoError> {
                 lz4_block(src, dst)?;
             }
         }
-        let Some(dst) = out.get_mut(base + i * blocksize..base + i * blocksize + bsize) else { return syn("block bounds") };
+        let Some(dst) = out.get_mut(base + i * blocksize..base + i * blocksize + bsize) else {
+            return syn("block bounds");
+        };
         let Some(src) = tmp.get(..bsize) else { return syn("block bounds") };
         if shuffle && ts > 1 {
             unshuffle(ts, src, dst);

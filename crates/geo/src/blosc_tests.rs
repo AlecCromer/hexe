@@ -1,10 +1,13 @@
 //! `scf1` / blosc / LZ4 reader tests: shipped sphere, synthetic frames, hostile-input regressions (never panic).
-use crate::blosc::{lz4_block, sc_decompress, MAGIC};
+use crate::blosc::{MAGIC, lz4_block, sc_decompress};
 use crate::*;
 use std::path::PathBuf;
 
 fn sphere() -> Vec<u8> {
-    std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/houdini-ship/sphere-sc/sphere.bgeo.sc")).expect("sphere.bgeo.sc")
+    std::fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/houdini-ship/sphere-sc/sphere.bgeo.sc"),
+    )
+    .expect("sphere.bgeo.sc")
 }
 /// Frame of memcpy-flag blosc chunks (`flags 0x02`), correct index + trailer.
 fn frame(chunks: &[&[u8]]) -> Vec<u8> {
