@@ -29,3 +29,43 @@ area = "C"
 tier = "P1"
 status = "planned"
 notes = "stub window only"
+
+[[feature]]
+id = "graph-cook-lazy"
+title = "Graph cook is lazy + cached (only the requested cone cooks; clean nodes return the same Arc; diamonds cook shared nodes once; iterative, 100k chain)"
+area = "A"
+tier = "P0"
+status = "shipped"
+evidence = [
+  "crates/graph/src/graph.rs::cook_once_then_cached_and_lazy",
+  "crates/graph/src/graph.rs::diamond_shared_node_cooks_once",
+  "crates/graph/src/graph.rs::chain_1000_cooks_without_stack_overflow",
+  "crates/graph/src/graph.rs::time_dependent_cooks_again_when_time_changes",
+]
+notes = "payload-generic Graph<T> (dummy i32 nodes); Detail payload + registry + to_json/from_json land with wave 2"
+
+[[feature]]
+id = "graph-dirty-propagation"
+title = "set_param/connect/disconnect dirty the node and everything downstream, nothing else"
+area = "A"
+tier = "P0"
+status = "shipped"
+evidence = [
+  "crates/graph/src/graph.rs::set_param_recooks_only_downstream",
+  "crates/graph/src/graph.rs::connect_and_disconnect_dirty_downstream",
+  "crates/graph/src/graph.rs::chain_100k_dirty_and_cook_stay_iterative",
+]
+notes = "channel expressions (param-driven dirtying) not modelled yet"
+
+[[feature]]
+id = "graph-cycle-error"
+title = "Cycles, missing inputs, bad ids/ports/params are Err, never panic (connect-time and cook-time)"
+area = "A"
+tier = "P0"
+status = "shipped"
+evidence = [
+  "crates/graph/src/graph.rs::cycle_is_error_not_panic",
+  "crates/graph/src/graph.rs::missing_input_is_error",
+  "crates/graph/src/graph.rs::bad_ids_ports_and_params_are_errors",
+]
+notes = "no fuzz target yet (AGENTS.md section 4: findings get a regression test first)"
