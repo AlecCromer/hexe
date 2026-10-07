@@ -6,7 +6,7 @@ use crate::Registry;
 
 mod null_sop;
 //
-// mod attribnoise_sop;
+mod attribnoise_sop;
 //
 mod box_sop;
 //
@@ -30,7 +30,7 @@ mod transform_sop;
 pub(crate) fn builtins(r: &mut Registry) {
     r.register("null", null_sop::spec, null_sop::new);
     //
-    // r.register("attribnoise", attribnoise_sop::spec, attribnoise_sop::new);
+    r.register("attribnoise", attribnoise_sop::spec, attribnoise_sop::new);
     //
     r.register("box", box_sop::spec, box_sop::new);
     //

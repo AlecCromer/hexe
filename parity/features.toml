@@ -241,8 +241,17 @@ id = "sop-noise"
 title = "Attribute Noise SOP"
 area = "A"
 tier = "P1"
-status = "planned"
-notes = "Wave 2. ~50 doc-labelled params; Attribute Noise vs Mountain TBD; noise bit-exactness not in docs; doc-derived; observed_in 20.5.487 (docs only)"
+status = "partial"
+commands = ["attribnoise"]
+evidence = [
+  "crates/sop/src/builtins/attribnoise_sop.rs::perlin_is_zero_at_integer_lattice_points",
+  "crates/sop/src/builtins/attribnoise_sop.rs::amplitude_scales_linearly_all_noise_kinds",
+  "crates/sop/src/builtins/attribnoise_sop.rs::add_on_p_moves_each_point_at_most_amp_sqrt3",
+  "crates/sop/src/builtins/attribnoise_sop.rs::white_noise_is_seed_deterministic_byte_equal",
+  "crates/sop/src/builtins/attribnoise_sop.rs::missing_attrib_is_failed_and_bad_params_are_rejected",
+  "crates/sop/src/builtins/attribnoise_sop.rs::example_scene_cooks",
+]
+notes = "H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). NOT modelled: Houdini noise-pattern menu, turbulence/fractal, rest, normals, groups. UNVERIFIED vs Houdini (hython blocked): noise streams, remap/amp semantics, default ranges. Example: examples/attribnoise.json."
 
 [[feature]]
 id = "core.cook-model"
