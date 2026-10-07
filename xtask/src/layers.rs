@@ -37,6 +37,7 @@ pub const PREFIX: &str = "hexe-";
 pub const TABLE: &[(&str, Class)] = &[
     ("core", Class::Standalone(0)),
     ("geo", Class::Layer(0)),
+    ("graph", Class::Layer(1)),
     // L1 formats · L2 model · L3 services · L4 features · L5 interaction · L6 engine · L7 platform/ui: add rows here
     // ("testkit", Class::Testkit),
     ("hexe", Class::Exempt),
