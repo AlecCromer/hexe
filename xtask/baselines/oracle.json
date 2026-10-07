@@ -1,3 +1,5 @@
 {
+  "merge-empty": 1.0,
+  "merge-two-boxes": 0.0,
   "null-passthrough": 1.0
 }
