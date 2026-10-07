@@ -217,6 +217,67 @@ evidence = [
 notes = "H9: individual mode only (no shared-edge welding). Params distance/inset/divisions/output_front/output_side/output_back/group = OUR minimal subset, not the harvested parm table. Inset = mitre edge offset toward centroid, applied before distance; divisions interpolate linearly. Prim order: front, sides (layer-major), back, in place. Input points used only by extruded prims are dropped (box 6 quads -> 48 pts). NOT modelled: extrusion spacing/twist/taper, local/global transform, N/uv updates, thickness, vertex-normal extrude mode, point/edge groups, output groups (front/back/side), connected (welded) mode. UNVERIFIED vs Houdini (hython blocked): side/front order, inset formula on concave n-gons, group-miss = Failed. Example: examples/polyextrude.json. Analytical oracle only."
 
 [[feature]]
+id = "sop-subdivide"
+title = "Subdivide SOP (Catmull-Clark / linear)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["subdivide"]
+evidence = [
+  "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_iter1_is_26_points_24_closed_quads",
+  "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_iter2_is_98_points_96_closed_quads",
+  "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_corner_is_five_eighteenths_exact",
+  "crates/sop/src/builtins/subdivide_sop.rs::box_linear_iter1_keeps_corners_exactly_and_splits_26_24",
+  "crates/sop/src/builtins/subdivide_sop.rs::single_triangle_catmull_clark_is_7_points_3_quads_boundary_rules",
+  "crates/sop/src/builtins/subdivide_sop.rs::open_grid_3x3_is_25_points_16_quads_boundary_corners_on_boundary",
+  "crates/sop/src/builtins/subdivide_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
+]
+notes = "H18: iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear; >=2 OpenSubdiv = Unsupported) / group. CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Output = quads only; face/edge pts appended after input pts. NOT modelled: creases, OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), crack protection vs unselected prims, subdivision of non-poly prims. UNVERIFIED vs Houdini (hython blocked). Example: examples/subdivide.json."
+
+[[feature]]
+id = "sop-smooth"
+title = "Smooth SOP (uniform Laplacian)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["smooth"]
+evidence = [
+  "crates/sop/src/builtins/smooth_sop.rs::box_one_iteration_strength_one_moves_corners_to_one_sixth",
+  "crates/sop/src/builtins/smooth_sop.rs::zero_strength_zero_iterations_and_empty_share_the_arc",
+  "crates/sop/src/builtins/smooth_sop.rs::pin_boundary_keeps_grid_border_and_moves_only_the_free_centre",
+]
+notes = "H18: iterations I (0..=1000) / strength F / pin_boundary B. P += strength*(avg(distinct edge neighbours)-P), Jacobi. NOT modelled: Houdini's other smoothing modes (cotangent/volume-preserving), groups, attribute smoothing, N update. UNVERIFIED vs Houdini (hython blocked)."
+
+[[feature]]
+id = "sop-peak"
+title = "Peak SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["peak"]
+evidence = [
+  "crates/sop/src/builtins/peak_sop.rs::box_distance_one_moves_corners_along_diagonal",
+  "crates/sop/src/builtins/peak_sop.rs::zero_distance_and_empty_share_the_arc",
+  "crates/sop/src/builtins/peak_sop.rs::existing_n_is_used_as_is_and_negative_distance_reverses",
+]
+notes = "H18: distance F only. P += N*distance; N = existing point N as-is, else uniform-averaged unit Newell. NOT modelled: group, N update. UNVERIFIED vs Houdini (hython blocked)."
+
+[[feature]]
+id = "sop-facet"
+title = "Facet SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["facet"]
+evidence = [
+  "crates/sop/src/builtins/facet_sop.rs::box_unique_points_is_24_points_with_same_positions_per_corner",
+  "crates/sop/src/builtins/facet_sop.rs::box_cusp_60_is_24_points_and_cusp_100_keeps_8",
+  "crates/sop/src/builtins/facet_sop.rs::flat_grid_cusp_60_is_unchanged_and_shares_the_arc",
+  "crates/sop/src/builtins/facet_sop.rs::post_nml_unique_gives_face_normals_and_shared_gives_diagonals",
+]
+notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N). NOT modelled: remove_inline, group, prim-normal flip/ consolidate options. UNVERIFIED vs Houdini (hython blocked)."
+
+[[feature]]
 id = "sop-scatter"
 title = "Scatter SOP"
 area = "A"
