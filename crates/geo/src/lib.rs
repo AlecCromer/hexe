@@ -15,7 +15,6 @@ mod json_read;
 mod json_write;
 mod types;
 
-pub use detail::*;
 pub use error::GeoError;
 pub use gpd::read_geo_gpd;
 pub use json_read::read_geo_json;
