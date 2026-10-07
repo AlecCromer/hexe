@@ -180,7 +180,7 @@ pub(crate) fn read_values(v: &Value, count: usize) -> Result<(usize, bool, Vec<f
     Ok((size, is_float, data))
 }
 
-fn pack(size: usize, float: bool, d: &[f64]) -> AttrData {
+pub(crate) fn pack(size: usize, float: bool, d: &[f64]) -> AttrData {
     let s = size as u32;
     if float {
         let f: Vec<f32> = d.iter().map(|&x| x as f32).collect();
