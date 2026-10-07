@@ -1,0 +1,86 @@
+# fixtures/houdini-ship/MANIFEST.toml: Houdini-shipped geometry used as reader oracle (H8). Verified by crates/geo/src/ship_tests.rs.
+# bytes/sha256 = exact copy of source. gate=true: reader must parse + match every expected_* field. gate=false: parse failure is a FINDING (FAILURES.md).
+# expected_* derived WITHOUT our reader (see `derived`). Absent field = UNVERIFIED-from-reader.
+
+[[file]]
+name = "hairypig"
+path = "hairypig/hairypig.bgeo"
+source = "$H/toolkit/samples/karma_procedurals/hairypig.bgeo"
+bytes = 511836
+sha256 = "011b66d1f79828db4a9c1e89b483b9a0a817433c01a2444b2361fd2f9cdb1e23"
+container = "binary-JSON (NSJb)"
+gate = true
+expected_points = 18789
+expected_vertices = 27449
+expected_prims = 3478
+expected_point_attrs = ["P", "displayColor", "tag"]
+expected_vertex_attrs = []
+expected_prim_attrs = []
+expected_point_groups = []
+expected_prim_groups = ["PigNeck", "PigFace", "PigEyes", "PigThroat"]
+expected_first_p = [-0.038613662123680115, 0.08764874935150146, -0.3989852964878082]
+derived = "python3 ad-hoc bjson->JSON decode (independent of hexe-geo): top-level pointcount/vertexcount/primitivecount, attributes.*attributes[].name, *groups[].name, P rawpagedata[0:3]; cross-check info.primcount_summary/attribute_summary written by Houdini"
+
+[[file]]
+name = "tree1"
+path = "tree1/tree1.bgeo"
+source = "$H/houdini/help/files/pdg_examples/top_roadbuilder/trees/tree1.bgeo"
+bytes = 28591
+sha256 = "4905317d3632a2776f41e292131589fd6ecc01b14e666a0febada7990ffe858e"
+container = "binary-JSON (NSJb)"
+gate = true
+expected_points = 267
+expected_vertices = 597
+expected_prims = 199
+expected_point_attrs = ["P"]
+expected_vertex_attrs = ["N", "uv", "uv2"]
+expected_prim_attrs = ["unreal_face_smoothing_mask", "unreal_input_mesh_name", "unreal_material"]
+expected_point_groups = []
+expected_prim_groups = []
+expected_first_p = [1.097592830657959, 2.0665714740753174, 1.285358190536499]
+derived = "python3 ad-hoc bjson->JSON decode (independent of hexe-geo): top-level pointcount/vertexcount/primitivecount, attributes.*attributes[].name, *groups[].name, P rawpagedata[0:3]; cross-check info.primcount_summary/attribute_summary written by Houdini"
+
+[[file]]
+name = "joint_link_n"
+path = "joint_link_n/joint_link_n.bgeo"
+source = "$H/packages/kinefx/geo/joint_link_n.bgeo"
+bytes = 1722
+sha256 = "b8e21bd7462dd69fe953555b3b2a97e9204ee65a342b53f86dcc63b911af5912"
+container = "binary-JSON (NSJb)"
+gate = true
+expected_points = 6
+expected_vertices = 24
+expected_prims = 8
+expected_point_attrs = ["P", "Cd"]
+expected_vertex_attrs = ["N"]
+expected_prim_attrs = []
+expected_point_groups = ["tip"]
+expected_prim_groups = []
+expected_first_p = [0.0, 0.0, -1.0]
+derived = "python3 ad-hoc bjson->JSON decode (independent of hexe-geo): top-level pointcount/vertexcount/primitivecount, attributes.*attributes[].name, *groups[].name, P rawpagedata[0:3]; cross-check info.primcount_summary/attribute_summary written by Houdini"
+
+[[file]]
+name = "gpd-all-legacy"
+path = "gpd-all-legacy/all.bgeo"
+source = "$H/houdini/public/GPD/all.bgeo"
+bytes = 22986
+sha256 = "99c9710a09a08fde3d842a5f2781baf0d1f40ee5869e4c5b62d444946a93cd5c"
+container = "legacy binary BgeoV"
+gate = false
+expected_points = 367
+expected_prims = 13
+expected_point_attrs = ["P", "Cd", "Alpha", "uv", "N"]
+expected_point_groups_count = 1
+expected_prim_groups_count = 1
+expected_first_p = [0.0, 0.0, 0.0]
+derived = "twin $H/houdini/public/GPD/all.geo (PGEOMETRY V2 text, fixtures/gpd-all/expected.geo, byte copy of the twin): header NPoints 367 NPrims 13 NPointGroups 1 NPrimGroups 1; PointAttrib Cd Alpha uv N (+P); first point line 0 0 0 1. vertices: UNVERIFIED-from-reader"
+
+[[file]]
+name = "sphere-sc"
+path = "sphere-sc/sphere.bgeo.sc"
+source = "$H/houdini/help/files/pdg_examples/top_houdinipipeline/input/sphere.bgeo.sc"
+bytes = 13968
+sha256 = "8d065f6f3e4f71e310a3f3814c12be0fa17dcd3a03e76d0260eba6c966fbdda5"
+container = "blosc-chunked scf1 (.bgeo.sc)"
+gate = false
+derived = "no twin ships: all expected_* UNVERIFIED-from-reader (reader cannot open it)"
