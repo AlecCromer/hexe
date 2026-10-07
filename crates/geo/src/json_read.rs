@@ -460,12 +460,40 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
                 let hv: Value = pair.first().cloned().unwrap_or(Value::Null);
                 let hk = kv(&hv).unwrap_or_default();
                 let rt = find(&hk, "runtype").and_then(Value::as_str).unwrap_or("run").to_string();
-                let items = pair.get(1).and_then(Value::as_array).cloned().unwrap_or_default();
+                let items: &[Value] = pair.get(1).and_then(Value::as_array).map_or(&[], Vec::as_slice);
+                // item = one value per `varyingfields` entry; the vertex slot is located by name (last slot if unnamed).
+                let slot = match find(&hk, "varyingfields") {
+                    Some(Value::Array(f)) => f.iter().position(|x| x.as_str() == Some("vertex")),
+                    _ => None,
+                };
+                // `runtype Poly`: the vertex slot holds the polygon's vertex LIST (pig.bgeo.sc), not one packed-prim vertex.
+                let poly = matches!(rt.as_str(), "Poly" | "Polygon");
+                let closed = find(&hk, "uniformfields")
+                    .and_then(kv)
+                    .and_then(|u| find(&u, "closed").and_then(Value::as_bool))
+                    .unwrap_or(true);
                 for it in items {
                     if out.len() as u64 > u64::from(nprims) {
                         return Err(GeoError::Count("more primitives than primitivecount".into()));
                     }
-                    let vtx = it.as_array().and_then(|a| a.last()).and_then(Value::as_i64).unwrap_or(-1);
+                    let fields = it.as_array().map_or(&[][..], Vec::as_slice);
+                    let vslot = slot.map_or_else(|| fields.last(), |i| fields.get(i));
+                    if poly {
+                        let Some(vl @ Value::Array(_)) = vslot else { return syn("Poly run item has no vertex list") };
+                        let vs = ints(vl)?;
+                        match contiguous(&vs, nverts)? {
+                            Some(r) => out.push(Prim { kind: PrimKind::Poly { closed }, verts: r }),
+                            None => out.push(Prim {
+                                kind: PrimKind::Unknown {
+                                    ty: rt.clone(),
+                                    json: serde_json::to_string(it).unwrap_or_default(),
+                                },
+                                verts: 0..0,
+                            }),
+                        }
+                        continue;
+                    }
+                    let Some(vtx) = vslot.and_then(Value::as_i64) else { return syn("run item has no scalar vertex") };
                     let r = contiguous(&[vtx], nverts)?.unwrap_or(0..0);
                     let mut b = vec![Value::from("vertex"), Value::from(vec![vtx]), Value::from("item"), it.clone()];
                     for k in ["varyingfields", "uniformfields"] {
