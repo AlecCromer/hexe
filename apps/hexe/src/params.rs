@@ -12,15 +12,16 @@ fn edit(ui: &mut Ui, v: &mut ParamValue, range: Option<(f32, f32)>) -> bool {
         ParamValue::Menu(x) => ui.add(egui::DragValue::new(x)).changed(),
         ParamValue::B(x) => ui.checkbox(x, "").changed(),
         ParamValue::S(s) => ui.text_edit_singleline(s).changed(),
-        ParamValue::V3(c) => ui
-            .horizontal(|ui| {
+        ParamValue::V3(c) => {
+            ui.horizontal(|ui| {
                 let mut ch = false;
                 for x in c.iter_mut() {
                     ch |= ui.add(egui::DragValue::new(x).speed(speed)).changed();
                 }
                 ch
             })
-            .inner,
+            .inner
+        }
     }
 }
 

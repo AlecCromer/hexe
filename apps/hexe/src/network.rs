@@ -58,7 +58,13 @@ pub fn show(ui: &mut Ui, scene: &Scene, pos: &mut [Pos2], selected: usize) -> Op
         let r = rect_of(pt);
         let b = pos2(r.left() + r.width() * (port as f32 + 1.0) / (ports as f32 + 1.0), r.top());
         painter.line_segment([a, b], Stroke::new(1.5, Color32::from_rgb(120, 160, 200)));
-        painter.text(b + vec2(3.0, -9.0), egui::Align2::LEFT_CENTER, port.to_string(), FontId::proportional(9.0), Color32::GRAY);
+        painter.text(
+            b + vec2(3.0, -9.0),
+            egui::Align2::LEFT_CENTER,
+            port.to_string(),
+            FontId::proportional(9.0),
+            Color32::GRAY,
+        );
     }
     let mut picked = None;
     for (i, node) in scene.nodes.iter().enumerate() {
@@ -77,8 +83,20 @@ pub fn show(ui: &mut Ui, scene: &Scene, pos: &mut [Pos2], selected: usize) -> Op
         let fill = if sel { Color32::from_rgb(70, 90, 130) } else { Color32::from_gray(55) };
         let edge = if sel { Color32::from_rgb(255, 200, 80) } else { Color32::from_gray(140) };
         painter.rect(r, 4.0, fill, Stroke::new(if sel { 2.0 } else { 1.0 }, edge), egui::StrokeKind::Inside);
-        painter.text(r.center_top() + vec2(0.0, 5.0), egui::Align2::CENTER_TOP, &node.name, FontId::proportional(12.0), Color32::WHITE);
-        painter.text(r.center_bottom() - vec2(0.0, 4.0), egui::Align2::CENTER_BOTTOM, node.ty, FontId::proportional(9.0), Color32::GRAY);
+        painter.text(
+            r.center_top() + vec2(0.0, 5.0),
+            egui::Align2::CENTER_TOP,
+            &node.name,
+            FontId::proportional(12.0),
+            Color32::WHITE,
+        );
+        painter.text(
+            r.center_bottom() - vec2(0.0, 4.0),
+            egui::Align2::CENTER_BOTTOM,
+            node.ty,
+            FontId::proportional(9.0),
+            Color32::GRAY,
+        );
         if sel {
             painter.circle_filled(r.right_top() + vec2(-6.0, 6.0), 3.5, Color32::from_rgb(80, 200, 255));
         }

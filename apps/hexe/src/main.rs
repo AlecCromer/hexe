@@ -65,7 +65,12 @@ impl Scene {
         let (key, val) = arg.split_once('=').ok_or(format!("--set {arg}: want node.param=value"))?;
         let (node, param) = key.split_once('.').ok_or(format!("--set {arg}: want node.param=value"))?;
         let id = self.nodes.iter().find(|n| n.name == node).map(|n| n.id).ok_or(format!("--set: no node `{node}`"))?;
-        let spec = self.graph.param_specs(id).into_iter().find(|s| s.name == param).ok_or(format!("--set: no param `{param}`"))?;
+        let spec = self
+            .graph
+            .param_specs(id)
+            .into_iter()
+            .find(|s| s.name == param)
+            .ok_or(format!("--set: no param `{param}`"))?;
         let bad = || format!("--set {arg}: bad value");
         let v = match spec.default {
             ParamValue::F(_) => ParamValue::F(val.parse().map_err(|_| bad())?),
@@ -138,7 +143,9 @@ impl App {
             Ok(Err(e)) => (self.detail, self.error) = (None, Some(e)),
             Err(_) => (self.detail, self.error) = (None, Some("cook panicked (caught)".into())),
         }
-        if self.fit && let Some(d) = &self.detail {
+        if self.fit
+            && let Some(d) = &self.detail
+        {
             let (lo, hi) = d.bbox();
             self.cam.fit(lo, hi);
             self.fit = false;

@@ -52,7 +52,15 @@ impl View {
     fn project(&self, p: V3) -> Option<(Pos2, f32)> {
         let d = sub(p, self.eye);
         let z = dot(d, self.fwd);
-        (z > NEAR).then(|| (pos2(self.center.x + self.focal * dot(d, self.right) / z, self.center.y - self.focal * dot(d, self.up) / z), z))
+        (z > NEAR).then(|| {
+            (
+                pos2(
+                    self.center.x + self.focal * dot(d, self.right) / z,
+                    self.center.y - self.focal * dot(d, self.up) / z,
+                ),
+                z,
+            )
+        })
     }
 }
 
@@ -60,7 +68,11 @@ impl Camera {
     fn view(&self, rect: egui::Rect) -> View {
         let (sy, cy, sp, cp) = (self.yaw.sin(), self.yaw.cos(), self.pitch.sin(), self.pitch.cos());
         let off = [cp * sy, sp, cp * cy];
-        let eye = [self.target[0] + self.dist * off[0], self.target[1] + self.dist * off[1], self.target[2] + self.dist * off[2]];
+        let eye = [
+            self.target[0] + self.dist * off[0],
+            self.target[1] + self.dist * off[1],
+            self.target[2] + self.dist * off[2],
+        ];
         let fwd = norm(sub(self.target, eye));
         let right = norm(cross(fwd, [0.0, 1.0, 0.0]));
         let up = cross(right, fwd);
@@ -156,7 +168,11 @@ fn draw_detail(painter: &egui::Painter, v: &View, d: &Detail) {
         let Some(poly) = flat.get(f.start..f.start + f.len) else { continue };
         if f.closed && f.len >= 3 {
             let g = 55.0 + 150.0 * f.shade;
-            painter.add(Shape::convex_polygon(poly.to_vec(), Color32::from_rgb((g * 0.6) as u8, (g * 0.8) as u8, g as u8), edge));
+            painter.add(Shape::convex_polygon(
+                poly.to_vec(),
+                Color32::from_rgb((g * 0.6) as u8, (g * 0.8) as u8, g as u8),
+                edge,
+            ));
         } else {
             painter.add(Shape::line(poly.to_vec(), edge));
         }
@@ -168,7 +184,11 @@ fn draw_detail(painter: &egui::Painter, v: &View, d: &Detail) {
 
 fn gizmo(painter: &egui::Painter, v: &View, rect: egui::Rect) {
     let o = rect.left_bottom() + vec2(44.0, -44.0);
-    for (axis, col, name) in [([1.0, 0.0, 0.0], Color32::from_rgb(230, 70, 70), "X"), ([0.0, 1.0, 0.0], Color32::from_rgb(90, 210, 90), "Y"), ([0.0, 0.0, 1.0], Color32::from_rgb(80, 130, 240), "Z")] {
+    for (axis, col, name) in [
+        ([1.0, 0.0, 0.0], Color32::from_rgb(230, 70, 70), "X"),
+        ([0.0, 1.0, 0.0], Color32::from_rgb(90, 210, 90), "Y"),
+        ([0.0, 0.0, 1.0], Color32::from_rgb(80, 130, 240), "Z"),
+    ] {
         let tip = o + vec2(dot(axis, v.right), -dot(axis, v.up)) * 30.0;
         painter.line_segment([o, tip], Stroke::new(2.0, col));
         painter.text(tip, egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(12.0), col);
