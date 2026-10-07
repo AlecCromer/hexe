@@ -605,3 +605,64 @@ evidence = [
   "crates/sop/src/builtins/blast_sop.rs::scene_tests::scene_loader_cooks_group_blast_example_and_registry_has_slots",
 ]
 notes = "H16: point|prim mode, negate, removeunused (default on; only points orphaned BY the blast, pre-existing unused points kept). Deleting points deletes whole prims using them. Empty group = all elements. Order, attributes, groups compact with survivors. NOT modelled: edge/vertex mode, delete-non-selected on unshared geometry, fillhole. UNVERIFIED vs Houdini (hython blocked); analytical oracle only."
+//
+# --- H20: IO (obj/ply, file SOP, rop_geometry, convert)
+[[feature]]
+id = "geo-read-obj"
+title = "Read Wavefront OBJ (v/vn/vt/f incl. a/b/c forms + negative indices, g -> prim groups, usemtl -> material, l -> polylines)"
+area = "B"
+tier = "P1"
+status = "partial"
+commands = ["convert", "info"]
+evidence = ["crates/geo/src/io_tests.rs::obj_hand_fixture_quad_with_negative_indices", "crates/geo/src/io_tests.rs::obj_corner_forms_groups_materials_lines", "crates/geo/src/io_tests.rs::hostile_obj"]
+notes = "vn -> vertex N, vt -> vertex uv stored V3 with z=0 (Houdini uv is 3-float). `o`, `s`, mtllib, curves/surfaces ignored; faces <3 / lines <2 corners are errors. Authored from the format spec, no Houdini OBJ importer diff (UNVERIFIED: material attrib name, group-per-g semantics, winding on import)."
+
+[[feature]]
+id = "geo-write-obj"
+title = "Write Wavefront OBJ (v/vn/vt, f for closed polys, l for polylines/open polys, usemtl from `material`)"
+area = "B"
+tier = "P1"
+status = "partial"
+commands = ["convert"]
+evidence = ["crates/geo/src/io_tests.rs::obj_roundtrip_cube", "crates/geo/src/io_tests.rs::write_refuses_non_poly_and_nonfinite", "crates/sop/src/builtins/rop_geometry_sop.rs::tests::box_rop_writes_each_format_and_reads_back"]
+notes = "Box -> obj -> read back = 8/24/6, P byte-equal (f32 shortest round-trip), prim normals equal <1e-6 (Newell, no `normal` SOP on main yet). Groups NOT written; non-poly prims -> Unsupported."
+
+[[feature]]
+id = "geo-read-ply"
+title = "Read PLY (ascii + binary_little_endian): x y z, nx ny nz -> N, red green blue -> Cd, s t -> uv, face vertex_indices lists"
+area = "B"
+tier = "P1"
+status = "partial"
+commands = ["convert", "info"]
+evidence = ["crates/geo/src/io_tests.rs::ply_binary_roundtrip_cube_and_every_truncation_is_err", "crates/geo/src/io_tests.rs::ply_attributes_and_skips", "crates/geo/src/io_tests.rs::hostile_ply"]
+notes = "binary_big_endian -> Unsupported. N/Cd/uv are POINT attributes; Cd /255 for integer types only; unknown vertex/face properties and extra elements are listed in skipped_attribs. Counts the body cannot hold are rejected before allocating (1e9 header -> Err). Spec from the format description (UNVERIFIED vs Houdini importer)."
+
+[[feature]]
+id = "geo-write-ply"
+title = "Write ascii PLY (P, point N/uv/Cd, closed polys <=255 corners)"
+area = "B"
+tier = "P1"
+status = "partial"
+commands = ["convert"]
+evidence = ["crates/geo/src/io_tests.rs::ply_ascii_roundtrip_cube", "crates/geo/src/io_tests.rs::ply_attributes_and_skips"]
+notes = "ascii only; Cd quantised to uchar; vertex-class attributes not written; non-poly prims -> Unsupported."
+
+[[feature]]
+id = "sop-file"
+title = "File SOP (read_any by extension; missing = error|no_geometry; cached by path+mtime+size)"
+area = "A"
+tier = "P0"
+status = "partial"
+commands = ["file"]
+evidence = ["crates/sop/src/builtins/file_sop.rs::tests::reads_houdini_ship_bgeo", "crates/sop/src/builtins/file_sop.rs::tests::missing_menu_error_or_no_geometry", "crates/sop/src/builtins/file_sop.rs::tests::reread_when_path_changes_and_when_file_changes", "crates/sop/src/builtins/file_sop.rs::tests::relative_path_resolves_against_scene_dir_then_cwd"]
+notes = "joint_link_n.bgeo -> 6/24/8. Relative path: scene dir (when loaded via load_scene_in / `hexe-cli cook`) if the file exists there, else cwd. No live file watching, no $HIP/$F expansion, no reload button, no frame-sequence paths."
+
+[[feature]]
+id = "rop-geometry"
+title = "ROP Geometry Output (rop_geometry): write input to sopoutput by extension on cook"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["rop_geometry", "cook", "convert"]
+evidence = ["crates/sop/src/builtins/rop_geometry_sop.rs::tests::box_rop_writes_each_format_and_reads_back", "crates/sop/src/builtins/rop_geometry_sop.rs::tests::rop_rejects_bad_params_and_unwritable_paths", "apps/hexe-cli/src/main.rs::tests::cook_with_rop_writes_the_file_and_file_sop_is_scene_relative", "apps/hexe-cli/src/main.rs::tests::example_file_rop_scene_cooks_from_any_cwd", "apps/hexe-cli/src/main.rs::tests::convert_roundtrips_formats_and_rejects_bad_args"]
+notes = "trange = off only (others Unsupported); relative sopoutput is cwd-relative; formats .geo(JSON) .obj .ply. No bgeo write, no frame ranges, no pre/post-render scripts. examples/file-rop.json."
