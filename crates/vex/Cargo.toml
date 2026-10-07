@@ -1,0 +1,12 @@
+[package]
+name = "hexe-vex"
+description = "hexe: clean-room VEX-subset (lexer + parser + tree-walking interpreter, no deps; geometry via the `Host` trait)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

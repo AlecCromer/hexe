@@ -15,6 +15,7 @@ hexe-core = { path = "crates/core", version = "0.1.0" }
 hexe-geo = { path = "crates/geo", version = "0.1.0" }
 hexe-graph = { path = "crates/graph", version = "0.1.0" }
 hexe-sop = { path = "crates/sop", version = "0.1.0" }
+hexe-vex = { path = "crates/vex", version = "0.1.0" }
 # ui (apps only: layers.rs forbids UI crates below L7). Switch eframe to `wgpu` when a custom pass is needed.
 glam = "0.30"
 egui = "0.36"
