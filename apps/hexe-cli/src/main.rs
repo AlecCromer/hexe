@@ -1,4 +1,5 @@
-//! hexe-cli: `--version`, `oracle <case> [input]`. Every command runs behind `catch_unwind` (AGENTS.md §4).
+//! hexe-cli: `--version`, `cook <scene.json> --out <file.geo> [--time T]`, `nodes`, `oracle <case> [input]`.
+//! Every command runs behind `catch_unwind` (AGENTS.md §4); every failure is one stderr line + exit 1.
 #![deny(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -7,12 +8,18 @@
     clippy::todo,
     clippy::unreachable
 )]
-
+use hexe_graph::{ParamSpec, ParamValue};
+use std::fmt::Write as _;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::process::ExitCode;
 
-/// Oracle entry point: `xtask oracle` runs `hexe-cli <case.toml cmd…> <input path>` and compares stdout
-/// with `expected`. Add one arm per fixture family as ledger rows land.
+/// Largest scene file `cook` reads (hostile input is the default).
+const MAX_SCENE_BYTES: u64 = 64 << 20;
+const USAGE: &str =
+    "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | oracle <case> [input]";
+
+/// Oracle entry point: `xtask oracle` runs `hexe-cli <case.toml cmd…>` (see fixtures/README.md) and compares the
+/// result with `expected`. Add one arm per fixture family as ledger rows land.
 fn oracle(case: &str, input: Option<&str>) -> Result<String, String> {
     match case {
         "parse-len" => {
@@ -24,14 +31,95 @@ fn oracle(case: &str, input: Option<&str>) -> Result<String, String> {
     }
 }
 
+/// Scene JSON text → cooked display node as `.geo` JSON bytes + `(points, prims)`.
+fn cook_scene(json: &str, time: f32) -> Result<(Vec<u8>, u32, u32), String> {
+    let (mut graph, display) = hexe_sop::load_scene(json).map_err(|e| e.to_string())?;
+    let detail = graph.cook(display, time).map_err(|e| e.to_string())?;
+    Ok((hexe_geo::write_geo_json(&detail), detail.point_count, detail.prim_count()))
+}
+
+struct CookArgs {
+    scene: String,
+    out: String,
+    time: f32,
+}
+
+fn parse_cook(args: &[String]) -> Result<CookArgs, String> {
+    let (mut scene, mut out, mut time) = (None, None, 0.0f32);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--out" | "-o" => out = Some(it.next().ok_or("cook: --out needs a path")?.clone()),
+            "--time" => {
+                let v = it.next().ok_or("cook: --time needs a number")?;
+                time = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --time `{v}`"))?;
+            }
+            flag if flag.starts_with('-') => return Err(format!("cook: unknown option `{flag}`")),
+            path if scene.is_none() => scene = Some(path.to_string()),
+            extra => return Err(format!("cook: unexpected argument `{extra}`")),
+        }
+    }
+    Ok(CookArgs {
+        scene: scene.ok_or("usage: hexe-cli cook <scene.json> --out <file.geo> [--time T]")?,
+        out: out.ok_or("cook: --out <file.geo> is required")?,
+        time,
+    })
+}
+
+fn cook(args: &[String]) -> Result<String, String> {
+    let a = parse_cook(args)?;
+    let meta = std::fs::metadata(&a.scene).map_err(|e| format!("{}: {e}", a.scene))?;
+    if meta.len() > MAX_SCENE_BYTES {
+        return Err(format!("{}: scene larger than {MAX_SCENE_BYTES} bytes", a.scene));
+    }
+    let json = std::fs::read_to_string(&a.scene).map_err(|e| format!("{}: {e}", a.scene))?;
+    let (bytes, points, prims) = cook_scene(&json, a.time)?;
+    std::fs::write(&a.out, bytes).map_err(|e| format!("{}: {e}", a.out))?;
+    Ok(format!("cooked {points} points, {prims} prims -> {}\n", a.out))
+}
+
+fn show(v: &ParamValue) -> String {
+    match v {
+        ParamValue::F(x) => format!("F {x}"),
+        ParamValue::I(x) => format!("I {x}"),
+        ParamValue::B(x) => format!("B {x}"),
+        ParamValue::V3([x, y, z]) => format!("V3 [{x}, {y}, {z}]"),
+        ParamValue::S(x) => format!("S {x:?}"),
+        ParamValue::Menu(x) => format!("Menu {x}"),
+    }
+}
+
+fn show_param(p: &ParamSpec) -> String {
+    let range = p.range.map_or(String::new(), |(lo, hi)| format!("  range {lo}..{hi}"));
+    format!("  {:<16} {}{range}\n", p.name, show(&p.default))
+}
+
+/// `nodes`: every registered SOP type with its inputs and `token  Type default` param table.
+fn nodes() -> String {
+    let reg = hexe_sop::registry();
+    let mut out = String::new();
+    for name in reg.type_names() {
+        let inputs = reg
+            .create(name)
+            .map_or_else(String::new, |n| n.inputs().iter().map(|i| i.name).collect::<Vec<_>>().join(", "));
+        let _ = writeln!(out, "{name}  (inputs: {})", if inputs.is_empty() { "none" } else { &inputs });
+        for p in reg.specs(name).unwrap_or_default() {
+            out.push_str(&show_param(&p));
+        }
+    }
+    out
+}
+
 fn dispatch(args: &[String]) -> Result<String, String> {
     match args.first().map(String::as_str) {
         Some("--version" | "-V") => Ok(format!("hexe {}\n", env!("CARGO_PKG_VERSION"))),
+        Some("cook") => cook(&args[1..]),
+        Some("nodes") => Ok(nodes()),
         Some("oracle") => match args.get(1) {
             Some(case) => oracle(case, args.get(2).map(String::as_str)),
             None => Err("usage: hexe-cli oracle <case> [input]".into()),
         },
-        _ => Err("usage: hexe-cli --version | oracle <case> [input]".into()),
+        _ => Err(USAGE.into()),
     }
 }
 
@@ -44,11 +132,11 @@ fn main() -> ExitCode {
         }
         Ok(Err(msg)) => {
             eprintln!("hexe-cli: {msg}");
-            ExitCode::from(2)
+            ExitCode::FAILURE
         }
         Err(_) => {
             eprintln!("hexe-cli: internal error (panic caught)");
-            ExitCode::from(70)
+            ExitCode::FAILURE
         }
     }
 }
@@ -56,6 +144,10 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|x| x.to_string()).collect()
+    }
 
     #[test]
     fn version_flag_prints_name_and_version() {
@@ -66,5 +158,45 @@ mod tests {
     #[test]
     fn unknown_oracle_case_is_an_error_not_a_panic() {
         assert!(dispatch(&["oracle".into(), "nope".into()]).is_err());
+    }
+
+    #[test]
+    fn cook_args_parse_and_reject() {
+        let a = parse_cook(&s(&["a.json", "--out", "o.geo", "--time", "1.5"])).unwrap();
+        assert_eq!((a.scene.as_str(), a.out.as_str(), a.time), ("a.json", "o.geo", 1.5));
+        for bad in [
+            s(&[]),
+            s(&["a.json"]),
+            s(&["--out", "o.geo"]),
+            s(&["a.json", "--out"]),
+            s(&["a.json", "--out", "o", "--time", "nan"]),
+            s(&["a.json", "--out", "o", "--time", "x"]),
+            s(&["a.json", "--out", "o", "--bogus"]),
+            s(&["a.json", "b.json", "--out", "o"]),
+        ] {
+            assert!(parse_cook(&bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn cook_scene_null_is_empty_geo_roundtrip() {
+        let (bytes, p, pr) = cook_scene(r#"{"nodes":[{"name":"n","type":"null"}],"display":"n"}"#, 0.0).unwrap();
+        assert_eq!((p, pr), (0, 0));
+        let d = hexe_geo::read_geo(&bytes).unwrap();
+        assert_eq!((d.point_count, d.prim_count(), d.p().len()), (0, 0, 0));
+    }
+
+    #[test]
+    fn cook_scene_errors_are_messages() {
+        assert!(cook_scene("{", 0.0).unwrap_err().contains("invalid scene JSON"));
+        assert!(cook_scene(r#"{"nodes":[],"display":"q"}"#, 0.0).is_err());
+        assert!(dispatch(&s(&["cook", "/nonexistent/scene.json", "--out", "x.geo"])).is_err());
+        assert!(dispatch(&s(&["bogus"])).is_err());
+    }
+
+    #[test]
+    fn nodes_lists_null() {
+        let out = nodes();
+        assert!(out.contains("null  (inputs: input)"), "{out}");
     }
 }

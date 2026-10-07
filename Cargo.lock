@@ -880,6 +880,9 @@ name = "hexe-cli"
 version = "0.1.0"
 dependencies = [
  "hexe-core",
+ "hexe-geo",
+ "hexe-graph",
+ "hexe-sop",
 ]
 
 [[package]]
