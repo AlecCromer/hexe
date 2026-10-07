@@ -18,6 +18,8 @@ mod grid_sop;
 //
 mod merge_sop;
 //
+mod polyextrude_sop;
+//
 mod scatter_sop;
 //
 mod sphere_sop;
@@ -41,6 +43,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     // r.register("line", line_sop::spec, line_sop::new);
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
+    //
+    r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
     //
     r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
