@@ -20,6 +20,8 @@ mod gpd;
 mod json_read;
 mod json_write;
 #[cfg(test)]
+mod fidelity_tests;
+#[cfg(test)]
 mod ship_tests;
 #[cfg(test)]
 mod tests;

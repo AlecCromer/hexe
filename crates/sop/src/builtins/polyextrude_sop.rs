@@ -338,6 +338,7 @@ impl Node<Detail> for PolyExtrude {
             prims: o.prims,
             attrs: Vec::new(),
             groups: Vec::new(),
+            skipped_attribs: Vec::new(),
         };
         let map_for = |c: AttrClass| -> Option<&[Option<usize>]> {
             match c {

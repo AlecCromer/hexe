@@ -92,4 +92,7 @@ pub struct Detail {
     pub prims: Vec<Prim>,
     pub attrs: Vec<Attribute>,
     pub groups: Vec<Group>,
+    /// Attributes present in the source but with no `AttrData` form (`dict`, `stringarray`, ...): `(class, name, source type)`.
+    /// Never silent: readers push here instead of dropping. Not written back by `write_geo_json`.
+    pub skipped_attribs: Vec<(AttrClass, String, String)>,
 }

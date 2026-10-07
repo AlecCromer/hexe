@@ -216,8 +216,8 @@ fn type_info_of(meta: &Kv<'_>) -> TypeInfo {
     }
 }
 
-/// `Ok(None)` = attribute kind we deliberately skip (dict/array/etc), never an error.
-fn read_attr(entry: &Value, class: AttrClass, count: usize) -> Result<Option<Attribute>, GeoError> {
+/// `Ok(None)` = attribute kind with no `AttrData` form (dict/stringarray/etc): recorded in `skipped`, never silent, never an error.
+fn read_attr(entry: &Value, class: AttrClass, count: usize, skipped: &mut Vec<(AttrClass, String, String)>) -> Result<Option<Attribute>, GeoError> {
     let Value::Array(pair) = entry else { return syn("attribute entry is not a [meta, data] pair") };
     let (Some(m), Some(d)) = (pair.first(), pair.get(1)) else { return syn("attribute entry needs [meta, data]") };
     let meta = need_kv(m, "attribute meta")?;
@@ -269,7 +269,10 @@ fn read_attr(entry: &Value, class: AttrClass, count: usize) -> Result<Option<Att
             }
             Ok(Some(attr(AttrData::Str { idx, table }, TypeInfo::None)))
         }
-        _ => Ok(None),
+        other => {
+            skipped.push((class, name.to_string(), other.to_string()));
+            Ok(None)
+        }
     }
 }
 
@@ -570,7 +573,7 @@ pub(crate) fn detail_from_value(root: &Value) -> Result<Detail, GeoError> {
             let Some(list) = find(&ak, key) else { continue };
             let Value::Array(list) = list else { return syn(format!("{key}: expected array")) };
             for e in list {
-                if let Some(at) = read_attr(e, class, n as usize)? {
+                if let Some(at) = read_attr(e, class, n as usize, &mut d.skipped_attribs)? {
                     d.attrs.push(at);
                 }
             }
