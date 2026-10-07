@@ -14,3 +14,11 @@
 # produced_by = "…"
 # original_version = "…"
 # date = "2026-01-01"
+
+[[fixture]]
+case = "gpd-all"
+file = "expected.geo"
+sha256 = "d3739159f69d4755d61dc8426eb718e6cf56005188b0d6eb2ca175e703a8281c"
+produced_by = "shipped with Houdini 20.5.487 ($H/houdini/public/GPD/all.geo, legacy PGEOMETRY V2 ASCII; copied byte-for-byte)"
+original_version = "20.5.487"
+date = "2026-10-07"

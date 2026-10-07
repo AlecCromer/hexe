@@ -268,6 +268,18 @@ impl Detail {
             verts: p.verts.start.saturating_add(shift_v)..p.verts.end.saturating_add(shift_v),
         }));
     }
+    /// Canonical order (what the readers/writer produce): attrs by class Point,Vertex,Prim,Detail; groups by class Point,Vertex,Prim.
+    /// Stable within a class.
+    pub fn canonicalize(&mut self) {
+        let rank = |c: AttrClass| match c {
+            AttrClass::Point => 0,
+            AttrClass::Vertex => 1,
+            AttrClass::Prim => 2,
+            AttrClass::Detail => 3,
+        };
+        self.attrs.sort_by_key(|a| rank(a.class));
+        self.groups.sort_by_key(|g| rank(g.class));
+    }
     /// Axis-aligned bounds of `P`; `([0;3],[0;3])` when empty.
     pub fn bbox(&self) -> ([f32; 3], [f32; 3]) {
         let p = self.p();
