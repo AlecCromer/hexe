@@ -17,14 +17,14 @@
 | 7 |  | `s` | Scale | vector[3] | 1 1 1 | -1 1 |  |  |  |
 | 8 |  | `shear` | Shear | float[3] | 0 0 0 | 0 10 |  |  |  |
 | 9 |  | `scale` | Uniform Scale | float | 1 | 0 10 |  |  |  |
-| 10 | Pivot Transform grouptag | `p` | Pivot Translate | vector[3] | 0 0 0 | -1 1 |  |  |  |
-| 11 | Pivot Transform grouptag | `pr` | Pivot Rotate | vector[3] | 0 0 0 | 0 360 |  |  |  |
-| 12 | Pre-Transform grouptag | `prexform_xOrd` | Pre-Transform Order | ordinal | srt |  | srt=Scale Rot Trans, str=Scale Trans Rot, rst=Rot Scale Trans, rts=Rot Trans Scale, tsr=Trans Scale Rot, trs=Trans Rot Scale |  | joinnext |
-| 13 | Pre-Transform grouptag | `prexform_rOrd` | Pre-Rotate Order | ordinal | xyz |  | xyz=Rx Ry Rz, xzy=Rx Rz Ry, yxz=Ry Rx Rz, yzx=Ry Rz Rx, zxy=Rz Rx Ry, zyx=Rz Ry Rx |  | nolabel |
-| 14 | Pre-Transform grouptag | `prexform_t` | Pre-Translate | vector[3] | 0 0 0 |  |  |  |  |
-| 15 | Pre-Transform grouptag | `prexform_r` | Pre-Rotate | vector[3] | 0 0 0 |  |  |  |  |
-| 16 | Pre-Transform grouptag | `prexform_s` | Pre-Scale | vector[3] | 1 1 1 |  |  |  |  |
-| 17 | Pre-Transform grouptag | `prexform_shear` | Pre-Shear | float[3] | 0 0 0 | 0 10 |  |  |  |
+| 10 | Pivot Transform | `p` | Pivot Translate | vector[3] | 0 0 0 | -1 1 |  |  |  |
+| 11 | Pivot Transform | `pr` | Pivot Rotate | vector[3] | 0 0 0 | 0 360 |  |  |  |
+| 12 | Pre-Transform | `prexform_xOrd` | Pre-Transform Order | ordinal | srt |  | srt=Scale Rot Trans, str=Scale Trans Rot, rst=Rot Scale Trans, rts=Rot Trans Scale, tsr=Trans Scale Rot, trs=Trans Rot Scale |  | joinnext |
+| 13 | Pre-Transform | `prexform_rOrd` | Pre-Rotate Order | ordinal | xyz |  | xyz=Rx Ry Rz, xzy=Rx Rz Ry, yxz=Ry Rx Rz, yzx=Ry Rz Rx, zxy=Rz Rx Ry, zyx=Rz Ry Rx |  | nolabel |
+| 14 | Pre-Transform | `prexform_t` | Pre-Translate | vector[3] | 0 0 0 |  |  |  |  |
+| 15 | Pre-Transform | `prexform_r` | Pre-Rotate | vector[3] | 0 0 0 |  |  |  |  |
+| 16 | Pre-Transform | `prexform_s` | Pre-Scale | vector[3] | 1 1 1 |  |  |  |  |
+| 17 | Pre-Transform | `prexform_shear` | Pre-Shear | float[3] | 0 0 0 | 0 10 |  |  |  |
 | 18 |  | `movecentroid` | Move Centroid to Origin | button | 0 | 0 1 |  |  | joinnext |
 | 19 |  | `movepivot` | Move Pivot to Centroid | button | 0 | 0 1 |  |  |  |
 | 20 |  | `attribs` | Attributes | string | * |  |  |  |  |
