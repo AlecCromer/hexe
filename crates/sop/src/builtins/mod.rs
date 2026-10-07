@@ -6,19 +6,27 @@ use crate::Registry;
 
 mod null_sop;
 //
+mod add_sop;
+//
 mod attribnoise_sop;
 //
 mod box_sop;
 //
+mod circle_sop;
+//
 mod copytopoints_sop;
+//
+mod curve_sop;
 //
 mod grid_sop;
 //
-// mod line_sop;
+mod line_sop;
 //
 mod merge_sop;
 //
 mod polyextrude_sop;
+//
+mod resample_sop;
 //
 mod scatter_sop;
 //
@@ -32,19 +40,27 @@ mod wrangle_sop;
 pub(crate) fn builtins(r: &mut Registry) {
     r.register("null", null_sop::spec, null_sop::new);
     //
+    r.register("add", add_sop::spec, add_sop::new);
+    //
     r.register("attribnoise", attribnoise_sop::spec, attribnoise_sop::new);
     //
     r.register("box", box_sop::spec, box_sop::new);
     //
+    r.register("circle", circle_sop::spec, circle_sop::new);
+    //
     r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
+    //
+    r.register("curve", curve_sop::spec, curve_sop::new);
     //
     r.register("grid", grid_sop::spec, grid_sop::new);
     //
-    // r.register("line", line_sop::spec, line_sop::new);
+    r.register("line", line_sop::spec, line_sop::new);
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
     //
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
+    //
+    r.register("resample", resample_sop::spec, resample_sop::new);
     //
     r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
