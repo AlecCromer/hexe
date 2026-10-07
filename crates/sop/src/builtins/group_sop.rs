@@ -15,6 +15,7 @@
 //!   point) -> excluded. Zero `dir` or negative `angle` -> `BadParam`.
 //! * `merge_op` vs an existing group of that class+name: replace | union | intersect (existing & new) | subtract (existing & !new).
 //!   Missing existing group = empty. The group is always created (possibly empty).
+//!
 //! Defaults `grouptype=prim`, `dir=(0,1,0)`, `angle=45`, `bbox_size=(1,1,1)` are guesses (UNVERIFIED).
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, Group, Prim};

@@ -9,6 +9,7 @@
 //! * to point: `any` = some vertex on the point selected, `all` = EVERY vertex on the point selected (point with no
 //!   vertices never qualifies). So prim -> point `any` = all points of the group's prims; `all` = only points whose every
 //!   prim is in the group.
+//!
 //! `fromtype == totype` copies the mask. Menus `fromtype`/`totype`: point | prim | vertex; `method`: any | all.
 use super::group_sop::{GT_POINT, GT_PRIM, GT_VERTEX, bad, failed, prim_verts, set_group};
 use crate::SopNode;

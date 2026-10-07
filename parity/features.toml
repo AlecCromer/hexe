@@ -544,3 +544,64 @@ status = "shipped"
 commands = []
 evidence = ["crates/geo/src/bgeo_legacy_tests.rs::binary_equals_text_twin", "crates/geo/src/bgeo_legacy_tests.rs::every_truncation_is_a_clean_error", "crates/geo/src/bgeo_legacy_tests.rs::lying_header_counts_never_panic_or_overallocate", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle"]
 notes = "all.bgeo (v2) == its text twin (points, vertex->point map, prim ranges+types, attr values, groups). v3/v5: 5 of 6 install files parse to the exact trailer (no twin, UNVERIFIED values); fabric.bgeo NURBMesh profile block fails. Non-float attrib types, vertex/prim/detail attribs, ordered-group lists, wide (>=65536 pts) indices are inferred (UNVERIFIED)."
+
+# --- H16: group family
+[[feature]]
+id = "sop-group"
+title = "Group SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["group"]
+evidence = [
+  "crates/sop/src/builtins/group_sop.rs::grid_pattern_0_2_is_3_points_and_negated_is_6",
+  "crates/sop/src/builtins/group_sop.rs::grid_bbox_unit_box_keeps_exactly_the_centre_point",
+  "crates/sop/src/builtins/group_sop.rs::box_normal_dir_y_angle_10_is_top_only_and_angle_90_is_all_but_bottom",
+  "crates/sop/src/builtins/group_sop.rs::merge_ops_against_existing_group",
+  "crates/sop/src/builtins/group_sop.rs::pattern_refers_to_existing_groups_and_unknown_fails",
+  "crates/sop/src/builtins/group_sop.rs::vertex_group_edge_unsupported_and_hostile_params",
+]
+notes = "H16: point/prim/vertex groups (edge = Unsupported); pattern ranges/*/!/group names/globs; bbox (inclusive faces); normal (Newell, points = averaged unit prim normals, angle boundary INCLUSIVE so 90 keeps perpendicular sides); merge_op replace|union|intersect|subtract. Empty pattern with no filter = all elements. Defaults grouptype=prim, dir=(0,1,0), angle=45, bbox_size=1 are guesses. NOT modelled: edge groups, prim:vertex syntax, include-by-edges, base-group-vs-pattern split, unshared/convex options. UNVERIFIED vs Houdini (hython blocked); analytical oracle only. Example: examples/group-blast.json."
+
+[[feature]]
+id = "sop-groupdelete"
+title = "Group Delete SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["groupdelete"]
+evidence = [
+  "crates/sop/src/builtins/groupdelete_sop.rs::deletes_named_and_glob_groups_geometry_untouched",
+  "crates/sop/src/builtins/groupdelete_sop.rs::nothing_matched_shares_the_arc",
+]
+notes = "H16: names with */? glob, all classes; geometry untouched; no match (or empty field) = same Arc. NOT modelled: per-type filters, negate, numeric/pattern selection. UNVERIFIED: empty field = nothing here, may be all in Houdini."
+
+[[feature]]
+id = "sop-grouppromote"
+title = "Group Promote SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["grouppromote"]
+evidence = [
+  "crates/sop/src/builtins/grouppromote_sop.rs::box_top_prim_to_points_is_4_and_all_method_is_0",
+  "crates/sop/src/builtins/grouppromote_sop.rs::box_one_corner_point_to_prims_any_3_all_0",
+  "crates/sop/src/builtins/grouppromote_sop.rs::vertex_roundtrip_same_type_rename_remove_and_hostile",
+]
+notes = "H16: point/prim/vertex both ways, routed through vertices; method any|all (all needs >=1 incident vertex); newname / removesource. prim->point any = all points of the group's prims. NOT modelled: edge class, multi-group source. UNVERIFIED vs Houdini (hython blocked); analytical oracle only."
+
+[[feature]]
+id = "sop-blast"
+title = "Blast SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["blast"]
+evidence = [
+  "crates/sop/src/builtins/blast_sop.rs::box_blast_prim_0_is_5_prims_8_points",
+  "crates/sop/src/builtins/blast_sop.rs::box_blast_top_group_negated_is_1_prim_4_points_and_unnegated_is_5_prims",
+  "crates/sop/src/builtins/blast_sop.rs::grid_blast_points_0_2_is_6_points_2_prims",
+  "crates/sop/src/builtins/blast_sop.rs::attributes_and_orphans_follow",
+  "crates/sop/src/builtins/blast_sop.rs::scene_tests::scene_loader_cooks_group_blast_example_and_registry_has_slots",
+]
+notes = "H16: point|prim mode, negate, removeunused (default on; only points orphaned BY the blast, pre-existing unused points kept). Deleting points deletes whole prims using them. Empty group = all elements. Order, attributes, groups compact with survivors. NOT modelled: edge/vertex mode, delete-non-selected on unshared geometry, fillhole. UNVERIFIED vs Houdini (hython blocked); analytical oracle only."

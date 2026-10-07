@@ -6,7 +6,9 @@
 //! * prim mode: selected prims go; points stay unless orphaned by this deletion AND `removeunused` (default on).
 //! * point mode: selected points go, and every prim using one of them goes with it (whole prim, never a shortened one);
 //!   points orphaned by those collateral prim deletions follow the same `removeunused` rule.
+//!
 //! Points that were already unused before the blast (point clouds) are never touched by `removeunused`.
+//!
 //! Order of survivors is preserved; attributes and groups are compacted along. Nothing deleted -> input `Arc` shared.
 use super::group_sop::{GT_POINT, GT_PRIM, bad, compact, parse_pattern, prim_verts};
 use crate::SopNode;
