@@ -198,6 +198,25 @@ evidence = [
 notes = "wave 2: max 4 inputs (input0..3; Houdini 9999); variadic ports = graph wave 3. 0 params (doc-labelled 0; hidden parms [?] unknown, none modelled). Single live input shares the Arc; empty inputs skipped. UNVERIFIED vs Houdini (hython blocked): attr default-fill (0 / empty string), type/tuple-size conflict = Failed (Houdini may drop/convert), group union, detail attr first-wins, bypass-exports-input-1 not modelled. Oracle: fixtures/merge-empty scores; fixtures/merge-two-boxes is xfail until the box SOP lane lands (point order/params of box unverified). Analytical expecteds, not Houdini-observed."
 
 [[feature]]
+id = "sop-polyextrude"
+title = "PolyExtrude SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["polyextrude"]
+evidence = [
+  "crates/sop/src/builtins/polyextrude_sop.rs::unit_quad_distance_1_is_8_points_5_prims_top_at_z1",
+  "crates/sop/src/builtins/polyextrude_sop.rs::divisions_3_is_16_points_13_prims_layers_evenly_spaced",
+  "crates/sop/src/builtins/polyextrude_sop.rs::inset_quarter_distance_0_top_corners_at_quarter_three_quarters",
+  "crates/sop/src/builtins/polyextrude_sop.rs::back_adds_one_prim_with_reversed_winding",
+  "crates/sop/src/builtins/polyextrude_sop.rs::box_distance_half_is_48_points_30_prims_outward",
+  "crates/sop/src/builtins/polyextrude_sop.rs::group_limits_extrusion_others_pass_through",
+  "crates/sop/src/builtins/polyextrude_sop.rs::hostile_non_polygon_and_degenerate_pass_through",
+  "crates/sop/src/builtins/polyextrude_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
+]
+notes = "H9: individual mode only (no shared-edge welding). Params distance/inset/divisions/output_front/output_side/output_back/group = OUR minimal subset, not the harvested parm table. Inset = mitre edge offset toward centroid, applied before distance; divisions interpolate linearly. Prim order: front, sides (layer-major), back, in place. Input points used only by extruded prims are dropped (box 6 quads -> 48 pts). NOT modelled: extrusion spacing/twist/taper, local/global transform, N/uv updates, thickness, vertex-normal extrude mode, point/edge groups, output groups (front/back/side), connected (welded) mode. UNVERIFIED vs Houdini (hython blocked): side/front order, inset formula on concave n-gons, group-miss = Failed. Example: examples/polyextrude.json. Analytical oracle only."
+
+[[feature]]
 id = "sop-scatter"
 title = "Scatter SOP"
 area = "A"

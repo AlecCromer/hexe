@@ -367,3 +367,259 @@ impl Node<Detail> for PolyExtrude {
         Ok(Arc::new(out))
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hexe_geo::{Attribute, TypeInfo};
+    fn cook(d: Detail, p: ParamSet) -> Result<Arc<Detail>, CookError> {
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+        new().cook(&ctx, &[Arc::new(d)])
+    }
+    fn quad() -> Detail {
+        let mut d = Detail::default();
+        d.add_points(4);
+        *d.p_mut() = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
+        d.add_poly(&[0, 1, 2, 3], true);
+        d
+    }
+    /// Unit box (corners +-0.5, 8 shared points), 6 outward-wound quads, closed form.
+    fn cube() -> Detail {
+        let mut d = Detail::default();
+        d.add_points(8);
+        let c = |b: u32, i: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
+        *d.p_mut() = (0..8).map(|i| [c(2, i), c(1, i), c(0, i)]).collect();
+        for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+            d.add_poly(&f, true);
+        }
+        d
+    }
+    fn f(v: f32) -> ParamValue {
+        ParamValue::F(v)
+    }
+    fn prim_pts(d: &Detail, i: usize) -> Vec<[f32; 3]> {
+        let pr = &d.prims[i];
+        d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| d.p()[p as usize]).collect()
+    }
+    /// Independent Newell normal (unnormalised).
+    fn newell(p: &[[f32; 3]]) -> [f32; 3] {
+        let mut n = [0.0f32; 3];
+        for i in 0..p.len() {
+            let (a, b) = (p[i], p[(i + 1) % p.len()]);
+            n[0] += (a[1] - b[1]) * (a[2] + b[2]);
+            n[1] += (a[2] - b[2]) * (a[0] + b[0]);
+            n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+        }
+        n
+    }
+    fn centroid(p: &[[f32; 3]]) -> [f32; 3] {
+        let k = p.len() as f32;
+        [0, 1, 2].map(|j| p.iter().map(|q| q[j]).sum::<f32>() / k)
+    }
+    fn near(a: [f32; 3], b: [f32; 3]) -> bool {
+        (0..3).all(|j| (a[j] - b[j]).abs() < 1e-5)
+    }
+    #[test]
+    fn params_and_defaults() {
+        let n = new();
+        assert_eq!(n.type_name(), "polyextrude");
+        let got: Vec<(&str, ParamValue)> = n.params().iter().map(|s| (s.name.as_str(), s.default.clone())).collect();
+        assert_eq!(
+            got,
+            [
+                ("distance", f(0.0)),
+                ("inset", f(0.0)),
+                ("divisions", ParamValue::I(1)),
+                ("output_front", ParamValue::B(true)),
+                ("output_side", ParamValue::B(true)),
+                ("output_back", ParamValue::B(false)),
+                ("group", ParamValue::S(String::new())),
+            ]
+        );
+    }
+    fn defaults() -> ParamSet {
+        new().params().iter().fold(ParamSet::new(), |p, s| p.with(&s.name, s.default.clone()))
+    }
+    fn with(p: ParamSet, k: &str, v: ParamValue) -> ParamSet {
+        p.with(k, v)
+    }
+    #[test]
+    fn unit_quad_distance_1_is_8_points_5_prims_top_at_z1() {
+        let out = cook(quad(), with(defaults(), "distance", f(1.0))).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (8, 5));
+        let top = prim_pts(&out, 0);
+        assert!(top.iter().all(|p| p[2] == 1.0), "{top:?}");
+        assert_eq!(
+            top.iter().map(|p| [p[0], p[1]]).collect::<Vec<_>>(),
+            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+        );
+        assert_eq!(newell(&top), [0.0, 0.0, 2.0]);
+        // side 0 sits on the y=0 edge, outward normal -Y
+        let s0 = prim_pts(&out, 1);
+        assert_eq!(s0, [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 0.0, 1.0]]);
+        assert_eq!(newell(&s0), [0.0, -2.0, 0.0]);
+        // every side normal points away from the extrusion axis
+        for i in 1..5 {
+            let s = prim_pts(&out, i);
+            let (n, c) = (newell(&s), centroid(&s));
+            assert!(n[0] * (c[0] - 0.5) + n[1] * (c[1] - 0.5) > 0.0, "side {i} inward");
+        }
+    }
+    #[test]
+    fn divisions_3_is_16_points_13_prims_layers_evenly_spaced() {
+        let out =
+            cook(quad(), with(with(defaults(), "distance", f(1.0)), "divisions", ParamValue::I(3))).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (16, 13));
+        assert!(prim_pts(&out, 0).iter().all(|p| p[2] == 1.0));
+        let z: Vec<f32> = (1..13).step_by(4).map(|i| prim_pts(&out, i)[2][2]).collect();
+        assert!(z.iter().zip([1.0 / 3.0, 2.0 / 3.0, 1.0]).all(|(a, b)| (a - b).abs() < 1e-6), "{z:?}");
+    }
+    #[test]
+    fn inset_quarter_distance_0_top_corners_at_quarter_three_quarters() {
+        let out = cook(quad(), with(defaults(), "inset", f(0.25))).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (8, 5));
+        let top = prim_pts(&out, 0);
+        let want = [[0.25, 0.25, 0.0], [0.75, 0.25, 0.0], [0.75, 0.75, 0.0], [0.25, 0.75, 0.0]];
+        assert!(top.iter().zip(want).all(|(a, b)| near(*a, b)), "{top:?}");
+        // inset before distance: distance 1 lifts the already-inset ring
+        let up = cook(quad(), with(with(defaults(), "inset", f(0.25)), "distance", f(1.0))).expect("cooks");
+        assert!(prim_pts(&up, 0).iter().zip(want).all(|(a, b)| near(*a, [b[0], b[1], 1.0])));
+    }
+    #[test]
+    fn back_adds_one_prim_with_reversed_winding() {
+        let out = cook(quad(), with(with(defaults(), "distance", f(1.0)), "output_back", ParamValue::B(true)))
+            .expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (8, 6));
+        let (front, back) = (prim_pts(&out, 0), prim_pts(&out, 5));
+        assert_eq!(newell(&front), [0.0, 0.0, 2.0]);
+        assert_eq!(newell(&back), [0.0, 0.0, -2.0]);
+        assert!(back.iter().all(|p| p[2] == 0.0));
+    }
+    #[test]
+    fn output_toggles_select_pieces() {
+        let p = |a, b, c| {
+            with(
+                with(with(defaults(), "output_front", ParamValue::B(a)), "output_side", ParamValue::B(b)),
+                "output_back",
+                ParamValue::B(c),
+            )
+        };
+        for (t, want) in [
+            ((true, false, false), 1),
+            ((false, true, false), 4),
+            ((false, false, true), 1),
+            ((false, false, false), 0),
+        ] {
+            let out = cook(quad(), with(p(t.0, t.1, t.2), "distance", f(1.0))).expect("cooks");
+            assert_eq!(out.prim_count(), want, "{t:?}");
+        }
+    }
+    #[test]
+    fn box_distance_half_is_48_points_30_prims_outward() {
+        let out = cook(cube(), with(defaults(), "distance", f(0.5))).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (48, 30));
+        for face in 0..6 {
+            let top = prim_pts(&out, face * 5);
+            let (n, c) = (newell(&top), centroid(&top));
+            assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] > 0.0, "face {face} top points inward");
+            let m = c.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+            assert!((m - 1.0).abs() < 1e-5, "top centroid {c:?} should sit at 0.5 + 0.5");
+        }
+    }
+    #[test]
+    fn group_limits_extrusion_others_pass_through() {
+        let mut d = cube();
+        d.groups.push(Group {
+            name: "g".into(),
+            class: AttrClass::Prim,
+            mask: vec![true, false, false, false, false, true],
+        });
+        let before: Vec<Vec<[f32; 3]>> = (1..5).map(|i| prim_pts(&d, i)).collect();
+        let out =
+            cook(d, with(with(defaults(), "distance", f(0.5)), "group", ParamValue::S("g".into()))).expect("cooks");
+        assert_eq!(out.prim_count(), 4 + 2 * 5);
+        // faces 0 and 5 cover points {0,1,2,3} and {1,3,5,7}; the other four still need all 8, so 8 kept + 16 new
+        assert_eq!(out.point_count, 8 + 2 * 8);
+        // order: [extruded 0 -> 0..5], passthrough 1..=4 -> 5..9, [extruded 5 -> 9..14]
+        let kept: Vec<Vec<[f32; 3]>> = (5..9).map(|i| prim_pts(&out, i)).collect();
+        assert_eq!(kept, before);
+        let gp = out.group(AttrClass::Prim, "g").expect("group kept");
+        assert_eq!(gp.mask.len(), 14);
+        assert_eq!(gp.mask.iter().filter(|m| **m).count(), 10);
+        let unknown = cook(cube(), with(defaults(), "group", ParamValue::S("nope".into())));
+        assert!(matches!(unknown, Err(CookError::Failed(_))));
+    }
+    #[test]
+    fn hostile_non_polygon_and_degenerate_pass_through() {
+        let mut d = quad();
+        d.add_poly(&[0, 1], false); // open polyline
+        d.add_poly(&[0, 1, 2, 3], false); // open poly
+        d.add_poly(&[0, 0, 0, 0], true); // zero area
+        d.add_poly(&[0, 1, 1], true); // collinear / zero area
+        d.add_poly(&[0, 1], true); // < 3 corners
+        let p = with(defaults(), "distance", f(1.0));
+        let out = cook(d.clone(), p.clone()).expect("cooks");
+        assert_eq!(out.prim_count(), 5 + 5);
+        // all passthrough -> same Arc
+        let mut only_bad = Detail::default();
+        only_bad.add_points(3);
+        *only_bad.p_mut() = vec![[0.0; 3], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]];
+        only_bad.add_poly(&[0, 1, 2], true);
+        let a = Arc::new(only_bad);
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+        let o = new().cook(&ctx, std::slice::from_ref(&a)).expect("cooks");
+        assert!(Arc::ptr_eq(&o, &a));
+        // empty / missing input
+        assert_eq!(*cook(Detail::default(), p.clone()).expect("cooks"), Detail::default());
+        let none = new().cook(&ctx, &[]).expect("cooks");
+        assert_eq!(none.point_count, 0);
+    }
+    #[test]
+    fn hostile_params_are_rejected_not_panicked() {
+        for (k, v) in [
+            ("divisions", ParamValue::I(0)),
+            ("divisions", ParamValue::I(-3)),
+            ("distance", f(f32::NAN)),
+            ("inset", f(f32::INFINITY)),
+        ] {
+            assert!(matches!(cook(quad(), with(defaults(), k, v)), Err(CookError::BadParam(_))), "{k}");
+        }
+        let huge = cook(quad(), with(defaults(), "divisions", ParamValue::I(i32::MAX)));
+        assert!(matches!(huge, Err(CookError::Failed(_))));
+        let overflow = cook(quad(), with(defaults(), "distance", f(f32::MAX)));
+        assert!(overflow.is_ok() || matches!(overflow, Err(CookError::Failed(_))));
+    }
+    #[test]
+    fn attrs_follow_source_corners_and_prims() {
+        let mut d = quad();
+        d.add_attr(Attribute {
+            name: "Cd".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0]]),
+            type_info: TypeInfo::Color,
+        });
+        d.add_attr(Attribute {
+            name: "w".into(),
+            class: AttrClass::Prim,
+            data: AttrData::F32(vec![7.0]),
+            type_info: TypeInfo::None,
+        });
+        let out = cook(d, with(defaults(), "distance", f(1.0))).expect("cooks");
+        let Some(AttrData::V3(cd)) = out.attr(AttrClass::Point, "Cd").map(|a| &a.data) else { panic!("Cd lost") };
+        assert_eq!(cd.len(), 8);
+        assert_eq!(cd[..4], cd[4..]);
+        assert_eq!(cd[2], [0.0, 0.0, 1.0]);
+        let Some(AttrData::F32(w)) = out.attr(AttrClass::Prim, "w").map(|a| &a.data) else { panic!("w lost") };
+        assert_eq!(w, &[7.0; 5]);
+    }
+    #[test]
+    fn scene_loader_cooks_example_and_registry_has_slot() {
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/polyextrude.json"))
+            .expect("example present");
+        let (mut g, id) = crate::load_scene(&ex).expect("example loads");
+        let out = g.cook(id, 0.0).expect("example cooks");
+        assert_eq!((out.point_count, out.prim_count()), (48, 30));
+        let bogus = r#"{"nodes":[{"name":"c","type":"polyextrude","params":{"bogus":1}}],"display":"c"}"#;
+        assert!(crate::load_scene(bogus).is_err());
+        assert_eq!(crate::registry().create("polyextrude").map(|n| n.type_name()), Some("polyextrude"));
+    }
+}
