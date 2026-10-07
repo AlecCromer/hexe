@@ -11,14 +11,12 @@ pub const MAGIC: [u8; 5] = [0x7f, b'N', b'S', b'J', b'b'];
 /// Token bytes (all single-byte, then payload).
 mod tok {
     pub const NULL: u8 = 0x00;
-    pub const BOOL: u8 = 0x10; // + 1 byte
+    pub const BOOL: u8 = 0x10; // uniform-array element only (bit-packed)
     pub const I8: u8 = 0x11;
     pub const I16: u8 = 0x12;
     pub const I32: u8 = 0x13;
     pub const I64: u8 = 0x14;
-    pub const U8: u8 = 0x15;
-    pub const U16: u8 = 0x16;
-    pub const F16: u8 = 0x18;
+    pub const U8: u8 = 0x21; // seen as uniform-array element only (`packing`)
     pub const F32: u8 = 0x19;
     pub const F64: u8 = 0x1a;
     pub const PAD: u8 = 0x20;
@@ -63,15 +61,17 @@ impl<'a> Rd<'a> {
         o.copy_from_slice(self.take(N)?);
         Ok(o)
     }
-    /// Length / count / table index: one byte < 0xF0, else `0xF1`/`0xF2`/`0xF4`/`0xF8` + that many LE bytes.
+    /// Length / count / table index: one byte <= 0xF0 (literal), else `0xF0 + k` (k = 1..=8) followed by k little-endian bytes.
     fn len(&mut self) -> Result<usize, GeoError> {
         let at = self.p;
         let v: u64 = match self.u8()? {
             b if b <= 0xF0 => u64::from(b),
-            0xF1 => u64::from(self.u8()?),
-            0xF2 => u64::from(u16::from_le_bytes(self.arr()?)),
-            0xF3 => u64::from(u32::from_le_bytes(self.arr()?)),
-            0xF4 => u64::from_le_bytes(self.arr()?),
+            b @ 0xF1..=0xF8 => {
+                let mut x = [0u8; 8];
+                let k = usize::from(b - 0xF0);
+                x[..k].copy_from_slice(self.take(k)?);
+                u64::from_le_bytes(x)
+            }
             b => return syn(format!("bjson: unknown length prefix 0x{b:02x} at byte {at}")),
         };
         usize::try_from(v).or_else(|_| syn("bjson: length exceeds usize"))
@@ -121,8 +121,7 @@ impl<'a> Rd<'a> {
             tok::NULL => Value::Null,
             tok::FALSE => Value::Bool(false),
             tok::TRUE => Value::Bool(true),
-            tok::BOOL => Value::Bool(self.u8()? != 0),
-            tok::I8 | tok::I16 | tok::I32 | tok::I64 | tok::U8 | tok::U16 | tok::F16 | tok::F32 | tok::F64 => self.scalar(t)?,
+            tok::I8 | tok::I16 | tok::I32 | tok::I64 | tok::U8 | tok::F32 | tok::F64 => self.scalar(t)?,
             tok::STRING => Value::String(self.string()?),
             tok::REF => Value::String(self.table_ref()?),
             tok::ARRAY => {
@@ -160,8 +159,6 @@ impl<'a> Rd<'a> {
             tok::I32 => Value::from(i32::from_le_bytes(self.arr()?)),
             tok::I64 => Value::from(i64::from_le_bytes(self.arr()?)),
             tok::U8 => Value::from(u8::from_le_bytes(self.arr()?)),
-            tok::U16 => Value::from(u16::from_le_bytes(self.arr()?)),
-            tok::F16 => real(f64::from(f16_to_f32(u16::from_le_bytes(self.arr()?)))),
             tok::F32 => real(f64::from(f32::from_le_bytes(self.arr()?))),
             _ => real(f64::from_le_bytes(self.arr()?)),
         })
@@ -180,7 +177,7 @@ impl<'a> Rd<'a> {
         }
         let w: usize = match et {
             tok::I8 | tok::U8 => 1,
-            tok::I16 | tok::U16 | tok::F16 => 2,
+            tok::I16 => 2,
             tok::I32 | tok::F32 => 4,
             tok::I64 | tok::F64 => 8,
             tok::STRING | tok::REF => 1, // at least one byte each
@@ -205,18 +202,6 @@ impl<'a> Rd<'a> {
 /// Non-finite reals have no JSON form; they become `null` (and then fail the numeric-array check, never silently 0).
 fn real(f: f64) -> Value {
     Number::from_f64(f).map_or(Value::Null, Value::Number)
-}
-fn f16_to_f32(h: u16) -> f32 {
-    let s = if h & 0x8000 != 0 { -1.0f32 } else { 1.0 };
-    let e = i32::from((h >> 10) & 0x1f);
-    let m = f32::from(h & 0x3ff);
-    if e == 0 {
-        s * m * 2f32.powi(-24)
-    } else if e == 31 {
-        if m == 0.0 { s * f32::INFINITY } else { f32::NAN }
-    } else {
-        s * (1.0 + m / 1024.0) * 2f32.powi(e - 15)
-    }
 }
 /// Decode a binary-JSON container to the generic tree (also used by tests to compare against ASCII).
 pub fn bjson_to_value(bytes: &[u8]) -> Result<Value, GeoError> {
