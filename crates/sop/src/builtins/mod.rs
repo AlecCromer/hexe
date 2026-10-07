@@ -18,7 +18,7 @@ mod grid_sop;
 //
 mod merge_sop;
 //
-// mod scatter_sop;
+mod scatter_sop;
 //
 mod sphere_sop;
 //
@@ -42,7 +42,7 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
     //
-    // r.register("scatter", scatter_sop::spec, scatter_sop::new);
+    r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
     r.register("sphere", sphere_sop::spec, sphere_sop::new);
     //

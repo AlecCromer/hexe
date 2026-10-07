@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "grid1", "type": "grid" },
+    { "name": "scatter1", "type": "scatter", "params": { "npts": 500, "seed": 7 } }
+  ],
+  "edges": [["grid1", 0, "scatter1", 0]],
+  "display": "scatter1"
+}

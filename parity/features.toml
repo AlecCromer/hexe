@@ -202,8 +202,15 @@ id = "sop-scatter"
 title = "Scatter SOP"
 area = "A"
 tier = "P1"
-status = "planned"
-notes = "Wave 2; wave 0 oracle fixture. ~35 doc-labelled params; bit-exact RNG unspecified → statistical parity; doc-derived; observed_in 20.5.487 (docs only)"
+status = "partial"
+commands = ["scatter"]
+evidence = [
+  "crates/sop/src/builtins/scatter_sop.rs::unit_quad_10000_inside_and_mean_centered",
+  "crates/sop/src/builtins/scatter_sop.rs::area_ratio_4_to_1_within_5_percent",
+  "crates/sop/src/builtins/scatter_sop.rs::same_seed_is_byte_equal_other_seed_differs",
+  "crates/sop/src/builtins/scatter_sop.rs::example_scene_cooks",
+]
+notes = "H6: params npts(1000) seed(0, i32 sign-extended to u64) density_attrib(empty). Area-weighted CDF + sqrt-barycentric, fan n-gons, SplitMix64; density = area*mean corner weight + in-tri rejection; out = P + sourceprim + N. NOT modelled: the other ~30 doc params (relax, attribute transfer, group, vol modes). UNVERIFIED vs Houdini (hython blocked): RNG stream, N when no prim N (we compute geometric), density attr lookup order (prim wins). Statistical parity only."
 
 [[feature]]
 id = "sop-copytopoints"
