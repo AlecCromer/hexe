@@ -1,0 +1,4 @@
+{
+"nodes": [{ "name": "sphere1", "type": "sphere", "params": { "type": 2 } }],
+"display": "sphere1"
+}
