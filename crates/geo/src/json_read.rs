@@ -1,7 +1,7 @@
 //! Houdini `.geo` JSON reader. Houdini writes every container as an alternating `[key, value, key, value, ...]` array;
 //! plain JSON objects are accepted too. Everything is bounds-checked; hostile input → `Err`, never panic.
 
-use crate::error::{check_len, count_of, MAX_ELEMS};
+use crate::error::{MAX_ELEMS, check_len, count_of};
 use crate::{AttrClass, AttrData, Attribute, Detail, GeoError, Group, Prim, PrimKind, TypeInfo};
 use serde_json::Value;
 
@@ -106,7 +106,7 @@ fn decode_pages(k: &Kv<'_>, raw: &[f64], count: usize, size: usize) -> Result<Ve
         Some(v) => ints(v)?.into_iter().map(|i| usize::try_from(i).unwrap_or(0)).collect(),
         None => vec![size],
     };
-    if packing.is_empty() || packing.iter().any(|&w| w == 0) || packing.iter().sum::<usize>() != size {
+    if packing.is_empty() || packing.contains(&0) || packing.iter().sum::<usize>() != size {
         return syn("rawpagedata: packing does not sum to tuple size");
     }
     let pagesize = match find(k, "pagesize").and_then(Value::as_u64) {
@@ -186,9 +186,9 @@ pub(crate) fn pack(size: usize, float: bool, d: &[f64]) -> AttrData {
         let f: Vec<f32> = d.iter().map(|&x| x as f32).collect();
         match size {
             1 => AttrData::F32(f),
-            2 => AttrData::V2(f.chunks_exact(2).map(|c| [c[0], c[1]]).collect()),
-            3 => AttrData::V3(f.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()),
-            4 => AttrData::V4(f.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()),
+            2 => AttrData::V2(f.as_chunks::<2>().0.to_vec()),
+            3 => AttrData::V3(f.as_chunks::<3>().0.to_vec()),
+            4 => AttrData::V4(f.as_chunks::<4>().0.to_vec()),
             _ => AttrData::FN { size: s, data: f },
         }
     } else {
@@ -241,10 +241,16 @@ fn read_attr(entry: &Value, class: AttrClass, count: usize) -> Result<Option<Att
         }
         "string" => {
             let table: Vec<String> = match find(&data, "strings") {
-                Some(Value::Array(a)) => a.iter().map(|s| s.as_str().map(str::to_string)).collect::<Option<_>>().ok_or_else(|| GeoError::Syntax("non-string in string table".into()))?,
+                Some(Value::Array(a)) => a
+                    .iter()
+                    .map(|s| s.as_str().map(str::to_string))
+                    .collect::<Option<_>>()
+                    .ok_or_else(|| GeoError::Syntax("non-string in string table".into()))?,
                 _ => return syn(format!("string attribute `{name}` without strings")),
             };
-            let Some(iv) = find(&data, "indices") else { return syn(format!("string attribute `{name}` without indices")) };
+            let Some(iv) = find(&data, "indices") else {
+                return syn(format!("string attribute `{name}` without indices"));
+            };
             let (size, _, d) = read_values(iv, count)?;
             if size != 1 {
                 return syn("string indices must have size 1");
@@ -268,7 +274,7 @@ fn expand_rle(arr: &[i64], n: usize) -> Option<Vec<bool>> {
         it.try_fold(0i64, |a, b| if b < 0 { None } else { a.checked_add(b) })
     }
     // interpretation 1: (value, count) pairs
-    if arr.len() % 2 == 0 && arr.chunks(2).all(|c| c[0] == 0 || c[0] == 1) {
+    if arr.len().is_multiple_of(2) && arr.chunks(2).all(|c| c[0] == 0 || c[0] == 1) {
         let total = sum(arr.chunks(2).map(|c| c[1]));
         if total == Some(n as i64) {
             let mut m = Vec::with_capacity(n);
@@ -312,7 +318,9 @@ fn read_groups(v: &Value, class: AttrClass, n: usize, out: &mut Vec<Group>) -> R
                 let uk = need_kv(u, "unordered")?;
                 if let Some(r) = find(&uk, "boolRLE") {
                     let a = ints(r)?;
-                    mask = expand_rle(&a, n).ok_or_else(|| GeoError::Count(format!("group `{name}` boolRLE does not cover {n} elements")))?;
+                    mask = expand_rle(&a, n).ok_or_else(|| {
+                        GeoError::Count(format!("group `{name}` boolRLE does not cover {n} elements"))
+                    })?;
                 }
             } else if let Some(o) = find(&sk, "ordered") {
                 for i in ints(o)? {
@@ -349,10 +357,8 @@ fn contiguous(vs: &[i64], nverts: u32) -> Result<Option<std::ops::Range<u32>>, G
         if v < 0 || v >= i64::from(nverts) {
             return Err(GeoError::Index(format!("primitive vertex {v} outside {nverts} vertices")));
         }
-        if let Some(p) = prev {
-            if v != p + 1 {
-                return Ok(None);
-            }
+        if prev.is_some_and(|p| v != p + 1) {
+            return Ok(None);
         }
         prev = Some(v);
     }
@@ -367,7 +373,8 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
     let mut out: Vec<Prim> = Vec::new();
     for e in entries {
         let Value::Array(pair) = e else { return syn("primitive entry is not [header, body]") };
-        let hdr = need_kv(pair.first().ok_or_else(|| GeoError::Syntax("empty primitive entry".into()))?, "primitive header")?;
+        let hdr =
+            need_kv(pair.first().ok_or_else(|| GeoError::Syntax("empty primitive entry".into()))?, "primitive header")?;
         let ty = find(&hdr, "type").and_then(Value::as_str).unwrap_or("");
         let body = pair.get(1).and_then(kv).unwrap_or_default();
         let unknown = |range: std::ops::Range<u32>| Prim {
@@ -396,7 +403,9 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
                     }
                     for _ in 0..cnt {
                         let end = cursor.checked_add(nv).filter(|&e| e <= i64::from(nverts));
-                        let Some(end) = end else { return Err(GeoError::Index("polygon run exceeds vertex count".into())) };
+                        let Some(end) = end else {
+                            return Err(GeoError::Index("polygon run exceeds vertex count".into()));
+                        };
                         if out.len() as u64 >= MAX_ELEMS || out.len() as u64 > u64::from(nprims) {
                             return Err(GeoError::Count("more primitives than primitivecount".into()));
                         }
@@ -410,7 +419,8 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
                 }
             }
             "Polygon" | "Poly" => {
-                let vs = body.iter().find(|(k, _)| *k == "vertex").map(|(_, v)| ints(v)).transpose()?.unwrap_or_default();
+                let vs =
+                    body.iter().find(|(k, _)| *k == "vertex").map(|(_, v)| ints(v)).transpose()?.unwrap_or_default();
                 let closed = find(&body, "closed").and_then(Value::as_bool).unwrap_or(true);
                 match contiguous(&vs, nverts)? {
                     Some(r) => out.push(Prim { kind: PrimKind::Poly { closed }, verts: r }),

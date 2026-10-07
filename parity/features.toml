@@ -29,3 +29,33 @@ area = "C"
 tier = "P1"
 status = "planned"
 notes = "stub window only"
+
+[[feature]]
+id = "geo-read-ascii"
+title = "Read Houdini ASCII geometry: .geo JSON (pointref, numeric/string attrs, rawpagedata, Polygon_run/Sphere/Tube/Unknown) + legacy PGEOMETRY V2 (all.geo)"
+area = "B"
+tier = "P0"
+status = "shipped"
+commands = []
+evidence = ["crates/geo/src/tests.rs::gpd_all_counts_match_header", "crates/geo/src/tests.rs::json_reads_houdini_shape", "crates/geo/src/tests.rs::hostile_input_is_err_never_panic"]
+notes = "JSON schema authored from public docs + memory, NO Houdini-written JSON .geo exists on the box to diff against (UNVERIFIED vs Houdini). Binary bgeo = wave 2 (#[ignore] test)."
+
+[[feature]]
+id = "geo-write-ascii"
+title = "Write Houdini .geo JSON (alternating-array schema, Polygon_run, size-4 P)"
+area = "B"
+tier = "P0"
+status = "shipped"
+commands = []
+evidence = ["crates/geo/src/tests.rs::json_roundtrip_gpd_all", "crates/geo/src/tests.rs::synthetic_details_roundtrip"]
+notes = "read(write(d))==d proven on all.geo + 3 synthetic details. Houdini loading our output is UNVERIFIED (hython unlicensed; no oracle load test)."
+
+[[feature]]
+id = "geo-groups"
+title = "Point/vertex/prim groups (boolRLE) read+write; legacy ordered/unordered bitmasks read"
+area = "B"
+tier = "P0"
+status = "shipped"
+commands = []
+evidence = ["crates/geo/src/tests.rs::groups_roundtrip_and_boolrle"]
+notes = "boolRLE (value,count)-pair vs alternating-run semantics UNVERIFIED: reader accepts both, writer emits pairs. Group order of 'ordered' groups is dropped (mask only)."

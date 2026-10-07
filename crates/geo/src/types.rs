@@ -49,14 +49,25 @@ pub struct Attribute {
 /// read→write loses nothing. `Volume`/`PackedRef` stay unit (read as `Unknown`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum PrimKind {
-    Poly { closed: bool },
+    Poly {
+        closed: bool,
+    },
     Polyline,
-    Sphere { xform: [f32; 9] },
-    Tube { xform: [f32; 9], taper: f32, closed: bool },
+    Sphere {
+        xform: [f32; 9],
+    },
+    Tube {
+        xform: [f32; 9],
+        taper: f32,
+        closed: bool,
+    },
     Volume,
     PackedRef,
     /// Passthrough for any primitive type we do not model. `json` = serialised source entry; `ty` = its type key.
-    Unknown { ty: String, json: String },
+    Unknown {
+        ty: String,
+        json: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -140,7 +140,12 @@ impl Detail {
             self.attrs.retain(|a| !(a.class == AttrClass::Point && a.name == "P"));
             self.attrs.insert(
                 0,
-                Attribute { name: "P".into(), class: AttrClass::Point, data: AttrData::V3(vec![[0.0; 3]; n]), type_info: TypeInfo::Point },
+                Attribute {
+                    name: "P".into(),
+                    class: AttrClass::Point,
+                    data: AttrData::V3(vec![[0.0; 3]; n]),
+                    type_info: TypeInfo::Point,
+                },
             );
         }
         let idx = self.attrs.iter().position(|a| a.class == AttrClass::Point && a.name == "P").unwrap_or(0);

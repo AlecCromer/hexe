@@ -8,7 +8,10 @@ pub enum GeoError {
     Count(String),
     /// An index (pointref, group, string table) is out of range.
     Index(String),
-    TooLarge { len: usize, max: usize },
+    TooLarge {
+        len: usize,
+        max: usize,
+    },
     Unsupported(String),
 }
 

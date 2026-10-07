@@ -29,7 +29,9 @@ fn gpd_all_counts_match_header() {
     assert_eq!(qg.mask.iter().filter(|&&b| b).count(), 3);
     // spot value: point 5 = (1 0 0), Cd = (0.833333 0 0)
     assert_eq!(d.p()[5], [1.0, 0.0, 0.0]);
-    assert!(matches!(d.attr(AttrClass::Point, "Cd").unwrap().data, AttrData::V3(ref v) if (v[5][0] - 0.833333).abs() < 1e-6));
+    assert!(
+        matches!(d.attr(AttrClass::Point, "Cd").unwrap().data, AttrData::V3(ref v) if (v[5][0] - 0.833333).abs() < 1e-6)
+    );
     // prim types seen: Circle Sphere Tube MetaBall MetaSQuad Poly Mesh NURBMesh BezierMesh NURBMesh 3xBezierCurve (Run)
     let kinds: Vec<String> = d
         .prims
@@ -43,7 +45,24 @@ fn gpd_all_counts_match_header() {
         })
         .collect();
     eprintln!("ALLGEO pts={} verts={} prims={} kinds={kinds:?}", d.point_count, d.vertex_point.len(), d.prims.len());
-    assert_eq!(kinds, ["Circle", "Sphere", "Tube", "MetaBall", "MetaSQuad", "Poly", "Mesh", "NURBMesh", "BezierMesh", "BezierCurve", "BezierCurve", "BezierCurve", "NURBMesh"]);
+    assert_eq!(
+        kinds,
+        [
+            "Circle",
+            "Sphere",
+            "Tube",
+            "MetaBall",
+            "MetaSQuad",
+            "Poly",
+            "Mesh",
+            "NURBMesh",
+            "BezierMesh",
+            "BezierCurve",
+            "BezierCurve",
+            "BezierCurve",
+            "NURBMesh"
+        ]
+    );
     // vertex_point total = 1+1+1+1+1+10+100+64+100+57+15+84+20
     assert_eq!(d.vertex_point.len(), 1 + 1 + 1 + 1 + 1 + 10 + 100 + 64 + 100 + 57 + 15 + 84 + 20);
 }
@@ -57,7 +76,10 @@ fn json_roundtrip_gpd_all() {
     assert_eq!(back.point_count, d.point_count);
     assert_eq!(attr_sig(&back), attr_sig(&d));
     assert_eq!(back.vertex_point, d.vertex_point);
-    assert_eq!(back.prims.iter().map(|p| p.verts.clone()).collect::<Vec<_>>(), d.prims.iter().map(|p| p.verts.clone()).collect::<Vec<_>>());
+    assert_eq!(
+        back.prims.iter().map(|p| p.verts.clone()).collect::<Vec<_>>(),
+        d.prims.iter().map(|p| p.verts.clone()).collect::<Vec<_>>()
+    );
     for (a, b) in back.p().iter().zip(d.p()) {
         for i in 0..3 {
             assert!((a[i] - b[i]).abs() < 1e-6);
@@ -77,12 +99,42 @@ fn synthetic_a() -> Detail {
     d.add_poly(&[0, 2, 3], true);
     d.add_poly(&[0, 1, 2, 3], true);
     d.add_poly(&[3, 4], false);
-    d.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(vec![[0.0, 0.0, 1.0]; 5]), type_info: TypeInfo::Normal });
-    d.add_attr(Attribute { name: "id".into(), class: AttrClass::Point, data: AttrData::I32(vec![10, 11, 12, 13, 14]), type_info: TypeInfo::None });
-    d.add_attr(Attribute { name: "name".into(), class: AttrClass::Prim, data: AttrData::Str { idx: vec![0, 1, 0, -1], table: vec!["a".into(), "b".into()] }, type_info: TypeInfo::None });
-    d.add_attr(Attribute { name: "uv".into(), class: AttrClass::Vertex, data: AttrData::V2((0..12).map(|i| [i as f32 * 0.1, 0.3]).collect()), type_info: TypeInfo::None });
-    d.add_attr(Attribute { name: "scale".into(), class: AttrClass::Detail, data: AttrData::F32(vec![2.5]), type_info: TypeInfo::None });
-    d.add_attr(Attribute { name: "m".into(), class: AttrClass::Point, data: AttrData::FN { size: 6, data: (0..30).map(|i| i as f32).collect() }, type_info: TypeInfo::None });
+    d.add_attr(Attribute {
+        name: "N".into(),
+        class: AttrClass::Point,
+        data: AttrData::V3(vec![[0.0, 0.0, 1.0]; 5]),
+        type_info: TypeInfo::Normal,
+    });
+    d.add_attr(Attribute {
+        name: "id".into(),
+        class: AttrClass::Point,
+        data: AttrData::I32(vec![10, 11, 12, 13, 14]),
+        type_info: TypeInfo::None,
+    });
+    d.add_attr(Attribute {
+        name: "name".into(),
+        class: AttrClass::Prim,
+        data: AttrData::Str { idx: vec![0, 1, 0, -1], table: vec!["a".into(), "b".into()] },
+        type_info: TypeInfo::None,
+    });
+    d.add_attr(Attribute {
+        name: "uv".into(),
+        class: AttrClass::Vertex,
+        data: AttrData::V2((0..12).map(|i| [i as f32 * 0.1, 0.3]).collect()),
+        type_info: TypeInfo::None,
+    });
+    d.add_attr(Attribute {
+        name: "scale".into(),
+        class: AttrClass::Detail,
+        data: AttrData::F32(vec![2.5]),
+        type_info: TypeInfo::None,
+    });
+    d.add_attr(Attribute {
+        name: "m".into(),
+        class: AttrClass::Point,
+        data: AttrData::FN { size: 6, data: (0..30).map(|i| i as f32).collect() },
+        type_info: TypeInfo::None,
+    });
     let mut m = vec![false; 5];
     m[1] = true;
     m[2] = true;
@@ -99,7 +151,13 @@ fn synthetic_b() -> Detail {
     d.prims.push(Prim { kind: PrimKind::Sphere { xform: [1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0] }, verts: 0..1 });
     d.prims.push(Prim { kind: PrimKind::Tube { xform: [1.0; 9], taper: 0.25, closed: true }, verts: 1..2 });
     d.prims.push(Prim { kind: PrimKind::Poly { closed: false }, verts: 2..4 });
-    d.prims.push(Prim { kind: PrimKind::Unknown { ty: "Volume".into(), json: r#"[["type","Volume"],{"res":[2,2,2],"vertex":[]}]"#.into() }, verts: 0..0 });
+    d.prims.push(Prim {
+        kind: PrimKind::Unknown {
+            ty: "Volume".into(),
+            json: r#"[["type","Volume"],{"res":[2,2,2],"vertex":[]}]"#.into(),
+        },
+        verts: 0..0,
+    });
     d
 }
 
@@ -133,7 +191,12 @@ fn merge_offsets_everything() {
     assert_eq!(c.prims[4].verts, 12..15);
     assert_eq!(c.vertex_point[12], 5);
     for a in &c.attrs {
-        assert_eq!(a.data.len(), c.class_len(a.class).max(if a.class == AttrClass::Detail { 1 } else { 0 }), "{}", a.name);
+        assert_eq!(
+            a.data.len(),
+            c.class_len(a.class).max(if a.class == AttrClass::Detail { 1 } else { 0 }),
+            "{}",
+            a.name
+        );
     }
     let ((lo, hi), n) = (c.bbox(), c.group(AttrClass::Point, "top").unwrap().mask.len());
     assert_eq!((lo, hi), ([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]));
@@ -241,7 +304,16 @@ fn hostile_input_is_err_never_panic() {
     assert!(read_geo_json(amp.as_bytes()).is_err());
     let deep = format!("{}{}", "[".repeat(100_000), "]".repeat(100_000));
     assert!(read_geo_json(deep.as_bytes()).is_err());
-    for junk in [&b""[..], b"null", b"[1,2,3]", b"{}", b"PGEOMETRY", b"PGEOMETRY V2 NPoints 99999999 NPrims 0", b"\xff\xfe", b"BgeoV"] {
+    for junk in [
+        &b""[..],
+        b"null",
+        b"[1,2,3]",
+        b"{}",
+        b"PGEOMETRY",
+        b"PGEOMETRY V2 NPoints 99999999 NPrims 0",
+        b"\xff\xfe",
+        b"BgeoV",
+    ] {
         assert!(read_geo(junk).is_err());
     }
     // GPD: negative counts, vertex referencing a missing point, bogus group bits
@@ -266,7 +338,9 @@ fn unknown_prim_types_pass_through() {
 #[test]
 #[ignore = "TODO wave 2: binary bgeo (BgeoV legacy binary + binary-JSON) reader"]
 fn bgeo_binary_reads() {
-    let p = PathBuf::from("/Applications/Houdini/Current/Frameworks/Houdini.framework/Versions/Current/Resources/houdini/public/GPD/all.bgeo");
+    let p = PathBuf::from(
+        "/Applications/Houdini/Current/Frameworks/Houdini.framework/Versions/Current/Resources/houdini/public/GPD/all.bgeo",
+    );
     let d = read_geo(&std::fs::read(p).unwrap()).unwrap();
     assert_eq!(d.point_count, 367);
 }

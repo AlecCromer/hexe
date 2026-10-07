@@ -13,9 +13,9 @@ mod error;
 mod gpd;
 mod json_read;
 mod json_write;
-mod types;
 #[cfg(test)]
 mod tests;
+mod types;
 
 pub use error::GeoError;
 pub use gpd::read_geo_gpd;

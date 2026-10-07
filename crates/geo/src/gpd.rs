@@ -503,8 +503,14 @@ pub fn read_geo_gpd(bytes: &[u8]) -> Result<Detail, GeoError> {
         let (name, mask) = c.group(nq)?;
         groups.push(Group { name, class: AttrClass::Prim, mask });
     }
-    let mut d = Detail { point_count: np as u32, vertex_point: c.vert_point, prims: c.prims, groups, ..Detail::default() };
-    d.attrs.push(Attribute { name: "P".into(), class: AttrClass::Point, data: AttrData::V3(pos), type_info: TypeInfo::Point });
+    let mut d =
+        Detail { point_count: np as u32, vertex_point: c.vert_point, prims: c.prims, groups, ..Detail::default() };
+    d.attrs.push(Attribute {
+        name: "P".into(),
+        class: AttrClass::Point,
+        data: AttrData::V3(pos),
+        type_info: TypeInfo::Point,
+    });
     build(pdefs, AttrClass::Point, &mut d.attrs)?;
     build(c.vdefs, AttrClass::Vertex, &mut d.attrs)?;
     build(c.qdefs, AttrClass::Prim, &mut d.attrs)?;
