@@ -1,3 +1,6 @@
 {
-  "null-passthrough": 1.0
+  "null-passthrough": 1.0,
+  "sphere-poly-f2": 1.0,
+  "sphere-polymesh-default": 1.0,
+  "sphere-prim": 1.0
 }
