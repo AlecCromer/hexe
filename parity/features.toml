@@ -128,8 +128,20 @@ id = "sop-grid"
 title = "Grid SOP"
 area = "A"
 tier = "P0"
-status = "planned"
-notes = "Wave 2; wave 0 oracle fixture. 12 doc-labelled params; doc-derived; observed_in 20.5.487 (docs only)"
+status = "shipped"
+commands = ["grid"]
+evidence = [
+  "crates/sop/src/builtins/grid_sop.rs::default_is_100_points_81_quads_on_zx_plane",
+  "crates/sop/src/builtins/grid_sop.rs::closed_form_counts_for_every_surftype",
+  "crates/sop/src/builtins/grid_sop.rs::rows_and_cols_connectivity_follow_point_lattice",
+  "crates/sop/src/builtins/grid_sop.rs::orient_size_and_center_map_points_by_closed_form",
+  "crates/sop/src/builtins/grid_sop.rs::quad_normals_follow_the_orient_plane_normal",
+  "crates/sop/src/builtins/grid_sop.rs::params_by_token_override_defaults",
+  "crates/sop/src/builtins/grid_sop.rs::unsupported_menu_items_are_bad_param",
+  "crates/sop/src/builtins/grid_sop.rs::hostile_rows_cols_are_errors",
+  "crates/sop/src/builtins/grid_sop.rs::fixtures_match_sop_output",
+]
+notes = "PARTIAL scope: type=poly; surftype rows/cols/triangles/quads (rowcol, alttriangles, revtriangles, other types, r, orderu/v, interpu/v NOT implemented: BadParam / undeclared). Fixtures grid-default, grid-tri-3x3 are ANALYTICAL, not Houdini-observed. UNVERIFIED vs Houdini: axis mapping (cols->first in-plane axis over size[0], rows->second over size[1]; zx: X cols, Z rows), ascending point order from -size/2, quad/tri winding and triangle split diagonal, rows/cols polyline direction, N attr absent, negative size accepted (flips), rows/cols<2 rejected (DS hard min is 1! per parms-grid.md, behaviour spec says >=2), size declared V3 (no V2 variant; z ignored), 2^20 point cap is ours."
 
 [[feature]]
 id = "sop-sphere"

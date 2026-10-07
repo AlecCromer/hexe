@@ -1,0 +1,4 @@
+{
+"nodes": [{ "name": "grid1", "type": "grid", "params": { "surftype": 3, "rows": 3, "cols": 3 } }],
+"display": "grid1"
+}

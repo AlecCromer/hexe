@@ -1,5 +1,7 @@
 {
   "box-default": 1.0,
   "box-divs222": 1.0,
+  "grid-default": 1.0,
+  "grid-tri-3x3": 1.0,
   "null-passthrough": 1.0
 }
