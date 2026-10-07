@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "grid1", "type": "grid", "params": { "rows": 3, "cols": 3, "type": 4 } },
+    { "name": "copy1", "type": "copytopoints", "params": { "copynum": true } }
+  ],
+  "edges": [["box1", 0, "copy1", 0], ["grid1", 0, "copy1", 1]],
+  "display": "copy1"
+}

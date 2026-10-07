@@ -10,7 +10,7 @@ mod null_sop;
 //
 mod box_sop;
 //
-// mod copytopoints_sop;
+mod copytopoints_sop;
 //
 mod grid_sop;
 //
@@ -34,7 +34,7 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("box", box_sop::spec, box_sop::new);
     //
-    // r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
+    r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
     //
     r.register("grid", grid_sop::spec, grid_sop::new);
     //

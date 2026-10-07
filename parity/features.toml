@@ -217,8 +217,16 @@ id = "sop-copytopoints"
 title = "Copy to Points SOP"
 area = "A"
 tier = "P1"
-status = "planned"
-notes = "Wave 2. 13 doc-labelled params; pack-and-instance out of scope; doc-derived; observed_in 20.5.487 (docs only)"
+status = "partial"
+commands = ["copytopoints"]
+evidence = [
+  "crates/sop/src/builtins/copytopoints_sop.rs::box_times_grid_3x3_counts_and_translation_oracle",
+  "crates/sop/src/builtins/copytopoints_sop.rs::pscale_2_doubles_box_extents_about_each_target_point",
+  "crates/sop/src/builtins/copytopoints_sop.rs::orient_n_maps_source_z_to_n_with_default_up",
+  "crates/sop/src/builtins/copytopoints_sop.rs::copynum_off_by_default_and_numbers_points_and_prims_when_on",
+  "crates/sop/src/builtins/copytopoints_sop.rs::scene_loader_wires_box_and_grid_and_example_cooks",
+]
+notes = "H5: translate + pscale + optional orient (N/up, +Z=N) + optional copynum; params use_orient/use_pscale/copynum are OUR names, not the harvested v2 parm table. Missing vs Houdini v2: source/target groups, piece attr, pack, targetattribs transfer, orient/scale attrs, implicit N, vertex-class N from target. Frame convention (+Z=N, +Y=up) UNVERIFIED (hython blocked). Example: examples/copytopoints.json. Analytical oracle only."
 
 [[feature]]
 id = "sop-wrangle"
