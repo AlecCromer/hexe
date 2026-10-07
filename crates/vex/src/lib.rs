@@ -10,12 +10,17 @@
     clippy::unreachable
 )]
 mod ast;
+mod builtins;
 mod error;
+mod interp;
 mod lexer;
 mod parser;
 mod value;
 pub use ast::{BinOp, Declarator, Expr, ExprKind, Program, Stmt, UnOp};
 pub use error::{ErrorKind, HostError, VexError};
+pub use interp::{Host, run};
+#[cfg(test)]
+mod tests;
 pub use lexer::{MAX_SRC, Tok, Token, lex};
 pub use parser::{MAX_DEPTH, parse};
 pub use value::{Ty, Value, builtin_ty, is_readonly};
