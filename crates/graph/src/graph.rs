@@ -1,7 +1,7 @@
 //! `Graph<T>`: nodes + edges + cache. Cook = lazy (only what the target needs), cached (until dirty / time
 //! change), dirty-propagated (`set_param`/`connect` clear every downstream cache), iterative (explicit stack).
 use crate::node::{CookCtx, GraphError, Node, NodeId, Payload};
-use crate::param::{ParamSet, ParamValue};
+use crate::param::{ParamSet, ParamSpec, ParamValue};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -194,6 +194,22 @@ impl<T: Payload> Graph<T> {
         self.slots.get(id.slot())?.params.get(name)
     }
 
+    /// Every node id in creation order (UI introspection).
+    pub fn node_ids(&self) -> Vec<NodeId> {
+        (0..self.slots.len()).filter_map(|i| u32::try_from(i).ok().map(NodeId)).collect()
+    }
+    /// Node type name, `None` for unknown ids.
+    pub fn node_type(&self, id: NodeId) -> Option<&'static str> {
+        self.slots.get(id.slot()).map(|s| s.node.type_name())
+    }
+    /// Source node of each input port (`None` = unconnected).
+    pub fn input_sources(&self, id: NodeId) -> Vec<Option<NodeId>> {
+        self.slots.get(id.slot()).map(|s| s.inputs.clone()).unwrap_or_default()
+    }
+    /// Parameter declarations of the node type (defaults, ranges).
+    pub fn param_specs(&self, id: NodeId) -> Vec<ParamSpec> {
+        self.slots.get(id.slot()).map(|s| s.node.params().to_vec()).unwrap_or_default()
+    }
     /// `true` when `cook(id, _)` would have to run the node (no cache). `false` for unknown ids.
     pub fn is_dirty(&self, id: NodeId) -> bool {
         self.slots.get(id.slot()).is_some_and(|s| s.cache.is_none())

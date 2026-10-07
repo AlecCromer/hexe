@@ -11,5 +11,8 @@ workspace = true
 
 [dependencies]
 hexe-core = { workspace = true }
+hexe-geo = { workspace = true }
+hexe-graph = { workspace = true }
+hexe-sop = { workspace = true }
 egui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "glow"] }

@@ -879,6 +879,9 @@ dependencies = [
  "eframe",
  "egui",
  "hexe-core",
+ "hexe-geo",
+ "hexe-graph",
+ "hexe-sop",
 ]
 
 [[package]]
