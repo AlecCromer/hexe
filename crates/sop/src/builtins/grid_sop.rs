@@ -225,11 +225,23 @@ mod tests {
         // 2x3 lattice, size (4,2), center (10,20,30): u in {-2,0,2} over cols, v in {-1,1} over rows.
         let base = |o: u32| ok(&format!(r#"{{"orient":{o},"rows":2,"cols":3,"size":[4,2,0],"t":[10,20,30]}}"#));
         let xy = base(0);
-        assert!(near(xy.p()[0], [8.0, 19.0, 30.0]) && near(xy.p()[2], [12.0, 19.0, 30.0]) && near(xy.p()[3], [8.0, 21.0, 30.0]));
+        assert!(
+            near(xy.p()[0], [8.0, 19.0, 30.0])
+                && near(xy.p()[2], [12.0, 19.0, 30.0])
+                && near(xy.p()[3], [8.0, 21.0, 30.0])
+        );
         let yz = base(1);
-        assert!(near(yz.p()[0], [10.0, 18.0, 29.0]) && near(yz.p()[2], [10.0, 22.0, 29.0]) && near(yz.p()[3], [10.0, 18.0, 31.0]));
+        assert!(
+            near(yz.p()[0], [10.0, 18.0, 29.0])
+                && near(yz.p()[2], [10.0, 22.0, 29.0])
+                && near(yz.p()[3], [10.0, 18.0, 31.0])
+        );
         let zx = base(2);
-        assert!(near(zx.p()[0], [8.0, 20.0, 29.0]) && near(zx.p()[2], [12.0, 20.0, 29.0]) && near(zx.p()[3], [8.0, 20.0, 31.0]));
+        assert!(
+            near(zx.p()[0], [8.0, 20.0, 29.0])
+                && near(zx.p()[2], [12.0, 20.0, 29.0])
+                && near(zx.p()[3], [8.0, 20.0, 31.0])
+        );
         assert!(near(zx.p()[5], [12.0, 20.0, 31.0]));
     }
 
@@ -238,7 +250,10 @@ mod tests {
         let nrm = |d: &Detail| {
             let v = prim_pts(d, 0);
             let q: Vec<[f32; 3]> = v.iter().map(|&i| d.p()[i as usize]).collect();
-            let (a, b) = ([q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], [q[3][0] - q[0][0], q[3][1] - q[0][1], q[3][2] - q[0][2]]);
+            let (a, b) = (
+                [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]],
+                [q[3][0] - q[0][0], q[3][1] - q[0][1], q[3][2] - q[0][2]],
+            );
             [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
         };
         for (o, axis) in [(0, 2), (1, 0), (2, 1)] {
@@ -260,7 +275,15 @@ mod tests {
 
     #[test]
     fn unsupported_menu_items_are_bad_param() {
-        for bad in [r#"{"type":1}"#, r#"{"type":5}"#, r#"{"surftype":2}"#, r#"{"surftype":5}"#, r#"{"surftype":6}"#, r#"{"surftype":7}"#, r#"{"orient":3}"#] {
+        for bad in [
+            r#"{"type":1}"#,
+            r#"{"type":5}"#,
+            r#"{"surftype":2}"#,
+            r#"{"surftype":5}"#,
+            r#"{"surftype":6}"#,
+            r#"{"surftype":7}"#,
+            r#"{"orient":3}"#,
+        ] {
             let e = cook(bad).expect_err(bad);
             assert!(e.contains("bad parameter: grid."), "{bad}: {e}");
         }
@@ -272,7 +295,11 @@ mod tests {
             let e = cook(bad).expect_err(bad);
             assert!(e.contains("bad parameter: grid.rows/cols"), "{bad}: {e}");
         }
-        for huge in [r#"{"rows":100000,"cols":100000}"#, r#"{"rows":2147483647,"cols":2147483647}"#, r#"{"rows":1025,"cols":1025}"#] {
+        for huge in [
+            r#"{"rows":100000,"cols":100000}"#,
+            r#"{"rows":2147483647,"cols":2147483647}"#,
+            r#"{"rows":1025,"cols":1025}"#,
+        ] {
             let e = cook(huge).expect_err(huge);
             assert!(e.contains("point cap"), "{huge}: {e}");
         }
@@ -306,8 +333,8 @@ mod tests {
         d.add_points(100);
         let coord = |i: usize| (-5.0 + 10.0 * (i as f64) / 9.0) as f32;
         let p = d.p_mut();
-        for k in 0..100usize {
-            p[k] = [coord(k % 10), 0.0, coord(k / 10)];
+        for (k, slot) in p.iter_mut().enumerate() {
+            *slot = [coord(k % 10), 0.0, coord(k / 10)];
         }
         for k in 0..81u32 {
             let (r, c) = (k / 9, k % 9);
@@ -347,7 +374,9 @@ mod tests {
 
     #[test]
     fn fixtures_match_sop_output() {
-        for (case, expected, counts) in [("grid-default", expected_default(), (100, 81)), ("grid-tri-3x3", expected_tri_3x3(), (9, 8))] {
+        for (case, expected, counts) in
+            [("grid-default", expected_default(), (100, 81)), ("grid-tri-3x3", expected_tri_3x3(), (9, 8))]
+        {
             let scene = std::fs::read_to_string(fixture_path(case, "scene.json")).expect("scene.json");
             let (mut g, id) = load_scene(&scene).expect("fixture scene loads");
             let out = g.cook(id, 0.0).expect("cooks");
