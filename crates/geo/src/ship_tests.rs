@@ -64,6 +64,21 @@ fn houdini_ship_gated_files_match_oracle() {
         assert_eq!(i64::from(d.point_count), int(r, "expected_points"), "{name}: points");
         assert_eq!(i64::from(d.vertex_count()), int(r, "expected_vertices"), "{name}: vertices");
         assert_eq!(i64::from(d.prim_count()), int(r, "expected_prims"), "{name}: prims");
+        if let Some(Value::Array(want)) = r.get("expected_prim_types") {
+            let got: Vec<String> = d
+                .prims
+                .iter()
+                .map(|p| match &p.kind {
+                    PrimKind::Poly { .. } => "Poly".to_string(),
+                    PrimKind::Sphere { .. } => "Sphere".to_string(),
+                    PrimKind::Tube { .. } => "Tube".to_string(),
+                    PrimKind::Unknown { ty, .. } => ty.clone(),
+                    other => format!("{other:?}"),
+                })
+                .collect();
+            let want: Vec<String> = want.iter().map(|x| x.as_str().expect("string").to_string()).collect();
+            assert_eq!(got, want, "{name}: prim types");
+        }
         assert_eq!(all_names(&d, AttrClass::Point), strs(r, "expected_point_attrs"), "{name}: point attrs");
         assert_eq!(all_names(&d, AttrClass::Vertex), strs(r, "expected_vertex_attrs"), "{name}: vertex attrs");
         assert_eq!(all_names(&d, AttrClass::Prim), strs(r, "expected_prim_attrs"), "{name}: prim attrs");

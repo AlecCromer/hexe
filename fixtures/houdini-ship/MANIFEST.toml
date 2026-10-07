@@ -66,14 +66,18 @@ source = "$H/houdini/public/GPD/all.bgeo"
 bytes = 22986
 sha256 = "99c9710a09a08fde3d842a5f2781baf0d1f40ee5869e4c5b62d444946a93cd5c"
 container = "legacy binary BgeoV"
-gate = false
+gate = true
 expected_points = 367
+expected_vertices = 455
 expected_prims = 13
+expected_prim_types = ["Circle", "Sphere", "Tube", "MetaBall", "MetaSQuad", "Poly", "Mesh", "NURBMesh", "BezierMesh", "BezierCurve", "BezierCurve", "BezierCurve", "NURBMesh"]
+expected_vertex_attrs = []
+expected_prim_attrs = []
 expected_point_attrs = ["P", "Cd", "Alpha", "uv", "N"]
-expected_point_groups_count = 1
-expected_prim_groups_count = 1
+expected_point_groups = ["pointGroup"]
+expected_prim_groups = ["primGroup"]
 expected_first_p = [0.0, 0.0, 0.0]
-derived = "twin $H/houdini/public/GPD/all.geo (PGEOMETRY V2 text, fixtures/gpd-all/expected.geo, byte copy of the twin): header NPoints 367 NPrims 13 NPointGroups 1 NPrimGroups 1; PointAttrib Cd Alpha uv N (+P); first point line 0 0 0 1. vertices: UNVERIFIED-from-reader"
+derived = "twin $H/houdini/public/GPD/all.geo (PGEOMETRY V2 text, fixtures/gpd-all/expected.geo, byte copy): header NPoints 367 NPrims 13 NPointGroups 1 NPrimGroups 1; PointAttrib Cd Alpha uv N (+P); first point 0 0 0 1; group names pointGroup/primGroup. vertices 455 + prim type list = python3 token walk over the twin text (scratch, not our reader): singles 5, Poly 10, Mesh 10x10, NURBMesh 8x8, BezierMesh 10x10, Run 3 BezierCurve 57+15+84, NURBMesh 10x2. Rust test bgeo_legacy_tests::binary_equals_text_twin additionally diffs vertex->point map, prim ranges, every attribute value (1e-5), group masks against the GPD reader on the twin."
 
 [[file]]
 name = "sphere-sc"

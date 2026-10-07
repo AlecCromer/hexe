@@ -333,3 +333,13 @@ status = "shipped"
 commands = []
 evidence = ["crates/geo/src/blosc_tests.rs::sphere_decompresses_to_bjson_with_oracle_size", "crates/geo/src/blosc_tests.rs::header_lies_are_syntax_or_toolarge", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle", "crates/geo/src/fidelity_tests.rs::poly_run_with_vertex_lists_reads", "crates/geo/src/fidelity_tests.rs::dict_and_stringarray_attribs_are_recorded_as_skipped"]
 notes = "H12: pig-sc + preview-network-1 gated (Poly-run vertex lists; dict/stringarray attrs recorded in Detail.skipped_attribs, printed by `hexe-cli info`, never silent). Only observed codec (LZ4, flags 0x21, typesize 4) implemented; blosclz/snappy/zlib/zstd/bitshuffle -> Unsupported. 11 shipped .sc decompress byte-identical to python-blosc; 5 gated. Index/trailer semantics inferred from corpus."
+
+[[feature]]
+id = "geo-read-bgeo-legacy"
+title = "Read legacy binary BgeoV (big-endian twin of PGEOMETRY; v2 oracle-checked, v3/v5 self-checked)"
+area = "B"
+tier = "P1"
+status = "shipped"
+commands = []
+evidence = ["crates/geo/src/bgeo_legacy_tests.rs::binary_equals_text_twin", "crates/geo/src/bgeo_legacy_tests.rs::every_truncation_is_a_clean_error", "crates/geo/src/bgeo_legacy_tests.rs::lying_header_counts_never_panic_or_overallocate", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle"]
+notes = "all.bgeo (v2) == its text twin (points, vertex->point map, prim ranges+types, attr values, groups). v3/v5: 5 of 6 install files parse to the exact trailer (no twin, UNVERIFIED values); fabric.bgeo NURBMesh profile block fails. Non-float attrib types, vertex/prim/detail attribs, ordered-group lists, wide (>=65536 pts) indices are inferred (UNVERIFIED)."
