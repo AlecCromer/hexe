@@ -1,0 +1,4 @@
+{
+"nodes": [{ "name": "sphere1", "type": "sphere", "params": { "type": 1, "freq": 2, "rad": [1, 2, 3], "t": [0.5, 0, -1] } }],
+"display": "sphere1"
+}

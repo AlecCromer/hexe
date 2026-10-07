@@ -1,0 +1,5 @@
+cmd = ["cook", "{input}", "--out", "{out}", "--time", "0"]
+input = "scene.json"
+expected = "expected.geo"
+compare = "geo"
+feature = "sop-sphere"

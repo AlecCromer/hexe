@@ -148,8 +148,10 @@ id = "sop-sphere"
 title = "Sphere SOP"
 area = "A"
 tier = "P0"
-status = "planned"
-notes = "Wave 2; wave 0 oracle fixture (type=poly). 17 doc-labelled params; prim-type sphere out of scope; doc-derived; observed_in 20.5.487 (docs only)"
+status = "shipped"
+commands = ["sphere"]
+evidence = ["crates/sop/src/builtins/sphere_sop.rs::default_is_one_point_one_sphere_prim", "crates/sop/src/builtins/sphere_sop.rs::poly_counts_are_10f2_plus_2_and_20f2", "crates/sop/src/builtins/sphere_sop.rs::poly_is_closed_outward_unit_sphere", "crates/sop/src/builtins/sphere_sop.rs::polymesh_default_closed_form_counts", "crates/sop/src/builtins/sphere_sop.rs::hostile_params_are_errors_not_panics", "crates/sop/src/builtins/sphere_sop.rs::fixtures_match_sop_output_and_independent_expected"]
+notes = "types prim/poly/polymesh only (mesh/nurbs/bezier/polysoup = BadParam; polymesh surftype quads only). Skipped params: orderu/orderv/imperfect (NURBS), accurate (no input). ALL UNVERIFIED vs Houdini (hython blocked, analytical fixtures): polymesh counts (R-2)C+2 pts / (R-1)C prims (tri poles), point order (rings top-down, then top pole, bottom pole), ring angle start/direction, poly icosahedron orientation + point/tri order, orient permutation, rotate order Rx,Ry,Rz, scale on rad only, Sphere xform row/col convention, upole/triangularpoles semantics, freq cap 100 (UI max 10), no N/uv attrs"
 
 [[feature]]
 id = "sop-transform"
