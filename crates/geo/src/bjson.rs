@@ -142,7 +142,9 @@ impl<'a> Rd<'a> {
                     if t == tok::MAP_END {
                         break;
                     }
-                    let Value::String(k) = self.value_of(t, depth + 1)? else { return syn("bjson: map key is not a string") };
+                    let Value::String(k) = self.value_of(t, depth + 1)? else {
+                        return syn("bjson: map key is not a string");
+                    };
                     let v = self.value(depth + 1)?;
                     m.insert(k, v);
                 }
@@ -170,7 +172,9 @@ impl<'a> Rd<'a> {
         if et == tok::BOOL {
             // bit-packed (element i = bit i%8 of byte i/8), byte count padded up to a multiple of 4
             let nbytes = n.div_ceil(32).checked_mul(4).filter(|&x| x <= self.b.len().saturating_sub(self.p));
-            let Some(nbytes) = nbytes else { return syn(format!("bjson bool array of {n} overruns the data at byte {at}")) };
+            let Some(nbytes) = nbytes else {
+                return syn(format!("bjson bool array of {n} overruns the data at byte {at}"));
+            };
             let bytes = self.take(nbytes)?;
             let v = (0..n).map(|i| Value::Bool(bytes.get(i / 8).is_some_and(|b| (b >> (i % 8)) & 1 == 1))).collect();
             return Ok(Value::Array(v));

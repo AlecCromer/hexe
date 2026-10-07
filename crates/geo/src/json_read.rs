@@ -471,9 +471,15 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
                             b.push(x.clone());
                         }
                     }
-                    let norm = Value::Array(vec![Value::Array(vec![Value::from("type"), Value::from(rt.clone())]), Value::Array(b)]);
+                    let norm = Value::Array(vec![
+                        Value::Array(vec![Value::from("type"), Value::from(rt.clone())]),
+                        Value::Array(b),
+                    ]);
                     out.push(Prim {
-                        kind: PrimKind::Unknown { ty: rt.clone(), json: serde_json::to_string(&norm).unwrap_or_default() },
+                        kind: PrimKind::Unknown {
+                            ty: rt.clone(),
+                            json: serde_json::to_string(&norm).unwrap_or_default(),
+                        },
                         verts: r,
                     });
                 }

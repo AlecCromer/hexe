@@ -9,13 +9,13 @@
 )]
 
 mod bjson;
+#[cfg(test)]
+mod bjson_tests;
 mod detail;
 mod error;
 mod gpd;
 mod json_read;
 mod json_write;
-#[cfg(test)]
-mod bjson_tests;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -34,7 +34,7 @@ pub fn read_geo(bytes: &[u8]) -> Result<Detail, GeoError> {
         Some(b'P') => read_geo_gpd(bytes),
         Some(b'[') | Some(b'{') => read_geo_json(bytes),
         Some(0x7f) => read_geo_bjson(bytes),
-Some(b'B') => Err(GeoError::Unsupported("legacy binary BgeoV is not supported".into())),
+        Some(b'B') => Err(GeoError::Unsupported("legacy binary BgeoV is not supported".into())),
         _ => Err(GeoError::Syntax("unrecognised geometry container".into())),
     }
 }
