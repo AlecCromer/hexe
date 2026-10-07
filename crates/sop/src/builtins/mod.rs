@@ -16,7 +16,7 @@ mod null_sop;
 //
 // mod line_sop;
 //
-// mod merge_sop;
+mod merge_sop;
 //
 // mod scatter_sop;
 //
@@ -40,7 +40,7 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     // r.register("line", line_sop::spec, line_sop::new);
     //
-    // r.register("merge", merge_sop::spec, merge_sop::new);
+    r.register("merge", merge_sop::spec, merge_sop::new);
     //
     // r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
