@@ -4,7 +4,7 @@
 
 ## copytopoints  — SOP_CopyToPoints-2.0.C (type copytopoints, ver 2.0)
 - source: `libHoudiniOP2.dylib:42587532` (file:byte-offset of DS text, NUL-terminated) · DS sha256[:16]=a0b1e7282ec60f0b · 4468 bytes
-- harvested parm templates: **11** · help doc entries (`sop/copytopoints.txt`): **13**
+- harvested parm templates: **16** · help doc entries (`sop/copytopoints.txt`): **13**
 
 | # | folder | token | label | type[size] | default | range | menu | cond | cppname/flags |
 |---|---|---|---|---|---|---|---|---|---|
@@ -19,6 +19,11 @@
 | 9 |  | `transform` | Transform Using Target Point Orientations | toggle | on |  |  |  |  |
 | 10 |  | `useimplicitn` | Transform Using Implicit Target Point Normals If No Point N Attribute | toggle | on |  |  | disa: { transform == 0 } | UseImplicitN |
 | 11 |  | `resettargetattribs` | Reset Attributes from Target | button | 0 |  |  |  |  |
+| 12 |  | `targetattribs` | Attributes from Target | multiparm | 0 |  |  |  | TargetAttribs |
+| 13 | multiparm:targetattribs | `useapply#` | Apply Attributes | toggle | 1 |  |  |  | joinnext, nolabel |
+| 14 | multiparm:targetattribs | `applyto#` | Apply to | ordinal | 0 |  | points=Points, verts=Vertices, prims=Primitives |  | joinnext |
+| 15 | multiparm:targetattribs | `applymethod#` | by | ordinal | 0 |  | copy=Copying, none=Nothing, mult=Multiplying, add=Adding, sub=Subtracting |  | joinnext |
+| 16 | multiparm:targetattribs | `applyattribs#` | Attributes | string |  |  |  |  | tags:sop_input=1 |
 
 doc entries: Source Group; Source Group Type; Target Points; Piece Attribute; Pack and Instance; Pivot Location; Display As; Transform Using Point Orientations; Reset Attributes from Target; Attributes from Target; Apply to; by; Attributes
 
