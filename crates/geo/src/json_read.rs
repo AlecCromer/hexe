@@ -382,15 +382,24 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
             verts: range,
         };
         match ty {
-            "Polygon_run" | "PolygonCurve_run" => {
-                let closed = ty == "Polygon_run";
-                let start = int_field(&body, "startvertex")?;
-                let n = int_field(&body, "nprimitives")?;
+            // `Polygon_run`/`PolygonCurve_run` = long names (authored schema); `p_r`/`c_r` + `s_v`/`n_p`/`r_v`/`n_v` = the
+            // abbreviations Houdini 20.5 binary .bgeo files use (seen in the shipped corpus). `n_v` = one vertex count per prim.
+            "Polygon_run" | "PolygonCurve_run" | "p_r" | "c_r" => {
+                let closed = ty == "Polygon_run" || ty == "p_r";
+                let start = find(&body, "startvertex").or_else(|| find(&body, "s_v")).and_then(Value::as_i64);
+                let Some(start) = start else { return syn("run without start vertex") };
+                let n = find(&body, "nprimitives").or_else(|| find(&body, "n_p")).and_then(Value::as_i64);
+                let Some(n) = n else { return syn("run without primitive count") };
                 if start < 0 || n < 0 {
                     return Err(GeoError::Count("negative run start/count".into()));
                 }
-                let Some(rle) = find(&body, "nvertices_rle") else { return syn("run without nvertices_rle") };
-                let rle = ints(rle)?;
+                let rle = if let Some(r) = find(&body, "nvertices_rle").or_else(|| find(&body, "r_v")) {
+                    ints(r)?
+                } else if let Some(l) = find(&body, "n_v") {
+                    ints(l)?.into_iter().flat_map(|c| [c, 1]).collect()
+                } else {
+                    return syn("run without vertex counts");
+                };
                 if rle.len() % 2 != 0 {
                     return syn("nvertices_rle has odd length");
                 }
@@ -416,6 +425,33 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
                 }
                 if made != n {
                     return Err(GeoError::Count(format!("run claims {n} primitives, rle yields {made}")));
+                }
+            }
+            // Packed-primitive run (Houdini 20.5 bgeo): `[["type","run","runtype",T,"varyingfields",F,"uniformfields",U], [item, ...]]`,
+            // each item = `[varying-values, vertex]`. One passthrough prim per item, normalised to the single-prim shape.
+            "run" => {
+                let hv: Value = pair.first().cloned().unwrap_or(Value::Null);
+                let hk = kv(&hv).unwrap_or_default();
+                let rt = find(&hk, "runtype").and_then(Value::as_str).unwrap_or("run").to_string();
+                let items = pair.get(1).and_then(Value::as_array).cloned().unwrap_or_default();
+                for it in items {
+                    if out.len() as u64 > u64::from(nprims) {
+                        return Err(GeoError::Count("more primitives than primitivecount".into()));
+                    }
+                    let vtx = it.as_array().and_then(|a| a.last()).and_then(Value::as_i64).unwrap_or(-1);
+                    let r = contiguous(&[vtx], nverts)?.unwrap_or(0..0);
+                    let mut b = vec![Value::from("vertex"), Value::from(vec![vtx]), Value::from("item"), it.clone()];
+                    for k in ["varyingfields", "uniformfields"] {
+                        if let Some(x) = find(&hk, k) {
+                            b.push(Value::from(k));
+                            b.push(x.clone());
+                        }
+                    }
+                    let norm = Value::Array(vec![Value::Array(vec![Value::from("type"), Value::from(rt.clone())]), Value::Array(b)]);
+                    out.push(Prim {
+                        kind: PrimKind::Unknown { ty: rt.clone(), json: serde_json::to_string(&norm).unwrap_or_default() },
+                        verts: r,
+                    });
                 }
             }
             "Polygon" | "Poly" => {
@@ -460,7 +496,11 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
 pub fn read_geo_json(bytes: &[u8]) -> Result<Detail, GeoError> {
     check_len(bytes.len())?;
     let root: Value = serde_json::from_slice(bytes).map_err(|e| GeoError::Syntax(format!("json: {e}")))?;
-    let top = need_kv(&root, "top level")?;
+    detail_from_value(&root)
+}
+/// Shared by the ASCII (`read_geo_json`) and binary (`read_geo_bjson`) paths: one `Value` tree → one `Detail`.
+pub(crate) fn detail_from_value(root: &Value) -> Result<Detail, GeoError> {
+    let top = need_kv(root, "top level")?;
     let np = count_of("pointcount", int_field(&top, "pointcount")?)?;
     let nv = count_of("vertexcount", int_field(&top, "vertexcount")?)?;
     let nq = count_of("primitivecount", int_field(&top, "primitivecount")?)?;
