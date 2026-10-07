@@ -1,0 +1,19 @@
+# ATTRIBUTION.toml: one entry per asset / bundled item. Source of truth; ATTRIBUTION.md is generated (`cargo xtask assets --write`).
+# Checked by `cargo xtask assets` (part of `cargo xtask ci`). Unknown fields are errors.
+#
+# [policy] original_vendor = ["acme"]   case-insensitive author substrings that may NEVER appear (the original's vendor)
+# [[asset]]       file in this repo (binary/media ext outside fixtures/ spec/). Fields: path, title, author, source (url+version),
+#                 licence (SPDX, allowlist in xtask/src/assets.rs), sha256 (hex of the exact bytes), kind?, usage?
+# [[bundled]]     file compiled in via a Cargo dependency. Fields: crate, version? (must match Cargo.lock), title, author, source, licence
+# [[fetched]]     downloaded at build time, never committed. Fields: name, url, sha256, title, author, source, licence
+# [[build_input]] optional external input, own repo attributes each file. Fields: name, title, author, source, licence
+[policy]
+original_vendor = []
+
+# egui's default UI fonts (eframe feature `default_fonts`); remove together with that feature.
+[[bundled]]
+crate = "epaint_default_fonts"
+title = "egui default fonts (Ubuntu-Light, Hack, emoji-icon-font)"
+author = "emilk and contributors; Canonical (Ubuntu), Hack authors"
+source = "https://github.com/emilk/egui (crate epaint_default_fonts)"
+licence = "OFL-1.1 AND Ubuntu-font-1.0"

@@ -1,0 +1,16 @@
+# fixtures/MANIFEST.toml: how every fixture file was produced (checked by `cargo xtask assets`: sha256 must match).
+# One [[fixture]] per file under fixtures/<case>/ (input and expected). Unknown fields are errors.
+#   case              directory name under fixtures/
+#   file              file name inside fixtures/<case>/
+#   sha256            hex of the exact bytes
+#   produced_by       command/tool that made it, e.g. "original headless: <cli> --batch in.x -o out.y" or "authored by hand"
+#   original_version  version of the original that produced it ("n/a" for hand-authored inputs)
+#   date              YYYY-MM-DD
+#
+# [[fixture]]
+# case = "parse-len"
+# file = "expected.txt"
+# sha256 = "…"
+# produced_by = "…"
+# original_version = "…"
+# date = "2026-01-01"

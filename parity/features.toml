@@ -1,0 +1,31 @@
+# parity/features.toml: the ledger. One [[feature]] row per feature of the original. `cargo xtask parity` validates it
+# (deny_unknown_fields; shipped rows must cite evidence `path::fn` that exists and commands that exist as string literals).
+#   id        stable dotted id, used in commit messages and fixtures/<case>/case.toml `feature`
+#   title     one line
+#   area      key of [schema].areas
+#   tier      P0 | P1 | P2 | P3 | N/A
+#   status    planned | partial | shipped | na   (shipped = exists + tested, NOT "as good as original"; partial needs notes)
+#   commands  CLI/registry ids that exist in the code (checked for shipped rows)
+#   evidence  ["path/to/file.rs::test_fn"] (checked for shipped rows)
+#   notes     what is still missing
+[schema]
+version = 1
+areas = { A = "core", B = "io", C = "ui", D = "misc" }
+
+[[feature]]
+id = "example.core-parse-len"
+title = "Example: parse a decimal length (delete when the first real row lands)"
+area = "A"
+tier = "P0"
+status = "shipped"
+commands = ["oracle"]
+evidence = ["crates/core/src/lib.rs::parse_len_rejects_hostile_input"]
+notes = "template example; no oracle fixture yet"
+
+[[feature]]
+id = "example.ui-window"
+title = "Example: main window with the first real panel"
+area = "C"
+tier = "P1"
+status = "planned"
+notes = "stub window only"

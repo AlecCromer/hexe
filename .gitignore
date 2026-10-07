@@ -1,0 +1,8 @@
+*~
+.DS_Store
+plan/
+dirty/
+corpus/
+fuzz-out/
+dist/
+target/

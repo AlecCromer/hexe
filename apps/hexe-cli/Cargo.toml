@@ -1,0 +1,17 @@
+[package]
+name = "hexe-cli"
+description = "hexe command-line tool (also the oracle entry point for `cargo xtask oracle`)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "hexe-cli"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+hexe-core = { workspace = true }

@@ -1,0 +1,12 @@
+# perf/budgets.toml: enforced by `cargo xtask perf` (per fixture) and `cargo xtask size` (binary).
+# Ratchets: xtask/baselines/perf.json (`cargo xtask perf --tighten`); regressions fail even inside the budget.
+[binary]
+bin = "hexe-cli"   # package measured; switch to "hexe" once the app is the product
+max_mb = 20.0
+original_mb = 0.0      # size of the original in MB (0 = unknown → no ratio)
+
+# [[fixture]]            # one per fixtures/<case>; run via /usr/bin/time, best of 3
+# case = "parse-len"
+# startup_ms = 200.0     # `--version`
+# run_ms = 500.0         # the case command
+# peak_rss_mb = 128.0
