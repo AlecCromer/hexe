@@ -109,7 +109,8 @@ impl Face {
             let c = cross(sub(*a, o), sub(*b, o));
             nw = [nw[0] + c[0], nw[1] + c[1], nw[2] + c[2]];
         }
-        if !(dot(nw, nw).sqrt() > MIN_NEWELL) {
+        let area2 = dot(nw, nw).sqrt();
+        if !area2.is_finite() || area2 <= MIN_NEWELL {
             return None;
         }
         Some(Face { pts, first_vert: lo, pos, normal: unit(nw)? })
@@ -127,7 +128,7 @@ impl Face {
                     return [0.0; 3];
                 }
                 let (n0, n1) = (edge_in((c + n - 1) % n), edge_in(c));
-                let d = match (n0, n1) {
+                match (n0, n1) {
                     (Some(a), Some(b)) => {
                         let den = 1.0 + dot(a, b);
                         let s = if den > 1e-6 { inset / den } else { inset * 0.5 };
@@ -135,8 +136,7 @@ impl Face {
                     }
                     (Some(a), None) | (None, Some(a)) => [a[0] * inset, a[1] * inset, a[2] * inset],
                     (None, None) => [0.0; 3],
-                };
-                d
+                }
             })
             .collect()
     }
