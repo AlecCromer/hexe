@@ -140,8 +140,18 @@ id = "sop-merge"
 title = "Merge SOP"
 area = "A"
 tier = "P0"
-status = "planned"
-notes = "Wave 2. 0 doc-labelled params (real count TBD); variadic inputs ≤9999; doc-derived; observed_in 20.5.487 (docs only)"
+status = "shipped"
+commands = ["merge"]
+evidence = [
+  "crates/sop/src/builtins/merge_sop.rs::two_boxes_concatenate_with_shifted_indices",
+  "crates/sop/src/builtins/merge_sop.rs::point_attr_union_zero_fills_missing_side",
+  "crates/sop/src/builtins/merge_sop.rs::prim_and_vertex_attrs_union_and_strings_default_empty",
+  "crates/sop/src/builtins/merge_sop.rs::mismatched_tuple_size_or_type_is_failed",
+  "crates/sop/src/builtins/merge_sop.rs::groups_union_by_name_masks_concatenated",
+  "crates/sop/src/builtins/merge_sop.rs::empty_inputs_are_skipped_and_all_empty_is_empty",
+  "crates/sop/src/builtins/merge_sop.rs::fixture_expected_equals_merge_of_hand_built_boxes",
+]
+notes = "wave 2: max 4 inputs (input0..3; Houdini 9999); variadic ports = graph wave 3. 0 params (doc-labelled 0; hidden parms [?] unknown, none modelled). Single live input shares the Arc; empty inputs skipped. UNVERIFIED vs Houdini (hython blocked): attr default-fill (0 / empty string), type/tuple-size conflict = Failed (Houdini may drop/convert), group union, detail attr first-wins, bypass-exports-input-1 not modelled. Oracle: fixtures/merge-empty scores; fixtures/merge-two-boxes is xfail until the box SOP lane lands (point order/params of box unverified). Analytical expecteds, not Houdini-observed."
 
 [[feature]]
 id = "sop-scatter"

@@ -1,0 +1,1 @@
+["fileversion","20.5.487","hasindex",false,"pointcount",0,"vertexcount",0,"primitivecount",0,"info",{"software":"hexe"},"topology",["pointref",["indices",[]]],"attributes",["pointattributes",[],"vertexattributes",[],"primitiveattributes",[],"globalattributes",[]],"primitives",[]]
