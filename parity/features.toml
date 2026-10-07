@@ -605,7 +605,7 @@ evidence = [
   "crates/sop/src/builtins/blast_sop.rs::scene_tests::scene_loader_cooks_group_blast_example_and_registry_has_slots",
 ]
 notes = "H16: point|prim mode, negate, removeunused (default on; only points orphaned BY the blast, pre-existing unused points kept). Deleting points deletes whole prims using them. Empty group = all elements. Order, attributes, groups compact with survivors. NOT modelled: edge/vertex mode, delete-non-selected on unshared geometry, fillhole. UNVERIFIED vs Houdini (hython blocked); analytical oracle only."
-//
+
 # --- H20: IO (obj/ply, file SOP, rop_geometry, convert)
 [[feature]]
 id = "geo-read-obj"
