@@ -1,0 +1,4 @@
+{
+  "nodes": [{ "name": "box1", "type": "box" }],
+  "display": "box1"
+}

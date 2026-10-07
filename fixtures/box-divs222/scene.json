@@ -1,0 +1,10 @@
+{
+  "nodes": [
+    {
+      "name": "box1",
+      "type": "box",
+      "params": { "size": [2, 4, 6], "t": [1, -1, 0.5], "divrate": [2, 2, 2], "dodivs": true, "divs": [3, 3, 3] }
+    }
+  ],
+  "display": "box1"
+}
