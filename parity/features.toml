@@ -248,6 +248,84 @@ evidence = [
 notes = "H5: translate + pscale + optional orient (N/up, +Z=N) + optional copynum; params use_orient/use_pscale/copynum are OUR names, not the harvested v2 parm table. Missing vs Houdini v2: source/target groups, piece attr, pack, targetattribs transfer, orient/scale attrs, implicit N, vertex-class N from target. Frame convention (+Z=N, +Y=up) UNVERIFIED (hython blocked). Example: examples/copytopoints.json. Analytical oracle only."
 
 [[feature]]
+id = "sop-line"
+title = "Line SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["line"]
+evidence = [
+  "crates/sop/src/builtins/line_sop.rs::defaults_are_two_points_p1_is_0_1_0_one_open_prim",
+  "crates/sop/src/builtins/line_sop.rs::five_points_dist_4_spacing_exactly_1",
+  "crates/sop/src/builtins/line_sop.rs::hostile_params_are_errors",
+]
+notes = "H17: origin(0,0,0) dir(0,1,0) dist(1) points(2) -> one open Poly. POINT ORDER: point i = origin + normalize(dir)*dist*i/(points-1), ids ascend from origin, prim verts 0..n in order (generator-defined, UNVERIFIED vs Houdini, hython blocked). dir normalised (length ignored). Missing: NURBS/Bezier output, Houdini's other line modes (attribute-driven, distance-from-points). Analytical oracle only."
+
+[[feature]]
+id = "sop-circle"
+title = "Circle SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["circle"]
+evidence = [
+  "crates/sop/src/builtins/circle_sop.rs::four_divisions_radius_1_xy_is_the_four_axis_points_one_closed_prim",
+  "crates/sop/src/builtins/circle_sop.rs::polyline_type_is_open_same_points",
+  "crates/sop/src/builtins/circle_sop.rs::arc_0_to_90_four_divisions_is_five_points_open",
+  "crates/sop/src/builtins/circle_sop.rs::orient_yz_zx_are_ccw_about_plane_normal_with_radius_and_center",
+  "crates/sop/src/builtins/circle_sop.rs::nurbs_bezier_unsupported_and_hostile_divisions_rejected",
+]
+notes = "H17: type polygon|polyline (nurbs/bezier -> Unsupported), orient xy|yz|zx, radius (declared V3, [2] ignored), center, divisions(12), arc closed|open_arc + beginangle/endangle(deg). POINT ORDER: right-handed cyclic in-plane axes xy(X,Y) yz(Y,Z) zx(Z,X) so every orient is CCW about its normal; point 0 on axis 0; closed = divisions pts (closing pt not repeated), open_arc = divisions+1 pts, a_i = begin+(end-begin)*i/divisions. Prim closed iff polygon && arc closed. UNVERIFIED vs Houdini (hython blocked): start axis/winding of yz+zx, closed-polyline-without-repeat. Missing: slice/sectors arc types, uniform scale, rotate, NURBS."
+
+[[feature]]
+id = "sop-curve"
+title = "Curve SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["curve"]
+evidence = [
+  "crates/sop/src/builtins/curve_sop.rs::three_coords_is_three_points_one_open_prim_close_closes",
+  "crates/sop/src/builtins/curve_sop.rs::empty_and_whitespace_variants",
+  "crates/sop/src/builtins/curve_sop.rs::hostile_coords_are_errors",
+]
+notes = "H17: coords S = whitespace-separated x,y,z triples, close B -> one Poly (open/closed), point i = i-th triple (generator-defined). Missing: NURBS/Bezier curve types, interactive-draw/multi-curve, 'method' menu, order/knots. Analytical oracle only."
+
+[[feature]]
+id = "sop-resample"
+title = "Resample SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["resample"]
+evidence = [
+  "crates/sop/src/builtins/resample_sop.rs::line_dist_1_two_points_length_quarter_is_five_points_spacing_exact",
+  "crates/sop/src/builtins/resample_sop.rs::segments_10_is_eleven_points_ends_kept",
+  "crates/sop/src/builtins/resample_sop.rs::circle_div4_segments_8_is_eight_points_with_every_edge_midpoint",
+  "crates/sop/src/builtins/resample_sop.rs::lastsegment_keeps_shorter_last_or_stretches",
+  "crates/sop/src/builtins/resample_sop.rs::attributes_lerp_ints_pick_nearest_prim_and_detail_pass",
+  "crates/sop/src/builtins/resample_sop.rs::hostile_params_and_geometry_are_errors",
+  "crates/sop/src/builtins/resample_sop.rs::example_scene_cooks",
+]
+notes = "H17: method length|segments, length(0.1), segments(10), lastsegment(on = edge_length_exact: shorter last segment; off = stretch to even spacing <= length), resample_closed(on). Output = new points curve by curve, one prim per source curve (same closedness); even samples at L*k/n. Point attrs: float-like lerp, int/string nearest; prim attrs copied; detail attrs kept; vertex attrs + groups dropped; non-curve prims DROPPED (Houdini likely passes them through: UNVERIFIED). Missing: per-curve/attrib-driven length, tangent/curveu outputs, subdivide-by-curvature, group filter. Analytical oracle only."
+
+[[feature]]
+id = "sop-add"
+title = "Add SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["add"]
+evidence = [
+  "crates/sop/src/builtins/add_sop.rs::three_coords_no_prims_is_three_points_zero_prims",
+  "crates/sop/src/builtins/add_sop.rs::prims_connect_all_is_one_open_polyline_of_three_verts",
+  "crates/sop/src/builtins/add_sop.rs::grid_3x3_connect_all_is_nine_vert_polyline_plus_four_quads",
+  "crates/sop/src/builtins/add_sop.rs::added_points_follow_input_points_and_delete_geometry_keeps_only_added",
+  "crates/sop/src/builtins/add_sop.rs::no_change_passes_input_through_and_bad_coords_error",
+]
+notes = "H17: points S (x,y,z triples), prims B, connect all|none, delete_geometry B. Order: input pts then added pts; input prims then ONE open polyline over ALL output points in id order (connect=all, prims on, >=2 pts). Missing: Houdini polygon-by-group/pattern, closed toggle, per-point weights, attribute defaults for added points (zero). UNVERIFIED vs Houdini (hython blocked). Example: examples/curves.json."
+
+[[feature]]
 id = "sop-wrangle"
 title = "Attribute Wrangle SOP"
 area = "A"
