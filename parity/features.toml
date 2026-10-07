@@ -99,3 +99,86 @@ evidence = [
   "crates/graph/src/graph.rs::bad_ids_ports_and_params_are_errors",
 ]
 notes = "no fuzz target yet (AGENTS.md section 4: findings get a regression test first)"
+
+
+# --- wave1/spec: Houdini SOP surface (spec/behaviour/sop-*.md). hython BLOCKED (no license) → all rows doc-derived, UNVERIFIED against oracle.
+
+[[feature]]
+id = "sop-box"
+title = "Box SOP"
+area = "A"
+tier = "P0"
+status = "planned"
+notes = "Wave 2 (SOP atoms; wave 0 oracle fixture). 13 doc-labelled UI params (hython count TBD); hython blocked → spec doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-grid"
+title = "Grid SOP"
+area = "A"
+tier = "P0"
+status = "planned"
+notes = "Wave 2; wave 0 oracle fixture. 12 doc-labelled params; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-sphere"
+title = "Sphere SOP"
+area = "A"
+tier = "P0"
+status = "planned"
+notes = "Wave 2; wave 0 oracle fixture (type=poly). 17 doc-labelled params; prim-type sphere out of scope; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-transform"
+title = "Transform SOP"
+area = "A"
+tier = "P0"
+status = "planned"
+notes = "Wave 2. 24 doc-labelled params; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-merge"
+title = "Merge SOP"
+area = "A"
+tier = "P0"
+status = "planned"
+notes = "Wave 2. 0 doc-labelled params (real count TBD); variadic inputs ≤9999; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-scatter"
+title = "Scatter SOP"
+area = "A"
+tier = "P1"
+status = "planned"
+notes = "Wave 2; wave 0 oracle fixture. ~35 doc-labelled params; bit-exact RNG unspecified → statistical parity; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-copytopoints"
+title = "Copy to Points SOP"
+area = "A"
+tier = "P1"
+status = "planned"
+notes = "Wave 2. 13 doc-labelled params; pack-and-instance out of scope; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-wrangle"
+title = "Attribute Wrangle SOP"
+area = "A"
+tier = "P1"
+status = "planned"
+notes = "Wave 2 via rhai (not VEX). 12 doc-labelled params + snippet; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "sop-noise"
+title = "Attribute Noise SOP"
+area = "A"
+tier = "P1"
+status = "planned"
+notes = "Wave 2. ~50 doc-labelled params; Attribute Noise vs Mountain TBD; noise bit-exactness not in docs; doc-derived; observed_in 20.5.487 (docs only)"
+
+[[feature]]
+id = "core.cook-model"
+title = "SOP cook model (lazy, dirty flags, time dependence)"
+area = "A"
+tier = "P0"
+status = "planned"
+notes = "spec/behaviour/cook-model.md; recalled not observed (hython blocked); observed_in 20.5.487 (docs only)"
