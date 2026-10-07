@@ -898,6 +898,16 @@ name = "hexe-graph"
 version = "0.1.0"
 
 [[package]]
+name = "hexe-sop"
+version = "0.1.0"
+dependencies = [
+ "hexe-geo",
+ "hexe-graph",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

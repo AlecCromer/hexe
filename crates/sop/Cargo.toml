@@ -1,0 +1,14 @@
+[package]
+name = "hexe-sop"
+description = "hexe: SOP node registry + graph JSON scene loader (L2, payload = hexe_geo::Detail)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+[dependencies]
+hexe-geo = { workspace = true }
+hexe-graph = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+[lints]
+workspace = true
