@@ -13,6 +13,8 @@ pub enum GeoError {
         max: usize,
     },
     Unsupported(String),
+    /// File could not be read/written (`read_any` / `write_any`).
+    Io(String),
 }
 
 impl fmt::Display for GeoError {
@@ -23,6 +25,7 @@ impl fmt::Display for GeoError {
             GeoError::Index(s) => write!(f, "index: {s}"),
             GeoError::TooLarge { len, max } => write!(f, "input of {len} bytes exceeds the {max}-byte cap"),
             GeoError::Unsupported(s) => write!(f, "unsupported: {s}"),
+            GeoError::Io(s) => write!(f, "io: {s}"),
         }
     }
 }
