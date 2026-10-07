@@ -104,6 +104,10 @@ pub enum GraphError {
         node: NodeId,
         input: usize,
     },
+    /// Empty or over-long node name.
+    BadName(String),
+    /// Another live node already has this name.
+    NameTaken(String),
     TooManyNodes {
         max: usize,
     },
@@ -126,6 +130,8 @@ impl fmt::Display for GraphError {
             GraphError::BadParamValue { node, name } => write!(f, "{node} parameter `{name}`: value rejected"),
             GraphError::Cycle(n) => write!(f, "cycle through {n}"),
             GraphError::MissingInput { node, input } => write!(f, "{node} input {input} is not connected"),
+            GraphError::BadName(n) => write!(f, "bad node name `{n}`"),
+            GraphError::NameTaken(n) => write!(f, "node name `{n}` is taken"),
             GraphError::TooManyNodes { max } => write!(f, "graph is capped at {max} nodes"),
             GraphError::Node { node, source } => write!(f, "{node}: {source}"),
             GraphError::Internal(m) => write!(f, "internal engine error: {m}"),

@@ -14,6 +14,6 @@ mod graph;
 mod node;
 mod param;
 
-pub use graph::{DEFAULT_FPS, Graph, MAX_NODES};
+pub use graph::{DEFAULT_FPS, Graph, MAX_NAME, MAX_NODES};
 pub use node::{CookCtx, CookError, GraphError, InputSpec, Node, NodeId, Payload};
 pub use param::{MAX_PARAM_STRING, Param, ParamSet, ParamSpec, ParamValue};

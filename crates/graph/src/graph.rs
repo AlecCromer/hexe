@@ -9,6 +9,8 @@ use std::sync::Arc;
 pub const MAX_NODES: usize = 1 << 20;
 /// Frame rate handed to `CookCtx` unless `set_fps`.
 pub const DEFAULT_FPS: f32 = 24.0;
+/// Longest node name accepted.
+pub const MAX_NAME: usize = 256;
 
 /// Cached output of one node. `sensitive` = depends on time (itself or any upstream).
 struct Cached<T> {
@@ -26,6 +28,8 @@ struct Slot<T> {
     outs: Vec<(NodeId, usize)>,
     /// `None` == dirty.
     cache: Option<Cached<T>>,
+    /// Tombstone (`remove_node`): ids stay stable, the slot is invisible to every accessor.
+    removed: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -36,6 +40,8 @@ enum Visit {
 
 pub struct Graph<T: Payload> {
     slots: Vec<Slot<T>>,
+    /// Optional unique display names (unnamed = hidden/internal node).
+    names: HashMap<NodeId, String>,
     display: Option<NodeId>,
     fps: f32,
     log: Arc<dyn Fn(&str) + Send + Sync>,
@@ -49,11 +55,12 @@ impl<T: Payload> Default for Graph<T> {
 
 impl<T: Payload> Graph<T> {
     pub fn new() -> Self {
-        Graph { slots: Vec::new(), display: None, fps: DEFAULT_FPS, log: Arc::new(|_| {}) }
+        Graph { slots: Vec::new(), names: HashMap::new(), display: None, fps: DEFAULT_FPS, log: Arc::new(|_| {}) }
     }
 
+    /// Live (not removed) nodes.
     pub fn node_count(&self) -> usize {
-        self.slots.len()
+        self.slots.iter().filter(|s| !s.removed).count()
     }
     pub fn fps(&self) -> f32 {
         self.fps
@@ -100,7 +107,7 @@ impl<T: Payload> Graph<T> {
             params.set(name, value.clone());
         }
         let inputs = vec![None; node.inputs().len()];
-        self.slots.push(Slot { node, params, inputs, outs: Vec::new(), cache: None });
+        self.slots.push(Slot { node, params, inputs, outs: Vec::new(), cache: None, removed: false });
         Ok(id)
     }
 
@@ -144,12 +151,12 @@ impl<T: Payload> Graph<T> {
             return Err(GraphError::Cycle(dst));
         }
         self.unlink(dst, input);
-        if let Some(s) = self.slots.get_mut(dst.slot())
+        if let Some(s) = self.live_mut(dst)
             && let Some(cell) = s.inputs.get_mut(input)
         {
             *cell = Some(src);
         }
-        if let Some(s) = self.slots.get_mut(src.slot()) {
+        if let Some(s) = self.live_mut(src) {
             s.outs.push((dst, input));
         }
         self.invalidate(dst);
@@ -168,9 +175,9 @@ impl<T: Payload> Graph<T> {
     }
 
     fn unlink(&mut self, dst: NodeId, input: usize) {
-        let old = self.slots.get_mut(dst.slot()).and_then(|s| s.inputs.get_mut(input)).and_then(Option::take);
+        let old = self.live_mut(dst).and_then(|s| s.inputs.get_mut(input)).and_then(Option::take);
         if let Some(old) = old
-            && let Some(s) = self.slots.get_mut(old.slot())
+            && let Some(s) = self.live_mut(old)
         {
             s.outs.retain(|&e| e != (dst, input));
         }
@@ -183,7 +190,7 @@ impl<T: Payload> Graph<T> {
         if slot.params.get(name) == Some(&value) {
             return Ok(());
         }
-        if let Some(s) = self.slots.get_mut(id.slot()) {
+        if let Some(s) = self.live_mut(id) {
             s.params.set(name, value);
         }
         self.invalidate(id);
@@ -191,32 +198,90 @@ impl<T: Payload> Graph<T> {
     }
 
     pub fn param(&self, id: NodeId, name: &str) -> Option<&ParamValue> {
-        self.slots.get(id.slot())?.params.get(name)
+        self.live(id)?.params.get(name)
     }
 
     /// Every node id in creation order (UI introspection).
     pub fn node_ids(&self) -> Vec<NodeId> {
-        (0..self.slots.len()).filter_map(|i| u32::try_from(i).ok().map(NodeId)).collect()
+        (0..self.slots.len())
+            .filter_map(|i| u32::try_from(i).ok().map(NodeId))
+            .filter(|&id| self.live(id).is_some())
+            .collect()
     }
     /// Node type name, `None` for unknown ids.
     pub fn node_type(&self, id: NodeId) -> Option<&'static str> {
-        self.slots.get(id.slot()).map(|s| s.node.type_name())
+        self.live(id).map(|s| s.node.type_name())
     }
     /// Source node of each input port (`None` = unconnected).
     pub fn input_sources(&self, id: NodeId) -> Vec<Option<NodeId>> {
-        self.slots.get(id.slot()).map(|s| s.inputs.clone()).unwrap_or_default()
+        self.live(id).map(|s| s.inputs.clone()).unwrap_or_default()
     }
     /// Parameter declarations of the node type (defaults, ranges).
     pub fn param_specs(&self, id: NodeId) -> Vec<ParamSpec> {
-        self.slots.get(id.slot()).map(|s| s.node.params().to_vec()).unwrap_or_default()
+        self.live(id).map(|s| s.node.params().to_vec()).unwrap_or_default()
     }
     /// `true` when `cook(id, _)` would have to run the node (no cache). `false` for unknown ids.
     pub fn is_dirty(&self, id: NodeId) -> bool {
-        self.slots.get(id.slot()).is_some_and(|s| s.cache.is_none())
+        self.live(id).is_some_and(|s| s.cache.is_none())
     }
 
+    fn live(&self, id: NodeId) -> Option<&Slot<T>> {
+        self.slots.get(id.slot()).filter(|s| !s.removed)
+    }
+    fn live_mut(&mut self, id: NodeId) -> Option<&mut Slot<T>> {
+        self.slots.get_mut(id.slot()).filter(|s| !s.removed)
+    }
+    /// Remove a node: its input edges and every edge it feeds are cut (dependents are dirtied and left with an
+    /// unconnected input; nothing is reconnected), its name and display flag are dropped. Other ids stay stable.
+    pub fn remove_node(&mut self, id: NodeId) -> Result<(), GraphError> {
+        let (ins, outs) = {
+            let s = self.slot(id)?;
+            (s.inputs.len(), s.outs.clone())
+        };
+        for i in 0..ins {
+            self.unlink(id, i);
+        }
+        for (dst, input) in outs {
+            self.unlink(dst, input);
+            self.invalidate(dst);
+        }
+        if let Some(s) = self.slots.get_mut(id.slot()) {
+            s.removed = true;
+            s.cache = None;
+            s.outs.clear();
+        }
+        self.names.remove(&id);
+        if self.display == Some(id) {
+            self.display = None;
+        }
+        Ok(())
+    }
+    /// Display name of a node (`None` = unnamed/hidden or unknown).
+    pub fn name(&self, id: NodeId) -> Option<&str> {
+        self.live(id).and(self.names.get(&id)).map(String::as_str)
+    }
+    /// Live node carrying exactly this name.
+    pub fn node_by_name(&self, name: &str) -> Option<NodeId> {
+        self.names.iter().find(|(id, n)| n.as_str() == name && self.live(**id).is_some()).map(|(id, _)| *id)
+    }
+    /// Name a node. Rejects empty / over-long names and names another live node already has.
+    pub fn rename(&mut self, id: NodeId, name: &str) -> Result<(), GraphError> {
+        self.slot(id)?;
+        if name.is_empty() || name.len() > MAX_NAME {
+            return Err(GraphError::BadName(name.chars().take(32).collect()));
+        }
+        if self.node_by_name(name).is_some_and(|other| other != id) {
+            return Err(GraphError::NameTaken(name.to_string()));
+        }
+        self.names.insert(id, name.to_string());
+        Ok(())
+    }
+    /// First free `<base>1`, `<base>2`, ... (Houdini-style auto name).
+    pub fn unique_name(&self, base: &str) -> String {
+        (1u32..).map(|n| format!("{base}{n}")).find(|c| self.node_by_name(c).is_none()).unwrap_or_default()
+    }
     fn slot(&self, id: NodeId) -> Result<&Slot<T>, GraphError> {
-        self.slots.get(id.slot()).ok_or(GraphError::NoSuchNode(id))
+        self.live(id).ok_or(GraphError::NoSuchNode(id))
     }
 
     /// Is `to` reachable from `from` following downstream edges? Iterative.
@@ -231,7 +296,7 @@ impl<T: Payload> Graph<T> {
             if std::mem::replace(flag, true) {
                 continue;
             }
-            if let Some(s) = self.slots.get(n.slot()) {
+            if let Some(s) = self.live(n) {
                 stack.extend(s.outs.iter().map(|&(d, _)| d));
             }
         }
@@ -247,7 +312,7 @@ impl<T: Payload> Graph<T> {
             if std::mem::replace(flag, true) {
                 continue;
             }
-            if let Some(s) = self.slots.get_mut(n.slot()) {
+            if let Some(s) = self.live_mut(n) {
                 s.cache = None;
                 stack.extend(s.outs.iter().map(|&(d, _)| d));
             }
@@ -255,7 +320,7 @@ impl<T: Payload> Graph<T> {
     }
 
     fn cached(&self, id: NodeId, time: f32) -> Option<&Cached<T>> {
-        let c = self.slots.get(id.slot())?.cache.as_ref()?;
+        let c = self.live(id)?.cache.as_ref()?;
         (!c.sensitive || c.time.to_bits() == time.to_bits()).then_some(c)
     }
 
@@ -311,7 +376,7 @@ impl<T: Payload> Graph<T> {
         }
         let ctx = CookCtx { time, fps: self.fps, params: &slot.params, log: &*self.log };
         let out = slot.node.cook(&ctx, &ins).map_err(|source| GraphError::Node { node: id, source })?;
-        if let Some(s) = self.slots.get_mut(id.slot()) {
+        if let Some(s) = self.live_mut(id) {
             s.cache = Some(Cached { out, time, sensitive });
         }
         Ok(())
@@ -663,5 +728,75 @@ mod tests {
         assert!(!g.is_dirty(a), "hostile fps ignored");
         g.set_fps(30.0);
         assert!(g.is_dirty(a), "fps change dirties everything");
+    }
+
+    #[test]
+    fn add_connect_disconnect_edit_cycle() {
+        let (ca, ci) = (counter(), counter());
+        let mut g: Graph<i32> = Graph::new();
+        let a = g.add_node(konst(&ca), val(4)).unwrap();
+        let i = g.add_node(inc(&ci), ParamSet::new()).unwrap();
+        assert!(matches!(g.cook(i, 0.0), Err(GraphError::MissingInput { .. })));
+        g.connect(a, 0, i, 0).unwrap();
+        assert_eq!(*g.cook(i, 0.0).unwrap(), 5);
+        g.disconnect(i, 0).unwrap();
+        assert!(g.is_dirty(i) && g.input_sources(i) == vec![None]);
+        assert!(matches!(g.cook(i, 0.0), Err(GraphError::MissingInput { .. })));
+        assert!(g.disconnect(i, 3).is_err(), "no such input");
+        g.connect(a, 0, i, 0).unwrap();
+        let j = g.add_node(inc(&counter()), ParamSet::new()).unwrap();
+        g.connect(i, 0, j, 0).unwrap();
+        assert!(matches!(g.connect(j, 0, i, 0), Err(GraphError::Cycle(_))));
+        assert_eq!(g.input_sources(i), vec![Some(a)], "rejected edge left no trace");
+    }
+
+    #[test]
+    fn remove_node_cuts_edges_and_keeps_ids() {
+        let (ca, ci, cj) = (counter(), counter(), counter());
+        let mut g: Graph<i32> = Graph::new();
+        let a = g.add_node(konst(&ca), val(1)).unwrap();
+        let i = g.add_node(inc(&ci), ParamSet::new()).unwrap();
+        let j = g.add_node(inc(&cj), ParamSet::new()).unwrap();
+        g.connect(a, 0, i, 0).unwrap();
+        g.connect(i, 0, j, 0).unwrap();
+        g.rename(i, "mid").unwrap();
+        g.set_display(Some(i)).unwrap();
+        assert_eq!(*g.cook(j, 0.0).unwrap(), 3);
+        g.remove_node(i).unwrap();
+        assert_eq!(g.node_count(), 2);
+        assert_eq!(g.node_ids(), vec![a, j], "ids of survivors are stable");
+        assert_eq!(g.display(), None);
+        assert_eq!((g.name(i), g.node_type(i)), (None, None));
+        assert!(g.node_by_name("mid").is_none());
+        assert_eq!(g.input_sources(j), vec![None], "dependent left unconnected, nothing reconnected");
+        assert!(g.is_dirty(j));
+        assert!(matches!(g.cook(j, 0.0), Err(GraphError::MissingInput { .. })));
+        assert!(matches!(g.cook(i, 0.0), Err(GraphError::NoSuchNode(_))));
+        assert!(g.remove_node(i).is_err(), "double remove");
+        assert!(g.connect(a, 0, i, 0).is_err() && g.set_param(i, "by", ParamValue::I(1)).is_err());
+        let k = g.add_node(inc(&counter()), ParamSet::new()).unwrap();
+        assert_ne!(k, i, "ids are never reused");
+        g.connect(a, 0, j, 0).unwrap();
+        assert_eq!(*g.cook(j, 0.0).unwrap(), 2);
+    }
+
+    #[test]
+    fn names_unique_rename_and_auto() {
+        let mut g: Graph<i32> = Graph::new();
+        let a = g.add_node(konst(&counter()), ParamSet::new()).unwrap();
+        let b = g.add_node(konst(&counter()), ParamSet::new()).unwrap();
+        assert_eq!(g.unique_name("const"), "const1");
+        g.rename(a, "const1").unwrap();
+        assert_eq!(g.unique_name("const"), "const2");
+        assert!(matches!(g.rename(b, "const1"), Err(GraphError::NameTaken(_))));
+        assert!(matches!(g.rename(b, ""), Err(GraphError::BadName(_))));
+        assert!(g.rename(b, &"x".repeat(MAX_NAME + 1)).is_err());
+        g.rename(a, "const1").unwrap(); // own name again: fine
+        g.rename(a, "renamed").unwrap();
+        g.rename(b, "const1").unwrap(); // freed by the rename
+        assert_eq!((g.node_by_name("renamed"), g.name(b)), (Some(a), Some("const1")));
+        g.remove_node(a).unwrap();
+        g.rename(b, "renamed").unwrap(); // removed node's name is free again
+        assert!(g.rename(NodeId(77), "z").is_err());
     }
 }
