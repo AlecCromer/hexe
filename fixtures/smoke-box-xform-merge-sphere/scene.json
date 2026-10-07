@@ -1,0 +1,10 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "xf", "type": "xform", "params": { "t": [1, 2, 3] } },
+    { "name": "sph", "type": "sphere", "params": { "type": 1, "freq": 1 } },
+    { "name": "m", "type": "merge" }
+  ],
+  "edges": [["box1", 0, "xf", 0], ["xf", 0, "m", 0], ["sph", 0, "m", 1]],
+  "display": "m"
+}

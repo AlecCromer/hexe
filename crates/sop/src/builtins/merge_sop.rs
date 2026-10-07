@@ -124,10 +124,11 @@ mod tests {
         let p = ParamSet::new();
         new().cook(&ctx(&p), inputs)
     }
-    /// Cube corner `i` (bit0→x, bit1→y, bit2→z), each coordinate ±0.5 (closed form, independent of any SOP).
+    /// Cube corner `i` in the BOX lane's point order (x-major, z fastest: bit2→x, bit1→y, bit0→z), each coordinate ±0.5
+    /// (closed form, independent of any SOP). Generator defines the order; merge only concatenates.
     fn corner(i: u32, shift: f32) -> [f32; 3] {
         let c = |b: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
-        [c(0) + shift, c(1), c(2)]
+        [c(2) + shift, c(1), c(0)]
     }
     /// Six quad faces over corner indices 0..8.
     const FACES: [[u32; 4]; 6] = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
@@ -142,6 +143,23 @@ mod tests {
             d.add_poly(&f.map(|i| r.start + i), true);
         }
         d
+    }
+    #[test]
+    fn box_order_p0_p1_and_faces_wind_outward() {
+        assert_eq!(corner(0, 0.0), [-0.5, -0.5, -0.5]);
+        assert_eq!(corner(1, 0.0), [-0.5, -0.5, 0.5]);
+        assert_eq!(corner(2, 0.0), [-0.5, 0.5, -0.5]);
+        assert_eq!(corner(4, 0.0), [0.5, -0.5, -0.5]);
+        for f in FACES {
+            let p: Vec<[f32; 3]> = f.iter().map(|&i| corner(i, 0.0)).collect();
+            let (a, b) = (
+                [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]],
+                [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]],
+            );
+            let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+            let c: Vec<f32> = (0..3).map(|k| p.iter().map(|q| q[k]).sum::<f32>() / 4.0).collect();
+            assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] > 0.0, "face {f:?} winds inward");
+        }
     }
     fn arc(d: Detail) -> Arc<Detail> {
         Arc::new(d)
@@ -414,12 +432,78 @@ mod tests {
         d
     }
 
+    const SMOKE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/smoke-box-xform-merge-sphere");
+    const SMOKE_SCENE: &str = r#"{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "xf", "type": "xform", "params": { "t": [1, 2, 3] } },
+    { "name": "sph", "type": "sphere", "params": { "type": 1, "freq": 1 } },
+    { "name": "m", "type": "merge" }
+  ],
+  "edges": [["box1", 0, "xf", 0], ["xf", 0, "m", 0], ["sph", 0, "m", 1]],
+  "display": "m"
+}
+"#;
+    const SMOKE_CASE: &str = "cmd = [\"cook\", \"{input}\", \"--out\", \"{out}\", \"--time\", \"0\"]\ninput = \"scene.json\"\nexpected = \"expected.geo\"\ncompare = \"geo\"\nfeature = \"sop-merge\"\n";
+
+    /// Expected for box -> xform(t=1,2,3) -> merge(sphere poly freq 1): 8 box-order corners + (1,2,3), then the 12 unit
+    /// icosahedron points in the sphere lane's documented order (pole +Y, upper ring of 5 at y=+1/sqrt5 starting at
+    /// angle 0, lower ring of 5 at y=-1/sqrt5 offset 36 deg, pole -Y), faces outward-CCW. Closed form only; the sphere
+    /// lane's private helpers are deliberately NOT reused.
+    fn expected_smoke() -> Detail {
+        let mut pts: Vec<[f32; 3]> =
+            (0..8u32).map(|i| corner(i, 0.0)).map(|p| [p[0] + 1.0, p[1] + 2.0, p[2] + 3.0]).collect();
+        let (ry, rr) = (1.0 / 5f64.sqrt(), 2.0 / 5f64.sqrt());
+        let ring = |k: usize, off: f64, y: f64| {
+            let a = 2.0 * std::f64::consts::PI * k as f64 / 5.0 + off;
+            [(rr * a.cos()) as f32, y as f32, (rr * a.sin()) as f32]
+        };
+        pts.push([0.0, 1.0, 0.0]);
+        pts.extend((0..5).map(|k| ring(k, 0.0, ry)));
+        pts.extend((0..5).map(|k| ring(k, std::f64::consts::PI / 5.0, -ry)));
+        pts.push([0.0, -1.0, 0.0]);
+        let mut d = Detail::default();
+        d.add_points(20);
+        *d.p_mut() = pts;
+        for f in FACES {
+            d.add_poly(&f, true);
+        }
+        for k in 0..5u32 {
+            let n = (k + 1) % 5;
+            for tri in [[0, 1 + n, 1 + k], [1 + k, 1 + n, 6 + k], [6 + k, 6 + (k + 4) % 5, 1 + k], [6 + k, 6 + n, 11]] {
+                d.add_poly(&tri.map(|i| i + 8), true);
+            }
+        }
+        d
+    }
+
     #[test]
-    #[ignore = "writes the committed fixture; run: cargo test -p hexe-sop -- --ignored write_fixture"]
+    #[ignore = "writes the committed fixtures; run: cargo test -p hexe-sop -- --ignored write_fixture"]
     fn write_fixture() {
         for (path, d) in [(FIXTURE_TWO_BOXES, expected_two_boxes()), (FIXTURE_EMPTY, Detail::default())] {
             std::fs::write(path, write_geo_json(&d)).expect("write expected.geo");
         }
+        let dir = std::path::Path::new(SMOKE_DIR);
+        std::fs::create_dir_all(dir).expect("mkdir");
+        std::fs::write(dir.join("scene.json"), SMOKE_SCENE).expect("scene");
+        std::fs::write(dir.join("case.toml"), SMOKE_CASE).expect("case");
+        std::fs::write(dir.join("expected.geo"), write_geo_json(&expected_smoke())).expect("geo");
+    }
+
+    #[test]
+    fn smoke_fixture_cooks_to_closed_form() {
+        let (mut g, id) = crate::load_scene(SMOKE_SCENE).expect("loads");
+        let got = g.cook(id, 0.0).expect("cooks");
+        let want = expected_smoke();
+        assert_eq!((got.point_count, got.prim_count()), (20, 26));
+        assert_eq!((want.point_count, want.vertex_count(), want.prim_count()), (20, 84, 26));
+        for (g, w) in got.p().iter().zip(want.p()) {
+            assert!((0..3).all(|k| (g[k] - w[k]).abs() <= 1e-5), "got {g:?} want {w:?}");
+        }
+        assert_eq!(got.vertex_point, want.vertex_point);
+        let file = read_geo(&std::fs::read(format!("{SMOKE_DIR}/expected.geo")).expect("present")).expect("parses");
+        assert_eq!(file.p(), want.p());
+        assert_eq!(file.vertex_point, want.vertex_point);
     }
 
     #[test]

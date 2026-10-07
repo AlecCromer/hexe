@@ -2,4 +2,4 @@ cmd = ["cook", "{input}", "--out", "{out}", "--time", "0"]
 input = "scene.json"
 expected = "expected.geo"
 compare = "geo"
-# no `feature`: needs the `box` SOP (separate wave-2 lane); scores 0 = xfail until it lands, then set feature = "sop-merge"
+feature = "sop-merge"

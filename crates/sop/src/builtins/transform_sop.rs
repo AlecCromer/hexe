@@ -554,14 +554,14 @@ mod tests {
     fn fixture_dir(case: &str) -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures").join(case)
     }
-    /// Oracle fixtures have no geometry source yet (no generator SOP; the scene loader feeds an EMPTY input), so the
-    /// analytical expected is the empty Detail; real-geometry maths is covered by the closed-form tests above.
+    /// Oracle fixtures: scene = box(default) -> xform. Expected is INDEPENDENT closed-form maths on the box lane's
+    /// documented point order (x-major, z fastest, low->high; first = (-x,-y,-z)) and its 6 quads.
     const FIXTURES: [(&str, &str); 2] = [
         (
             "xform-translate",
             r#"{
   "nodes": [
-    { "name": "src", "type": "null" },
+    { "name": "src", "type": "box" },
     { "name": "xform1", "type": "xform", "params": { "t": [1, 2, 3] } }
   ],
   "edges": [["src", 0, "xform1", 0]],
@@ -573,7 +573,7 @@ mod tests {
             "xform-rot90y",
             r#"{
   "nodes": [
-    { "name": "src", "type": "null" },
+    { "name": "src", "type": "box" },
     { "name": "xform1", "type": "xform", "params": { "r": [0, 90, 0] } }
   ],
   "edges": [["src", 0, "xform1", 0]],
@@ -583,6 +583,31 @@ mod tests {
         ),
     ];
 
+    /// Closed-form expected for a fixture case: the 8 unit-box corners (+-0.5) mapped analytically.
+    fn expected_detail(case: &str) -> Detail {
+        let map: fn([f32; 3]) -> [f32; 3] = match case {
+            "xform-translate" => |p| [p[0] + 1.0, p[1] + 2.0, p[2] + 3.0],
+            // Ry(+90 deg): (x,y,z) -> (z,y,-x)
+            "xform-rot90y" => |p| [p[2], p[1], -p[0]],
+            other => panic!("unknown case {other}"),
+        };
+        let mut d = Detail::default();
+        d.add_points(8);
+        let mut pts = Vec::new();
+        for x in [-0.5f32, 0.5] {
+            for y in [-0.5f32, 0.5] {
+                for z in [-0.5f32, 0.5] {
+                    pts.push(map([x, y, z]));
+                }
+            }
+        }
+        *d.p_mut() = pts;
+        for q in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+            d.add_poly(&q, true);
+        }
+        d
+    }
+
     #[test]
     fn fixtures_cook_to_committed_expected_geo() {
         for (case, _) in FIXTURES {
@@ -591,9 +616,11 @@ mod tests {
             let (mut g, id) = crate::load_scene(&scene).expect("loads");
             let got = g.cook(id, 0.0).expect("cooks");
             let want = read_geo(&std::fs::read(dir.join("expected.geo")).expect("expected.geo")).expect("parses");
-            // same pipeline as the CLI: write .geo JSON, read back (adds the empty `P` of an empty Detail)
             let got = read_geo(&write_geo_json(&got)).expect("round trip");
-            assert_eq!(got, want, "{case}");
+            assert_eq!((got.point_count, got.vertex_count(), got.prim_count()), (8, 24, 6), "{case}");
+            assert_close(got.p(), want.p());
+            // committed file == independent closed form
+            assert_close(want.p(), expected_detail(case).p());
         }
     }
 
@@ -605,7 +632,7 @@ mod tests {
         assert_close(back.p(), &mapped(|p| [p[0] + 1.0, p[1] + 2.0, p[2] + 3.0]));
     }
 
-    /// `cargo test -p hexe-sop -- --ignored write_fixture` rewrites scene.json + expected.geo (expected = empty Detail,
+    /// `cargo test -p hexe-sop -- --ignored write_fixture` rewrites scene.json + expected.geo (expected = closed form,
     /// independent of the SOP).
     #[test]
     #[ignore = "writes fixture files"]
@@ -614,7 +641,7 @@ mod tests {
             let dir = fixture_dir(case);
             std::fs::create_dir_all(&dir).expect("mkdir");
             std::fs::write(dir.join("scene.json"), scene).expect("scene");
-            std::fs::write(dir.join("expected.geo"), write_geo_json(&Detail::default())).expect("geo");
+            std::fs::write(dir.join("expected.geo"), write_geo_json(&expected_detail(case))).expect("geo");
         }
     }
 }

@@ -1,6 +1,6 @@
 {
   "nodes": [
-    { "name": "src", "type": "null" },
+    { "name": "src", "type": "box" },
     { "name": "xform1", "type": "xform", "params": { "r": [0, 90, 0] } }
   ],
   "edges": [["src", 0, "xform1", 0]],
