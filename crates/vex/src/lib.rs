@@ -9,9 +9,13 @@
     clippy::todo,
     clippy::unreachable
 )]
+mod ast;
 mod error;
 mod lexer;
+mod parser;
 mod value;
+pub use ast::{BinOp, Declarator, Expr, ExprKind, Program, Stmt, UnOp};
 pub use error::{ErrorKind, HostError, VexError};
 pub use lexer::{MAX_SRC, Tok, Token, lex};
+pub use parser::{MAX_DEPTH, parse};
 pub use value::{Ty, Value, builtin_ty, is_readonly};
