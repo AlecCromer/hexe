@@ -108,8 +108,20 @@ id = "sop-box"
 title = "Box SOP"
 area = "A"
 tier = "P0"
-status = "planned"
-notes = "Wave 2 (SOP atoms; wave 0 oracle fixture). 13 doc-labelled UI params (hython count TBD); hython blocked → spec doc-derived; observed_in 20.5.487 (docs only)"
+status = "shipped"
+commands = ["box"]
+evidence = [
+  "crates/sop/src/builtins/box_sop.rs::default_box_is_8_points_6_quads_p_only",
+  "crates/sop/src/builtins/box_sop.rs::size_center_scale_move_p_only",
+  "crates/sop/src/builtins/box_sop.rs::closed_manifold_outward_winding",
+  "crates/sop/src/builtins/box_sop.rs::divisions_match_closed_form_and_independent_builder",
+  "crates/sop/src/builtins/box_sop.rs::unconsolidated_faces_own_their_points",
+  "crates/sop/src/builtins/box_sop.rs::hostile_params_are_errors",
+  "crates/sop/src/builtins/box_sop.rs::non_poly_types_are_unsupported_in_wave_2",
+  "crates/sop/src/builtins/box_sop.rs::fixture_box_default_matches_analytical_expected",
+  "crates/sop/src/builtins/box_sop.rs::fixture_box_divs222_matches_analytical_expected",
+]
+notes = "wave 2: type=poly only (other menu values -> BadParam 'unsupported in wave 2'); params type consolidatepts size t scale divrate dodivs divs. EXCLUDED: surftype r orderrate rebar orientedbbox vertexnormals, input-0 bbox mode (generator only). divrate validated (min 1, cap) but inert for poly (mesh types only). divs = points per axis (<2 treated as 2). Oracle cases box-default, box-divs222 (analytical, not Houdini-observed; hython blocked). UNVERIFIED vs Houdini: point/prim order (here x-major z-fastest low->high, faces -x+x-y+y-z+z), winding, consolidatepts-off with divs, divs=1, negative size, scale-about-centre (t unscaled), attr list (P only)."
 
 [[feature]]
 id = "sop-grid"
