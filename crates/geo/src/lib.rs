@@ -19,6 +19,8 @@ mod json_write;
 #[cfg(test)]
 mod tests;
 mod types;
+#[cfg(test)]
+mod ship_tests;
 
 pub use bjson::{bjson_to_value, read_geo_bjson};
 pub use error::GeoError;
