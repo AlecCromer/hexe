@@ -8,6 +8,9 @@
     clippy::unreachable
 )]
 
+mod bgeo_legacy;
+#[cfg(test)]
+mod bgeo_legacy_tests;
 mod bjson;
 #[cfg(test)]
 mod bjson_tests;
@@ -27,6 +30,7 @@ mod ship_tests;
 mod tests;
 mod types;
 
+pub use bgeo_legacy::read_geo_bgeo_legacy;
 pub use bjson::{bjson_to_value, read_geo_bjson};
 pub use blosc::{read_geo_sc, sc_decompress};
 pub use error::GeoError;
@@ -35,7 +39,7 @@ pub use json_read::read_geo_json;
 pub use json_write::write_geo_json;
 pub use types::*;
 
-/// Sniff the container: legacy `PGEOMETRY` text (GPD) vs JSON. binary-JSON `0x7f NSJb` (bjson); `scf1` blosc-chunked `.bgeo.sc` (decompress, then re-sniff); legacy binary `BgeoV` stays `Err(Unsupported)`.
+/// Sniff the container: legacy `PGEOMETRY` text (GPD) vs JSON. binary-JSON `0x7f NSJb` (bjson); `scf1` blosc-chunked `.bgeo.sc` (decompress, then re-sniff); legacy binary `BgeoV` -> `read_geo_bgeo_legacy` (v2 layout; other versions `Unsupported`).
 pub fn read_geo(bytes: &[u8]) -> Result<Detail, GeoError> {
     if bytes.starts_with(&blosc::MAGIC) {
         return read_geo_sc(bytes);
@@ -45,7 +49,7 @@ pub fn read_geo(bytes: &[u8]) -> Result<Detail, GeoError> {
         Some(b'P') => read_geo_gpd(bytes),
         Some(b'[') | Some(b'{') => read_geo_json(bytes),
         Some(0x7f) => read_geo_bjson(bytes),
-        Some(b'B') => Err(GeoError::Unsupported("legacy binary BgeoV is not supported".into())),
+        Some(b'B') => read_geo_bgeo_legacy(bytes),
         _ => Err(GeoError::Syntax("unrecognised geometry container".into())),
     }
 }
