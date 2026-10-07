@@ -22,7 +22,7 @@ mod grid_sop;
 //
 mod sphere_sop;
 //
-// mod transform_sop;
+mod transform_sop;
 //
 // mod wrangle_sop;
 
@@ -46,7 +46,7 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("sphere", sphere_sop::spec, sphere_sop::new);
     //
-    // r.register("transform", transform_sop::spec, transform_sop::new);
+    r.register("xform", transform_sop::spec, transform_sop::new);
     //
     // r.register("wrangle", wrangle_sop::spec, wrangle_sop::new);
 }

@@ -6,5 +6,7 @@
   "null-passthrough": 1.0,
   "sphere-poly-f2": 1.0,
   "sphere-polymesh-default": 1.0,
-  "sphere-prim": 1.0
+  "sphere-prim": 1.0,
+  "xform-rot90y": 1.0,
+  "xform-translate": 1.0
 }

@@ -158,8 +158,17 @@ id = "sop-transform"
 title = "Transform SOP"
 area = "A"
 tier = "P0"
-status = "planned"
-notes = "Wave 2. 24 doc-labelled params; doc-derived; observed_in 20.5.487 (docs only)"
+status = "shipped"
+commands = ["xform"]
+evidence = [
+  "crates/sop/src/builtins/transform_sop.rs::translate_box_adds_t_and_keeps_topology",
+  "crates/sop/src/builtins/transform_sop.rs::rotate_90_about_y_maps_x_to_minus_z",
+  "crates/sop/src/builtins/transform_sop.rs::scale_about_pivot_and_uniform_scale",
+  "crates/sop/src/builtins/transform_sop.rs::invert_round_trips_a_composed_transform",
+  "crates/sop/src/builtins/transform_sop.rs::normals_use_inverse_transpose",
+  "crates/sop/src/builtins/transform_sop.rs::hostile_params_are_errors",
+]
+notes = "Wave 2B. token xform. Registered: group(point-group NAME only; grouptype guess/points) grouptype xOrd rOrd t r s shear scale p pr(must be 0, else BadParam) updatenmls invertxform. NOT registered: prexform_*, movecentroid/movepivot, attribs, updateaffectednmls, vlength, addattrib/outputattrib/outputmerge. Matrix T(-p).X1.X2.X3.T(p) row-vector, glam f64; shear form, xOrd/rOrd apply order, pivot placement for non-srt orders, N handling (transformed always via inverse-transpose; length kept unless updatenmls, which is really Houdini 'recompute from geometry') are all UNVERIFIED vs Houdini (hython blocked). Sphere/Tube prim xforms not updated. Oracle fixtures xform-translate/xform-rot90y have EMPTY input (no generator SOP / geo source yet) = smoke only; real maths covered by in-file closed-form tests; upgrade fixtures to box->xform once box ships."
 
 [[feature]]
 id = "sop-merge"
