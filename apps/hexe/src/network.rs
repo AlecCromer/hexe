@@ -143,9 +143,7 @@ pub fn show(ui: &mut Ui, scene: &Scene, c: Ctx) -> Vec<Act> {
         let Some(r) = rect_of(node.id) else { continue };
         let resp = ui.interact(r, ui.id().with(("node", node.id)), Sense::click_and_drag());
         let shift = ui.input(|i| i.modifiers.shift);
-        if resp.clicked() {
-            acts.push(Act::Select { id: node.id, add: shift });
-        } else if resp.drag_started() && !selected.contains(&node.id) {
+        if resp.clicked() || (resp.drag_started() && !selected.contains(&node.id)) {
             acts.push(Act::Select { id: node.id, add: shift });
         }
         if resp.dragged() {
@@ -321,5 +319,120 @@ mod tests {
         assert_eq!((p[0].x, p[1].x, p[2].x), (0.0, STEP.x, 0.0));
         assert_eq!((p[0].y, p[2].y), (0.0, STEP.y));
         assert_eq!(depths(2, &[(0, 1, 0), (1, 0, 0)]), vec![2, 2], "cycle terminates, bounded by n");
+    }
+
+    /// Synthetic-pointer harness: real egui input handling (press / drag / release), no window.
+    struct Rig {
+        ctx: egui::Context,
+        t: f64,
+        scene: Scene,
+        pos: HashMap<NodeId, Pos2>,
+        sel: BTreeSet<NodeId>,
+        wire: Option<WireFrom>,
+        origin: Pos2,
+    }
+    impl Rig {
+        fn new(scene: Scene, pos: HashMap<NodeId, Pos2>) -> Rig {
+            let mut r = Rig {
+                ctx: egui::Context::default(),
+                t: 0.0,
+                scene,
+                pos,
+                sel: BTreeSet::new(),
+                wire: None,
+                origin: Pos2::ZERO,
+            };
+            r.frame(vec![], vec![]);
+            r
+        }
+        fn frame(&mut self, events: Vec<egui::Event>, keys_acts: Vec<Act>) -> Vec<Act> {
+            self.t += 0.05;
+            let raw = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(900.0, 700.0))),
+                time: Some(self.t),
+                events,
+                ..Default::default()
+            };
+            let mut acts = keys_acts;
+            let Rig { ctx, scene, pos, sel, wire, origin, .. } = self;
+            let mut out = ctx.run_ui(raw, |ui| {
+                *origin = ui.cursor().min + vec2(12.0, 12.0);
+                let c = Ctx { pos, selected: sel, active: None, wire };
+                acts.extend(show(ui, scene, c));
+            });
+            out.textures_delta.clear();
+            acts
+        }
+        fn at(&self, name: &str, f: impl Fn(Rect) -> Pos2) -> Pos2 {
+            let id = self.scene.id(name).expect("node");
+            f(Rect::from_min_size(self.origin + self.pos[&id].to_vec2(), BOX))
+        }
+        /// press at `from`, drag in steps to `to`, release; returns every action seen.
+        fn drag(&mut self, from: Pos2, to: Pos2) -> Vec<Act> {
+            let ptr = |p| egui::Event::PointerMoved(p);
+            let btn = |p, pressed| egui::Event::PointerButton {
+                pos: p,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            let mut acts = self.frame(vec![ptr(from)], vec![]);
+            acts.extend(self.frame(vec![btn(from, true)], vec![]));
+            for i in 1..=6 {
+                let p = from + (to - from) * (i as f32 / 6.0);
+                acts.extend(self.frame(vec![ptr(p)], vec![]));
+            }
+            acts.extend(self.frame(vec![btn(to, false)], vec![]));
+            acts.extend(self.frame(vec![], vec![]));
+            acts
+        }
+    }
+    fn rig() -> Rig {
+        let mut s = Scene::parse(include_str!("../../../examples/polyextrude.json")).expect("scene");
+        let b2 = s.add("box", Some("box2")).expect("adds");
+        let pos = s
+            .nodes
+            .iter()
+            .map(|n| {
+                (n.id, if n.id == b2 { pos2(240.0, 0.0) } else { pos2(0.0, if n.name == "pe1" { 140.0 } else { 0.0 }) })
+            })
+            .collect();
+        Rig::new(s, pos)
+    }
+
+    #[test]
+    fn drag_output_dot_onto_input_dot_connects() {
+        let mut r = rig();
+        let (from, to) = (r.at("box2", out_dot), r.at("pe1", |rc| in_dot(rc, 1, 0)));
+        let acts = r.drag(from, to);
+        let (b2, pe) = (r.scene.id("box2").expect("b2"), r.scene.id("pe1").expect("pe"));
+        assert!(acts.contains(&Act::Connect { src: b2, dst: pe, port: 0 }), "{acts:?}");
+        assert_eq!(r.wire, None, "wire state cleared on release");
+        assert!(!acts.iter().any(|a| matches!(a, Act::Select { .. })), "dot drag does not select");
+    }
+
+    #[test]
+    fn drag_wire_off_input_disconnects_and_reroutes() {
+        let mut r = rig();
+        let (b1, pe) = (r.scene.id("box1").expect("b1"), r.scene.id("pe1").expect("pe"));
+        let dot = r.at("pe1", |rc| in_dot(rc, 1, 0));
+        let acts = r.drag(dot, dot + vec2(150.0, 150.0));
+        assert!(acts.contains(&Act::Disconnect { dst: pe, port: 0 }), "{acts:?}");
+        assert!(!acts.iter().any(|a| matches!(a, Act::Connect { .. })), "dropped on empty canvas");
+        // same pick-up, dropped on box2... has no inputs; drop it back on pe1's own port instead
+        let acts = r.drag(dot, r.at("pe1", |rc| in_dot(rc, 1, 0)) + vec2(2.0, 1.0));
+        assert!(acts.contains(&Act::Disconnect { dst: pe, port: 0 }), "{acts:?}");
+        assert!(acts.contains(&Act::Connect { src: b1, dst: pe, port: 0 }), "re-dropped: wire carried the old source");
+    }
+
+    #[test]
+    fn node_body_click_selects_and_drag_moves() {
+        let mut r = rig();
+        let (c, b2) = (r.at("box2", |rc| rc.center()), r.scene.id("box2").expect("b2"));
+        let acts = r.drag(c, c + vec2(30.0, 40.0));
+        assert!(acts.contains(&Act::Select { id: b2, add: false }), "{acts:?}");
+        let moved = r.pos[&b2];
+        assert!((moved.x - 270.0).abs() < 8.0 && (moved.y - 40.0).abs() < 8.0, "moved by the drag: {moved:?}");
+        assert!(!acts.iter().any(|a| matches!(a, Act::Connect { .. } | Act::Disconnect { .. })));
     }
 }

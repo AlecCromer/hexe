@@ -238,10 +238,10 @@ impl App {
         self.pos.retain(|id, _| ids.contains(id));
         let mut right = self.pos.values().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
         for n in &scene.nodes {
-            if !self.pos.contains_key(&n.id) {
+            self.pos.entry(n.id).or_insert_with(|| {
                 right = if right.is_finite() { right + 120.0 } else { 0.0 };
-                self.pos.insert(n.id, egui::pos2(right, 0.0));
-            }
+                egui::pos2(right, 0.0)
+            });
         }
     }
     /// Cook the display node. Errors and panics land in the status bar, never abort.
@@ -472,7 +472,7 @@ impl Shell {
             },
         );
         if close {
-            let (canvas, _) = (menu.canvas, ());
+            let canvas = menu.canvas;
             self.app.add_menu = None;
             if let Some(t) = pick {
                 self.app.add_node(t, None, Some(canvas));
