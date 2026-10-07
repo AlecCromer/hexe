@@ -666,3 +666,12 @@ status = "partial"
 commands = ["rop_geometry", "cook", "convert"]
 evidence = ["crates/sop/src/builtins/rop_geometry_sop.rs::tests::box_rop_writes_each_format_and_reads_back", "crates/sop/src/builtins/rop_geometry_sop.rs::tests::rop_rejects_bad_params_and_unwritable_paths", "apps/hexe-cli/src/main.rs::tests::cook_with_rop_writes_the_file_and_file_sop_is_scene_relative", "apps/hexe-cli/src/main.rs::tests::example_file_rop_scene_cooks_from_any_cwd", "apps/hexe-cli/src/main.rs::tests::convert_roundtrips_formats_and_rejects_bad_args"]
 notes = "trange = off only (others Unsupported); relative sopoutput is cwd-relative; formats .geo(JSON) .obj .ply. No bgeo write, no frame ranges, no pre/post-render scripts. examples/file-rop.json."
+[[feature]]
+id = "ui-edit-network"
+title = "Editable network: Tab add, wire drag connect/disconnect, delete, multi-select, display flag, save (ui.pos), viewport W/P/N"
+area = "C"
+tier = "P1"
+status = "shipped"
+commands = []
+evidence = ["apps/hexe/src/network.rs::drag_output_dot_onto_input_dot_connects", "apps/hexe/src/network.rs::drag_wire_off_input_disconnects_and_reroutes", "crates/graph/src/graph.rs::remove_node_cuts_edges_and_keeps_ids", "crates/sop/src/scene.rs::save_round_trips_examples", "crates/sop/src/scene.rs::ui_pos_persists_and_hostile_ui_is_dropped"]
+notes = "H19: synthetic egui pointer events drive pane tests; real mouse/Tab popup/keys not exercised. --script hook = proof only. No rename UI, no undo."
