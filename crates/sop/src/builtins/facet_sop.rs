@@ -11,6 +11,7 @@
 //!   60 deg -> 24 pts (faces are 90 deg apart); flat grid -> unchanged (input `Arc` shared when nothing else changes).
 //! * `post_nml`: after the split, point `N` (V3, type Normal) = uniform-averaged Newell normal (see `peak`).
 //! * `remove_inline`: NOT modelled (skipped by order).
+//!
 //! Split points copy the point attrs / groups of their source point; vertices, prims and detail data are unchanged.
 //! No option on -> the input `Arc` is shared. Output above `MAX_ELEMS` points -> `Failed`.
 use super::meshutil::{
@@ -130,10 +131,10 @@ impl Node<Detail> for Facet {
                         }
                     };
                     // a leader-less cluster adopts the first real normal that joins it
-                    if let (Some(l), Some(_)) = (leaders.get_mut(c), n) {
-                        if l.is_none() {
-                            *l = n;
-                        }
+                    if let (Some(l), Some(_)) = (leaders.get_mut(c), n)
+                        && l.is_none()
+                    {
+                        *l = n;
                     }
                     if let (Some(nv), Some(&id)) = (new_vp.get_mut(v), ids.get(c)) {
                         *nv = id;
