@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "file1", "type": "file", "params": { "file": "../fixtures/houdini-ship/joint_link_n/joint_link_n.bgeo" } },
+    { "name": "rop1", "type": "rop_geometry", "params": { "sopoutput": "file-rop-out.obj" } }
+  ],
+  "edges": [["file1", 0, "rop1", 0]],
+  "display": "rop1"
+}

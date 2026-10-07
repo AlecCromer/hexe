@@ -15,7 +15,7 @@ use std::process::ExitCode;
 
 /// Largest scene file `cook` reads (hostile input is the default).
 const MAX_SCENE_BYTES: u64 = 64 << 20;
-const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | info <geo-file> | oracle <case> [input]";
+const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | convert <in> <out> | info <geo-file> | oracle <case> [input]";
 
 /// Largest geometry file `info` reads (hostile input is the default).
 const MAX_GEO_BYTES: u64 = 1 << 30;
@@ -32,7 +32,10 @@ fn class_name(c: hexe_geo::AttrClass) -> &'static str {
 /// Geometry bytes (any container `read_geo` sniffs) -> counts, attribute names, and every attribute the reader could
 /// not represent (`skipped class:name:type`; never silent).
 fn info_text(bytes: &[u8]) -> Result<String, String> {
-    let d = hexe_geo::read_geo(bytes).map_err(|e| e.to_string())?;
+    Ok(info_detail(&hexe_geo::read_geo(bytes).map_err(|e| e.to_string())?))
+}
+
+fn info_detail(d: &hexe_geo::Detail) -> String {
     let mut out = format!("points {}\nvertices {}\nprims {}\n", d.point_count, d.vertex_count(), d.prim_count());
     for a in &d.attrs {
         let _ = writeln!(out, "attr {}:{}", class_name(a.class), a.name);
@@ -40,7 +43,7 @@ fn info_text(bytes: &[u8]) -> Result<String, String> {
     for (c, n, t) in &d.skipped_attribs {
         let _ = writeln!(out, "skipped {}:{n}:{t}", class_name(*c));
     }
-    Ok(out)
+    out
 }
 
 fn info(args: &[String]) -> Result<String, String> {
@@ -48,6 +51,10 @@ fn info(args: &[String]) -> Result<String, String> {
     let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
     if meta.len() > MAX_GEO_BYTES {
         return Err(format!("{path}: larger than {MAX_GEO_BYTES} bytes"));
+    }
+    let lower = path.to_ascii_lowercase();
+    if lower.ends_with(".obj") || lower.ends_with(".ply") {
+        return Ok(info_detail(&hexe_geo::read_any(path).map_err(|e| format!("{path}: {e}"))?));
     }
     info_text(&std::fs::read(path).map_err(|e| format!("{path}: {e}"))?).map_err(|e| format!("{path}: {e}"))
 }
@@ -66,8 +73,14 @@ fn oracle(case: &str, input: Option<&str>) -> Result<String, String> {
 }
 
 /// Scene JSON text → cooked display node as `.geo` JSON bytes + `(points, prims)`.
+#[cfg(test)]
 fn cook_scene(json: &str, time: f32) -> Result<(Vec<u8>, u32, u32), String> {
-    let (mut graph, display) = hexe_sop::load_scene(json).map_err(|e| e.to_string())?;
+    cook_scene_in(json, time, None)
+}
+
+/// Like `cook_scene`; relative `file` SOP paths also resolve against `base` (the scene file's directory).
+fn cook_scene_in(json: &str, time: f32, base: Option<&std::path::Path>) -> Result<(Vec<u8>, u32, u32), String> {
+    let (mut graph, display) = hexe_sop::load_scene_in(json, base).map_err(|e| e.to_string())?;
     let detail = graph.cook(display, time).map_err(|e| e.to_string())?;
     Ok((hexe_geo::write_geo_json(&detail), detail.point_count, detail.prim_count()))
 }
@@ -107,9 +120,22 @@ fn cook(args: &[String]) -> Result<String, String> {
         return Err(format!("{}: scene larger than {MAX_SCENE_BYTES} bytes", a.scene));
     }
     let json = std::fs::read_to_string(&a.scene).map_err(|e| format!("{}: {e}", a.scene))?;
-    let (bytes, points, prims) = cook_scene(&json, a.time)?;
+    let (bytes, points, prims) = cook_scene_in(&json, a.time, std::path::Path::new(&a.scene).parent())?;
     std::fs::write(&a.out, bytes).map_err(|e| format!("{}: {e}", a.out))?;
     Ok(format!("cooked {points} points, {prims} prims -> {}\n", a.out))
+}
+
+/// `convert <in> <out>`: `read_any` -> `write_any` (in: .geo .bgeo .bgeo.sc .obj .ply; out: .geo .obj .ply).
+fn convert(args: &[String]) -> Result<String, String> {
+    let [input, output] = args else { return Err("usage: hexe-cli convert <in> <out>".into()) };
+    let d = hexe_geo::read_any(input).map_err(|e| format!("{input}: {e}"))?;
+    hexe_geo::write_any(output, &d).map_err(|e| format!("{output}: {e}"))?;
+    Ok(format!(
+        "converted {} points, {} vertices, {} prims: {input} -> {output}\n",
+        d.point_count,
+        d.vertex_count(),
+        d.prim_count()
+    ))
 }
 
 fn show(v: &ParamValue) -> String {
@@ -149,6 +175,7 @@ fn dispatch(args: &[String]) -> Result<String, String> {
         Some("--version" | "-V") => Ok(format!("hexe {}\n", env!("CARGO_PKG_VERSION"))),
         Some("cook") => cook(&args[1..]),
         Some("nodes") => Ok(nodes()),
+        Some("convert") => convert(&args[1..]),
         Some("info") => info(&args[1..]),
         Some("oracle") => match args.get(1) {
             Some(case) => oracle(case, args.get(2).map(String::as_str)),
@@ -237,6 +264,64 @@ mod tests {
         let out = info_text(g.as_bytes()).unwrap();
         assert!(out.contains("attr point:P\n") && out.contains("skipped point:tags:stringarray\n"), "{out}");
         assert!(info(&[]).is_err() && info(&s(&["/nonexistent/x.bgeo"])).is_err());
+    }
+
+    #[test]
+    fn convert_roundtrips_formats_and_rejects_bad_args() {
+        let dir = std::path::PathBuf::from(
+            std::env::var("HEXE_SCRATCH")
+                .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/hexe-scratch").into()),
+        );
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = |n: &str| dir.join(n).to_str().unwrap().to_string();
+        let scene = r#"{"nodes":[{"name":"b","type":"box"}],"display":"b"}"#;
+        let (geo, _, _) = cook_scene(scene, 0.0).unwrap();
+        std::fs::write(p("cli_box.geo"), geo).unwrap();
+        let out = dispatch(&s(&["convert", &p("cli_box.geo"), &p("cli_box.obj")])).unwrap();
+        assert!(out.starts_with("converted 8 points, 24 vertices, 6 prims"), "{out}");
+        let out = dispatch(&s(&["convert", &p("cli_box.obj"), &p("cli_box.ply")])).unwrap();
+        assert!(out.contains("8 points, 24 vertices, 6 prims"), "{out}");
+        assert!(dispatch(&s(&["info", &p("cli_box.ply")])).unwrap().starts_with("points 8\nvertices 24\nprims 6"));
+        let bad_in = s(&["convert", "/nonexistent/a.obj", "b.ply"]);
+        for bad in [s(&["convert"]), s(&["convert", "a.obj"]), bad_in, s(&["convert", &p("cli_box.obj"), "x.stl"])] {
+            assert!(dispatch(&bad).is_err(), "{bad:?}");
+        }
+    }
+    #[test]
+    fn cook_with_rop_writes_the_file_and_file_sop_is_scene_relative() {
+        let dir = std::path::PathBuf::from(
+            std::env::var("HEXE_SCRATCH")
+                .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/hexe-scratch").into()),
+        );
+        std::fs::create_dir_all(&dir).unwrap();
+        let (out, geo) = (dir.join("cli_rop.ply"), dir.join("cli_rop_cook.geo"));
+        let _ = std::fs::remove_file(&out);
+        let scene = format!(
+            r#"{{"nodes":[{{"name":"b","type":"box"}},{{"name":"r","type":"rop_geometry","params":{{"sopoutput":{:?}}}}}],"edges":[["b",0,"r",0]],"display":"r"}}"#,
+            out.to_str().unwrap()
+        );
+        std::fs::write(dir.join("cli_rop_scene.json"), scene).unwrap();
+        let args = s(&["cook", dir.join("cli_rop_scene.json").to_str().unwrap(), "--out", geo.to_str().unwrap()]);
+        assert!(dispatch(&args).unwrap().starts_with("cooked 8 points, 6 prims"));
+        let back = hexe_geo::read_any(&out).unwrap();
+        assert_eq!((back.point_count, back.vertex_count(), back.prim_count()), (8, 24, 6));
+    }
+    #[test]
+    fn example_file_rop_scene_cooks_from_any_cwd() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let json = std::fs::read_to_string(root.join("examples/file-rop.json")).unwrap();
+        let dir = std::path::PathBuf::from(
+            std::env::var("HEXE_SCRATCH")
+                .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/hexe-scratch").into()),
+        );
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("file-rop-out.obj");
+        let _ = std::fs::remove_file(&out);
+        let json = json.replace("file-rop-out.obj", out.to_str().unwrap());
+        let (_, p, pr) = cook_scene_in(&json, 0.0, Some(&root.join("examples"))).unwrap();
+        assert_eq!((p, pr), (6, 8));
+        let back = hexe_geo::read_any(&out).unwrap();
+        assert_eq!((back.point_count, back.vertex_count(), back.prim_count()), (6, 24, 8));
     }
 
     #[test]
