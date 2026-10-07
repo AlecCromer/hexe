@@ -315,4 +315,14 @@ mod tests {
         fails(&format!(r#"{two}[["a",0,"b",0],["b",0,"a",0]]}}"#), "cycle");
         fails(&format!(r#"{two}[["a",0]]}}"#), "invalid scene JSON");
     }
+
+    /// The oracle fixture's `expected.geo` is the analytical answer: an empty Detail written by our writer.
+    #[test]
+    fn null_passthrough_fixture_expected_is_empty_detail() {
+        let expected = include_bytes!("../../../fixtures/null-passthrough/expected.geo");
+        assert_eq!(hexe_geo::write_geo_json(&Detail::default()), expected.to_vec());
+        let scene = include_str!("../../../fixtures/null-passthrough/scene.json");
+        let (mut g, id) = load_scene(scene).expect("fixture scene loads");
+        assert_eq!(hexe_geo::write_geo_json(&g.cook(id, 0.0).expect("cooks")), expected.to_vec());
+    }
 }

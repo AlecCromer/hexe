@@ -1,7 +1,10 @@
 //! `cargo xtask oracle [--raise]`: run every fixtures/<case>/case.toml against the release CLI and score it.
-//! case.toml: `cmd = ["oracle","parse-len"]` (args for `target/release/hexe-cli`; the absolute input path is appended),
-//! `input`, `expected` (files in the case dir), `compare = bytes|json|text-f1|png-psnr`, optional `feature` (ledger id)
-//! and `threshold`. Fails on: a case of a `shipped` ledger row under its threshold; any score under its floor in
+//! case.toml: `cmd = ["oracle","parse-len"]` (args for `target/release/hexe-cli`), `input`, `expected` (files in the case
+//! dir), `compare = bytes|json|text-f1|png-psnr|geo`, optional `feature` (ledger id) and `threshold`. `cmd` args may use
+//! `{input}` `{expected}` (absolute paths in the case dir) and `{out}` (a fresh file under `<target>/oracle/<case>/`; when
+//! present the CLI must write its result there and THAT file is compared, else stdout is). No `{input}` anywhere → the
+//! absolute input path is appended (legacy form). `geo` = both parsed with `hexe_geo::read_geo`: point/vertex/prim counts
+//! equal, `P` within 1e-5, same (class, name) attribute set; score 1.0 or 0.0. Fails on: a case of a `shipped` ledger row under its threshold; any score under its floor in
 //! xtask/baselines/oracle.json. `--raise` ratchets floors up (never down).
 use crate::{Res, baseline, parity, root};
 use serde::Deserialize;
@@ -72,6 +75,36 @@ pub fn png_psnr(a: &[u8], b: &[u8]) -> Result<f64, String> {
     Ok(if mse == 0.0 { 100.0 } else { (10.0 * (255.0f64 * 255.0 / mse).log10()).min(100.0) })
 }
 
+/// Max |actual - expected| per `P` component.
+pub const GEO_P_TOL: f32 = 1e-5;
+/// `None` = same geometry per the `geo` compare mode, `Some(first difference)` otherwise; `Err` = a side does not parse.
+pub fn geo_mismatch(actual: &[u8], expected: &[u8]) -> Result<Option<String>, String> {
+    let parse = |who: &str, b: &[u8]| hexe_geo::read_geo(b).map_err(|e| format!("{who}: {e}"));
+    let (a, e) = (parse("actual", actual)?, parse("expected", expected)?);
+    if a.point_count != e.point_count {
+        return Ok(Some(format!("point count {} != {}", a.point_count, e.point_count)));
+    }
+    if a.vertex_count() != e.vertex_count() {
+        return Ok(Some(format!("vertex count {} != {}", a.vertex_count(), e.vertex_count())));
+    }
+    if a.prim_count() != e.prim_count() {
+        return Ok(Some(format!("prim count {} != {}", a.prim_count(), e.prim_count())));
+    }
+    let names = |d: &hexe_geo::Detail| {
+        let mut v: Vec<String> = d.attrs.iter().map(|x| format!("{:?}:{}", x.class, x.name)).collect();
+        v.sort();
+        v
+    };
+    if names(&a) != names(&e) {
+        return Ok(Some(format!("attribute sets differ: {:?} vs {:?}", names(&a), names(&e))));
+    }
+    for (i, (pa, pe)) in a.p().iter().zip(e.p()).enumerate() {
+        if pa.iter().zip(pe).any(|(x, y)| x != y && ((x - y).abs() > GEO_P_TOL || (x - y).is_nan())) {
+            return Ok(Some(format!("P[{i}] {pa:?} != {pe:?} (tol {GEO_P_TOL})")));
+        }
+    }
+    Ok(None)
+}
 pub fn score(compare: &str, actual: &[u8], expected: &[u8]) -> Result<f64, String> {
     match compare {
         "bytes" => Ok(f64::from(u8::from(actual == expected))),
@@ -81,23 +114,51 @@ pub fn score(compare: &str, actual: &[u8], expected: &[u8]) -> Result<f64, Strin
         }
         "text-f1" => Ok(word_f1(&String::from_utf8_lossy(actual), &String::from_utf8_lossy(expected))),
         "png-psnr" => png_psnr(actual, expected),
-        other => Err(format!("unknown compare `{other}` (bytes|json|text-f1|png-psnr)")),
+        "geo" => match geo_mismatch(actual, expected)? {
+            None => Ok(1.0),
+            Some(why) => {
+                eprintln!("oracle geo: {why}");
+                Ok(0.0)
+            }
+        },
+        other => Err(format!("unknown compare `{other}` (bytes|json|text-f1|png-psnr|geo)")),
     }
 }
 
+/// `cmd` with `{input}` `{expected}` `{out}` substituted; no `{input}` anywhere → input path appended (legacy form).
+pub fn expand_cmd(cmd: &[String], input: &Path, expected: &Path, out: &Path) -> Vec<String> {
+    let uses_input = cmd.iter().any(|a| a.contains("{input}"));
+    let sub = |a: &String| {
+        a.replace("{input}", &input.to_string_lossy())
+            .replace("{expected}", &expected.to_string_lossy())
+            .replace("{out}", &out.to_string_lossy())
+    };
+    let mut v: Vec<String> = cmd.iter().map(sub).collect();
+    if !uses_input {
+        v.push(input.to_string_lossy().into_owned());
+    }
+    v
+}
 fn run_case(bin: &Path, dir: &Path, c: &Case) -> Result<f64, String> {
-    let out = Command::new(bin)
-        .args(&c.cmd)
-        .arg(dir.join(&c.input))
-        .output()
-        .map_err(|e| format!("spawn {}: {e}", bin.display()))?;
+    let id = dir.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let out_dir = crate::target_dir().join("oracle").join(&id);
+    std::fs::create_dir_all(&out_dir).map_err(|e| format!("mkdir {}: {e}", out_dir.display()))?;
+    let out_path = out_dir.join("out");
+    let _ = std::fs::remove_file(&out_path);
+    let args = expand_cmd(&c.cmd, &dir.join(&c.input), &dir.join(&c.expected), &out_path);
+    let out = Command::new(bin).args(&args).output().map_err(|e| format!("spawn {}: {e}", bin.display()))?;
     let expected = std::fs::read(dir.join(&c.expected)).map_err(|e| format!("read expected: {e}"))?;
     if !out.status.success() {
+        eprintln!("oracle {id}: {}", String::from_utf8_lossy(&out.stderr).trim());
         return Ok(0.0);
     }
-    score(&c.compare, &out.stdout, &expected)
+    let actual = if c.cmd.iter().any(|a| a.contains("{out}")) {
+        std::fs::read(&out_path).map_err(|e| format!("cmd did not write {{out}} ({}): {e}", out_path.display()))?
+    } else {
+        out.stdout
+    };
+    score(&c.compare, &actual, &expected)
 }
-
 pub fn run(args: &[String]) -> Res {
     let root = root();
     let ledger = parity::load(&root)?;
@@ -197,5 +258,44 @@ mod tests {
         let d = png_psnr(&enc(10), &enc(20)).unwrap();
         assert!(d > 20.0 && d < 40.0, "{d}");
         assert!(png_psnr(b"junk", &enc(1)).is_err());
+    }
+    #[test]
+    fn expand_cmd_substitutes_and_appends() {
+        let (i, e, o) = (Path::new("/c/in"), Path::new("/c/exp"), Path::new("/t/out"));
+        let c = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(expand_cmd(&c(&["oracle", "x"]), i, e, o), c(&["oracle", "x", "/c/in"]));
+        assert_eq!(
+            expand_cmd(&c(&["cook", "{input}", "--out", "{out}"]), i, e, o),
+            c(&["cook", "/c/in", "--out", "/t/out"])
+        );
+        assert_eq!(expand_cmd(&c(&["--ref={expected}", "{input}"]), i, e, o), c(&["--ref=/c/exp", "/c/in"]));
+    }
+    #[test]
+    fn geo_compare_counts_p_and_attr_names() {
+        let mk = |pts: &[[f32; 3]], extra: Option<&str>| {
+            let mut d = hexe_geo::Detail::default();
+            d.add_points(pts.len() as u32);
+            *d.p_mut() = pts.to_vec();
+            if let Some(n) = extra {
+                d.add_attr(hexe_geo::Attribute {
+                    name: n.into(),
+                    class: hexe_geo::AttrClass::Point,
+                    data: hexe_geo::AttrData::F32(vec![0.0; pts.len()]),
+                    type_info: hexe_geo::TypeInfo::None,
+                });
+            }
+            hexe_geo::write_geo_json(&d)
+        };
+        let base = mk(&[[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]], None);
+        assert_eq!(score("geo", &base, &base).unwrap(), 1.0);
+        let near = mk(&[[0.0, 0.0, 0.0], [1.000_001, 2.0, 3.0]], None);
+        assert_eq!(score("geo", &near, &base).unwrap(), 1.0);
+        let far = mk(&[[0.0, 0.0, 0.0], [1.001, 2.0, 3.0]], None);
+        assert!(geo_mismatch(&far, &base).unwrap().unwrap().contains("P[1]"));
+        let fewer = mk(&[[0.0, 0.0, 0.0]], None);
+        assert!(geo_mismatch(&fewer, &base).unwrap().unwrap().contains("point count"));
+        let attr = mk(&[[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]], Some("foo"));
+        assert!(geo_mismatch(&attr, &base).unwrap().unwrap().contains("attribute sets"));
+        assert!(score("geo", b"junk", &base).is_err());
     }
 }

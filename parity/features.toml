@@ -182,3 +182,45 @@ area = "A"
 tier = "P0"
 status = "planned"
 notes = "spec/behaviour/cook-model.md; recalled not observed (hython blocked); observed_in 20.5.487 (docs only)"
+# --- wave2/sop-scaffold: SOP registry + scene JSON + hexe-cli cook (serial prerequisite of the SOP lanes)
+[[feature]]
+id = "sop-registry"
+title = "SOP registry: type name → param specs + constructor; null SOP (passthrough); one-file-one-line-per-SOP registration"
+area = "A"
+tier = "P0"
+status = "shipped"
+commands = ["null"]
+evidence = [
+  "crates/sop/src/registry.rs::every_builtin_is_self_consistent",
+  "crates/sop/src/builtins/null_sop.rs::passes_input_through_same_arc",
+  "crates/sop/src/builtins/null_sop.rs::no_input_gives_empty_detail",
+  "crates/sop/src/scene.rs::null_passthrough_fixture_expected_is_empty_detail",
+]
+notes = "oracle case fixtures/null-passthrough (analytical expected, not Houdini-observed). Real SOPs are separate rows (sop-box …)."
+[[feature]]
+id = "scene-json"
+title = "Graph JSON scene loader: nodes/params(typed by ParamSpec)/edges/display → Graph<Detail>; hostile scenes are Err"
+area = "A"
+tier = "P0"
+status = "shipped"
+commands = []
+evidence = [
+  "crates/sop/src/scene.rs::params_typed_by_spec",
+  "crates/sop/src/scene.rs::edges_chain_and_partial_inputs_get_empty",
+  "crates/sop/src/scene.rs::hostile_scenes_are_errors",
+]
+notes = "unconnected inputs are fed an empty Detail (hidden source) — not verified against Houdini's behaviour for missing sources. No int[3] ParamValue: lanes map integer vectors onto V3."
+[[feature]]
+id = "cli-cook"
+title = "hexe-cli cook <scene.json> --out <file.geo> [--time T] + nodes; failures exit 1 with a message"
+area = "B"
+tier = "P0"
+status = "shipped"
+commands = ["cook", "nodes"]
+evidence = [
+  "apps/hexe-cli/tests/cook.rs::cook_null_scene_writes_empty_geo",
+  "apps/hexe-cli/tests/cook.rs::bad_scene_exits_1_with_message",
+  "apps/hexe-cli/tests/cook.rs::missing_file_and_no_args_exit_1",
+  "apps/hexe-cli/src/main.rs::cook_args_parse_and_reject",
+]
+notes = "oracle compare mode `geo` (xtask/src/oracle.rs) + {input}/{expected}/{out} cmd substitution"
