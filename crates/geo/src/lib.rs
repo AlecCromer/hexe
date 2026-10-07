@@ -16,11 +16,11 @@ mod blosc;
 mod blosc_tests;
 mod detail;
 mod error;
+#[cfg(test)]
+mod fidelity_tests;
 mod gpd;
 mod json_read;
 mod json_write;
-#[cfg(test)]
-mod fidelity_tests;
 #[cfg(test)]
 mod ship_tests;
 #[cfg(test)]

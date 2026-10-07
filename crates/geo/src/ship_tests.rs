@@ -70,7 +70,8 @@ fn houdini_ship_gated_files_match_oracle() {
         if r.contains_key("expected_detail_attrs") {
             assert_eq!(all_names(&d, AttrClass::Detail), strs(r, "expected_detail_attrs"), "{name}: detail attrs");
         }
-        let mut skipped: Vec<String> = d.skipped_attribs.iter().map(|(c, n, t)| format!("{}:{n}:{t}", cls(*c))).collect();
+        let mut skipped: Vec<String> =
+            d.skipped_attribs.iter().map(|(c, n, t)| format!("{}:{n}:{t}", cls(*c))).collect();
         skipped.sort();
         let want_skipped = if r.contains_key("expected_skipped") { strs(r, "expected_skipped") } else { Vec::new() };
         assert_eq!(skipped, want_skipped, "{name}: skipped_attribs");

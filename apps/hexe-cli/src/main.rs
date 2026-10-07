@@ -15,8 +15,7 @@ use std::process::ExitCode;
 
 /// Largest scene file `cook` reads (hostile input is the default).
 const MAX_SCENE_BYTES: u64 = 64 << 20;
-const USAGE: &str =
-    "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | info <geo-file> | oracle <case> [input]";
+const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | info <geo-file> | oracle <case> [input]";
 
 /// Largest geometry file `info` reads (hostile input is the default).
 const MAX_GEO_BYTES: u64 = 1 << 30;

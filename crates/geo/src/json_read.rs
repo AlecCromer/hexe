@@ -217,7 +217,12 @@ fn type_info_of(meta: &Kv<'_>) -> TypeInfo {
 }
 
 /// `Ok(None)` = attribute kind with no `AttrData` form (dict/stringarray/etc): recorded in `skipped`, never silent, never an error.
-fn read_attr(entry: &Value, class: AttrClass, count: usize, skipped: &mut Vec<(AttrClass, String, String)>) -> Result<Option<Attribute>, GeoError> {
+fn read_attr(
+    entry: &Value,
+    class: AttrClass,
+    count: usize,
+    skipped: &mut Vec<(AttrClass, String, String)>,
+) -> Result<Option<Attribute>, GeoError> {
     let Value::Array(pair) = entry else { return syn("attribute entry is not a [meta, data] pair") };
     let (Some(m), Some(d)) = (pair.first(), pair.get(1)) else { return syn("attribute entry needs [meta, data]") };
     let meta = need_kv(m, "attribute meta")?;
