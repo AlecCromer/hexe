@@ -1,0 +1,10 @@
+# hexe-geo (L0): Detail + attributes + groups + Houdini `.geo` IO
+- Read: `read_geo` sniffs `PGEOMETRY` (legacy GPD V2 text, = shipped `all.geo`) vs JSON `.geo`; `BgeoV` binary = wave 2 (`Err(Unsupported)`).
+- Write: `write_geo_json` only (Houdini alternating `[key,val,...]` arrays, size-4 `P`, `Polygon_run`, `boolRLE`).
+- Divergence vs HDK `GA_Detail.h` (shape only; no HDK code consulted): HDK = GA_Offset (sparse, stable under deletes) mapped to GA_Index (dense) → here ONLY dense indices (PointId/VertexId/PrimId = u32 position). No offset/index split, no free-lists.
+- HDK vertex = (GA_Offset) owned by a primitive, refs a point; here `vertex_point[v]` + `Prim.verts: Range<u32>` → prim vertex ranges must be contiguous (non-contiguous `Polygon` → `PrimKind::Unknown` passthrough).
+- HDK attribute owners GA_ATTRIB_POINT/VERTEX/PRIMITIVE/GLOBAL(+DETAIL) → `AttrClass{Point,Vertex,Prim,Detail}`; HDK has per-owner dictionaries + GA_AIF* tuples/arrays/dicts; here flat `Vec<Attribute>` (class tag), no array/dict attrs (skipped on read).
+- HDK groups = GA_Group with GA_ElementGroup/ordered; here `Group{name,class,mask:Vec<bool>}`, order of ordered groups dropped.
+- Precision: storage fpreal64/int64/uint8 narrowed to f32/i32; `P` w dropped (always 1).
+- DESIGN.md deviations: `PrimKind::{Sphere{xform},Tube{xform,taper,closed},Unknown{ty,json}}` carry data; `AttrData::{FN,IN}` for tuple sizes the contract's enum cannot hold; `PartialEq`+`Debug` derived; `Detail::canonicalize`.
+- Hostile input: all counts checked (`MAX_ELEMS`=2^28, scalar cap 2^27), bounded nesting, `Err` never panic.
