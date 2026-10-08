@@ -29,6 +29,7 @@ Checklist = in egui, NOT yet in Tauri. `[ ]` open.
 - [x] `N` = prim numbers overlay (up to 500 labels, scan <=100k prims)
 - [x] axis gizmo (corner)
 - [x] view-state label in status (`shaded +P +N`)
+- [x] Cd display (S2): cook `cd` per prim corner (vertex>point>prim) + `cd_point`; USE_CD shader variants, corner-indexed mesh, absent = flat base colour; ui/src/cd.ts + proof s2-color.png
 - [x] viewport `Style` tunables struct (colours, light ambient/diffuse, point px radius + depth pull, grid lines/spacing) — tauri hard-coded in viewport.ts
 - [x] ground grid with coloured axes (X red / Z blue) + Y axis line (tauri GridHelper, no axes)
 
