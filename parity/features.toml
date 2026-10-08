@@ -459,6 +459,33 @@ evidence = [
 notes = "H15: distance(0.001) snap(average|lowest-point) group(point). Grid-hash O(n) leader-centred clustering (NOT transitive; ascending ptnum leaders), output points ordered by leader; average = float attrs incl P mean, lowest = leader; int/string attrs copy leader. Prims touching a merged point drop consecutive duplicate verts, deleted at <3 (closed) / <2 (open); verbatim otherwise; nothing merged -> input Arc shared. Oracle: 2 quads/8 pts -> 6 pts/2 prims; 6-quad soup box 24 -> 8 pts; distance 0 on shared = same Arc; grid 3x3 d10 -> 1 pt 0 prims; 80k pts linear-time. NOT modelled: Houdini unique-point / consolidate-only modes, attribute-aware snap, prim-group, tolerance on attribs. UNVERIFIED vs Houdini (hython blocked): clustering order, degenerate-prim rule. Example: examples/fuse.json."
 
 [[feature]]
+id = "sop-boolean"
+title = "Boolean SOP (union / subtract / intersect of closed polygon meshes)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["boolean"]
+evidence = [
+  "crates/sop/src/builtins/boolean_sop.rs::params_and_defaults",
+  "crates/sop/src/builtins/boolean_sop.rs::union_of_cubes_offset_along_x_by_half_is_14_quads_16_points",
+  "crates/sop/src/builtins/boolean_sop.rs::union_of_cubes_offset_diagonally_is_6_quads_6_hexagons_20_points",
+  "crates/sop/src/builtins/boolean_sop.rs::subtract_cube_minus_cube_diagonal_is_9_prims_14_points",
+  "crates/sop/src/builtins/boolean_sop.rs::intersect_cube_cube_diagonal_is_the_half_cube",
+  "crates/sop/src/builtins/boolean_sop.rs::cube_minus_nested_cube_proxy_for_a_low_res_sphere_is_a_hollow_12_prims_16_points",
+  "crates/sop/src/builtins/boolean_sop.rs::cube_minus_cube_poking_out_of_a_face_makes_a_notch_without_t_junctions",
+  "crates/sop/src/builtins/boolean_sop.rs::identical_cubes_union_and_intersect_are_the_cube_and_subtract_is_empty",
+  "crates/sop/src/builtins/boolean_sop.rs::face_touching_cubes_union_drops_the_shared_face",
+  "crates/sop/src/builtins/boolean_sop.rs::disjoint_cubes",
+  "crates/sop/src/builtins/boolean_sop.rs::concave_operand_l_prism_keeps_hexagon_caps",
+  "crates/sop/src/builtins/boolean_sop.rs::concave_operand_notch_filled_by_a_cube_gives_a_2x2_slab",
+  "crates/sop/src/builtins/boolean_sop.rs::surface_mode_cuts_without_inside_removal",
+  "crates/sop/src/builtins/boolean_sop.rs::empty_and_open_operands",
+  "crates/sop/src/builtins/boolean_sop.rs::hostile_params_nan_and_reversed_winding",
+  "crates/sop/src/builtins/boolean_sop.rs::many_small_cubes_finish_fast",
+  "crates/sop/src/builtins/boolean_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H21: operation(union|subtract|intersect = 0|1|2, task order) treat_as_solid(on). Iterative BSP per operand; each polygon of A is fragmented against B (Out|In|CoSame|CoOpp, coplanar parts decided by clipping to the coplanar node faces) and vice versa; solid mode: union=A.Out+B.Out+A.CoSame, subtract=A.Out+A.CoOpp+flip(B.In), intersect=A.In+B.In+A.CoSame. Cleanup: 1e-5 weld, T-vertex insertion, per-(source face,tag) re-fusing when the union is ONE simple loop (L-remainder = 1 hexagon), removal of vertices collinear in every user. Concave input polys are ear-clipped. Output P only + prim groups a_only/b_only/seam (seam = source face crossing or lying on the other surface). Oracle (hand-derived, never the port output): cube U cube offset (.5,0,0) = 14 quads/16 pts, offset (.5,.5,.5) = 6 quads+6 hexagons/20 pts (chi 2), A-B diag = 9 prims/14 pts, A^B = half cube 6/8, cube-nested cube = 12/16, + signed volumes by divergence theorem + watertight directed-edge check on every case. DELTAS vs Houdini (UNVERIFIED, hython blocked): no attribute transfer/interpolation beyond P (Houdini keeps point/vertex/prim attribs), no abooleanprim/'resolve' modes, no intersection-edge group or shatter/cut modes, treat_as_solid=off is OUR surface mode (A trimmed, no inside bookkeeping), menu order ours (task) not Houdini's, coplanar overlap strips stay separate from the rest of their source face (14 not 6 for the x-offset union), faces with holes / pinched remainders stay as un-fused fragments, non-closed prims ignored, 1e-6 plane / 1e-5 weld tolerance (absolute), >16384 polys/operand = Failed. Example: examples/boolean.json."
+[[feature]]
 id = "sop-reverse"
 title = "Reverse SOP"
 area = "A"
