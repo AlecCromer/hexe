@@ -618,6 +618,69 @@ evidence = [
 notes = "H16: point/prim/vertex both ways, routed through vertices; method any|all (all needs >=1 incident vertex); newname / removesource. prim->point any = all points of the group's prims. NOT modelled: edge class, multi-group source. UNVERIFIED vs Houdini (hython blocked); analytical oracle only."
 
 [[feature]]
+id = "sop-attribpromote"
+title = "Attribute Promote SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["attribpromote"]
+evidence = [
+  "crates/sop/src/builtins/attribpromote_sop.rs::point_index_to_prim_average_is_exact",
+  "crates/sop/src/builtins/attribpromote_sop.rs::prim_to_point_uses_distinct_incident_prims",
+  "crates/sop/src/builtins/attribpromote_sop.rs::detail_and_vertex_paths",
+  "crates/sop/src/builtins/attribpromote_sop.rs::rename_delete_ints_vectors_strings",
+  "crates/sop/src/builtins/attribpromote_sop.rs::hostile_params_and_empty_input",
+]
+notes = "H24: point/vertex/prim/detail both ways; methods max|min|average|first|last|sum (menu order = that); ints round; strings first/last only; inname/inclass/outclass/useoutname/outname/method/deloriginal. point->prim counts per vertex; prim->point over DISTINCT prims. NOT modelled: mode/median/sumsq/rms methods. UNVERIFIED vs Houdini (hython blocked): parm names, defaults, int rounding, empty-set default 0; analytical oracle (grid v=index -> prim avg 3r+c+2)."
+
+[[feature]]
+id = "sop-attribtransfer"
+title = "Attribute Transfer SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["attribtransfer"]
+evidence = [
+  "crates/sop/src/builtins/attribtransfer_sop.rs::offset_grid_nearest_mapping_by_hand",
+  "crates/sop/src/builtins/attribtransfer_sop.rs::distance_threshold_gates_points_and_keeps_existing_values",
+  "crates/sop/src/builtins/attribtransfer_sop.rs::pattern_selects_attributes_and_p_is_opt_in",
+  "crates/sop/src/builtins/attribtransfer_sop.rs::kernel_blend_is_linear_falloff_and_off_by_default",
+  "crates/sop/src/builtins/attribtransfer_sop.rs::empty_inputs_and_hostile_params",
+]
+notes = "H24: nearest source POINT (brute force, tie -> lowest idx) onto input-0 points; pointattribs pattern (default `* ^P`), distancethreshold (default 1), kernelradius (default 0 = off; linear falloff blend). NOT modelled: vertex/prim/detail transfer, prim-surface nearest, lod, maxsamplecount, other kernels. UNVERIFIED vs Houdini (hython blocked): parm names/defaults, kernel shape, threshold semantics; analytical oracle (offset grid by hand)."
+
+[[feature]]
+id = "sop-attribcopy"
+title = "Attribute Copy SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["attribcopy"]
+evidence = [
+  "crates/sop/src/builtins/attribcopy_sop.rs::by_index_copies_prefix_and_leaves_rest",
+  "crates/sop/src/builtins/attribcopy_sop.rs::by_p_matches_positions_within_tolerance",
+  "crates/sop/src/builtins/attribcopy_sop.rs::by_p_tolerance_gates",
+  "crates/sop/src/builtins/attribcopy_sop.rs::classes_pattern_p_opt_in_and_strings",
+  "crates/sop/src/builtins/attribcopy_sop.rs::empty_source_and_hostile_params",
+]
+notes = "H24: copy input-1 attribute values onto input 0 by matching index (any class) or by P within tolerance (point only; closest, ties lowest idx); attribs pattern (default `* ^P`). UNVERIFIED vs Houdini (hython blocked): this is a model of attribcopy (Houdini group-driven src/dest parms not modelled); analytical oracle only."
+
+[[feature]]
+id = "sop-attribdelete"
+title = "Attribute Delete SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["attribdelete"]
+evidence = [
+  "crates/sop/src/builtins/attribdelete_sop.rs::star_deletes_all_but_p_and_names_are_exact",
+  "crates/sop/src/builtins/attribdelete_sop.rs::exclusion_and_negate",
+  "crates/sop/src/builtins/attribdelete_sop.rs::nothing_matched_shares_the_arc_and_hostile",
+  "crates/sop/src/builtins/attribs.rs::pattern_grammar",
+]
+notes = "H24: ptdel/vtxdel/primdel/dtldel patterns (space-sep, glob, `^` exclusion; leading `^` = from all) + negate; point P never deleted; groups untouched. UNVERIFIED vs Houdini (hython blocked): leading-exclusion semantics, empty-pattern=nothing, negate on empty classes."
+
+[[feature]]
 id = "sop-blast"
 title = "Blast SOP"
 area = "A"

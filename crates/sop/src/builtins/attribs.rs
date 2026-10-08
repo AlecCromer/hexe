@@ -377,3 +377,25 @@ mod tests {
         assert_eq!(t, AttrData::Str { idx: vec![1, -1], table: vec!["a".into(), "b".into()] });
     }
 }
+#[cfg(test)]
+mod scene_tests {
+    use hexe_geo::{AttrClass, AttrData};
+    #[test]
+    fn scene_loader_cooks_attrib_family_example_and_registry_has_slots() {
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/attrib-family.json"))
+            .expect("example present");
+        let (mut g, id) = crate::load_scene(&ex).expect("example loads");
+        let out = g.cook(id, 0.0).expect("example cooks");
+        // grid1 (3x3 pts, 4 quads) keeps its own P (snap result lives on the `center` branch); the copied prim attr is the
+        // average of grid1's points snapped onto grid2's 4 points.
+        assert_eq!((out.point_count, out.prim_count()), (9, 4));
+        match out.attr(AttrClass::Prim, "center").map(|a| &a.data) {
+            Some(AttrData::V3(v)) => assert_eq!(v.len(), 4),
+            o => panic!("center missing: {o:?}"),
+        }
+        let r = crate::registry();
+        for t in ["attribpromote", "attribtransfer", "attribcopy", "attribdelete"] {
+            assert_eq!(r.create(t).map(|n| n.type_name()), Some(t));
+        }
+    }
+}

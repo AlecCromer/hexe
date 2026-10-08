@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    { "name": "grid1", "type": "grid", "params": { "rows": 3, "cols": 3 } },
+    { "name": "grid2", "type": "grid", "params": { "rows": 2, "cols": 2 } },
+    { "name": "snap", "type": "attribtransfer", "params": { "pointattribs": "P", "distancethreshold": 10 } },
+    { "name": "center", "type": "attribpromote", "params": { "inname": "P", "inclass": 0, "outclass": 2, "useoutname": true, "outname": "center", "method": 2 } },
+    { "name": "copy1", "type": "attribcopy", "params": { "class": 2, "attribs": "center" } },
+    { "name": "clean", "type": "attribdelete", "params": { "primdel": "^center", "ptdel": "* ^P" } }
+  ],
+  "edges": [["grid1", 0, "snap", 0], ["grid2", 0, "snap", 1], ["snap", 0, "center", 0], ["grid1", 0, "copy1", 0], ["center", 0, "copy1", 1], ["copy1", 0, "clean", 0]],
+  "display": "clean"
+}
