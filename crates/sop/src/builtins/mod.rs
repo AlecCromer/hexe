@@ -67,6 +67,8 @@ mod measure_sop;
 //
 mod merge_sop;
 //
+mod mirror_sop;
+//
 mod mountain_sop;
 //
 mod normal_sop;
@@ -177,6 +179,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("measure", measure_sop::spec, measure_sop::new);
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
+    //
+    r.register("mirror", mirror_sop::spec, mirror_sop::new);
     //
     r.register("mountain", mountain_sop::spec, mountain_sop::new);
     //

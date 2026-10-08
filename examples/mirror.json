@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "grid1", "type": "grid", "params": { "rows": 21, "cols": 21 } },
+    { "name": "mountain1", "type": "mountain", "params": { "height": 0.6, "elementsize": 3, "seed": 7 } },
+    { "name": "mirror1", "type": "mirror", "params": { "dir": [0, 1, 0], "dist": 0.5, "keepOriginal": true } }
+  ],
+  "edges": [["grid1", 0, "mountain1", 0], ["mountain1", 0, "mirror1", 0]],
+  "display": "mirror1"
+}

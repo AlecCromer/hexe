@@ -180,6 +180,26 @@ evidence = [
 notes = "Wave 2B. token xform. Registered: group(point-group NAME only; grouptype guess/points) grouptype xOrd rOrd t r s shear scale p pr(must be 0, else BadParam) updatenmls invertxform. NOT registered: prexform_*, movecentroid/movepivot, attribs, updateaffectednmls, vlength, addattrib/outputattrib/outputmerge. Matrix T(-p).X1.X2.X3.T(p) row-vector, glam f64; shear form, xOrd/rOrd apply order, pivot placement for non-srt orders, N handling (transformed always via inverse-transpose; length kept unless updatenmls, which is really Houdini 'recompute from geometry') are all UNVERIFIED vs Houdini (hython blocked). Sphere/Tube prim xforms not updated. Oracle fixtures xform-translate/xform-rot90y have EMPTY input (no generator SOP / geo source yet) = smoke only; real maths covered by in-file closed-form tests; upgrade fixtures to box->xform once box ships. Houdini-oracle (H32, real Houdini 20.5): MATCH, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
+id = "sop-mirror"
+title = "Mirror SOP (plane reflect, keep original)"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["mirror"]
+evidence = [
+  "crates/sop/src/builtins/mirror_sop.rs::keep_original_doubles_geometry_and_reflects_positions",
+  "crates/sop/src/builtins/mirror_sop.rs::reverse_keeps_winding_and_off_flips_it",
+  "crates/sop/src/builtins/mirror_sop.rs::plane_origin_and_distance_offset_the_copy",
+  "crates/sop/src/builtins/mirror_sop.rs::keep_off_reflects_in_place",
+  "crates/sop/src/builtins/mirror_sop.rs::consolidate_welds_seam_points",
+  "crates/sop/src/builtins/mirror_sop.rs::group_limits_the_copy_and_carries_attributes",
+  "crates/sop/src/builtins/mirror_sop.rs::normals_and_vectors_are_reflected_on_the_copy_only",
+  "crates/sop/src/builtins/mirror_sop.rs::hostile_params",
+  "crates/sop/src/builtins/mirror_sop.rs::scene_loader_and_registry_slot",
+]
+notes = "S1: group(prim pattern) origin(0) dir(0,1,0) dist(0) keepOriginal(on) reverse(on) consolidate(off) consolidatetol(0.001). Plane = origin + normalize(dir)*dist. Keep on: input + reflected copy of selected prims (fresh points, attrs/groups follow source); off: points reflected in place. reverse flips closed-poly winding of reflected prims. Normal/Vector-typed V3 point+vertex attrs reflected on the copy. NOT modelled: sphere/tube xform reflection, output group. UNVERIFIED vs Houdini (hython not run): parm defaults of reverse/consolidate, in-place semantics for shared points. Example: examples/mirror.json."
+
+[[feature]]
 id = "sop-merge"
 title = "Merge SOP"
 area = "A"
