@@ -87,6 +87,8 @@ pub(super) struct Cut {
 enum PRef {
     S(usize),
     C(usize),
+    /// A not-yet-numbered cut on the source edge (lo, hi).
+    E(usize, usize),
 }
 type Corner = (PRef, Option<usize>);
 struct Emit {
@@ -147,8 +149,6 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
         Keep::Below => &[-1],
         Keep::Both => &[1, -1],
     };
-    let mut cuts = Cuts::default();
-    let mut emits: Vec<Emit> = Vec::new();
     let mut in_prim = vec![false; np];
     for pr in &src.prims {
         for &(_, p) in prim_vpts(src, pr, np).iter().flatten() {
@@ -157,76 +157,104 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
             }
         }
     }
-    for &s in passes {
+    // Pieces per (source prim, side). Cut points are only NAMED here (`PRef::E`); ids are minted afterwards in walk order.
+    let piece = |pr: &Prim, vp: &[(usize, usize)], s: i8| -> Vec<(PrimKind, Vec<Corner>)> {
         let inside = |p: usize| side.get(p).is_some_and(|&x| x * s >= 0);
         let crosses = |a: usize, b: usize| side.get(a).zip(side.get(b)).is_some_and(|(&x, &y)| x * y < 0);
-        for (qi, pr) in src.prims.iter().enumerate() {
-            let Some(vp) = prim_vpts(src, pr, np) else { continue };
-            if keep == Keep::Both && s == -1 && vp.iter().all(|&(_, p)| side.get(p) == Some(&0)) {
-                continue;
-            }
-            let mut push = |kind: PrimKind, corners: Vec<Corner>| {
-                emits.push(Emit { kind, corners, src: qi, above: s == 1 });
-            };
-            match &pr.kind {
-                PrimKind::Poly { closed: true } => {
-                    let mut out: Vec<Corner> = Vec::new();
-                    for (k, &(va, a)) in vp.iter().enumerate() {
-                        let Some(&(vb, b)) = vp.get((k + 1) % vp.len()) else { continue };
-                        let (ia, ib) = (inside(a), inside(b));
-                        if ib {
-                            if !ia && crosses(a, b) {
-                                out.push((cuts.get(a, b), Some(va)));
-                            }
-                            out.push((PRef::S(b), Some(vb)));
-                        } else if ia && crosses(a, b) {
-                            out.push((cuts.get(a, b), Some(va)));
-                        }
+        let edge = |a: usize, b: usize| PRef::E(a.min(b), a.max(b));
+        match &pr.kind {
+            PrimKind::Poly { closed: true } => {
+                // walk: emit the corner if inside, then the cut of the edge to the next corner if it crosses
+                let mut out: Vec<Corner> = Vec::new();
+                for (k, &(va, a)) in vp.iter().enumerate() {
+                    let Some(&(_, b)) = vp.get((k + 1) % vp.len()) else { continue };
+                    if inside(a) {
+                        out.push((PRef::S(a), Some(va)));
                     }
-                    if out.len() >= 3 {
-                        push(pr.kind.clone(), out);
+                    if crosses(a, b) {
+                        out.push((edge(a, b), Some(va)));
                     }
                 }
-                PrimKind::Poly { closed: false } | PrimKind::Polyline => {
-                    let mut run: Vec<Corner> = Vec::new();
-                    let mut flush = |run: &mut Vec<Corner>| {
-                        if run.len() >= 2 {
-                            push(pr.kind.clone(), std::mem::take(run));
+                if out.len() >= 3 { vec![(pr.kind.clone(), out)] } else { Vec::new() }
+            }
+            PrimKind::Poly { closed: false } | PrimKind::Polyline => {
+                let mut runs: Vec<Vec<Corner>> = Vec::new();
+                let mut run: Vec<Corner> = Vec::new();
+                for (k, &(vb, b)) in vp.iter().enumerate() {
+                    let Some(&(va, a)) = k.checked_sub(1).and_then(|j| vp.get(j)) else {
+                        if inside(b) {
+                            run.push((PRef::S(b), Some(vb)));
                         }
-                        run.clear();
+                        continue;
                     };
-                    for (k, &(vb, b)) in vp.iter().enumerate() {
-                        let Some(&(va, a)) = k.checked_sub(1).and_then(|j| vp.get(j)) else {
-                            if inside(b) {
-                                run.push((PRef::S(b), Some(vb)));
+                    match (inside(a), inside(b)) {
+                        (true, true) => run.push((PRef::S(b), Some(vb))),
+                        (true, false) => {
+                            if crosses(a, b) {
+                                run.push((edge(a, b), Some(va)));
                             }
-                            continue;
-                        };
-                        match (inside(a), inside(b)) {
-                            (true, true) => run.push((PRef::S(b), Some(vb))),
-                            (true, false) => {
-                                if crosses(a, b) {
-                                    run.push((cuts.get(a, b), Some(va)));
-                                }
-                                flush(&mut run);
-                            }
-                            (false, true) => {
-                                if crosses(a, b) {
-                                    run.push((cuts.get(a, b), Some(va)));
-                                }
-                                run.push((PRef::S(b), Some(vb)));
-                            }
-                            (false, false) => {}
+                            runs.push(std::mem::take(&mut run));
                         }
+                        (false, true) => {
+                            if crosses(a, b) {
+                                run.push((edge(a, b), Some(va)));
+                            }
+                            run.push((PRef::S(b), Some(vb)));
+                        }
+                        (false, false) => {}
                     }
-                    flush(&mut run);
                 }
-                _ => {
-                    if vp.iter().all(|&(_, p)| inside(p)) {
-                        push(pr.kind.clone(), vp.iter().map(|&(v, p)| (PRef::S(p), Some(v))).collect());
-                    }
+                runs.push(run);
+                runs.into_iter().filter(|r| r.len() >= 2).map(|r| (pr.kind.clone(), r)).collect()
+            }
+            _ => {
+                if vp.iter().all(|&(_, p)| inside(p)) {
+                    vec![(pr.kind.clone(), vp.iter().map(|&(v, p)| (PRef::S(p), Some(v))).collect())]
+                } else {
+                    Vec::new()
                 }
             }
+        }
+    };
+    let want_above = keep != Keep::Below;
+    let want_below = keep != Keep::Above;
+    // slot layout (Houdini): every source prim keeps its slot holding its BELOW piece (or, when it has none, its ABOVE
+    // piece); the ABOVE halves of prims that were split are appended afterwards in source order.
+    let mut slots: Vec<(usize, Vec<(PrimKind, Vec<Corner>)>, bool)> = Vec::new();
+    let mut appended: Vec<(usize, Vec<(PrimKind, Vec<Corner>)>, bool)> = Vec::new();
+    for (qi, pr) in src.prims.iter().enumerate() {
+        let Some(vp) = prim_vpts(src, pr, np) else { continue };
+        let on_plane = vp.iter().all(|&(_, p)| side.get(p) == Some(&0));
+        let above = piece(pr, &vp, 1);
+        let below = if keep == Keep::Both && on_plane { Vec::new() } else { piece(pr, &vp, -1) };
+        if below.is_empty() {
+            slots.push((qi, above, true));
+        } else {
+            slots.push((qi, below, false));
+            if !above.is_empty() {
+                appended.push((qi, above, true));
+            }
+        }
+    }
+    let mut cuts = Cuts::default();
+    let mut emits: Vec<Emit> = Vec::new();
+    for (qi, pieces, is_above) in slots.into_iter().chain(appended) {
+        if (is_above && !want_above) || (!is_above && !want_below) {
+            continue;
+        }
+        for (kind, mut corners) in pieces {
+            // mint cut ids in walk order, then start a closed cycle at its first kept source corner
+            for c in corners.iter_mut() {
+                if let PRef::E(a, b) = c.0 {
+                    c.0 = cuts.get(a, b);
+                }
+            }
+            if kind == (PrimKind::Poly { closed: true })
+                && let Some(k) = corners.iter().position(|c| matches!(c.0, PRef::S(_)))
+            {
+                corners.rotate_left(k);
+            }
+            emits.push(Emit { kind, corners, src: qi, above: is_above });
         }
     }
     // kept source points: referenced by an emitted corner, or loose and on a kept side
@@ -270,6 +298,7 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
             let ix = match r {
                 PRef::S(i) => new_ix[*i],
                 PRef::C(c) => n_src + c,
+                PRef::E(..) => return Err(failed(op, "unresolved cut")),
             };
             vertex_point.push(u32::try_from(ix).map_err(|_| failed(op, "point id overflow"))?);
             vert_src.push(*v);
@@ -347,7 +376,7 @@ impl Node<Detail> for Clip {
 
 #[cfg(test)]
 mod tests {
-    use super::super::meshutil::testkit::{cook, cube, defaults, prim_pts};
+    use super::super::meshutil::testkit::{cook, cube, defaults, houdini_twin, prim_pts};
     use super::*;
     use hexe_geo::{Attribute, TypeInfo};
 
@@ -471,6 +500,18 @@ mod tests {
         d.prims.push(Prim { kind: PrimKind::Poly { closed: true }, verts: 24..25 });
         let out = cook(&*new(), d, &with(0, 0.0)).expect("cooks");
         assert_eq!(out.prim_count(), 5, "dangling prim dropped");
+    }
+
+    /// H33: the oracle twin of `sop-clip` equals real Houdini 20.5 (`fixtures/sop-clip/houdini.geo`) point-for-point and
+    /// prim-for-prim: kept points first, cut points in walk order (+x,-z first), intact prims first, then the split sides
+    /// each starting at their first kept source corner (`[1,2,3,0]`, `[1,0,5,4]`, ...).
+    #[test]
+    fn clip_box_matches_houdini_fixture_order() {
+        let r = houdini_twin(
+            include_str!("../../../../fixtures/sop-clip/scene.json"),
+            include_bytes!("../../../../fixtures/sop-clip/houdini.geo"),
+        );
+        assert_eq!(r, Ok(()));
     }
 
     #[test]
