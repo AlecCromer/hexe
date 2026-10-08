@@ -198,6 +198,28 @@ evidence = [
 notes = "wave 2: max 4 inputs (input0..3; Houdini 9999); variadic ports = graph wave 3. 0 params (doc-labelled 0; hidden parms [?] unknown, none modelled). Single live input shares the Arc; empty inputs skipped. UNVERIFIED vs Houdini (hython blocked): attr default-fill (0 / empty string), type/tuple-size conflict = Failed (Houdini may drop/convert), group union, detail attr first-wins, bypass-exports-input-1 not modelled. Oracle: fixtures/merge-empty scores; fixtures/merge-two-boxes is xfail until the box SOP lane lands (point order/params of box unverified). Analytical expecteds, not Houdini-observed."
 
 [[feature]]
+id = "sop-polybevel"
+title = "PolyBevel SOP (edge chamfer / round fillet)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["polybevel"]
+evidence = [
+"crates/sop/src/builtins/polybevel_sop.rs::cube_all_edges_chamfer_is_24_points_6_quads_12_edge_quads_8_corner_tris",
+"crates/sop/src/builtins/polybevel_sop.rs::chamfer_strip_of_one_edge_is_at_exact_offset_positions",
+"crates/sop/src/builtins/polybevel_sop.rs::cube_divisions_2_is_48_points_38_prims_with_hexagon_caps",
+"crates/sop/src/builtins/polybevel_sop.rs::divisions_2_round_profile_point_is_on_the_circle_solid_is_the_chord_midpoint",
+"crates/sop/src/builtins/polybevel_sop.rs::edge_group_top_loop_bevels_only_those_edges",
+"crates/sop/src/builtins/polybevel_sop.rs::point_group_selects_edges_with_both_ends_in_group",
+"crates/sop/src/builtins/polybevel_sop.rs::lone_edge_tapers_without_new_topology",
+"crates/sop/src/builtins/polybevel_sop.rs::open_grid_bevels_interior_edges_only",
+"crates/sop/src/builtins/polybevel_sop.rs::point_attrs_inherit_normals_recompute_groups_and_prim_attrs_follow",
+"crates/sop/src/builtins/polybevel_sop.rs::hostile_params_degenerate_prims_and_caps",
+"crates/sop/src/builtins/polybevel_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
+]
+notes = "H22: params group/offset/divisions/filletshape = OUR minimal subset. Bevelable edge = exactly 2 valid closed polys, opposite winding (boundary / non-manifold edges never beveled). offset = in-face perpendicular distance (cube chamfer width = offset*sqrt2). Vertex splits into sectors (corners joined across unbeveled edges) + cap polys for closed sector loops; cube all-edges: div1 = 24 pts/26 prims (6 quads+12 strips+8 tris), div2 = 48/38 (8 hexagon caps). round = conic arc w=sin(theta/2) (exact circle at 90deg), solid = straight profile. Group = 'a-b' edge pairs or point groups (both ends in group); no edge-group class in Detail. Point attrs copy source vertex (profile pts too), strips inherit first face prim attrs, existing N (point/vertex/prim) recomputed flat/uniform. LIMITS: a lone beveled edge (vertex with 1 beveled edge) tapers = no strip (selection needs loops/ends meeting 2+ beveled edges); no uv fix-up, per-edge offset, angle limit, offset-collision cleanup. UNVERIFIED vs Houdini (hython blocked): offset semantics (in-face vs along-edge), fillet-shape menu (round|solid meaning), profile param spacing, prim order, vertex-attr handling on strips. Example: examples/polybevel.json. Analytical oracle only."
+
+[[feature]]
 id = "sop-polyextrude"
 title = "PolyExtrude SOP"
 area = "A"
