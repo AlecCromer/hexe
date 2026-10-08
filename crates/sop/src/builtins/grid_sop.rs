@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn quad_normals_follow_the_orient_plane_normal() {
         // Houdini prim normals (left-hand rule on its clockwise cells, measured): xy -Z, yz +X, zx +Y; ours = right-hand on the
-    // reversed cell, i.e. the same vectors. Every quad.
+        // reversed cell, i.e. the same vectors. Every quad.
         for (o, axis, sign) in [(0, 2, -1.0f32), (1, 0, 1.0), (2, 1, 1.0)] {
             let d = ok(&format!(r#"{{"orient":{o},"rows":3,"cols":4}}"#));
             for i in 0..d.prims.len() {
