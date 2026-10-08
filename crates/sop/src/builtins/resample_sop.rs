@@ -40,7 +40,9 @@ const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("method", ParamValue::Menu(METHOD_LENGTH)).label("Method"),
+        ParamSpec::new("method", ParamValue::Menu(METHOD_LENGTH))
+            .label("Method")
+            .menu(&[("length", "By Length"), ("segments", "By Segment Count")]),
         ParamSpec::new("length", ParamValue::F(0.1)).label("Length").range(0.001, 10.0),
         ParamSpec::new("segments", ParamValue::I(10)).label("Segments").range(1.0, 100.0),
         ParamSpec::new("lastsegment", ParamValue::B(true)).label("Keep Shorter Last Segment"),

@@ -13,7 +13,9 @@ use std::time::SystemTime;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("file", ParamValue::S(String::new())).label("Geometry File"),
-        ParamSpec::new("missing", ParamValue::Menu(0)).label("Missing File"),
+        ParamSpec::new("missing", ParamValue::Menu(0))
+            .label("Missing File")
+            .menu(&[("error", "Report Error"), ("no_geometry", "No Geometry")]),
     ]
 }
 

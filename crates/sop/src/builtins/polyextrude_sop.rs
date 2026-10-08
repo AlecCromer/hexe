@@ -47,7 +47,11 @@ const MIN_MITRE: f64 = 0.2;
 const MIN_NEWELL: f64 = 1e-12;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("splittype", ParamValue::Menu(SPLIT_CONNECTED)).label("Split Type"),
+        ParamSpec::new("splittype", ParamValue::Menu(SPLIT_CONNECTED)).label("Split Type").menu(&[
+            ("connected", "Connected Components"),
+            ("individual", "Individual Elements"),
+            ("groups", "Groups"),
+        ]),
         ParamSpec::new("distance", ParamValue::F(0.0)).label("Distance").range(-1.0, 1.0),
         ParamSpec::new("inset", ParamValue::F(0.0)).label("Inset").range(-1.0, 1.0),
         ParamSpec::new("divisions", ParamValue::I(1)).label("Divisions").range(1.0, 10.0),

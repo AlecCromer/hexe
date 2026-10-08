@@ -57,7 +57,9 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
         ParamSpec::new("offset", ParamValue::F(0.1)).label("Offset").range(0.0, 10.0),
         ParamSpec::new("divisions", ParamValue::I(1)).label("Divisions").range(1.0, 10.0),
-        ParamSpec::new("filletshape", ParamValue::Menu(SHAPE_ROUND)).label("Fillet Shape"),
+        ParamSpec::new("filletshape", ParamValue::Menu(SHAPE_ROUND))
+            .label("Fillet Shape")
+            .menu(&[("round", "Round"), ("solid", "Solid")]),
     ]
 }
 pub fn new() -> Box<SopNode> {

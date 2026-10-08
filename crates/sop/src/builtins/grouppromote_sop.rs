@@ -24,9 +24,19 @@ const WHO: &str = "grouppromote";
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("group", ParamValue::S(String::new())).label("Source Group"),
-        ParamSpec::new("fromtype", ParamValue::Menu(GT_PRIM)).label("From Type"),
-        ParamSpec::new("totype", ParamValue::Menu(GT_POINT)).label("To Type"),
-        ParamSpec::new("method", ParamValue::Menu(ANY)).label("Method"),
+        ParamSpec::new("fromtype", ParamValue::Menu(GT_PRIM)).label("From Type").menu(&[
+            ("point", "Points"),
+            ("prim", "Primitives"),
+            ("vertex", "Vertices"),
+        ]),
+        ParamSpec::new("totype", ParamValue::Menu(GT_POINT)).label("To Type").menu(&[
+            ("point", "Points"),
+            ("prim", "Primitives"),
+            ("vertex", "Vertices"),
+        ]),
+        ParamSpec::new("method", ParamValue::Menu(ANY))
+            .label("Method")
+            .menu(&[("any", "Any Element"), ("all", "All Elements")]),
         ParamSpec::new("newname", ParamValue::S(String::new())).label("New Group Name"),
         ParamSpec::new("removesource", ParamValue::B(false)).label("Delete Original"),
     ]

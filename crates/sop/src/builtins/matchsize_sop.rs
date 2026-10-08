@@ -23,15 +23,29 @@ const FLAT: f64 = 1e-12;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("targettype", ParamValue::Menu(0)).label("Target Type"),
+        ParamSpec::new("targettype", ParamValue::Menu(0))
+            .label("Target Type")
+            .menu(&[("explicit", "Explicit Size and Center"), ("input1", "Second Input Bounds")]),
         ParamSpec::new("targetsize", ParamValue::V3([1.0; 3])).label("Target Size"),
         ParamSpec::new("targetcenter", ParamValue::V3([0.0; 3])).label("Target Center"),
         ParamSpec::new("doscale", ParamValue::B(true)).label("Scale to Match Size"),
         ParamSpec::new("uniformscale", ParamValue::B(false)).label("Uniform Scale"),
         ParamSpec::new("dotranslate", ParamValue::B(true)).label("Move to Match Center"),
-        ParamSpec::new("justifyx", ParamValue::Menu(1)).label("Justify X"),
-        ParamSpec::new("justifyy", ParamValue::Menu(1)).label("Justify Y"),
-        ParamSpec::new("justifyz", ParamValue::Menu(1)).label("Justify Z"),
+        ParamSpec::new("justifyx", ParamValue::Menu(1)).label("Justify X").menu(&[
+            ("min", "Min"),
+            ("center", "Center"),
+            ("max", "Max"),
+        ]),
+        ParamSpec::new("justifyy", ParamValue::Menu(1)).label("Justify Y").menu(&[
+            ("min", "Min"),
+            ("center", "Center"),
+            ("max", "Max"),
+        ]),
+        ParamSpec::new("justifyz", ParamValue::Menu(1)).label("Justify Z").menu(&[
+            ("min", "Min"),
+            ("center", "Center"),
+            ("max", "Max"),
+        ]),
     ]
 }
 pub fn new() -> Box<SopNode> {

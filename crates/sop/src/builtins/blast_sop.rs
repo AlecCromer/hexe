@@ -21,7 +21,9 @@ const WHO: &str = "blast";
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
-        ParamSpec::new("grouptype", ParamValue::Menu(GT_PRIM)).label("Group Type"),
+        ParamSpec::new("grouptype", ParamValue::Menu(GT_PRIM))
+            .label("Group Type")
+            .menu(&[("point", "Points"), ("prim", "Primitives")]),
         ParamSpec::new("negate", ParamValue::B(false)).label("Delete Non Selected"),
         ParamSpec::new("removeunused", ParamValue::B(true)).label("Delete Unused Points"),
     ]

@@ -43,7 +43,11 @@ const MAX_TSCAN: u64 = 400_000_000;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("operation", ParamValue::Menu(OP_UNION)).label("Operation"),
+        ParamSpec::new("operation", ParamValue::Menu(OP_UNION)).label("Operation").menu(&[
+            ("union", "Union"),
+            ("subtract", "Subtract"),
+            ("intersect", "Intersect"),
+        ]),
         ParamSpec::new("treat_as_solid", ParamValue::B(true)).label("Treat As Solid"),
     ]
 }

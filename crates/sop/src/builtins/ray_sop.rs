@@ -26,7 +26,9 @@ const MAX_WORK: u64 = 1 << 26;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("method", ParamValue::Menu(METHOD_NORMAL)).label("Method"),
+        ParamSpec::new("method", ParamValue::Menu(METHOD_NORMAL))
+            .label("Method")
+            .menu(&[("normal", "Minimum Distance Along Normal"), ("dir", "Along Direction")]),
         ParamSpec::new("dir", ParamValue::V3([0.0, -1.0, 0.0])).label("Direction"),
         ParamSpec::new("bidirectional", ParamValue::B(false)).label("Bidirectional"),
         ParamSpec::new("hitgroup", ParamValue::S(String::new())).label("Hit Group"),

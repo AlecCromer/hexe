@@ -56,6 +56,35 @@ impl Registry {
 mod tests {
     use crate::registry as builtin_registry;
 
+    /// T2b: every menu param declares labelled entries (token, label), unique tokens, and its default is one of them.
+    #[test]
+    fn every_menu_param_has_labels() {
+        use hexe_graph::ParamValue;
+        let r = builtin_registry();
+        let mut menus = 0;
+        for name in r.type_names() {
+            for s in r.specs(name).expect("specs") {
+                let ParamValue::Menu(d) = s.default else {
+                    assert!(s.menu.is_empty(), "{name}.{} is not a menu but declares entries", s.name);
+                    continue;
+                };
+                menus += 1;
+                assert!(
+                    (d as usize) < s.menu.len(),
+                    "{name}.{}: default {d} not in {} labelled entries",
+                    s.name,
+                    s.menu.len()
+                );
+                let mut toks: Vec<&str> = s.menu.iter().map(|(t, _)| t.as_str()).collect();
+                toks.sort_unstable();
+                toks.dedup();
+                assert_eq!(toks.len(), s.menu.len(), "{name}.{}: duplicate menu tokens", s.name);
+                assert!(s.menu.iter().all(|(t, l)| !t.is_empty() && !l.is_empty()));
+            }
+        }
+        assert!(menus >= 50, "expected the full set of menu params, saw {menus}");
+    }
+
     /// Generic contract every SOP lane inherits: unique names, ctor/spec/type_name agree, at most 1 output assumed.
     #[test]
     fn every_builtin_is_self_consistent() {

@@ -24,8 +24,16 @@ pub struct ParamInfo {
     pub default: Value,
     pub min: Option<f32>,
     pub max: Option<f32>,
-    /// Menu entries. The engine's `ParamSpec` carries no menu labels, so this is empty (UI shows an index stepper).
-    pub menu: Vec<String>,
+    /// Menu entries from the engine's `ParamSpec::menu` (empty for non-menu params).
+    pub menu: Vec<MenuEntry>,
+}
+
+/// One menu choice: `value` is the `ParamValue::Menu` index, `token` the stable scene-file name, `label` the UI text.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct MenuEntry {
+    pub value: u32,
+    pub token: String,
+    pub label: String,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -164,7 +172,16 @@ fn param_info(s: &ParamSpec) -> ParamInfo {
         default: param_json(&s.default),
         min: s.range.map(|r| r.0),
         max: s.range.map(|r| r.1),
-        menu: Vec::new(),
+        menu: s
+            .menu
+            .iter()
+            .enumerate()
+            .map(|(i, (t, l))| MenuEntry {
+                value: u32::try_from(i).unwrap_or(u32::MAX),
+                token: t.clone(),
+                label: l.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -434,7 +451,12 @@ mod tests {
         let pe = t.iter().find(|n| n.ty == "polyextrude").expect("polyextrude registered");
         let dist = pe.params.iter().find(|p| p.name == "distance").expect("distance");
         assert_eq!((dist.kind, dist.min, dist.max), ("float", Some(-1.0), Some(1.0)));
-        assert!(pe.params.iter().any(|p| p.kind == "menu"));
+        let split = pe.params.iter().find(|p| p.name == "splittype").expect("splittype");
+        assert_eq!(split.kind, "menu");
+        let labels: Vec<&str> = split.menu.iter().map(|m| m.label.as_str()).collect();
+        assert_eq!(labels, ["Connected Components", "Individual Elements", "Groups"]);
+        assert_eq!(split.menu[1].value, 1);
+        assert!(t.iter().flat_map(|n| &n.params).filter(|p| p.kind == "menu").all(|p| !p.menu.is_empty()));
         assert_eq!(t.iter().map(|n| n.ty.as_str()).collect::<Vec<_>>().len(), hexe_sop::registry().type_names().len());
     }
 

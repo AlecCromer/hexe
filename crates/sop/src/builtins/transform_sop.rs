@@ -44,9 +44,29 @@ const GROUP_POINTS: usize = 3;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
-        ParamSpec::new("grouptype", ParamValue::Menu(0)).label("Group Type"),
-        ParamSpec::new("xOrd", ParamValue::Menu(0)).label("Transform Order"),
-        ParamSpec::new("rOrd", ParamValue::Menu(0)).label("Rotate Order"),
+        ParamSpec::new("grouptype", ParamValue::Menu(0)).label("Group Type").menu(&[
+            ("guess", "Guess from Group"),
+            ("breakpoints", "Breakpoints"),
+            ("edges", "Edges"),
+            ("points", "Points"),
+            ("prims", "Primitives"),
+        ]),
+        ParamSpec::new("xOrd", ParamValue::Menu(0)).label("Transform Order").menu(&[
+            ("srt", "Scale Rotate Translate"),
+            ("str", "Scale Translate Rotate"),
+            ("rst", "Rotate Scale Translate"),
+            ("rts", "Rotate Translate Scale"),
+            ("tsr", "Translate Scale Rotate"),
+            ("trs", "Translate Rotate Scale"),
+        ]),
+        ParamSpec::new("rOrd", ParamValue::Menu(0)).label("Rotate Order").menu(&[
+            ("xyz", "Rx Ry Rz"),
+            ("xzy", "Rx Rz Ry"),
+            ("yxz", "Ry Rx Rz"),
+            ("yzx", "Ry Rz Rx"),
+            ("zxy", "Rz Rx Ry"),
+            ("zyx", "Rz Ry Rx"),
+        ]),
         ParamSpec::new("t", ParamValue::V3([0.0; 3])).label("Translate").range(-1.0, 1.0),
         ParamSpec::new("r", ParamValue::V3([0.0; 3])).label("Rotate").range(0.0, 360.0),
         ParamSpec::new("s", ParamValue::V3([1.0; 3])).label("Scale").range(-1.0, 1.0),

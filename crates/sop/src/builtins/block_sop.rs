@@ -44,8 +44,15 @@ const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 
 pub fn begin_spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("method", ParamValue::Menu(M_PIECE)).label("Iterate Over"),
-        ParamSpec::new("class", ParamValue::Menu(C_PRIM)).label("Piece Class"),
+        ParamSpec::new("method", ParamValue::Menu(M_PIECE)).label("Iterate Over").menu(&[
+            ("piece", "Pieces"),
+            ("count", "Count"),
+            ("points", "Points"),
+            ("prims", "Primitives"),
+        ]),
+        ParamSpec::new("class", ParamValue::Menu(C_PRIM))
+            .label("Piece Class")
+            .menu(&[("point", "Points"), ("prim", "Primitives")]),
         ParamSpec::new("attrib", ParamValue::S("name".into())).label("Piece Attribute"),
         ParamSpec::new("count", ParamValue::I(1)).label("Iterations").range(0.0, 100.0),
     ]
@@ -55,7 +62,9 @@ pub fn begin_new() -> Box<SopNode> {
 }
 pub fn end_spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("mode", ParamValue::Menu(0)).label("Gather (merge | feedback)"),
+        ParamSpec::new("mode", ParamValue::Menu(0))
+            .label("Gather (merge | feedback)")
+            .menu(&[("merge", "Merge"), ("feedback", "Feedback")]),
         ParamSpec::new("begin", ParamValue::S(String::new())).label("Block Begin"),
     ]
 }

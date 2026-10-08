@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 export type Kind = "float" | "int" | "toggle" | "menu" | "string" | "vector3";
 export type PVal = number | boolean | string | [number, number, number];
 
-export interface ParamInfo { name: string; label: string; kind: Kind; default: PVal; min: number | null; max: number | null; menu: string[] }
+export interface MenuEntry { value: number; token: string; label: string }
+export interface ParamInfo { name: string; label: string; kind: Kind; default: PVal; min: number | null; max: number | null; menu: MenuEntry[] }
 export interface NodeType { type: string; label: string; inputs: string[]; params: ParamInfo[] }
 export interface NodeView { id: number; type: string; name: string; x: number; y: number; inputs: string[]; params: Record<string, PVal> }
 export interface EdgeView { from: number; to: number; input: number }

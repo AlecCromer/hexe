@@ -24,7 +24,11 @@ const NAMES: [&str; 3] = ["area", "perimeter", "volume"];
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("measure", ParamValue::Menu(0)).label("Measure"),
+        ParamSpec::new("measure", ParamValue::Menu(0)).label("Measure").menu(&[
+            ("area", "Area"),
+            ("perimeter", "Perimeter"),
+            ("volume", "Volume"),
+        ]),
         ParamSpec::new("attribname", ParamValue::S(String::new())).label("Attribute Name"),
         ParamSpec::new("total", ParamValue::B(false)).label("Write Total (detail)"),
     ]

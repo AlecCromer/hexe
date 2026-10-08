@@ -62,7 +62,7 @@ function control(p: ParamInfo, value: PVal, commit: (v: PVal) => void): HTMLElem
     case "menu": {
       if (p.menu.length) {
         const s = el("select", {});
-        p.menu.forEach((m, i) => s.append(el("option", { value: String(i), textContent: m, selected: i === Number(value) })));
+        p.menu.forEach((m) => s.append(el("option", { value: String(m.value), textContent: m.label, title: m.token, selected: m.value === Number(value) })));
         s.dataset.param = p.name;
         s.addEventListener("change", () => commit(Number(s.value)));
         return el("div", { className: "pctl" }, s);

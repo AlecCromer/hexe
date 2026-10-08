@@ -25,7 +25,9 @@ use std::sync::Arc;
 const WHO: &str = "delete";
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("entity", ParamValue::Menu(GT_POINT)).label("Entity"),
+        ParamSpec::new("entity", ParamValue::Menu(GT_POINT))
+            .label("Entity")
+            .menu(&[("point", "Points"), ("prim", "Primitives")]),
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
         ParamSpec::new("userange", ParamValue::B(false)).label("Delete by Range"),
         ParamSpec::new("start", ParamValue::I(0)).label("Start"),

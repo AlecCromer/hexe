@@ -32,8 +32,16 @@ const TYPE_SPHERICAL: u32 = 2;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("type", ParamValue::Menu(TYPE_PLANAR)).label("Projection"),
-        ParamSpec::new("axis", ParamValue::Menu(2)).label("Axis"),
+        ParamSpec::new("type", ParamValue::Menu(TYPE_PLANAR)).label("Projection").menu(&[
+            ("planar", "Planar"),
+            ("cylindrical", "Cylindrical"),
+            ("spherical", "Spherical"),
+        ]),
+        ParamSpec::new("axis", ParamValue::Menu(2)).label("Axis").menu(&[
+            ("x", "X Axis"),
+            ("y", "Y Axis"),
+            ("z", "Z Axis"),
+        ]),
         ParamSpec::new("center", ParamValue::V3([0.0; 3])).label("Center"),
         ParamSpec::new("scale", ParamValue::V3([1.0; 3])).label("Scale"),
         ParamSpec::new("offset", ParamValue::V3([0.0; 3])).label("Offset"),

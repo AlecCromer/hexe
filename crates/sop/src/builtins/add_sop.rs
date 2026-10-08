@@ -27,7 +27,9 @@ pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("points", ParamValue::S(String::new())).label("Points"),
         ParamSpec::new("prims", ParamValue::B(false)).label("Add Polyline"),
-        ParamSpec::new("connect", ParamValue::Menu(CONNECT_ALL)).label("Connect"),
+        ParamSpec::new("connect", ParamValue::Menu(CONNECT_ALL))
+            .label("Connect")
+            .menu(&[("all", "All Points"), ("none", "None")]),
         ParamSpec::new("delete_geometry", ParamValue::B(false)).label("Delete Geometry But Keep the Points"),
     ]
 }

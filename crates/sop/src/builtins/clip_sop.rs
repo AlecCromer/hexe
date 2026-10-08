@@ -39,7 +39,11 @@ pub(super) fn plane_specs(keep_default: u32) -> Vec<ParamSpec> {
         ParamSpec::new("origin", ParamValue::V3([0.0; 3])).label("Origin"),
         ParamSpec::new("dir", ParamValue::V3([0.0, 1.0, 0.0])).label("Direction"),
         ParamSpec::new("dist", ParamValue::F(0.0)).label("Distance").range(-10.0, 10.0),
-        ParamSpec::new("keep", ParamValue::Menu(keep_default)).label("Keep"),
+        ParamSpec::new("keep", ParamValue::Menu(keep_default)).label("Keep").menu(&[
+            ("above", "Keep Above"),
+            ("below", "Keep Below"),
+            ("both", "Keep Both"),
+        ]),
     ]
 }
 

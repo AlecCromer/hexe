@@ -40,9 +40,18 @@ const COS_EPS: f64 = 1e-9;
 const MAX_WORK: u64 = 1 << 28;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("type", ParamValue::Menu(TYPE_VERTEX)).label("Add Normals To"),
+        ParamSpec::new("type", ParamValue::Menu(TYPE_VERTEX)).label("Add Normals To").menu(&[
+            ("point", "Points"),
+            ("vertex", "Vertices"),
+            ("prim", "Primitives"),
+            ("detail", "Detail"),
+        ]),
         ParamSpec::new("cusp_angle", ParamValue::F(60.0)).label("Cusp Angle").range(0.0, 180.0),
-        ParamSpec::new("weighting", ParamValue::Menu(W_AREA)).label("Weighting Method"),
+        ParamSpec::new("weighting", ParamValue::Menu(W_AREA)).label("Weighting Method").menu(&[
+            ("area", "By Area"),
+            ("angle", "By Angle"),
+            ("uniform", "Uniform"),
+        ]),
         ParamSpec::new("add_normals_to", ParamValue::S(String::new())).label("Group"),
     ]
 }

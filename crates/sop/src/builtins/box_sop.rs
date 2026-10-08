@@ -25,7 +25,7 @@ const MAX_AXIS: f32 = 1.0e7;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("type", ParamValue::Menu(0)).label("Primitive Type"),
+        ParamSpec::new("type", ParamValue::Menu(0)).label("Primitive Type").menu(&[("poly", "Polygon")]),
         ParamSpec::new("consolidatepts", ParamValue::B(true)).label("Consolidate Corner Points"),
         ParamSpec::new("size", ParamValue::V3([1.0, 1.0, 1.0])).label("Size").range(-1.0, 1.0),
         ParamSpec::new("t", ParamValue::V3([0.0, 0.0, 0.0])).label("Center").range(-1.0, 1.0),

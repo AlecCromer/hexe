@@ -28,13 +28,27 @@ const MAX_POINTS: usize = 4_000_000;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("type", ParamValue::Menu(TY_PRIM)).label("Primitive Type"),
-        ParamSpec::new("surftype", ParamValue::Menu(SURF_QUADS)).label("Connectivity"),
+        ParamSpec::new("type", ParamValue::Menu(TY_PRIM)).label("Primitive Type").menu(&[
+            ("prim", "Primitive"),
+            ("poly", "Polygon"),
+            ("polymesh", "Polygon Mesh"),
+        ]),
+        ParamSpec::new("surftype", ParamValue::Menu(SURF_QUADS)).label("Connectivity").menu(&[
+            ("rows", "Rows"),
+            ("cols", "Columns"),
+            ("rowcol", "Rows and Columns"),
+            ("triangles", "Triangles"),
+            ("quads", "Quadrilaterals"),
+        ]),
         ParamSpec::new("rad", ParamValue::V3([1.0, 1.0, 1.0])).label("Radius").range(-1.0, 1.0),
         ParamSpec::new("t", ParamValue::V3([0.0; 3])).label("Center").range(-1.0, 1.0),
         ParamSpec::new("r", ParamValue::V3([0.0; 3])).label("Rotate").range(0.0, 360.0),
         ParamSpec::new("scale", ParamValue::F(1.0)).label("Uniform Scale").range(0.0, 10.0),
-        ParamSpec::new("orient", ParamValue::Menu(1)).label("Orientation").range(0.0, 1.0),
+        ParamSpec::new("orient", ParamValue::Menu(1)).label("Orientation").range(0.0, 1.0).menu(&[
+            ("x", "X Axis"),
+            ("y", "Y Axis"),
+            ("z", "Z Axis"),
+        ]),
         ParamSpec::new("freq", ParamValue::I(2)).label("Frequency").range(1.0, 10.0),
         ParamSpec::new("rows", ParamValue::I(13)).label("Rows").range(3.0, 50.0),
         ParamSpec::new("cols", ParamValue::I(24)).label("Columns").range(3.0, 50.0),

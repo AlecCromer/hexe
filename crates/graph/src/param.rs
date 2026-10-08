@@ -44,15 +44,23 @@ pub struct ParamSpec {
     pub default: ParamValue,
     /// UI hint only; the engine does not clamp.
     pub range: Option<(f32, f32)>,
+    /// Menu entries `(token, label)`; the menu value (`ParamValue::Menu(i)`) is the position. Empty = none declared.
+    pub menu: Vec<(String, String)>,
 }
 
 impl ParamSpec {
     pub fn new(name: &str, default: ParamValue) -> Self {
-        ParamSpec { name: name.to_string(), label: name.to_string(), default, range: None }
+        ParamSpec { name: name.to_string(), label: name.to_string(), default, range: None, menu: Vec::new() }
     }
     #[must_use]
     pub fn label(mut self, label: &str) -> Self {
         self.label = label.to_string();
+        self
+    }
+    /// Declare the menu entries `(token, label)` in menu-index order (UI hint; the engine still range-checks in `cook`).
+    #[must_use]
+    pub fn menu(mut self, entries: &[(&str, &str)]) -> Self {
+        self.menu = entries.iter().map(|(t, l)| ((*t).to_string(), (*l).to_string())).collect();
         self
     }
     #[must_use]

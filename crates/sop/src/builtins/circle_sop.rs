@@ -34,12 +34,23 @@ const ARC_OPEN: u32 = 1;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("type", ParamValue::Menu(TYPE_POLYGON)).label("Primitive Type"),
-        ParamSpec::new("orient", ParamValue::Menu(ORIENT_XY)).label("Orientation"),
+        ParamSpec::new("type", ParamValue::Menu(TYPE_POLYGON)).label("Primitive Type").menu(&[
+            ("polygon", "Polygon"),
+            ("polyline", "Polyline"),
+            ("nurbs", "NURBS"),
+            ("bezier", "Bezier"),
+        ]),
+        ParamSpec::new("orient", ParamValue::Menu(ORIENT_XY)).label("Orientation").menu(&[
+            ("xy", "XY Plane"),
+            ("yz", "YZ Plane"),
+            ("zx", "ZX Plane"),
+        ]),
         ParamSpec::new("radius", ParamValue::V3([1.0, 1.0, 0.0])).label("Radius").range(0.0, 10.0),
         ParamSpec::new("center", ParamValue::V3([0.0, 0.0, 0.0])).label("Center").range(-1.0, 1.0),
         ParamSpec::new("divisions", ParamValue::I(12)).label("Divisions").range(3.0, 50.0),
-        ParamSpec::new("arc", ParamValue::Menu(ARC_CLOSED)).label("Arc Type"),
+        ParamSpec::new("arc", ParamValue::Menu(ARC_CLOSED))
+            .label("Arc Type")
+            .menu(&[("closed", "Closed"), ("open_arc", "Open Arc")]),
         // Houdini default is ON (verified): the circle runs clockwise about the plane normal.
         ParamSpec::new("reverse", ParamValue::B(true)).label("Reverse"),
         ParamSpec::new("beginangle", ParamValue::F(0.0)).label("Start Angle").range(0.0, 360.0),

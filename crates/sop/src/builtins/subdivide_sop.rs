@@ -43,7 +43,9 @@ const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("iterations", ParamValue::I(1)).label("Subdivision Levels").range(0.0, 6.0),
-        ParamSpec::new("algorithm", ParamValue::Menu(ALGO_CATMULL)).label("Algorithm"),
+        ParamSpec::new("algorithm", ParamValue::Menu(ALGO_CATMULL))
+            .label("Algorithm")
+            .menu(&[("catmull", "OpenSubdiv Catmull-Clark"), ("linear", "Linear")]),
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
     ]
 }

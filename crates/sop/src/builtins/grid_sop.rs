@@ -39,9 +39,28 @@ const ORIENT_YZ: u32 = 1;
 const ORIENT_ZX: u32 = 2;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("type", ParamValue::Menu(TYPE_POLY)).label("Primitive Type"),
-        ParamSpec::new("surftype", ParamValue::Menu(SURF_QUADS)).label("Connectivity"),
-        ParamSpec::new("orient", ParamValue::Menu(ORIENT_ZX)).label("Orientation"),
+        ParamSpec::new("type", ParamValue::Menu(TYPE_POLY)).label("Primitive Type").menu(&[
+            ("poly", "Polygon"),
+            ("mesh", "Polygon Mesh"),
+            ("nurbs", "NURBS"),
+            ("bezier", "Bezier"),
+            ("points", "Points"),
+            ("polysoup", "Polygon Soup"),
+        ]),
+        ParamSpec::new("surftype", ParamValue::Menu(SURF_QUADS)).label("Connectivity").menu(&[
+            ("rows", "Rows"),
+            ("cols", "Columns"),
+            ("rowcol", "Rows and Columns"),
+            ("triangles", "Triangles"),
+            ("quads", "Quadrilaterals"),
+            ("alttriangles", "Alternating Triangles"),
+            ("revtriangles", "Reverse Triangles"),
+        ]),
+        ParamSpec::new("orient", ParamValue::Menu(ORIENT_ZX)).label("Orientation").menu(&[
+            ("xy", "XY Plane"),
+            ("yz", "YZ Plane"),
+            ("zx", "ZX Plane"),
+        ]),
         ParamSpec::new("size", ParamValue::V3([10.0, 10.0, 0.0])).label("Size").range(-1.0, 1.0),
         ParamSpec::new("t", ParamValue::V3([0.0, 0.0, 0.0])).label("Center").range(-1.0, 1.0),
         ParamSpec::new("r", ParamValue::V3([0.0, 0.0, 0.0])).label("Rotate").range(0.0, 360.0),

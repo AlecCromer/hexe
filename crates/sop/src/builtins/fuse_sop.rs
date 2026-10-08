@@ -29,7 +29,9 @@ const SNAP_LOWEST: u32 = 1;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("distance", ParamValue::F(0.001)).label("Distance").range(0.0, 1.0),
-        ParamSpec::new("snap", ParamValue::Menu(SNAP_AVERAGE)).label("Snap"),
+        ParamSpec::new("snap", ParamValue::Menu(SNAP_AVERAGE))
+            .label("Snap")
+            .menu(&[("average", "Average"), ("lowest", "Lowest Point")]),
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
     ]
 }

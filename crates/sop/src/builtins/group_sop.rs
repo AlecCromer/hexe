@@ -38,7 +38,12 @@ const MIN_LEN: f64 = 1e-12;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("groupname", ParamValue::S("group1".into())).label("Group Name"),
-        ParamSpec::new("grouptype", ParamValue::Menu(GT_PRIM)).label("Group Type"),
+        ParamSpec::new("grouptype", ParamValue::Menu(GT_PRIM)).label("Group Type").menu(&[
+            ("point", "Points"),
+            ("prim", "Primitives"),
+            ("vertex", "Vertices"),
+            ("edge", "Edges"),
+        ]),
         ParamSpec::new("pattern", ParamValue::S(String::new())).label("Pattern"),
         ParamSpec::new("bbox", ParamValue::B(false)).label("Keep in Bounding Box"),
         ParamSpec::new("bbox_size", ParamValue::V3([1.0, 1.0, 1.0])).label("Size").range(0.0, 10.0),
@@ -46,7 +51,12 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("normal", ParamValue::B(false)).label("Keep by Normals"),
         ParamSpec::new("dir", ParamValue::V3([0.0, 1.0, 0.0])).label("Direction").range(-1.0, 1.0),
         ParamSpec::new("angle", ParamValue::F(45.0)).label("Spread Angle").range(0.0, 180.0),
-        ParamSpec::new("merge_op", ParamValue::Menu(MERGE_REPLACE)).label("Merge Operation"),
+        ParamSpec::new("merge_op", ParamValue::Menu(MERGE_REPLACE)).label("Merge Operation").menu(&[
+            ("replace", "Replace Existing"),
+            ("union", "Union with Existing"),
+            ("intersect", "Intersect with Existing"),
+            ("subtract", "Subtract from Existing"),
+        ]),
     ]
 }
 pub fn new() -> Box<SopNode> {

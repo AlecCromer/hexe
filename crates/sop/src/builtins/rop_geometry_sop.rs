@@ -10,7 +10,9 @@ use std::sync::Arc;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("sopoutput", ParamValue::S(String::new())).label("Output File"),
-        ParamSpec::new("trange", ParamValue::Menu(0)).label("Valid Frame Range"),
+        ParamSpec::new("trange", ParamValue::Menu(0))
+            .label("Valid Frame Range")
+            .menu(&[("off", "Render Current Frame")]),
     ]
 }
 

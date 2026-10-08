@@ -21,7 +21,9 @@ const CONN_POINT: u32 = 1;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("connecttype", ParamValue::Menu(CONN_PRIM)).label("Connectivity Type"),
+        ParamSpec::new("connecttype", ParamValue::Menu(CONN_PRIM))
+            .label("Connectivity Type")
+            .menu(&[("prim", "Primitives"), ("point", "Points")]),
         ParamSpec::new("attribname", ParamValue::S("class".into())).label("Attribute Name"),
     ]
 }

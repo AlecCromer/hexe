@@ -22,9 +22,16 @@ const BY_INDEX: u32 = 0;
 const BY_P: u32 = 1;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("class", ParamValue::Menu(0)).label("Class"),
+        ParamSpec::new("class", ParamValue::Menu(0)).label("Class").menu(&[
+            ("point", "Point"),
+            ("vertex", "Vertex"),
+            ("prim", "Primitive"),
+            ("detail", "Detail"),
+        ]),
         ParamSpec::new("attribs", ParamValue::S("* ^P".into())).label("Attributes"),
-        ParamSpec::new("matchby", ParamValue::Menu(BY_INDEX)).label("Match By"),
+        ParamSpec::new("matchby", ParamValue::Menu(BY_INDEX))
+            .label("Match By")
+            .menu(&[("index", "Index"), ("P", "Position")]),
         ParamSpec::new("tolerance", ParamValue::F(1e-5)).label("Position Tolerance").range(0.0, 1.0),
     ]
 }

@@ -20,11 +20,28 @@ const WHO: &str = "attribpromote";
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("inname", ParamValue::S(String::new())).label("Original Name"),
-        ParamSpec::new("inclass", ParamValue::Menu(0)).label("Original Class"),
-        ParamSpec::new("outclass", ParamValue::Menu(2)).label("New Class"),
+        ParamSpec::new("inclass", ParamValue::Menu(0)).label("Original Class").menu(&[
+            ("point", "Point"),
+            ("vertex", "Vertex"),
+            ("prim", "Primitive"),
+            ("detail", "Detail"),
+        ]),
+        ParamSpec::new("outclass", ParamValue::Menu(2)).label("New Class").menu(&[
+            ("point", "Point"),
+            ("vertex", "Vertex"),
+            ("prim", "Primitive"),
+            ("detail", "Detail"),
+        ]),
         ParamSpec::new("useoutname", ParamValue::B(false)).label("Change New Name"),
         ParamSpec::new("outname", ParamValue::S(String::new())).label("New Name"),
-        ParamSpec::new("method", ParamValue::Menu(0)).label("Promotion Method"),
+        ParamSpec::new("method", ParamValue::Menu(0)).label("Promotion Method").menu(&[
+            ("max", "Maximum"),
+            ("min", "Minimum"),
+            ("average", "Average"),
+            ("first", "First Match"),
+            ("last", "Last Match"),
+            ("sum", "Sum"),
+        ]),
         ParamSpec::new("deloriginal", ParamValue::B(true)).label("Delete Original"),
     ]
 }
