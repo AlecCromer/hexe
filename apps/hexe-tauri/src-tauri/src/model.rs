@@ -487,6 +487,17 @@ impl Session {
         self.mutate(None, |s| s.node_move_raw(id, x, y))
     }
 
+    /// Move several nodes as ONE undo step (all ids validated first).
+    pub fn nodes_move(&mut self, moves: &[(u32, f32, f32)]) -> Result<(), String> {
+        for &(i, x, y) in moves {
+            self.find(i)?;
+            if !x.is_finite() || !y.is_finite() {
+                return Err("non-finite position".into());
+            }
+        }
+        self.mutate(None, |s| moves.iter().try_for_each(|&(i, x, y)| s.node_move_raw(i, x, y)))
+    }
+
     /// Set a parameter; consecutive sets of the same parameter coalesce into one undo step (a scrub).
     pub fn node_set_param(&mut self, id: u32, name: &str, value: &Value) -> Result<(), String> {
         self.mutate(Some(format!("{id}:{name}")), |s| s.node_set_param_raw(id, name, value))

@@ -1,5 +1,6 @@
 // Param pane generated from the selected node's schema (list_node_types). Edits -> node_set_param -> onChange (re-cook).
 import type { NodeType, NodeView, ParamInfo, PVal } from "./api";
+import { attachScrub, scrubSpeed } from "./scrub";
 
 export type SetParam = (id: number, name: string, value: PVal) => Promise<void>;
 
@@ -12,8 +13,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLEl
 
 function stepFor(p: ParamInfo): number {
   if (p.kind === "int" || p.kind === "menu") return 1;
-  if (p.min !== null && p.max !== null) return (p.max - p.min) / 200 || 0.01;
-  return 0.01;
+  return scrubSpeed(p) || 0.01; // = registry range / 200 (the same speed the click-drag scrub uses)
 }
 
 function numberInput(p: ParamInfo, value: number, commit: (v: number) => void, live: boolean): HTMLElement {
@@ -24,6 +24,7 @@ function numberInput(p: ParamInfo, value: number, commit: (v: number) => void, l
   num.dataset.param = p.name;
   const parse = (s: string) => (isInt ? Math.round(Number(s)) : Number(s));
   num.addEventListener("change", () => { const v = parse(num.value); if (Number.isFinite(v)) commit(v); });
+  attachScrub(num, p, commit);
   wrap.append(num);
   if (live && p.min !== null && p.max !== null && p.kind !== "menu") {
     const r = el("input", { type: "range", min: String(p.min), max: String(p.max), step: String(stepFor(p)), value: String(value) });
@@ -52,8 +53,10 @@ function control(p: ParamInfo, value: PVal, commit: (v: PVal) => void): HTMLElem
       const v = [...(value as number[])];
       const box = el("div", { className: "pctl v3" });
       v.forEach((x, i) => {
-        const n = el("input", { type: "number", value: String(x), step: "0.01" });
+        const n = el("input", { type: "number", value: String(x), step: String(stepFor(p)) });
         n.dataset.param = `${p.name}.${i}`;
+        // scrub per component: the other two keep their current values
+        attachScrub(n, { kind: "float", min: p.min, max: p.max }, (f) => { v[i] = f; commit([v[0], v[1], v[2]]); });
         n.addEventListener("change", () => { const f = Number(n.value); if (Number.isFinite(f)) { v[i] = f; commit([v[0], v[1], v[2]]); } });
         box.append(n);
       });
@@ -89,7 +92,11 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
     const row = el("div", { className: "prow" }, el("label", { textContent: p.label, title: p.name }));
     row.append(control(p, value, (v) => {
       node.params[p.name] = v;
-      set(node.id, p.name, v).catch((e) => host.prepend(el("div", { className: "err-msg", textContent: String(e) })));
+      const clear = () => host.querySelector(".err-msg")?.remove();
+      set(node.id, p.name, v).then(clear, (e) => {
+        clear();
+        host.prepend(el("div", { className: "err-msg", textContent: `${p.label}: ${typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e)}` }));
+      });
     }));
     host.append(row);
   }

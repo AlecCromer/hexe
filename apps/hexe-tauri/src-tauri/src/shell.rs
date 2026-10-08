@@ -5,6 +5,7 @@ use crate::script::{self, Op};
 use std::process::Command;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Window -> runner handshake (the UI calls `script_ready` once booted, `script_ack` after each re-sync).
@@ -88,4 +89,42 @@ pub fn spawn(app: AppHandle, ops: Vec<Op>, ready: Receiver<()>, ack: Receiver<()
             }
         }
     });
+}
+
+/// App menu with Edit > Undo / Redo (Cmd+Z / Cmd+Shift+Z) routed to the editor as `hexe://menu` events: the stock Edit menu
+/// binds those keys to WebKit text-edit undo, which never reaches the graph. Cut / Copy / Paste / Select All stay native.
+pub fn install_menu(app: &tauri::App) -> tauri::Result<()> {
+    let h = app.handle();
+    let undo = MenuItem::with_id(h, "undo", "Undo", true, Some("CmdOrCtrl+Z"))?;
+    let redo = MenuItem::with_id(h, "redo", "Redo", true, Some("CmdOrCtrl+Shift+Z"))?;
+    let (sep1, sep2) = (PredefinedMenuItem::separator(h)?, PredefinedMenuItem::separator(h)?);
+    let app_menu = Submenu::with_items(
+        h,
+        "Hexe",
+        true,
+        &[&PredefinedMenuItem::about(h, None, None)?, &sep1, &PredefinedMenuItem::hide(h, None)?, &PredefinedMenuItem::quit(h, None)?],
+    )?;
+    let edit = Submenu::with_items(
+        h,
+        "Edit",
+        true,
+        &[
+            &undo,
+            &redo,
+            &sep2,
+            &PredefinedMenuItem::cut(h, None)?,
+            &PredefinedMenuItem::copy(h, None)?,
+            &PredefinedMenuItem::paste(h, None)?,
+            &PredefinedMenuItem::select_all(h, None)?,
+        ],
+    )?;
+    let window = Submenu::with_items(h, "Window", true, &[&PredefinedMenuItem::minimize(h, None)?, &PredefinedMenuItem::close_window(h, None)?])?;
+    app.set_menu(Menu::with_items(h, &[&app_menu, &edit, &window])?)?;
+    app.on_menu_event(|app, ev| {
+        let id = ev.id().as_ref();
+        if id == "undo" || id == "redo" {
+            let _ = app.emit("hexe://menu", id);
+        }
+    });
+    Ok(())
 }

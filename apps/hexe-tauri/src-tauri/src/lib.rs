@@ -90,6 +90,11 @@ fn set_display(app: State<App>, id: Option<u32>) -> Res<()> {
 fn nodes_remove(app: State<App>, ids: Vec<u32>) -> Res<()> {
     app.lock().nodes_remove(&ids)
 }
+/// Move several nodes (`[id, x, y]` each) as one undo step.
+#[tauri::command]
+fn nodes_move(app: State<App>, moves: Vec<(u32, f32, f32)>) -> Res<()> {
+    app.lock().nodes_move(&moves)
+}
 #[tauri::command]
 fn node_rename(app: State<App>, id: u32, name: String) -> Res<()> {
     app.lock().node_rename(id, &name)
@@ -185,6 +190,7 @@ pub fn run() {
             if let (Some((w, h)), Some(win)) = (size, app.get_webview_window("main")) {
                 let _ = win.set_size(tauri::LogicalSize::new(w, h));
             }
+            shell::install_menu(app)?;
             if let Some(ops) = ops {
                 shell::spawn(app.handle().clone(), ops, ready, ack);
             }
@@ -201,6 +207,7 @@ pub fn run() {
             nodes_remove,
             node_rename,
             node_move,
+            nodes_move,
             node_set_param,
             edge_connect,
             edge_disconnect,

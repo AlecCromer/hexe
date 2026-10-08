@@ -1,0 +1,11 @@
+/* T3: multi-select, port index labels, inline rename, value scrubbing */
+.node text.nm { pointer-events: all; cursor: text; }
+.node text.pidx { fill: var(--dim); font-size: 9px; pointer-events: none; }
+.node.sel .ring { display: block; stroke: #ffd24a; stroke-width: 2; }
+.node.sel.disp .ring { stroke: var(--acc); stroke-width: 3; }
+#renamebox { position: absolute; z-index: 6; height: 20px; padding: 0 4px; font-size: 13px; background: #14161a; border: 1px solid var(--acc); }
+/* scrubbable number fields: no spinner arrows, horizontal-resize cursor, whole page keeps it while dragging */
+.pctl input[type=number] { cursor: ew-resize; -moz-appearance: textfield; appearance: textfield; }
+.pctl input[type=number]:focus { cursor: text; }
+.pctl input[type=number]::-webkit-inner-spin-button, .pctl input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: none; }

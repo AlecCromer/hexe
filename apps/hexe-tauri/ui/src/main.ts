@@ -6,6 +6,7 @@ import { Network } from "./network";
 import { renderParams } from "./params";
 import { Spreadsheet } from "./sheet";
 import { Viewport } from "./viewport";
+import "./shell";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const status = $("status");
