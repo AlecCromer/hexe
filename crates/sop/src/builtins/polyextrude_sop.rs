@@ -3,10 +3,11 @@
 //!
 //! # splittype 0 (connected components; Houdini default, hython-verified on a closed box: 8 pts / 6 prims / 24 vtx)
 //! Selected faces joined by a shared edge form a component. The front ring is built ONCE per component point (shared
-//! points stay shared), displaced along the unit sum of the component's face normals at that point. Side quads exist only
+//! points stay shared), displaced by `distance` x the mitre vector of its incident face normals (every incident face plane moves by `distance`;
+//! hython: box +-0.5 at distance 0.5 -> +-1). Side quads exist only
 //! on the component's BOUNDARY edges (edges used by exactly one selected face), so a closed mesh gets no side faces.
 //! Original points survive only where a boundary side / back face needs them (ring 0 = the original point); `inset` moves
-//! boundary points inward by the mitre of the two boundary edges. New points: ring-major, ascending (component, point id).
+//! boundary points inward by the mitre of the two boundary edges. New points: ring-major, in order of first appearance along the prim vertex lists (Houdini's numbering).
 //! Normal-averaging, inset and `connected groups` details are UNVERIFIED (only the closed-box counts are hython-checked).
 //!
 //! # splittype 1 (individual faces; the pre-H32 behaviour; UNVERIFIED vs Houdini beyond counts)
@@ -40,6 +41,8 @@ const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 const SPLIT_CONNECTED: u32 = 0;
 const SPLIT_INDIVIDUAL: u32 = 1;
 const SPLIT_GROUPS: u32 = 2;
+/// Lower bound of the mean cosine between the mitre direction and the incident face normals (caps the stretch at 5x).
+const MIN_MITRE: f64 = 0.2;
 /// Areas (|Newell|) at or below this are treated as degenerate.
 const MIN_NEWELL: f64 = 1e-12;
 pub fn spec() -> Vec<ParamSpec> {
@@ -217,7 +220,7 @@ impl Topo {
 struct Slot {
     comp: usize,
     pt: usize,
-    /// Unit sum of the component's face normals at this point.
+    /// Mitre displacement per unit distance (see `Plan::of`).
     dir: V3,
     /// Mitre inset offset (boundary points only).
     inset: V3,
@@ -285,9 +288,10 @@ impl Plan {
         struct Acc {
             nsum: V3,
             first_n: V3,
-            ins: Vec<V3>,
-            boundary: bool,
-        }
+ count: u32,
+ ins: Vec<V3>,
+ boundary: bool,
+ }
         let mut acc: BTreeMap<(usize, usize), Acc> = BTreeMap::new();
         for (qi, f) in faces.iter().enumerate() {
             let Some(f) = f else { continue };
@@ -298,21 +302,24 @@ impl Plan {
                 boundary[qi].push(is_b);
                 let e = acc.entry((comp[qi], a)).or_insert(Acc {
                     nsum: [0.0; 3],
-                    first_n: f.normal,
-                    ins: Vec::new(),
-                    boundary: false,
-                });
-                e.nsum = [e.nsum[0] + f.normal[0], e.nsum[1] + f.normal[1], e.nsum[2] + f.normal[2]];
+ first_n: f.normal,
+ count: 0,
+ ins: Vec::new(),
+ boundary: false,
+ });
+ e.count += 1;
+ e.nsum = [e.nsum[0] + f.normal[0], e.nsum[1] + f.normal[1], e.nsum[2] + f.normal[2]];
                 if is_b {
                     let ind = f.pos.get(c).zip(f.pos.get((c + 1) % n)).and_then(|(pa, pb)| unit(cross(sub(*pb, *pa), f.normal)));
                     for pt in [a, b] {
                         let e = acc.entry((comp[qi], pt)).or_insert(Acc {
                             nsum: [0.0; 3],
-                            first_n: f.normal,
-                            ins: Vec::new(),
-                            boundary: false,
-                        });
-                        e.boundary = true;
+ first_n: f.normal,
+ count: 0,
+ ins: Vec::new(),
+ boundary: false,
+ });
+ e.boundary = true;
                         e.ins.extend(ind);
                     }
                 }
@@ -320,8 +327,28 @@ impl Plan {
         }
         let mut slots = Vec::with_capacity(acc.len());
         let mut slot_of = HashMap::new();
-        for ((cm, pt), a) in acc {
-            let dir = unit(a.nsum).unwrap_or(a.first_n);
+        // Houdini numbers the rebuilt points by FIRST APPEARANCE walking the prims' vertex lists (hython: box -> [0,1,2,3, 4,5,1,0, ..])
+ let mut seen: HashMap<(usize, usize), usize> = HashMap::new();
+ for (qi, f) in faces.iter().enumerate() {
+ if let Some(f) = f {
+ for &pt in &f.pts {
+ let n = seen.len();
+ seen.entry((comp[qi], pt)).or_insert(n);
+ }
+ }
+ }
+ let mut items: Vec<_> = acc.into_iter().collect();
+ items.sort_by_key(|(k, _)| seen.get(k).copied().unwrap_or(usize::MAX));
+ for ((cm, pt), a) in items {
+            // mitre: the displacement v with v . n_i = 1 on average, so every incident face plane moves by exactly `distance`
+ // (box corner -> (+-1,+-1,+-1) x distance, hython-verified: box +-0.5 -> +-1 at distance 0.5; coplanar faces -> n)
+ let l = dot(a.nsum, a.nsum).sqrt();
+ let dir = if l.is_finite() && l > 1e-9 {
+ let mean = (l / f64::from(a.count.max(1))).max(MIN_MITRE);
+ [a.nsum[0] / (l * mean), a.nsum[1] / (l * mean), a.nsum[2] / (l * mean)]
+ } else {
+ a.first_n
+ };
             let off = match a.ins.as_slice() {
                 _ if inset == 0.0 => [0.0; 3],
                 [x, y] => {
@@ -825,7 +852,7 @@ mod tests {
         let out = cook(d, with(defaults(), "distance", f(1.0))).expect("cooks");
         let Some(AttrData::V3(cd)) = out.attr(AttrClass::Point, "Cd").map(|a| &a.data) else { panic!("Cd lost") };
         assert_eq!(cd.len(), 8);
-        assert_eq!(cd[..4], cd[4..]);
+        assert_eq!(cd[4..], [cd[0], cd[3], cd[2], cd[1]], "front points follow the clockwise corner order (first appearance)");
         assert_eq!(cd[2], [0.0, 0.0, 1.0]);
         let Some(AttrData::F32(w)) = out.attr(AttrClass::Prim, "w").map(|a| &a.data) else { panic!("w lost") };
         assert_eq!(w, &[7.0; 5]);
@@ -848,15 +875,25 @@ mod tests {
         let src = cube();
         let out = cook(cube(), defaults()).expect("cooks");
         assert_eq!((out.point_count, out.prim_count(), out.vertex_count()), (8, 6, 24));
-        assert_eq!(out.vertex_point, src.vertex_point);
-        assert_eq!(out.p(), src.p());
-        // distance moves every shared corner ONCE along the unit sum of its three face normals
+        // Houdini numbers the rebuilt points by first appearance along the vertex lists ([1,5,4,0, 2,6,5,1, ..] -> [0,1,2,3, 4,5,1,0, ..])
+ let mut first: Vec<u32> = Vec::new();
+ for &v in &src.vertex_point {
+ if !first.contains(&v) {
+ first.push(v);
+ }
+ }
+ let renum: Vec<u32> = src.vertex_point.iter().filter_map(|v| first.iter().position(|f| f == v)).map(|i| i as u32).collect();
+ assert_eq!(out.vertex_point, renum);
+ assert!(first.iter().enumerate().all(|(i, &old)| out.p()[i] == src.p()[old as usize]));
+        // distance moves every shared corner ONCE by the mitre of its three face normals: (+-1,+-1,+-1) x distance (Houdini:
+ // box +-0.5 at distance 0.5 -> +-1)
         let out = cook(cube(), with(defaults(), "distance", f(0.5))).expect("cooks");
         assert_eq!((out.point_count, out.prim_count()), (8, 6));
-        let s = 0.5 / 3.0f32.sqrt();
-        for (q, p) in out.p().iter().zip(src.p()) {
-            assert!(near(*q, [p[0] + p[0].signum() * s, p[1] + p[1].signum() * s, p[2] + p[2].signum() * s]), "{q:?}");
-        }
+        let s = 0.5f32;
+        for (i, &old) in first.iter().enumerate() {
+ let (q, p) = (out.p()[i], src.p()[old as usize]);
+ assert!(near(q, [p[0] + p[0].signum() * s, p[1] + p[1].signum() * s, p[2] + p[2].signum() * s]), "{q:?}");
+ }
         for i in 0..6 {
             let (n, c) = (newell(&prim_pts(&out, i)), centroid(&prim_pts(&out, i)));
             assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] > 0.0, "face {i} inward");
