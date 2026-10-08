@@ -446,4 +446,65 @@ mod tests {
         g.set_param(a, "points", ParamValue::S("0,0,0 1,1,1".into())).expect("set");
         assert_eq!(g.cook(id, 0.0).expect("recooked").point_count, 4);
     }
+
+    fn fixture_dir(case: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures").join(case)
+    }
+    /// Oracle scenes (committed as fixtures/foreach-*/scene.json).
+    const PIECES_SCENE: &str = r#"{"nodes":[{"name":"src","type":"add","params":{"points":"0,0,0 1,0,0 2,0,0 3,0,0 4,0,0 5,0,0"}},{"name":"nm","type":"wrangle","params":{"snippet":"if(@ptnum % 3 == 0) s@name = 'a'; else if(@ptnum % 3 == 1) s@name = 'b'; else s@name = 'c';"}},{"name":"b","type":"block_begin","params":{"method":0,"class":0}},{"name":"x","type":"xform","params":{"t":[0,1,0]}},{"name":"e","type":"block_end"}],"edges":[["src",0,"nm",0],["nm",0,"b",0],["b",0,"x",0],["x",0,"e",0]],"display":"e"}"#;
+    const FEEDBACK_SCENE: &str = r#"{"nodes":[{"name":"b","type":"block_begin","params":{"method":1,"count":4}},{"name":"a","type":"add","params":{"points":"0,0,0"}},{"name":"x","type":"xform","params":{"t":[0,1,0]}},{"name":"e","type":"block_end","params":{"mode":1}}],"edges":[["b",0,"a",0],["a",0,"x",0],["x",0,"e",0]],"display":"e"}"#;
+    /// Closed-form expecteds, independent of the SOPs: pieces a,b,c (first appearance) of x=0..5 -> P.y+1; feedback y=4,3,2,1.
+    fn expected(case: &str) -> Detail {
+        let mut d = Detail::default();
+        let pts: Vec<[f32; 3]> = if case == "foreach-pieces" {
+            vec![[0.0, 1.0, 0.0], [3.0, 1.0, 0.0], [1.0, 1.0, 0.0], [4.0, 1.0, 0.0], [2.0, 1.0, 0.0], [5.0, 1.0, 0.0]]
+        } else {
+            vec![[0.0, 4.0, 0.0], [0.0, 3.0, 0.0], [0.0, 2.0, 0.0], [0.0, 1.0, 0.0]]
+        };
+        let n = u32::try_from(pts.len()).unwrap_or(0);
+        d.add_points(n);
+        *d.p_mut() = pts;
+        if case == "foreach-pieces" {
+            d.add_attr(Attribute {
+                name: "name".into(),
+                class: AttrClass::Point,
+                data: AttrData::Str { idx: vec![0, 0, 1, 1, 2, 2], table: vec!["a".into(), "b".into(), "c".into()] },
+                type_info: TypeInfo::None,
+            });
+        }
+        d
+    }
+    #[test]
+    fn committed_scenes_cook_to_the_closed_form_expected() {
+        for (case, scene) in [("foreach-pieces", PIECES_SCENE), ("foreach-feedback", FEEDBACK_SCENE)] {
+            let got = cook(scene).expect(case);
+            let want = expected(case);
+            assert_eq!((got.point_count, got.prim_count()), (want.point_count, 0), "{case}");
+            assert_eq!(got.p(), want.p(), "{case}");
+            let names = |d: &Detail| d.attrs.iter().map(|a| (a.class, a.name.clone())).collect::<Vec<_>>();
+            assert_eq!(names(&got), names(&want), "{case}: attribute set");
+        }
+        let named = cook(PIECES_SCENE).expect("cooks");
+        let Some(AttrData::Str { idx, table }) = named.attr(AttrClass::Point, "name").map(|a| &a.data) else {
+            panic!("name is a string attribute")
+        };
+        let got: Vec<&str> = idx.iter().map(|&i| table[i as usize].as_str()).collect();
+        assert_eq!(got, ["a", "a", "b", "b", "c", "c"]);
+    }
+    /// `cargo test -p hexe-sop -- --ignored write_fixture` rewrites fixtures/foreach-*/{scene.json,expected.geo}.
+    #[test]
+    #[ignore = "writes fixture files"]
+    fn write_fixture() {
+        for (case, scene) in [("foreach-pieces", PIECES_SCENE), ("foreach-feedback", FEEDBACK_SCENE)] {
+            let dir = fixture_dir(case);
+            std::fs::create_dir_all(&dir).expect("mkdir");
+            std::fs::write(dir.join("scene.json"), scene).expect("scene");
+            std::fs::write(dir.join("expected.geo"), hexe_geo::write_geo_json(&expected(case))).expect("geo");
+            std::fs::write(
+                dir.join("case.toml"),
+                "cmd = [\"cook\", \"{input}\", \"--out\", \"{out}\", \"--time\", \"0\"]\ninput = \"scene.json\"\nexpected = \"expected.geo\"\ncompare = \"geo\"\nfeature = \"sop-foreach\"\n",
+            )
+            .expect("case");
+        }
+    }
 }

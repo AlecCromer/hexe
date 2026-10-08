@@ -1,0 +1,1 @@
+{"nodes":[{"name":"b","type":"block_begin","params":{"method":1,"count":4}},{"name":"a","type":"add","params":{"points":"0,0,0"}},{"name":"x","type":"xform","params":{"t":[0,1,0]}},{"name":"e","type":"block_end","params":{"mode":1}}],"edges":[["b",0,"a",0],["a",0,"x",0],["x",0,"e",0]],"display":"e"}
