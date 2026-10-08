@@ -4,10 +4,11 @@
 //! `V3` (no V2 variant; `radius[2]` ignored): `radius[0]` along the plane's first axis, `radius[1]` along its second.
 //! `arc`: `closed` (full circle; `beginangle`/`endangle` ignored) | `open_arc` (`beginangle..endangle` degrees).
 //!
-//! # Point order (generator defines it; UNVERIFIED vs Houdini, hython blocked)
-//! In-plane axes are the right-handed cyclic pair so every orient is counter-clockwise about its plane normal (xy +Z,
-//! yz +X, zx +Y): xy: (X, Y); yz: (Y, Z); zx: (Z, X). Point `i` at angle `a_i` (radians) =
-//! `center + r0 * cos(a_i) * axis0 + r1 * sin(a_i) * axis1`; point 0 sits on axis 0 (+X / +Y / +Z).
+//! # Point order (verified against real Houdini 20.5, `fixtures/sop-circle/houdini.geo` + orient/reverse cases in docs/HOUDINI-ORACLE.md)
+//! `reverse` B (default ON, Houdini's default): with `u = r0 cos(a_i)`, `v = r1 sin(a_i)` and `sg = -1` when reverse else `+1`:
+//! xy `(u, sg v, 0)`; yz `(0, v, -sg u)` (first radius along Z, second along Y); zx `(u, 0, -sg v)`; all + `center`. Point 0 sits on
+//! the first radius axis (+X for xy / zx, +Z for yz with reverse on). Default (reverse on, xy) runs CLOCKWISE seen from +Z: pt1 =
+//! `(r0 cos(2pi/n), -r1 sin(2pi/n))`. Reverse off = counter-clockwise (xy).
 //! * closed: `divisions` points, `a_i = 2*pi*i/divisions`; the closing point is NOT repeated.
 //! * open_arc: `divisions + 1` points, `a_i = begin + (end - begin)*i/divisions` (degrees → radians).
 //!
@@ -39,6 +40,8 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("center", ParamValue::V3([0.0, 0.0, 0.0])).label("Center").range(-1.0, 1.0),
         ParamSpec::new("divisions", ParamValue::I(12)).label("Divisions").range(3.0, 50.0),
         ParamSpec::new("arc", ParamValue::Menu(ARC_CLOSED)).label("Arc Type"),
+        // Houdini default is ON (verified): the circle runs clockwise about the plane normal.
+        ParamSpec::new("reverse", ParamValue::B(true)).label("Reverse"),
         ParamSpec::new("beginangle", ParamValue::F(0.0)).label("Start Angle").range(0.0, 360.0),
         ParamSpec::new("endangle", ParamValue::F(360.0)).label("End Angle").range(0.0, 360.0),
     ]
@@ -74,6 +77,9 @@ impl Node<Detail> for Circle {
         let center = p.vec3("center").ok_or_else(|| bad("center", "missing or not a vector"))?;
         let div = p.int("divisions").ok_or_else(|| bad("divisions", "missing or not an integer"))?;
         let arc = p.menu("arc").ok_or_else(|| bad("arc", "missing or not a menu"))?;
+        let reverse = p.toggle("reverse").ok_or_else(|| bad("reverse", "missing or not a toggle"))?;
+        // `reverse` mirrors the curve (point 0 stays put): Houdini flips the second in-plane component (see module docs).
+        let sgn = if reverse { -1.0 } else { 1.0 };
         let begin = p.float("beginangle").ok_or_else(|| bad("beginangle", "missing or not a float"))?;
         let end = p.float("endangle").ok_or_else(|| bad("endangle", "missing or not a float"))?;
         if ty > TYPE_BEZIER {
@@ -113,9 +119,9 @@ impl Node<Detail> for Circle {
             let a = if open_arc { b + (e - b) * t } else { std::f64::consts::TAU * t };
             let (u, v) = (r0 * a.cos(), r1 * a.sin());
             let local = match orient {
-                ORIENT_XY => [u, v, 0.0],
-                ORIENT_YZ => [0.0, u, v],
-                _ => [v, 0.0, u],
+                ORIENT_XY => [u, sgn * v, 0.0],
+                ORIENT_YZ => [0.0, v, -sgn * u],
+                _ => [u, 0.0, -sgn * v],
             };
             pos.push([0, 1, 2].map(|k| (c[k] + local[k]) as f32));
         }
@@ -144,7 +150,8 @@ mod tests {
     fn four_divisions_radius_1_xy_is_the_four_axis_points_one_closed_prim() {
         let d = cook(r#"{"divisions":4}"#).expect("cooks");
         assert_eq!((d.point_count, d.prim_count()), (4, 1));
-        let want = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]];
+        // Houdini default reverse=1: clockwise seen from +Z
+        let want = [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         for (p, w) in d.p().iter().zip(want) {
             assert!(near(p, w), "{p:?} vs {w:?}");
         }
@@ -164,23 +171,28 @@ mod tests {
         let d = cook(r#"{"divisions":4,"arc":1,"beginangle":0,"endangle":90}"#).expect("cooks");
         assert_eq!((d.point_count, d.prim_count()), (5, 1));
         assert!(matches!(d.prims[0].kind, PrimKind::Poly { closed: false }));
-        assert!(near(&d.p()[0], [1.0, 0.0, 0.0]) && near(&d.p()[4], [0.0, 1.0, 0.0]));
+        assert!(near(&d.p()[0], [1.0, 0.0, 0.0]) && near(&d.p()[4], [0.0, -1.0, 0.0]));
         let h = (45.0f32).to_radians();
-        let a2 = [h.cos(), h.sin(), 0.0];
+        let a2 = [h.cos(), -h.sin(), 0.0];
         assert!(near(&d.p()[2], a2));
     }
 
     #[test]
-    fn orient_yz_zx_are_ccw_about_plane_normal_with_radius_and_center() {
+    fn orient_yz_zx_follow_houdini_axes_with_radius_and_center() {
         let yz = cook(r#"{"divisions":4,"orient":1,"radius":[2,3,0],"center":[1,1,1]}"#).expect("cooks");
-        assert!(near(&yz.p()[0], [1.0, 3.0, 1.0]) && near(&yz.p()[1], [1.0, 1.0, 4.0]));
+        // Houdini yz: first radius along Z, second along Y; reverse on
+        assert!(near(&yz.p()[0], [1.0, 1.0, 3.0]) && near(&yz.p()[1], [1.0, 4.0, 1.0]));
         let zx = cook(r#"{"divisions":4,"orient":2}"#).expect("cooks");
-        assert!(near(&zx.p()[0], [0.0, 0.0, 1.0]) && near(&zx.p()[1], [1.0, 0.0, 0.0]));
-        // CCW about +Y: z -> x. Newell normal of the xy ring is +Z.
+        assert!(near(&zx.p()[0], [1.0, 0.0, 0.0]) && near(&zx.p()[1], [0.0, 0.0, 1.0]));
+        // reverse on = clockwise about +Z (Newell -Z); reverse off = counter-clockwise (+Z).
         let xy = cook(r#"{"divisions":4}"#).expect("cooks");
         let q = xy.p();
         let n: f32 = (0..4).map(|i| q[i][0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * q[i][1]).sum();
-        assert!(n > 0.0);
+        assert!(n < 0.0);
+        let ccw = cook(r#"{"divisions":4,"reverse":false}"#).expect("cooks");
+        let q = ccw.p();
+        let n: f32 = (0..4).map(|i| q[i][0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * q[i][1]).sum();
+        assert!(n > 0.0 && near(&q[1], [0.0, 1.0, 0.0]));
     }
 
     #[test]
