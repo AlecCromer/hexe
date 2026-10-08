@@ -1,9 +1,10 @@
 // hexe UI: viewport (three.js) + param pane + network editor over the Tauri engine commands. State lives in Rust;
 // every edit = command -> graph_get -> render, every graph/param change -> cook -> viewport.
 import "./style.css";
-import { api, msg, type Cooked, type GraphView, type NodeType, type PVal } from "./api";
+import "./t4.css";
+import { api, msg, type Cooked, type GraphView, type NodeType, type PVal, type RenderReq } from "./api";
 import { Network } from "./network";
-import { renderParams } from "./params";
+import { renderParams, showCookError } from "./params";
 import { Spreadsheet } from "./sheet";
 import { Viewport } from "./viewport";
 import "./shell";
@@ -22,6 +23,9 @@ const markError = (id: number | null) => { errStyle.textContent = id == null ? "
 let types: NodeType[] = [];
 let graph: GraphView = { nodes: [], edges: [], display: null };
 let net: Network;
+let lastCook: Cooked | null = null;
+/** one-shot suffix for the next status line (e.g. `grouped 4 points -> selection`) */
+let note = "";
 const viewport = new Viewport($("viewport"));
 const sheet = new Spreadsheet($("sheet"), (c, o, l) => api.spreadsheet(c, o, l));
 
@@ -31,7 +35,9 @@ function statusLine(c: Cooked, g: GraphView, ms: string, warn: string[]): string
   if (!d) return "no display node (right-click a node or press D)";
   const verts = c.prims.reduce((a, p) => a + p.length, 0) + c.shapes.length;
   const un = c.counts.unsupported ? ` · ${c.counts.unsupported} undrawn` : "";
-  return `display: ${d.name} · ${c.counts.points} pts · ${c.counts.prims} prims · ${verts} verts · ${ms} ms${un}${warn.length ? ` · WARNING: ${warn.join("; ")}` : ""}`;
+    const n = note ? ` · ${note}` : "";
+    note = "";
+    return `display: ${d.name} · ${c.counts.points} pts · ${c.counts.prims} prims · ${verts} verts · ${ms} ms${un}${warn.length ? ` · WARNING: ${warn.join("; ")}` : ""}${n}`;
 }
 // cook requests never overlap: while one is in flight only the latest follow-up is kept
 let cooking = false, again = false;
@@ -44,7 +50,9 @@ async function recook(): Promise<void> {
       const t0 = performance.now();
       const c = await api.cook();
       const ms = (performance.now() - t0).toFixed(0);
-      const warn = viewport.show(c);
+            lastCook = c;
+            const warn = viewport.show(c);
+            showCookError(c.error && c.error !== "no display node" ? c.error_node : null, c.error && c.error !== "no display node" ? c.error : null);
       sheet.invalidate(!c.error);
       markError(c.error ? c.error_node : null);
       if (c.error === "no display node") say("no display node (right-click a node or press D)");
@@ -117,7 +125,24 @@ async function main(): Promise<void> {
   wire.addEventListener("change", () => viewport.setWireframe(wire.checked));
   $("ptsize").addEventListener("input", (e) => viewport.setPointSize(Number((e.target as HTMLInputElement).value)));
   $("pts").addEventListener("change", (e) => viewport.setPoints((e.target as HTMLInputElement).checked));
-  $("fit").addEventListener("click", () => viewport.fitCurrent());
+    $("fit").addEventListener("click", () => viewport.fitCurrent());
+    // viewport picking: selection lives here + in Rust (`selection_get`); the group button writes it into a new group SOP
+    const grp = $<HTMLButtonElement>("grpsel"), pickBtn = $("pick");
+    const syncPick = () => pickBtn.classList.toggle("on", viewport.pickMode);
+    viewport.onState = syncPick;
+    viewport.onPick = (sel, info) => {
+      grp.disabled = sel.length === 0;
+      api.selectionSet(sel).catch((e) => say(msg(e), true));
+      say(info);
+    };
+    pickBtn.addEventListener("click", () => viewport.setPickMode(!viewport.pickMode));
+    grp.addEventListener("click", structural(async () => {
+      const n = viewport.selection.length;
+      const id = await api.groupFromSelection();
+      await refresh(false);
+      net.selectNode(id);
+      note = `grouped ${n} point${n === 1 ? "" : "s"} -> group node #${id}`;
+    }));
   const path = $<HTMLInputElement>("path");
   const open = async () => {
     try {
@@ -156,7 +181,8 @@ async function main(): Promise<void> {
       if (k === "h" || k === "f") viewport.fitCurrent();
       else if (k === "w") { wire.checked = !viewport.wireframe; viewport.setWireframe(wire.checked); }
       else if (k === "p") viewport.setNumbers("p", !viewport.numbers.p);
-      else if (k === "n") viewport.setNumbers("n", !viewport.numbers.n);
+            else if (k === "n") viewport.setNumbers("n", !viewport.numbers.n);
+            else if (k === "s") viewport.setPickMode(!viewport.pickMode);
       else return;
       e.preventDefault();
       return;
@@ -170,7 +196,20 @@ async function main(): Promise<void> {
   const start = await api.startupScene();
   if (start) { path.value = start; await open(); } else { await refresh(); showParams(); }
   // proof / test door (read by the T1 proof script): drive the real param pane through the DOM
-  (window as unknown as Record<string, unknown>).__hexe = { select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook };
+    (window as unknown as Record<string, unknown>).__hexe = { select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, open: async (p: string) => { path.value = p; await open(); } };
+    const job = await api.renderRequest();
+    if (job) await headlessRender(job);
+}
+
+/** `--render`: the scene is loaded + cooked; draw it at the requested size, hand the PNG to Rust (which writes it and exits). */
+async function headlessRender(job: RenderReq): Promise<void> {
+  try {
+        if (!lastCook || lastCook.error) throw new Error(lastCook?.error ?? (status.textContent || "nothing cooked"));
+    viewport.setWireframe(job.wire);
+    await api.renderSave(viewport.snapshot(job.width, job.height));
+  } catch (e) {
+    await api.renderFail(msg(e));
+  }
 }
 
 main().catch((e) => say(msg(e), true));

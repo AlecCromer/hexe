@@ -46,11 +46,23 @@ pub struct ParamSpec {
     pub range: Option<(f32, f32)>,
     /// Menu entries `(token, label)`; the menu value (`ParamValue::Menu(i)`) is the position. Empty = none declared.
     pub menu: Vec<(String, String)>,
+    /// Code-editor hint for a string parameter (`"vex"`): the UI shows a multi-line editor. `None` = plain text field.
+    pub language: Option<String>,
+    /// Allowed values of a string parameter (UI hint: drawn as a dropdown; the node still validates in `cook`). Empty = free text.
+    pub choices: Vec<String>,
 }
 
 impl ParamSpec {
     pub fn new(name: &str, default: ParamValue) -> Self {
-        ParamSpec { name: name.to_string(), label: name.to_string(), default, range: None, menu: Vec::new() }
+        ParamSpec {
+            name: name.to_string(),
+            label: name.to_string(),
+            default,
+            range: None,
+            menu: Vec::new(),
+            language: None,
+            choices: Vec::new(),
+        }
     }
     #[must_use]
     pub fn label(mut self, label: &str) -> Self {
@@ -61,6 +73,18 @@ impl ParamSpec {
     #[must_use]
     pub fn menu(mut self, entries: &[(&str, &str)]) -> Self {
         self.menu = entries.iter().map(|(t, l)| ((*t).to_string(), (*l).to_string())).collect();
+        self
+    }
+    /// Mark a string parameter as source code in `lang` (UI hint: multi-line editor with inline compile errors).
+    #[must_use]
+    pub fn language(mut self, lang: &str) -> Self {
+        self.language = Some(lang.to_string());
+        self
+    }
+    /// Declare the allowed values of a string parameter (UI dropdown hint).
+    #[must_use]
+    pub fn choices(mut self, values: &[&str]) -> Self {
+        self.choices = values.iter().map(|v| (*v).to_string()).collect();
         self
     }
     #[must_use]

@@ -1,0 +1,20 @@
+/* T4: script pane (code editor), viewport picking */
+.prow.code { grid-template-columns: 1fr; gap: 3px; }
+.codeed { display: flex; flex-direction: column; min-width: 0; }
+.code-wrap { display: flex; height: 220px; min-height: 90px; resize: vertical; overflow: hidden; background: #1b1d20; border: 1px solid #44484f; border-radius: 3px; }
+.codeed.has-err .code-wrap { border-color: var(--bad); }
+.code-gutter { margin: 0; flex: none; min-width: 34px; padding: 4px 6px 4px 4px; overflow: hidden; text-align: right; color: #6b7380; background: #24272b; border-right: 1px solid var(--edge); user-select: none; font: 12px/16px ui-monospace, "SF Mono", Menlo, monospace; }
+.code-gutter .ln { display: block; height: 16px; }
+.code-gutter .ln.bad { color: #fff; background: var(--bad); margin: 0 -6px 0 -4px; padding: 0 6px 0 4px; font-weight: 700; }
+.code-body { position: relative; flex: 1; min-width: 0; }
+.code-strip { display: none; position: absolute; left: 0; right: 0; height: 16px; background: #ff6b6b40; border-top: 1px solid #ff6b6b99; border-bottom: 1px solid #ff6b6b99; border-left: 3px solid var(--bad); pointer-events: none; z-index: 0; }
+.code-ta { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; margin: 0; padding: 4px 6px; border: 0; border-radius: 0; background: transparent; color: #e6e9ee; white-space: pre; overflow: auto; tab-size: 2; z-index: 1; font: 12px/16px ui-monospace, "SF Mono", Menlo, monospace; }
+.code-ta:focus { outline: none; box-shadow: inset 0 0 0 1px var(--acc); }
+.code-err { display: none; margin-top: 3px; padding: 4px 6px; background: #4a2326; border-left: 3px solid var(--bad); color: #ffb3b3; font: 11px/15px ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+.code-hint { color: var(--dim); font-size: 10px; padding-top: 2px; }
+.vp-box { display: none; position: absolute; pointer-events: none; border: 1px dashed var(--acc); background: #3aa0ff22; z-index: 3; }
+#viewport.picking canvas { cursor: crosshair; }
+#grpsel:disabled { opacity: .45; cursor: default; }
+#grpsel:disabled:hover { border-color: #44484f; }
+
+#pick.on { border-color: var(--acc); color: var(--acc); }

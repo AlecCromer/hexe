@@ -32,6 +32,10 @@ pub struct ParamInfo {
     pub max: Option<f32>,
     /// Menu entries from the engine's `ParamSpec::menu` (empty for non-menu params).
     pub menu: Vec<MenuEntry>,
+    /// `Some("vex")` = source-code string (the UI draws an editor with inline errors); from `ParamSpec::language`.
+    pub language: Option<String>,
+    /// Allowed values of a string param (dropdown, e.g. the wrangle's `class` = Run Over); empty = free text.
+    pub choices: Vec<String>,
 }
 
 /// One menu choice: `value` is the `ParamValue::Menu` index, `token` the stable scene-file name, `label` the UI text.
@@ -129,6 +133,8 @@ pub struct Session {
     last_key: Option<String>,
     clip: Option<Clip>,
     pastes: u32,
+    /// Viewport point selection (ptnums of the display geometry), pushed by the UI; see `selection_get`.
+    selection: Vec<u32>,
 }
 
 /// Whole-graph snapshot for undo / redo: the scene text (names, params, wires, `ui.pos`) + the display node name
@@ -168,6 +174,7 @@ impl Default for Session {
             last_key: None,
             clip: None,
             pastes: 0,
+            selection: Vec::new(),
         }
     }
 }
@@ -239,6 +246,16 @@ pub fn split_set(arg: &str) -> Result<(&str, &str, &str), String> {
     if node.is_empty() || param.is_empty() { Err(bad()) } else { Ok((node, param, val)) }
 }
 
+/// Open limit: a scene file larger than `MAX_SCENE_BYTES` is refused before it is read.
+fn check_scene_size(path: &str, len: u64) -> Result<(), String> {
+    if len > MAX_SCENE_BYTES {
+        return Err(format!(
+            "{path}: scene is {len} bytes, larger than the {MAX_SCENE_BYTES} byte (64 MiB) open limit"
+        ));
+    }
+    Ok(())
+}
+
 fn param_info(s: &ParamSpec) -> ParamInfo {
     ParamInfo {
         name: s.name.clone(),
@@ -257,6 +274,8 @@ fn param_info(s: &ParamSpec) -> ParamInfo {
                 label: l.clone(),
             })
             .collect(),
+        language: s.language.clone(),
+        choices: s.choices.clone(),
     }
 }
 
@@ -306,9 +325,7 @@ impl Session {
     /// Replace the session graph with the scene at `path` (relative `file` SOPs resolve against its directory).
     pub fn graph_load(&mut self, path: &str) -> Result<(), String> {
         let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
-        if meta.len() > MAX_SCENE_BYTES {
-            return Err(format!("{path}: scene larger than {MAX_SCENE_BYTES} bytes"));
-        }
+        check_scene_size(path, meta.len())?;
         let json = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
         let l =
             hexe_sop::load_scene_with_base(&json, &self.reg, Path::new(path).parent()).map_err(|e| e.to_string())?;
@@ -542,6 +559,50 @@ impl Session {
                 s.pos.insert(name.to_string(), p);
             }
             Ok(())
+        })
+    }
+
+    // ---- viewport point selection ----
+
+    /// Replace the point selection (sorted, deduplicated). Ids beyond the displayed point count are kept as given: the UI owns
+    /// validity, `group_from_selection` re-checks against the last cook.
+    pub fn selection_set(&mut self, ids: &[u32]) {
+        let mut v = ids.to_vec();
+        v.sort_unstable();
+        v.dedup();
+        self.selection = v;
+    }
+
+    /// The selected ptnums (ascending).
+    pub fn selection_get(&self) -> Vec<u32> {
+        self.selection.clone()
+    }
+
+    /// "Group from selection": a new `group` SOP (point group `selection`, `pattern` = the explicit ptnum list) wired under the
+    /// display node and made the display node: ONE undo step. Returns the new node id.
+    pub fn group_from_selection(&mut self) -> Result<u32, String> {
+        let ids = self.selection.clone();
+        if ids.is_empty() {
+            return Err("no points selected (press S in the viewport, then click or drag-box points)".into());
+        }
+        let disp = self.graph.display().ok_or("no display node to group points of")?;
+        if let Some(d) = &self.last
+            && let Some(&bad) = ids.iter().find(|&&i| i >= d.point_count)
+        {
+            return Err(format!("selected point {bad} is outside the displayed geometry ({} points)", d.point_count));
+        }
+        let disp_id = disp.index();
+        let name = self.graph.name(disp).unwrap_or_default().to_string();
+        let [x, y] = self.pos.get(&name).copied().unwrap_or([0.0, 0.0]);
+        let pattern = ptnum_pattern(&ids);
+        self.mutate(None, |s| {
+            let id = s.node_add_raw("group", x, y + LAYOUT_DY)?;
+            s.node_set_param_raw(id, "grouptype", &Value::from(0))?;
+            s.node_set_param_raw(id, "groupname", &Value::from("selection"))?;
+            s.node_set_param_raw(id, "pattern", &Value::from(pattern))?;
+            s.edge_connect_raw(disp_id, id, 0)?;
+            s.set_display_raw(Some(id))?;
+            Ok(id)
         })
     }
 
@@ -789,6 +850,24 @@ impl Session {
         let d = self.last.as_ref().ok_or("nothing cooked (no display geometry)")?;
         Ok(sheet::sheet(d, class, offset, limit))
     }
+}
+
+/// Ascending, deduplicated ptnums -> the group SOP `pattern` syntax: `0-3 7 9-10`.
+pub fn ptnum_pattern(ids: &[u32]) -> String {
+    let mut v = ids.to_vec();
+    v.sort_unstable();
+    v.dedup();
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < v.len() {
+        let mut j = i;
+        while j + 1 < v.len() && v[j + 1] == v[j] + 1 {
+            j += 1;
+        }
+        out.push(if j > i { format!("{}-{}", v[i], v[j]) } else { v[i].to_string() });
+        i = j + 1;
+    }
+    out.join(" ")
 }
 
 /// `Detail` -> the viewport payload. Polys/polylines become point-index lists; other prim kinds are counted, not drawn.
@@ -1199,5 +1278,77 @@ mod tests {
         assert!(s.graph_save("/definitely/not/here/out.json").is_err());
         assert!(s.node_move(99, f32::NAN, 0.0).is_err());
         assert!(s.set_display(Some(5)).is_err());
+    }
+
+    #[test]
+    fn ptnum_pattern_compresses_runs() {
+        assert_eq!(ptnum_pattern(&[]), "");
+        assert_eq!(ptnum_pattern(&[5]), "5");
+        assert_eq!(ptnum_pattern(&[9, 0, 1, 2, 3, 7, 10, 3]), "0-3 7 9-10");
+    }
+
+    #[test]
+    fn scene_size_limit_is_64_mib() {
+        assert_eq!(MAX_SCENE_BYTES, 64 * 1024 * 1024);
+        assert!(check_scene_size("a.json", MAX_SCENE_BYTES).is_ok());
+        let e = check_scene_size("a.json", MAX_SCENE_BYTES + 1).expect_err("over the limit");
+        assert!(e.contains("a.json") && e.contains("64 MiB"), "{e}");
+    }
+
+    #[test]
+    fn wrangle_params_flag_code_and_run_over() {
+        let s = Session::new();
+        let w = s.list_node_types().into_iter().find(|t| t.ty == "wrangle").expect("wrangle type");
+        let snip = w.params.iter().find(|p| p.name == "snippet").expect("snippet");
+        assert_eq!(snip.language.as_deref(), Some("vex"));
+        let class = w.params.iter().find(|p| p.name == "class").expect("class");
+        assert_eq!(class.choices, ["point", "prim", "vertex", "detail"]);
+        assert!(class.language.is_none());
+        let other = s.list_node_types().into_iter().flat_map(|t| t.params).filter(|p| p.language.is_some()).count();
+        assert_eq!(other, 1, "only the wrangle snippet is code so far");
+    }
+
+    #[test]
+    fn wrangle_vex_errors_carry_line_and_col() {
+        let mut s = Session::new();
+        let g = s.node_add("grid", 0.0, 0.0).expect("grid");
+        let w = s.node_add("wrangle", 0.0, 90.0).expect("wrangle");
+        s.edge_connect(g, w, 0).expect("wire");
+        s.set_display(Some(w)).expect("display");
+        s.node_set_param(w, "snippet", &json!("@P.y = 1;\n@P.x = ;")).expect("set");
+        let c = s.cook();
+        assert_eq!(c.error_node, Some(w));
+        let msg = c.error.expect("parse error");
+        assert!(msg.contains("2:") && msg.contains("wrangle"), "line 2 reported: {msg}");
+        s.node_set_param(w, "snippet", &json!("@P.y = 1;")).expect("fixed");
+        assert_eq!(s.cook().error, None);
+    }
+
+    #[test]
+    fn group_from_selection_adds_a_point_group_sop() {
+        let mut s = Session::new();
+        let g = s.node_add("grid", 10.0, 20.0).expect("grid");
+        assert!(s.group_from_selection().is_err(), "empty selection refused");
+        assert_eq!(s.cook().error, None);
+        s.selection_set(&[3, 1, 2, 3, 7]);
+        assert_eq!(s.selection_get(), [1, 2, 3, 7]);
+        let before = s.graph_get().nodes.len();
+        let id = s.group_from_selection().expect("group");
+        let gv = s.graph_get();
+        assert_eq!(gv.nodes.len(), before + 1);
+        assert_eq!(gv.display, Some(id), "the new group node is displayed");
+        assert!(gv.edges.iter().any(|e| e.from == g && e.to == id && e.input == 0));
+        let n = gv.nodes.iter().find(|n| n.id == id).expect("node");
+        assert_eq!(n.ty, "group");
+        assert_eq!(n.params["pattern"], json!("1-3 7"));
+        assert_eq!(n.params["grouptype"], json!(0));
+        assert_eq!(s.cook().error, None, "the group cooks");
+        // one undo step removes it again
+        assert!(s.undo().expect("undo"));
+        assert_eq!(s.graph_get().nodes.len(), before);
+        // a selection outside the displayed geometry is refused
+        s.selection_set(&[1_000_000]);
+        assert_eq!(s.cook().error, None);
+        assert!(s.group_from_selection().expect_err("out of range").contains("outside"));
     }
 }

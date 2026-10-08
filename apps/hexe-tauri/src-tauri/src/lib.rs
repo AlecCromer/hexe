@@ -9,6 +9,7 @@
 )]
 pub mod cli;
 pub mod model;
+pub mod render;
 pub mod script;
 pub mod sheet;
 pub mod shell;
@@ -24,6 +25,8 @@ use tauri::State;
 pub struct App {
     session: Mutex<Session>,
     cli: cli::Cli,
+    /// `--render` job (headless mode), if any.
+    render: Option<render::RenderReq>,
 }
 
 impl App {
@@ -136,12 +139,63 @@ fn cook(app: State<App>) -> CookResult {
 fn spreadsheet(app: State<App>, class: String, offset: usize, limit: usize) -> Res<Sheet> {
     app.lock().spreadsheet(&class, offset, limit)
 }
+/// Viewport point selection (ptnums of the display geometry): pushed by the viewport on every pick change.
+#[tauri::command]
+fn selection_set(app: State<App>, ids: Vec<u32>) {
+    app.lock().selection_set(&ids);
+}
+/// The selected ptnums, ascending.
+#[tauri::command]
+fn selection_get(app: State<App>) -> Vec<u32> {
+    app.lock().selection_get()
+}
+/// Group from selection: new point `group` SOP (explicit ptnum pattern) under the display node, made display. Returns its id.
+#[tauri::command]
+fn group_from_selection(app: State<App>) -> Res<u32> {
+    app.lock().group_from_selection()
+}
+/// `--render` job for the window (`None` = normal interactive run).
+#[tauri::command]
+fn render_request(app: State<App>) -> Option<render::RenderReq> {
+    app.render.clone()
+}
+/// Headless render result: `data_url` = the canvas PNG. Writes the file and ENDS the app (exit 0, or 2 on any failure).
+#[tauri::command]
+fn render_save(handle: tauri::AppHandle, app: State<App>, data_url: String) {
+    let Some(job) = app.render.clone() else { return };
+    let done =
+        render::decode_data_url(&data_url).and_then(|png| render::write_png(&job.out, &png, (job.width, job.height)));
+    match done {
+        Ok(()) => {
+            println!(
+                "hexe: rendered {} ({}x{}{})",
+                job.out,
+                job.width,
+                job.height,
+                if job.wire { ", wire" } else { "" }
+            );
+            handle.exit(0);
+        }
+        Err(e) => {
+            eprintln!("hexe: {e}");
+            handle.exit(2);
+        }
+    }
+}
+/// Headless render failed in the window (cook error, no display node, ...): report on stderr, exit 2.
+#[tauri::command]
+fn render_fail(handle: tauri::AppHandle, message: String) {
+    eprintln!("hexe: render: {message}");
+    handle.exit(2);
+}
 /// Scene path to open at startup: the positional CLI argument, else `HEXE_OPEN`; `None` = start empty.
 #[tauri::command]
 fn startup_scene(app: State<App>) -> Option<String> {
     app.cli.scene.clone().or_else(|| std::env::var("HEXE_OPEN").ok().filter(|p| !p.is_empty()))
 }
 
+/// Max wall time of a `--render` run.
+const RENDER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(90);
 fn fail(msg: &str) -> ! {
     eprintln!("hexe: {msg}\n{}", cli::USAGE);
     std::process::exit(2)
@@ -180,9 +234,10 @@ pub fn run() {
             fail(&probe.set_errors.join("\n"));
         }
     }
+    let render = cli::render_req(&cli);
     let (gate, ready, ack) = shell::gate();
     let built = tauri::Builder::default()
-        .manage(App { session: Mutex::new(session), cli })
+        .manage(App { session: Mutex::new(session), cli, render: render.clone() })
         .manage(gate)
         .setup(move |app| {
             use tauri::Manager;
@@ -191,6 +246,18 @@ pub fn run() {
                 let _ = win.set_size(tauri::LogicalSize::new(w, h));
             }
             shell::install_menu(app)?;
+            if render.is_some() {
+                // headless: no visible window (the canvas is drawn + read back at the requested size); a watchdog ends a stuck run
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.hide();
+                }
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(RENDER_TIMEOUT);
+                    eprintln!("hexe: render: timed out after {}s", RENDER_TIMEOUT.as_secs());
+                    handle.exit(3);
+                });
+            }
             if let Some(ops) = ops {
                 shell::spawn(app.handle().clone(), ops, ready, ack);
             }
@@ -221,6 +288,12 @@ pub fn run() {
             cook,
             spreadsheet,
             startup_scene,
+            selection_set,
+            selection_get,
+            group_from_selection,
+            render_request,
+            render_save,
+            render_fail,
         ]);
     if let Err(e) = built.run(tauri::generate_context!()) {
         eprintln!("hexe: {e}");

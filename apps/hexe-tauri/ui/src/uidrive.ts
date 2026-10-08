@@ -1,5 +1,6 @@
 // `--script` op `ui <verb> ...`: drives the REAL network / param handlers with synthetic DOM events (proof + CI only; nothing
 // here is reachable without the CLI flag). Verbs: click NAME [shift] · rclick NAME · dblclick NAME [name|body] · rename NAME NEW ·
+// pickmode (S key) · pickpt N [shift] · pickat X Y [shift] · pickbox X0 Y0 X1 Y1 [shift] (viewport px) · code TEXT (\s=; \n=newline; types into the script pane + Cmd+Enter) · press SELECTOR · openpath PATH (path field + Enter) · 
 // wire FROM TO [body|N] · drag NAME DX DY · hover NAME · key COMBO (meta+shift+z, delete, d, ...) · scrub PARAM DX · addat TYPE X Y · assert SELECTOR TEXT · wait MS.
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const centre = (el: Element): { x: number; y: number } => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
@@ -88,6 +89,55 @@ export async function drive(args: string[]): Promise<void> {
       input.value = a[0];
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      break;
+    }
+    case "pickmode": {
+      const vp = document.getElementById("viewport") as HTMLElement;
+      mouse(vp, "mouseenter", centre(vp));
+      key("s");
+      break;
+    }
+    case "pickpt": case "pickat": case "pickbox": {
+      const cv = document.querySelector<HTMLCanvasElement>("#viewport canvas") as HTMLCanvasElement;
+      const r = cv.getBoundingClientRect();
+      const vp = ((window as unknown as { __hexe: { viewport: { pointScreen(i: number): { x: number; y: number } | null } } }).__hexe).viewport;
+      const shift = a[a.length - 1] === "shift";
+      const num = a.filter((x) => x !== "shift").map(Number);
+      let pts: { x: number; y: number }[];
+      if (verb === "pickpt") {
+        const p = vp.pointScreen(num[0]);
+        if (!p) throw new Error(`ui: point ${num[0]} is not visible in the viewport`);
+        pts = [p];
+      } else pts = verb === "pickat" ? [{ x: num[0], y: num[1] }] : [{ x: num[0], y: num[1] }, { x: num[2], y: num[3] }];
+      const ptr = (type: string, p: { x: number; y: number }) =>
+        cv.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: r.left + p.x, clientY: r.top + p.y, button: 0, buttons: type === "pointerup" ? 0 : 1, pointerId: 41, shiftKey: shift }));
+      const [p0, p1] = [pts[0], pts[pts.length - 1]];
+      ptr("pointerdown", p0);
+      if (pts.length > 1) for (const f of [0.3, 0.7, 1]) { ptr("pointermove", { x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f }); await sleep(16); }
+      ptr("pointerup", p1);
+      break;
+    }
+    case "code": {
+      const ta = document.querySelector<HTMLTextAreaElement>(".code-ta");
+      if (!ta) throw new Error("ui: no code editor (select a wrangle)");
+      ta.focus();
+      ta.value = a.join(" ").replace(/\\s/g, ";").replace(/\\n/g, "\n").replace(/\\t/g, "  ");
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
+      await sleep(500);
+      break;
+    }
+    case "press": {
+      const b = document.querySelector<HTMLElement>(a[0]);
+      if (!b) throw new Error(`ui: no element ${a[0]}`);
+      b.click();
+      break;
+    }
+    case "openpath": {
+      const f = document.getElementById("path") as HTMLInputElement;
+      f.value = a.join(" ");
+      f.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      await sleep(300);
       break;
     }
     case "assert": { // assert SELECTOR TEXT...: the element exists and its text contains TEXT (fails the script otherwise)

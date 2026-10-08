@@ -3,14 +3,18 @@
 import * as THREE from "three";
 import { clip, type Cam, defaultCam, dolly, dragDolly, eye, fit as fitCam, FOV, orbit, pan, wheelDolly } from "./camera";
 import type { Cooked } from "./api";
+import { describe } from "./pick";
+import { CLICK_SLOP, clampSel, combine, inBox, nearest, projectAll } from "./pick";
 import { bounds, capCheck, CAP_LABELS, CAP_LABEL_SCAN, edgeSegments, primCentroids, shapeWire, triangulate, triEstimate, viewState } from "./geom";
 
 /** Viewport tunables (egui `Style` parity). Colours are 0xRRGGBB; light = headlight ambient + diffuse*|N.V|. */
 export const STYLE = {
   background: 0x3b3f45, surface: [0.73, 0.76, 0.81] as [number, number, number], ambient: 0.28, diffuse: 0.72,
   point: [1, 0.64, 0.29] as [number, number, number], pointPx: 6, edge: 0x14171a, wire: 0xd6dae0, openEdge: 0xffd24a, shape: 0x7fd4ff,
-  gridHalf: 10, gridStep: 1, gridMinor: 0x4d535c, axisX: 0xe0453a, axisY: 0x56c456, axisZ: 0x3a7bf0, gizmoPx: 84,
-};
+  gridHalf: 10, gridStep: 1, gridMinor: 0x4d535c, axisX: 0xe0453a, axisY: 0x56c456, axisZ: 0x3a7bf0,   gizmoPx: 84,
+   /** picked points: colour, size px */
+   pick: [1, 0.95, 0.2] as [number, number, number], pickPx: 11,
+ };
 
 const SURFACE_VS = "varying vec3 vP; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vP = mv.xyz; gl_Position = projectionMatrix * mv; }";
 // flat per-face normal from screen derivatives (== the Newell normal), headlight: ambient + diffuse * |N.V|
@@ -42,11 +46,18 @@ export class Viewport {
   private shown: Cooked | null = null;
   private primC = new Float32Array(0);
   private bb: ReturnType<typeof bounds> = null;
-  private raf = 0;
+    private raf = 0;
+    private pickOn = false;
+    private sel: number[] = [];
+    private hi: THREE.Points | null = null;
+    private hiMat = new THREE.ShaderMaterial({ vertexShader: POINT_VS, fragmentShader: POINT_FS, depthTest: false, uniforms: { size: { value: STYLE.pickPx }, col: { value: new THREE.Vector3(...STYLE.pick) } } });
+    private boxEl = document.createElement("div");
   /** true while the mouse is over the viewport (hotkeys are hover scoped) */
   hover = false;
   /** fired when P / N / wire state changes (status label) */
-  onState: (s: string) => void = () => {};
+    onState: (s: string) => void = () => {};
+    /** fired when the point selection changes: ascending ptnums + a status line (`pt 5  P (x, y, z)`) */
+    onPick: (sel: number[], info: string) => void = () => {};
 
   constructor(private host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -54,7 +65,8 @@ export class Viewport {
     host.appendChild(this.renderer.domElement);
     this.labels.className = "vp-labels";
     this.tag.className = "vp-tag";
-    host.append(this.labels, this.tag);
+        this.boxEl.className = "vp-box";
+        host.append(this.labels, this.tag, this.boxEl);
     for (const [t, c] of [["X", STYLE.axisX], ["Y", STYLE.axisY], ["Z", STYLE.axisZ]] as const) {
       const e = document.createElement("span");
       e.className = "vp-axis"; e.textContent = t; e.style.color = `#${c.toString(16).padStart(6, "0")}`;
@@ -103,8 +115,8 @@ export class Viewport {
     cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame(() => this.render());
   }
-  private render(): void {
-    const r = this.renderer, w = this.host.clientWidth, h = this.host.clientHeight, g = STYLE.gizmoPx;
+    private render(w = this.host.clientWidth, h = this.host.clientHeight): void {
+      const r = this.renderer, g = STYLE.gizmoPx;
     r.setViewport(0, 0, w, h);
     r.render(this.scene, this.camera);
     // corner axis gizmo: same view rotation, own ortho camera, bottom-left
@@ -126,7 +138,7 @@ export class Viewport {
     });
     this.updateLabels();
   }
-  private state(): string { return viewState(this.wireOn, this.showP, this.showN); }
+    private state(): string { return viewState(this.wireOn, this.showP, this.showN) + (this.pickOn ? " [pick]" : ""); }
   private changed(): void { this.tag.textContent = this.state(); this.onState(this.state()); this.applyVisibility(); this.draw(); }
   private applyVisibility(): void {
     if (this.mesh) this.mesh.visible = !this.wireOn;
@@ -189,8 +201,9 @@ export class Viewport {
   }
   /** Replace the displayed geometry with a fresh cook and fit the camera. Returns draw-cap warnings (layers skipped, not frozen). */
   show(c: Cooked): string[] {
-    this.clear();
-    this.shown = c;
+        this.clear();
+        const sameGeo = !!this.shown && !this.shown.error && !c.error && this.shown.counts.points === c.counts.points;
+        this.shown = c;
     const warnings: string[] = [];
     const n = c.counts.points;
     if (!c.error && n > 0) {
@@ -245,10 +258,79 @@ export class Viewport {
       this.applyVisibility();
       this.frame();
     }
-    this.draw();
-    return warnings;
+        // the selection survives a re-cook of the same point count (param tweaks), else it is dropped
+        if (this.sel.length) { if (sameGeo) this.setSelection(this.sel, false); else this.setSelection([]); }
+        this.draw();
+        return warnings;
   }
-  /** Push the orbit state into the three.js camera. */
+    /** S: pick mode - LMB drag = box select (shift adds), click = nearest point; off = LMB orbits (a click still picks). */
+    setPickMode(on: boolean): void {
+      this.pickOn = on;
+      this.host.classList.toggle("picking", on);
+      this.changed();
+    }
+    get pickMode(): boolean { return this.pickOn; }
+    get selection(): number[] { return [...this.sel]; }
+    /** Replace the selection (ids beyond the point count are dropped), rebuild the highlight, notify. */
+    setSelection(ids: number[], notify = true): void {
+      const n = this.shown?.counts.points ?? 0;
+      const next = clampSel(ids, n);
+      const same = next.length === this.sel.length && next.every((v, i) => v === this.sel[i]);
+      this.sel = next;
+      this.buildHighlight();
+      this.draw();
+      if (notify && !same) this.onPick([...next], describe(next, this.shown?.positions ?? []));
+    }
+    private buildHighlight(): void {
+      if (this.hi) { this.scene.remove(this.hi); this.hi.geometry.dispose(); this.hi = null; }
+      const c = this.shown;
+      if (!c || !this.sel.length) return;
+      const pos = new Float32Array(this.sel.length * 3);
+      this.sel.forEach((p, k) => pos.set(c.positions.slice(p * 3, p * 3 + 3), k * 3));
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      this.hi = new THREE.Points(g, this.hiMat);
+      this.hi.renderOrder = 10;
+      this.scene.add(this.hi);
+    }
+    /** All displayed points in viewport CSS px (`NaN` = off screen / behind the eye). */
+    private screenPoints(): Float32Array {
+      const c = this.shown;
+      if (!c || c.error) return new Float32Array(0);
+      this.camera.updateMatrixWorld();
+      this.camera.updateProjectionMatrix();
+      const m = new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+      return projectAll(c.positions, m.elements, this.host.clientWidth, this.host.clientHeight);
+    }
+    /** Viewport px of point `i` (proof driver + tests), or null when not visible. */
+    pointScreen(i: number): { x: number; y: number } | null {
+      const s = this.screenPoints();
+      return i >= 0 && i * 2 < s.length && Number.isFinite(s[i * 2]) ? { x: s[i * 2], y: s[i * 2 + 1] } : null;
+    }
+    /** Click pick at viewport px: nearest point within 8 px; nothing there = clear (unless `add`). */
+    pickAt(x: number, y: number, add: boolean): void {
+      const hit = nearest(this.screenPoints(), x, y);
+      this.setSelection(combine(this.sel, hit < 0 ? [] : [hit], add));
+    }
+    /** Box pick between two viewport px corners. */
+    pickBox(x0: number, y0: number, x1: number, y1: number, add: boolean): void {
+      this.setSelection(combine(this.sel, inBox(this.screenPoints(), x0, y0, x1, y1), add));
+    }
+    /** Draw the scene at exactly w x h px (pixel ratio 1, camera refitted) and return it as a PNG data URL: the headless render. */
+    snapshot(w: number, h: number): string {
+      const r = this.renderer, ratio = r.getPixelRatio();
+      r.setPixelRatio(1);
+      r.setSize(w, h, false);
+      this.camera.aspect = w / h;
+      this.fitCurrent();
+      this.camera.updateMatrixWorld();
+      this.render(w, h);
+      const url = r.domElement.toDataURL("image/png");
+      r.setPixelRatio(ratio);
+      this.resize();
+      return url;
+    }
+    /** Push the orbit state into the three.js camera. */
   private applyCam(): void {
     const e = eye(this.cam), k = clip(this.cam);
     this.camera.position.set(...e);
@@ -260,23 +342,46 @@ export class Viewport {
     this.draw();
   }
   private bindInput(el: HTMLElement): void {
-    let drag: { mode: "orbit" | "pan" | "dolly"; x: number; y: number } | null = null;
+    type Drag = { mode: "orbit" | "pan" | "dolly" | "box"; x: number; y: number; x0: number; y0: number; moved: boolean; shift: boolean };
+    let drag: Drag | null = null;
+    const local = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     el.addEventListener("contextmenu", (e) => e.preventDefault());
     el.addEventListener("pointerdown", (e) => {
-      const mode = e.button === 2 ? "dolly" : e.button === 1 || (e.button === 0 && e.shiftKey) ? "pan" : e.button === 0 ? "orbit" : null;
+      const lmb = e.button === 0;
+      // pick mode: LMB drag = box select (shift adds, so shift+LMB no longer pans there; MMB still does)
+      const mode = e.button === 2 ? "dolly" : e.button === 1 ? "pan" : lmb && this.pickOn ? "box" : lmb && e.shiftKey ? "pan" : lmb ? "orbit" : null;
       if (!mode) return;
-      drag = { mode, x: e.clientX, y: e.clientY };
-      el.setPointerCapture(e.pointerId);
+      const p = local(e);
+      drag = { mode, x: e.clientX, y: e.clientY, x0: p.x, y0: p.y, moved: false, shift: e.shiftKey };
+      try { el.setPointerCapture(e.pointerId); } catch { /* synthetic pointer (proof driver): no capture needed */ }
       e.preventDefault();
     });
     el.addEventListener("pointermove", (e) => {
       if (!drag) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      const p = local(e);
+      if (!drag.moved && Math.hypot(p.x - drag.x0, p.y - drag.y0) <= CLICK_SLOP) return; // still a click
+      drag.moved = true;
+      if (drag.mode === "box") {
+        const b = this.boxEl.style;
+        b.display = "block"; b.left = `${Math.min(drag.x0, p.x)}px`; b.top = `${Math.min(drag.y0, p.y)}px`;
+        b.width = `${Math.abs(p.x - drag.x0)}px`; b.height = `${Math.abs(p.y - drag.y0)}px`;
+        return;
+      }
       drag.x = e.clientX; drag.y = e.clientY;
       this.cam = drag.mode === "orbit" ? orbit(this.cam, dx, dy) : drag.mode === "pan" ? pan(this.cam, dx, dy, el.clientHeight) : dolly(this.cam, dragDolly(dx, dy));
       this.applyCam();
     });
-    const end = (e: PointerEvent) => { drag = null; if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); };
+    const end = (e: PointerEvent) => {
+      const d = drag;
+      drag = null;
+      this.boxEl.style.display = "none";
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      if (!d || e.type === "pointercancel") return;
+      const p = local(e);
+      if (d.mode === "box" && d.moved) this.pickBox(d.x0, d.y0, p.x, p.y, d.shift);
+      else if (!d.moved && e.button === 0) this.pickAt(p.x, p.y, d.shift); // a click without travel picks in either mode
+    };
     el.addEventListener("pointerup", end);
     el.addEventListener("pointercancel", end);
     el.addEventListener("wheel", (e) => {

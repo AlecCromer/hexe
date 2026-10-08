@@ -5,7 +5,13 @@ export type Kind = "float" | "int" | "toggle" | "menu" | "string" | "vector3";
 export type PVal = number | boolean | string | [number, number, number];
 
 export interface MenuEntry { value: number; token: string; label: string }
-export interface ParamInfo { name: string; label: string; kind: Kind; default: PVal; min: number | null; max: number | null; menu: MenuEntry[] }
+export interface ParamInfo {
+  name: string; label: string; kind: Kind; default: PVal; min: number | null; max: number | null; menu: MenuEntry[];
+  /** "vex" = source-code string (script pane editor) */
+  language: string | null;
+  /** allowed values of a string param (dropdown, e.g. wrangle Run Over) */
+  choices: string[];
+}
 export interface NodeType { type: string; label: string; inputs: string[]; params: ParamInfo[] }
 export interface NodeView { id: number; type: string; name: string; x: number; y: number; inputs: string[]; params: Record<string, PVal> }
 export interface EdgeView { from: number; to: number; input: number }
@@ -19,6 +25,7 @@ export interface Cooked {
   /** id of the node whose cook failed (red border), if tied to one */
   error_node: number | null;
 }
+export interface RenderReq { out: string; width: number; height: number; wire: boolean }
 export type SheetClass = "point" | "vertex" | "prim" | "detail";
 export interface SheetData {
   class: SheetClass; columns: string[]; rows: (number | string | null)[][]; offset: number; total: number; shown: number;
@@ -49,7 +56,13 @@ export const api = {
   scriptAck: (error: string | null = null) => invoke<void>("script_ack", { error }),
   cook: () => invoke<Cooked>("cook"),
   spreadsheet: (cls: SheetClass, offset: number, limit: number) => invoke<SheetData>("spreadsheet", { class: cls, offset, limit }),
-  startupScene: () => invoke<string | null>("startup_scene"),
+    startupScene: () => invoke<string | null>("startup_scene"),
+    selectionSet: (ids: number[]) => invoke<void>("selection_set", { ids }),
+    selectionGet: () => invoke<number[]>("selection_get"),
+    groupFromSelection: () => invoke<number>("group_from_selection"),
+    renderRequest: () => invoke<RenderReq | null>("render_request"),
+    renderSave: (dataUrl: string) => invoke<void>("render_save", { dataUrl }),
+    renderFail: (message: string) => invoke<void>("render_fail", { message }),
 };
 
 export const msg = (e: unknown): string => (typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e));

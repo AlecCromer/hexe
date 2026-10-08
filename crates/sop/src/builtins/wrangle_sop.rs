@@ -25,8 +25,10 @@ const MAX_ADDED_POINTS: usize = 1_000_000;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("snippet", ParamValue::S(String::new())).label("VEXpression"),
-        ParamSpec::new("class", ParamValue::S("point".into())).label("Run Over"),
+        ParamSpec::new("snippet", ParamValue::S(String::new())).label("VEXpression").language("vex"),
+        ParamSpec::new("class", ParamValue::S("point".into()))
+            .label("Run Over")
+            .choices(&["point", "prim", "vertex", "detail"]),
     ]
 }
 

@@ -1,7 +1,7 @@
-//! Command line: `hexe [scene.json] [--set node.param=value]... [--script ops] [--version]`.
+//! Command line: `hexe [scene.json] [--set node.param=value]... [--script ops] [--render out.png [--size WxH] [--wire]] [--version]`.
 use crate::model::split_set;
 
-pub const USAGE: &str = "usage: hexe [scene.json] [--set node.param=value]... [--script ops|file] [--version]";
+pub const USAGE: &str = "usage: hexe [scene.json] [--set node.param=value]... [--script ops|file] [--render out.png [--size WxH] [--wire]] [--version]";
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Cli {
@@ -11,6 +11,12 @@ pub struct Cli {
     pub sets: Vec<String>,
     /// `--script` argument (op text or a file path), parsed by `script::parse`.
     pub script: Option<String>,
+    /// `--render out.png`: headless render of the scene (window cooks, canvas -> PNG, exit); see `render.rs`.
+    pub render: Option<String>,
+    /// `--size WxH` (render only).
+    pub size: Option<(u32, u32)>,
+    /// `--wire` (render only): edges only, no shaded surface.
+    pub wire: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -39,6 +45,9 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, String> 
                 cli.sets.push(v);
             }
             "--script" => cli.script = Some(it.next().ok_or("--script needs ops or a file")?),
+            "--render" => cli.render = Some(it.next().ok_or("--render needs an output .png path")?),
+            "--size" => cli.size = Some(crate::render::parse_size(&it.next().ok_or("--size needs WxH")?)?),
+            "--wire" => cli.wire = true,
             // Launch Services / debuggers may add their own flags (`-psn_0_123`): not ours, skip.
             f if f.starts_with("-psn_") => {}
             f if f.starts_with("--") => return Err(format!("unknown option `{f}`")),
@@ -46,7 +55,21 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, String> 
             _ => cli.scene = Some(a),
         }
     }
+    if cli.render.is_none() && (cli.size.is_some() || cli.wire) {
+        return Err("--size / --wire only apply with --render out.png".into());
+    }
+    if cli.render.is_some() && cli.scene.is_none() {
+        return Err("--render needs a scene: hexe scene.json --render out.png".into());
+    }
+    if cli.render.is_some() && cli.script.is_some() {
+        return Err("--render and --script cannot be combined".into());
+    }
     Ok(Parsed::Run(cli))
+}
+/// The window's render job, if `--render` was given.
+pub fn render_req(cli: &Cli) -> Option<crate::render::RenderReq> {
+    let (width, height) = cli.size.unwrap_or(crate::render::DEFAULT_SIZE);
+    cli.render.as_ref().map(|out| crate::render::RenderReq { out: out.clone(), width, height, wire: cli.wire })
 }
 
 #[cfg(test)]
@@ -63,6 +86,7 @@ mod tests {
             scene: Some("a.json".into()),
             sets: vec!["pe.distance=2".into(), "b.size=1,2,3".into()],
             script: Some("quit".into()),
+            ..Cli::default()
         };
         let got = p(&["a.json", "--set", "pe.distance=2", "--set", "b.size=1,2,3", "--script", "quit"]);
         assert_eq!(got, Ok(Parsed::Run(want)));
@@ -79,5 +103,25 @@ mod tests {
             assert!(p(bad).is_err(), "{bad:?}");
         }
         assert_eq!(p(&["-psn_0_1"]), Ok(Parsed::Run(Cli::default())));
+    }
+    #[test]
+    fn render_flags() {
+        let Ok(Parsed::Run(c)) = p(&["a.json", "--render", "o.png", "--size", "640x480", "--wire"]) else {
+            panic!("parse")
+        };
+        let r = render_req(&c).expect("render job");
+        assert_eq!((r.out.as_str(), r.width, r.height, r.wire), ("o.png", 640, 480, true));
+        let Ok(Parsed::Run(d)) = p(&["a.json", "--render", "o.png"]) else { panic!("parse") };
+        assert_eq!(render_req(&d).map(|r| (r.width, r.height, r.wire)), Some((1280, 800, false)));
+        for bad in [
+            &["a.json", "--size", "640x480"][..],
+            &["a.json", "--wire"],
+            &["--render", "o.png"],
+            &["a.json", "--render"],
+            &["a.json", "--render", "o.png", "--size", "9x9"],
+            &["a.json", "--render", "o.png", "--script", "quit"],
+        ] {
+            assert!(p(bad).is_err(), "{bad:?}");
+        }
     }
 }
