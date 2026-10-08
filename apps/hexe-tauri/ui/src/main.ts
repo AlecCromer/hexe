@@ -46,7 +46,8 @@ async function recook(): Promise<void> {
       const warn = viewport.show(c);
       sheet.invalidate(!c.error);
       markError(c.error ? c.error_node : null);
-      if (c.error) say(c.error, true);
+      if (c.error === "no display node") say("no display node (right-click a node or press D)");
+      else if (c.error) say(c.error, true);
       else say(statusLine(c, graph, ms, warn), false, warn.length > 0);
     } while (again);
   } catch (e) {
