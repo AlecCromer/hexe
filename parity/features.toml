@@ -1154,3 +1154,21 @@ evidence = [
   "crates/sop/src/builtins/knife_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "H29: = clip core (clip_sop.rs, same plane params, keep default BOTH) + groups: seamgroup(cut, POINT: cut points + kept ON-plane points), abovegroup(above)/belowgroup(below) PRIM groups; empty name = skip. Box at y=0: 12 pts (4 seam), 10 prims (5+5), halves welded on shared cut points. NOT modelled (DEFERRED): cap/fill, remove-seam, keepedges, shatter, second-input cutter surface, group filter. UNVERIFIED vs Houdini (hython blocked): seam group semantics/naming, default keep. Example: examples/knife.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
+
+[[feature]]
+id = "sop-sweep"
+title = "Sweep SOP (cross-section curves along backbone curves, parallel-transport frames, caps, twist/roll/scale)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["sweep"]
+evidence = [
+  "crates/sop/src/builtins/sweep_sop.rs::square_along_z_with_caps_is_a_closed_outward_solid_of_volume_two",
+  "crates/sop/src/builtins/sweep_sop.rs::frame_follows_up_and_section_is_in_n_b_plane",
+  "crates/sop/src/builtins/sweep_sop.rs::bent_backbone_keeps_sections_perpendicular_and_circular_scale_roll_twist_apply",
+  "crates/sop/src/builtins/sweep_sop.rs::closed_backbone_wraps_into_a_closed_torus_and_ignores_caps",
+  "crates/sop/src/builtins/sweep_sop.rs::open_section_makes_a_ribbon_and_uv_runs_zero_to_one",
+  "crates/sop/src/builtins/sweep_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/sweep_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "S2: 2 inputs (backbone, crosssection). scale(1) useptscale(on, backbone pscale) roll(0 deg) twist(0 deg, linear in arclength) up(0,1,0) startcap/endcap(off, closed section + open backbone only). Frames = mean-tangent T + double-reflection parallel transport N (up made orthogonal; parallel up -> least-aligned axis), B = T x N; section (x,y,z) -> P + s*(xN + yB + zT). Quads wound so the Houdini normal = ring dir x T: CCW section + both caps = closed solid, signed volume +2 pinned for unit square x length 2. Vertex uv V3 (u = section arclength, v = backbone arclength). NOT modelled (DEFERRED): third surface input, generated tube/ribbon/square shapes (use circle/line), up/N/orient point attributes, skinning modes, per-point scale/twist ramps, attribute carry; closed backbone has no holonomy correction. UNVERIFIED vs Houdini (hython blocked): parm set/defaults (Houdini sweep::2.0 differs: surfaceshape, cols, etc.), frame init and cap winding, uv layout. Example: examples/sweep.json. Analytical oracle only."
