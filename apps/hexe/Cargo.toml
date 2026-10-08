@@ -15,4 +15,8 @@ hexe-geo = { workspace = true }
 hexe-graph = { workspace = true }
 hexe-sop = { workspace = true }
 egui = { workspace = true }
-eframe = { workspace = true, features = ["default_fonts", "glow"] }
+eframe = { workspace = true, features = ["default_fonts", "wgpu"] }
+glam = { workspace = true }
+bytemuck = { version = "1", features = ["derive"] }
+pollster = "0.4"
+png = "0.18"

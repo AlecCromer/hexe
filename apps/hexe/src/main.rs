@@ -1,4 +1,4 @@
-//! hexe desktop app (egui via eframe, painter-based viewport, no custom wgpu pass).
+//! hexe desktop app (egui via eframe; wgpu viewport as an egui-wgpu paint callback, see `gpu.rs`).
 //! `hexe [scene.json] [--set node.param=value]... [--script ops]`: network (left) · viewport (centre) · params (right).
 //! Editable: Tab add node · drag dots to wire · Del delete · D/right-click display flag · Ctrl/Cmd+S save · Ctrl/Cmd+O reload.
 #![deny(
@@ -9,6 +9,7 @@
     clippy::todo,
     clippy::unreachable
 )]
+mod gpu;
 mod network;
 mod params;
 mod script;
@@ -169,6 +170,8 @@ struct App {
     add_menu: Option<AddMenu>,
     view: viewport::Opts,
     detail: Option<Arc<Detail>>,
+    mesh: Option<Arc<gpu::Mesh>>,
+    style: viewport::Style,
     cam: viewport::Camera,
     error: Option<String>,
     note: Option<String>,
@@ -190,6 +193,8 @@ impl App {
             add_menu: None,
             view: viewport::Opts::default(),
             detail: None,
+            mesh: None,
+            style: viewport::Style::default(),
             cam: viewport::Camera::default(),
             error: None,
             note: None,
@@ -245,11 +250,27 @@ impl App {
         }
     }
     /// Cook the display node. Errors and panics land in the status bar, never abort.
+    /// Rebuild the GPU draw data from the current `detail` (once per cook, not per frame).
+    fn sync_mesh(&mut self) {
+        self.mesh = self.detail.as_ref().map(|d| Arc::new(gpu::Mesh::build(d, &self.style)));
+    }
+    /// Home / frame-all (`H`, `F`): fit the display geometry, or the default camera when nothing is shown.
+    fn home(&mut self) {
+        match &self.detail {
+            Some(d) => {
+                let (lo, hi) = d.bbox();
+                self.cam.fit(lo, hi);
+            }
+            None => self.cam = viewport::Camera::default(),
+        }
+        self.fit = false;
+    }
     fn recook(&mut self) {
         self.ensure_pos();
         let Some(scene) = self.scene.as_mut() else { return };
         let Some(id) = scene.graph.display() else {
             (self.detail, self.error) = (None, None);
+            self.sync_mesh();
             return;
         };
         let t = Instant::now();
@@ -263,6 +284,7 @@ impl App {
             Ok(Err(e)) => (self.detail, self.error) = (None, Some(e)),
             Err(_) => (self.detail, self.error) = (None, Some("cook panicked (caught)".into())),
         }
+        self.sync_mesh();
         if self.fit
             && let Some(d) = &self.detail
         {
@@ -542,15 +564,12 @@ impl eframe::App for Shell {
             }
         });
         egui::CentralPanel::default().show(ui, |ui| {
-            if ui.input(|i| i.key_pressed(egui::Key::F)) && !ui.ctx().egui_wants_keyboard_input() {
-                app.fit = true;
-                if let Some(d) = &app.detail {
-                    let (lo, hi) = d.bbox();
-                    app.cam.fit(lo, hi);
-                    app.fit = false;
-                }
+            if ui.input(|i| i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::H))
+                && !ui.ctx().egui_wants_keyboard_input()
+            {
+                app.home();
             }
-            viewport::show(ui, &mut app.cam, app.detail.as_deref(), &mut app.view);
+            viewport::show(ui, &mut app.cam, app.detail.as_deref(), app.mesh.as_ref(), &mut app.view, &app.style);
         });
         for a in acts {
             app.apply(a);
@@ -571,6 +590,24 @@ impl eframe::App for Shell {
     }
 }
 
+/// Default `--render` image size.
+const DEFAULT_RENDER_SIZE: [u32; 2] = [640, 480];
+/// `WxH`, both in 1..=MAX_TARGET.
+fn parse_size(s: &str) -> Option<[u32; 2]> {
+    let (w, h) = s.split_once('x')?;
+    let ok = |v: u32| (1..=gpu::MAX_TARGET).contains(&v);
+    let (w, h) = (w.parse().ok()?, h.parse().ok()?);
+    (ok(w) && ok(h)).then_some([w, h])
+}
+/// Headless: render the display node through the same wgpu scene as the window and write a PNG.
+fn render_to(app: &App, out: &str, size: [u32; 2]) -> Result<(), String> {
+    if let Some(e) = &app.error {
+        return Err(e.clone());
+    }
+    let img = gpu::render_offscreen(app.mesh.as_deref(), &app.cam, &app.view, &app.style, size)?;
+    img.write_png(out)
+}
+
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--version") {
@@ -578,16 +615,30 @@ fn main() -> eframe::Result {
         return Ok(());
     }
     let (mut path, mut sets, mut script_arg, mut it) = (String::new(), Vec::new(), None, args.into_iter());
+    let (mut render, mut size, mut app_wire) = (None, DEFAULT_RENDER_SIZE, false);
     while let Some(a) = it.next() {
         match a.as_str() {
             "--set" => sets.extend(it.next()),
             "--script" => script_arg = it.next(),
+            "--render" => render = it.next(),
+            "--size" => size = it.next().and_then(|s| parse_size(&s)).unwrap_or(size),
+            "--wire" => app_wire = true,
             _ => path = a,
         }
     }
     let mut app = App::new(path);
     if !app.path.is_empty() {
         app.open(&sets);
+    }
+    app.view.wire = app_wire;
+    if let Some(out) = render {
+        return match render_to(&app, &out, size) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        };
     }
     if let Some(s) = script_arg {
         match script::parse(&s) {
@@ -603,7 +654,18 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default().with_inner_size([1100.0, 700.0]),
         ..Default::default()
     };
-    eframe::run_native("hexe", opts, Box::new(|_cc| Ok(Box::new(Shell::new(app, sets)))))
+    let style = app.style.clone();
+    eframe::run_native(
+        "hexe",
+        opts,
+        Box::new(move |cc| {
+            if let Some(rs) = cc.wgpu_render_state.as_ref() {
+                let r3 = gpu::Renderer3d::new(&rs.device, rs.target_format, style);
+                rs.renderer.write().callback_resources.insert(r3);
+            }
+            Ok(Box::new(Shell::new(app, sets)))
+        }),
+    )
 }
 
 #[cfg(test)]
@@ -618,6 +680,68 @@ mod tests {
         s.graph.param(s.id("normal1")?, "cusp_angle").cloned()
     }
 
+    fn lit(img: &gpu::Image, bg: [u8; 3], cx: u32, cy: u32, r: u32) -> usize {
+        let mut n = 0;
+        for y in cy - r..=cy + r {
+            for x in cx - r..=cx + r {
+                let p = img.px(x, y);
+                n += (p[..3].iter().zip(bg).map(|(a, b)| i32::from(*a).abs_diff(i32::from(b))).sum::<u32>() > 24) as usize;
+            }
+        }
+        n
+    }
+
+    /// box + sphere (examples/viewport.json) through the real wgpu scene: lit centre, background corners.
+    #[test]
+    fn offscreen_box_and_sphere_has_lit_centre_and_background_corners() {
+        let mut app = App::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/viewport.json").to_string());
+        app.open(&[]);
+        assert!(app.error.is_none(), "{:?}", app.error);
+        // no grid in the test so corners are guaranteed background
+        app.style = viewport::Style { grid_half: 0, ..viewport::Style::default() };
+        app.sync_mesh();
+        let m = app.mesh.as_ref().expect("cooked mesh");
+        assert!(m.tris.len() > 36 && m.points.len() > 8, "box + sphere: {} tri verts", m.tris.len());
+        let size = [320, 240];
+        let render = |opts: &viewport::Opts| gpu::render_offscreen(app.mesh.as_deref(), &app.cam, opts, &app.style, size);
+        let shaded = match render(&app.view) {
+            Ok(i) => i,
+            Err(e) if e.starts_with("no wgpu adapter") => return eprintln!("SKIP (no GPU): {e}"),
+            Err(e) => panic!("{e}"),
+        };
+        let bg = app.style.background.map(|c| (c * 255.0).round() as u8);
+        for (x, y) in [(0, 0), (319, 0), (0, 239), (319, 239)] {
+            let p = shaded.px(x, y);
+            assert_eq!(p[..3], bg, "corner ({x},{y}) is background");
+        }
+        assert!(lit(&shaded, bg, 160, 120, 8) > 0, "centre is lit");
+        let c = shaded.px(160, 120);
+        assert!(c[2] > c[0], "surface is blue-tinted: {c:?}");
+        let wire = render(&viewport::Opts { wire: true, ..app.view }).expect("wire render");
+        let (a, b) = (lit(&shaded, bg, 160, 120, 60), lit(&wire, bg, 160, 120, 60));
+        assert!(b > 0 && b < a, "wireframe covers fewer pixels than shaded: {b} vs {a}");
+        if let Ok(path) = std::env::var("HEXE_OFFSCREEN_PNG") {
+            let big = gpu::render_offscreen(app.mesh.as_deref(), &app.cam, &app.view, &viewport::Style::default(), [640, 480]);
+            big.expect("png render").write_png(&path).expect("write png");
+        }
+    }
+
+    #[test]
+    fn home_frames_the_display_node_and_size_arg_is_bounded() {
+        let mut app = App::new(example());
+        app.open(&[]);
+        app.cam = viewport::Camera { dist: 1e5, ..viewport::Camera::default() };
+        let mut shell = Shell::new(app, vec![]);
+        shell.app.home();
+        assert!(shell.app.cam.dist < 100.0, "H refits: {}", shell.app.cam.dist);
+        shell.app.detail = None;
+        shell.app.home();
+        assert_eq!(shell.app.cam, viewport::Camera::default(), "nothing displayed -> default camera");
+        assert_eq!(parse_size("640x480"), Some([640, 480]));
+        for bad in ["0x5", "5x0", "99999x5", "x", "5", "axb"] {
+            assert_eq!(parse_size(bad), None, "{bad}");
+        }
+    }
     #[test]
     fn set_overrides_survive_a_cmd_o_reload() {
         let sets = vec!["normal1.cusp_angle=99".to_string()];

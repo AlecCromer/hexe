@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "sphere1", "type": "sphere", "params": { "type": 1, "rad": [0.8, 0.8, 0.8], "t": [0.6, 0.4, 0.2] } },
+    { "name": "merge1", "type": "merge" }
+  ],
+  "edges": [["box1", 0, "merge1", 0], ["sphere1", 0, "merge1", 1]],
+  "display": "merge1"
+}

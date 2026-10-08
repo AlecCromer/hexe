@@ -1,94 +1,182 @@
-//! Viewport pane: painter-based 3D (no wgpu). Orbit camera, perspective projection, depth-sorted faces by centroid.
-use egui::{Color32, Pos2, Sense, Shape, Stroke, Ui, pos2, vec2};
+//! Viewport pane: wgpu 3D (see `gpu.rs`) inside the egui window. Houdini-style camera: orbit / pan / dolly, `H` home.
+//! Mouse: alt+LMB (or plain LMB) orbit · MMB pan (shift+LMB too) · RMB drag / scroll dolly. Egui paints the overlays
+//! (W wireframe, P point numbers, N prim numbers, axis gizmo) on top of the GPU image.
+use crate::gpu::{Frame, Mesh, ViewCallback};
+use eframe::egui_wgpu;
+use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, pos2, vec2};
+use glam::{Mat4, Vec3, Vec4};
 use hexe_geo::{Detail, PrimKind};
+use std::sync::Arc;
 
-type V3 = [f32; 3];
-const FOV: f32 = 0.9;
-const NEAR: f32 = 1e-3;
-/// Draw caps (never let a huge cook freeze the UI).
-const MAX_FACES: usize = 100_000;
-const MAX_POINTS: usize = 200_000;
+/// Default vertical field of view (radians).
+pub const DEFAULT_FOV: f32 = 0.9;
+/// Frame-all leaves this much air around the bounding sphere.
+const FIT_MARGIN: f32 = 1.15;
+/// Smallest orbit distance / largest orbit distance.
+const DIST_RANGE: (f32, f32) = (1e-3, 1e6);
+/// Most prim/point labels (and faces scanned for labels) per frame.
+const MAX_LABELS: usize = 500;
+const MAX_LABEL_PRIMS: usize = 100_000;
 
-fn sub(a: V3, b: V3) -> V3 {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+/// Every tunable of the viewport (colours are 0..1 gamma-space RGB). `Default` = the shipped look.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Style {
+    pub background: [f32; 3],
+    pub surface: [f32; 3],
+    pub edge: [f32; 3],
+    pub point: [f32; 3],
+    pub grid: [f32; 3],
+    pub axis_x: [f32; 3],
+    pub axis_y: [f32; 3],
+    pub axis_z: [f32; 3],
+    /// Headlight: colour = surface * (ambient + diffuse * |N.V|).
+    pub ambient: f32,
+    pub diffuse: f32,
+    /// Point radius in physical pixels, and its depth pull toward the camera (clip-w fraction) so points sit on surfaces.
+    pub point_px: f32,
+    pub point_depth_bias: f32,
+    /// Ground grid: lines each side of the origin, spacing in world units.
+    pub grid_half: u32,
+    pub grid_step: f32,
+    /// Near/far plane as multiples of the orbit distance.
+    pub near_ratio: f32,
+    pub far_ratio: f32,
+    /// Radians per dragged point (orbit) · dolly exp-rate per dragged point · exp-rate per scroll point.
+    pub orbit_rate: f32,
+    pub dolly_rate: f32,
+    pub scroll_rate: f32,
+    pub pitch_limit: f32,
 }
-fn dot(a: V3, b: V3) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+impl Default for Style {
+    fn default() -> Self {
+        Style {
+            background: [0.15, 0.15, 0.15],
+            surface: [0.55, 0.72, 0.95],
+            edge: [0.92, 0.92, 0.96],
+            point: [1.0, 0.67, 0.24],
+            grid: [0.27, 0.27, 0.27],
+            axis_x: [0.80, 0.27, 0.27],
+            axis_y: [0.35, 0.78, 0.35],
+            axis_z: [0.31, 0.51, 0.94],
+            ambient: 0.25,
+            diffuse: 0.75,
+            point_px: 2.5,
+            point_depth_bias: 2e-4,
+            grid_half: 10,
+            grid_step: 1.0,
+            near_ratio: 0.01,
+            far_ratio: 1000.0,
+            orbit_rate: 0.01,
+            dolly_rate: 0.005,
+            scroll_rate: 0.005,
+            pitch_limit: 1.5,
+        }
+    }
 }
-fn cross(a: V3, b: V3) -> V3 {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
-}
-fn norm(a: V3) -> V3 {
-    let l = dot(a, a).sqrt();
-    if l > 1e-12 { [a[0] / l, a[1] / l, a[2] / l] } else { [0.0, 0.0, 1.0] }
+fn v3(a: [f32; 3]) -> Vec3 {
+    Vec3::from_array(a)
 }
 
-/// Orbit camera around `target`.
+/// Orbit camera around `target` (Y up, right-handed).
+#[derive(Debug, Clone, PartialEq)]
 pub struct Camera {
     pub yaw: f32,
     pub pitch: f32,
     pub dist: f32,
-    pub target: V3,
+    pub target: [f32; 3],
+    pub fov: f32,
 }
-
 impl Default for Camera {
     fn default() -> Self {
-        Camera { yaw: 0.6, pitch: 0.45, dist: 6.0, target: [0.0; 3] }
+        Camera { yaw: 0.6, pitch: 0.45, dist: 6.0, target: [0.0; 3], fov: DEFAULT_FOV }
     }
 }
-
-/// Per-frame projection state.
-struct View {
-    eye: V3,
-    right: V3,
-    up: V3,
-    fwd: V3,
-    focal: f32,
-    center: Pos2,
+/// What a mouse drag does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Drag {
+    Orbit,
+    Pan,
+    Dolly,
 }
-
-impl View {
-    /// Screen position + view depth; `None` behind the near plane.
-    fn project(&self, p: V3) -> Option<(Pos2, f32)> {
-        let d = sub(p, self.eye);
-        let z = dot(d, self.fwd);
-        (z > NEAR).then(|| {
-            (
-                pos2(
-                    self.center.x + self.focal * dot(d, self.right) / z,
-                    self.center.y - self.focal * dot(d, self.up) / z,
-                ),
-                z,
-            )
-        })
+/// Houdini mapping: LMB (alt+LMB) orbit, shift+LMB or MMB pan, RMB dolly. Alt never changes the meaning.
+pub fn drag_action(button: egui::PointerButton, shift: bool) -> Option<Drag> {
+    use egui::PointerButton::{Middle, Primary, Secondary};
+    match button {
+        Primary if shift => Some(Drag::Pan),
+        Primary => Some(Drag::Orbit),
+        Middle => Some(Drag::Pan),
+        Secondary => Some(Drag::Dolly),
+        _ => None,
     }
 }
-
 impl Camera {
-    fn view(&self, rect: egui::Rect) -> View {
+    pub fn eye(&self) -> Vec3 {
         let (sy, cy, sp, cp) = (self.yaw.sin(), self.yaw.cos(), self.pitch.sin(), self.pitch.cos());
-        let off = [cp * sy, sp, cp * cy];
-        let eye = [
-            self.target[0] + self.dist * off[0],
-            self.target[1] + self.dist * off[1],
-            self.target[2] + self.dist * off[2],
-        ];
-        let fwd = norm(sub(self.target, eye));
-        let right = norm(cross(fwd, [0.0, 1.0, 0.0]));
-        let up = cross(right, fwd);
-        View { eye, right, up, fwd, focal: rect.height() * 0.5 / (FOV * 0.5).tan(), center: rect.center() }
+        v3(self.target) + self.dist * Vec3::new(cp * sy, sp, cp * cy)
     }
-
-    /// Frame the bounding box (F key, and on load).
-    pub fn fit(&mut self, lo: V3, hi: V3) {
-        self.target = [(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5];
-        let r = (dot(sub(hi, lo), sub(hi, lo)).sqrt() * 0.5).max(1e-3);
-        self.dist = r / (FOV * 0.5).sin() * 1.15;
+    /// (right, up) in world space.
+    pub fn basis(&self) -> (Vec3, Vec3) {
+        let fwd = (v3(self.target) - self.eye()).normalize_or(Vec3::NEG_Z);
+        let right = fwd.cross(Vec3::Y).normalize_or(Vec3::X);
+        (right, right.cross(fwd))
+    }
+    /// (view-projection, eye). Depth range 0..1 (wgpu).
+    pub fn matrices(&self, s: &Style, aspect: f32) -> (Mat4, Vec3) {
+        let eye = self.eye();
+        let view = Mat4::look_at_rh(eye, v3(self.target), Vec3::Y);
+        let d = self.dist.max(DIST_RANGE.0);
+        let proj = Mat4::perspective_rh(self.fov, aspect.max(1e-3), d * s.near_ratio, d * s.far_ratio);
+        (proj * view, eye)
+    }
+    /// Frame the bounding box (`H` / `F`, and on load).
+    pub fn fit(&mut self, lo: [f32; 3], hi: [f32; 3]) {
+        let (lo, hi) = (v3(lo), v3(hi));
+        self.target = ((lo + hi) * 0.5).to_array();
+        let r = ((hi - lo).length() * 0.5).max(DIST_RANGE.0);
+        self.dist = (r / (self.fov * 0.5).sin() * FIT_MARGIN).clamp(DIST_RANGE.0, DIST_RANGE.1);
+    }
+    /// Apply a drag of `d` points in a viewport `height` points tall.
+    pub fn drag(&mut self, a: Drag, d: egui::Vec2, height: f32, s: &Style) {
+        match a {
+            Drag::Orbit => {
+                self.yaw -= d.x * s.orbit_rate;
+                self.pitch = (self.pitch + d.y * s.orbit_rate).clamp(-s.pitch_limit, s.pitch_limit);
+            }
+            Drag::Pan => {
+                let (right, up) = self.basis();
+                let k = self.dist * 2.0 * (self.fov * 0.5).tan() / height.max(1.0);
+                self.target = (v3(self.target) + (-right * d.x + up * d.y) * k).to_array();
+            }
+            Drag::Dolly => self.zoom((d.x - d.y) * s.dolly_rate),
+        }
+    }
+    /// Multiply the distance by `exp(-amount)`; positive = in.
+    pub fn zoom(&mut self, amount: f32) {
+        self.dist = (self.dist * (-amount).exp()).clamp(DIST_RANGE.0, DIST_RANGE.1);
     }
 }
 
-/// Most point/prim number labels drawn per frame.
-const MAX_LABELS: usize = 500;
+/// World -> screen for the egui overlays, same matrix as the GPU image.
+struct Proj {
+    vp: Mat4,
+    rect: Rect,
+}
+impl Proj {
+    /// Screen position + clip depth (w); `None` outside the depth range.
+    fn project(&self, p: [f32; 3]) -> Option<(Pos2, f32)> {
+        let c = self.vp * Vec4::new(p[0], p[1], p[2], 1.0);
+        if c.w <= 1e-6 || c.z < 0.0 || c.z > c.w {
+            return None;
+        }
+        Some((
+            pos2(
+                self.rect.min.x + (c.x / c.w * 0.5 + 0.5) * self.rect.width(),
+                self.rect.min.y + (0.5 - c.y / c.w * 0.5) * self.rect.height(),
+            ),
+            c.w,
+        ))
+    }
+}
 
 /// Viewport display toggles: `W` wireframe/shaded, `P` point numbers, `N` primitive numbers.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -97,7 +185,6 @@ pub struct Opts {
     pub point_nums: bool,
     pub prim_nums: bool,
 }
-
 impl Opts {
     /// Status-bar summary of the active toggles.
     pub fn label(&self) -> String {
@@ -112,31 +199,24 @@ impl Opts {
     }
 }
 
-struct Face {
-    depth: f32,
-    start: usize,
-    len: usize,
-    closed: bool,
-    shade: f32,
-    index: usize,
-}
-
-/// Orbit/pan/dolly input, then draw `detail` (points + polygon edges) and the axis gizmo.
-pub fn show(ui: &mut Ui, cam: &mut Camera, detail: Option<&Detail>, opts: &mut Opts) {
-    let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
-    let rect = resp.rect;
-    painter.rect_filled(rect, 0.0, Color32::from_gray(38));
+/// Camera input, then the wgpu image (grid, axes, display geometry) and the egui overlays.
+pub fn show(
+    ui: &mut Ui,
+    cam: &mut Camera,
+    detail: Option<&Detail>,
+    mesh: Option<&Arc<Mesh>>,
+    opts: &mut Opts,
+    style: &Style,
+) {
+    let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
     if resp.dragged() {
         let (d, shift) = (resp.drag_delta(), ui.input(|i| i.modifiers.shift));
-        if shift {
-            let v = cam.view(rect);
-            let k = cam.dist * 2.0 * (FOV * 0.5).tan() / rect.height().max(1.0);
-            for i in 0..3 {
-                cam.target[i] += (-v.right[i] * d.x + v.up[i] * d.y) * k;
+        for b in [egui::PointerButton::Primary, egui::PointerButton::Middle, egui::PointerButton::Secondary] {
+            if resp.dragged_by(b)
+                && let Some(a) = drag_action(b, shift)
+            {
+                cam.drag(a, d, rect.height(), style);
             }
-        } else {
-            cam.yaw -= d.x * 0.01;
-            cam.pitch = (cam.pitch + d.y * 0.01).clamp(-1.5, 1.5);
         }
     }
     if resp.hovered() && !ui.ctx().egui_wants_keyboard_input() {
@@ -148,104 +228,143 @@ pub fn show(ui: &mut Ui, cam: &mut Camera, detail: Option<&Detail>, opts: &mut O
     }
     if resp.hovered() {
         let s = ui.input(|i| i.smooth_scroll_delta.y);
-        cam.dist = (cam.dist * (-s * 0.005).exp()).clamp(1e-3, 1e6);
+        cam.zoom(s * style.scroll_rate);
     }
-    let v = cam.view(rect);
+    let ppp = ui.ctx().pixels_per_point();
+    let px = |v: f32| (v * ppp).round().max(1.0) as u32;
+    let frame = Frame::new(cam, style, opts, [px(rect.width()), px(rect.height())]);
+    let painter = ui.painter_at(rect);
+    painter.add(egui_wgpu::Callback::new_paint_callback(rect, ViewCallback { mesh: mesh.cloned(), frame }));
+    let proj = Proj { vp: frame.view_proj, rect };
     if let Some(d) = detail {
-        draw_detail(&painter, &v, d, opts);
+        overlays(&painter, &proj, d, opts);
     }
-    gizmo(&painter, &v, rect);
+    gizmo(&painter, cam, rect);
 }
 
-fn draw_detail(painter: &egui::Painter, v: &View, d: &Detail, opts: &Opts) {
-    let pts: Vec<Option<(Pos2, f32)>> = d.p().iter().map(|&p| v.project(p)).collect();
-    let (mut flat, mut faces): (Vec<Pos2>, Vec<Face>) = (Vec::new(), Vec::new());
-    for (pi, prim) in d.prims.iter().enumerate().take(MAX_FACES) {
-        let closed = match prim.kind {
-            PrimKind::Poly { closed } => closed,
-            PrimKind::Polyline => false,
-            _ => continue,
-        };
-        let (a, b) = (prim.verts.start as usize, prim.verts.end as usize);
-        let ids = d.vertex_point.get(a..b).unwrap_or(&[]);
-        let (start, mut depth, mut ok) = (flat.len(), 0.0, ids.len() >= 2);
-        let mut world: Vec<V3> = Vec::with_capacity(ids.len());
-        for &pid in ids {
-            match (pts.get(pid as usize).copied().flatten(), d.p().get(pid as usize)) {
-                (Some((s, z)), Some(&w)) => {
-                    flat.push(s);
-                    world.push(w);
-                    depth += z / ids.len() as f32;
-                }
-                _ => ok = false,
-            }
-        }
-        if !ok {
-            flat.truncate(start);
-            continue;
-        }
-        // Newell normal -> |n . view dir| as the face shade.
-        let mut n = [0.0f32; 3];
-        for (i, p) in world.iter().enumerate() {
-            let q = world.get((i + 1) % world.len()).copied().unwrap_or(*p);
-            n[0] += (p[1] - q[1]) * (p[2] + q[2]);
-            n[1] += (p[2] - q[2]) * (p[0] + q[0]);
-            n[2] += (p[0] - q[0]) * (p[1] + q[1]);
-        }
-        let shade = dot(norm(n), v.fwd).abs();
-        faces.push(Face { depth, start, len: flat.len() - start, closed, shade, index: pi });
-    }
-    faces.sort_by(|a, b| b.depth.total_cmp(&a.depth));
-    let edge = Stroke::new(1.0, Color32::from_rgb(235, 235, 245));
-    for f in &faces {
-        let Some(poly) = flat.get(f.start..f.start + f.len) else { continue };
-        if opts.wire {
-            painter.add(if f.closed {
-                Shape::closed_line(poly.to_vec(), edge)
-            } else {
-                Shape::line(poly.to_vec(), edge)
-            });
-        } else if f.closed && f.len >= 3 {
-            let g = 55.0 + 150.0 * f.shade;
-            painter.add(Shape::convex_polygon(
-                poly.to_vec(),
-                Color32::from_rgb((g * 0.6) as u8, (g * 0.8) as u8, g as u8),
-                edge,
-            ));
-        } else {
-            painter.add(Shape::line(poly.to_vec(), edge));
-        }
-    }
-    for (s, _) in pts.iter().flatten().take(MAX_POINTS) {
-        painter.circle_filled(*s, 2.2, Color32::from_rgb(255, 170, 60));
-    }
+fn overlays(painter: &egui::Painter, pr: &Proj, d: &Detail, opts: &Opts) {
     let label = |at: Pos2, text: String, col: Color32| {
         painter.text(at + vec2(4.0, -4.0), egui::Align2::LEFT_BOTTOM, text, egui::FontId::monospace(10.0), col);
     };
     if opts.point_nums {
-        for (i, (s, _)) in pts.iter().enumerate().filter_map(|(i, p)| p.map(|p| (i, p))).take(MAX_LABELS) {
+        let mut pts: Vec<(f32, usize, Pos2)> =
+            d.p().iter().enumerate().filter_map(|(i, &p)| pr.project(p).map(|(s, z)| (z, i, s))).collect();
+        pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (_, i, s) in pts.into_iter().take(MAX_LABELS) {
             label(s, i.to_string(), Color32::from_rgb(255, 200, 100));
         }
     }
     if opts.prim_nums {
         // nearest-first so the cap keeps the faces the user is looking at
-        for f in faces.iter().rev().take(MAX_LABELS) {
-            let Some(poly) = flat.get(f.start..f.start + f.len).filter(|p| !p.is_empty()) else { continue };
-            let c = poly.iter().fold(vec2(0.0, 0.0), |a, p| a + p.to_vec2()) / poly.len() as f32;
-            label(c.to_pos2(), f.index.to_string(), Color32::from_rgb(120, 230, 255));
+        let mut faces: Vec<(f32, usize, Pos2)> = Vec::new();
+        for (pi, prim) in d.prims.iter().enumerate().take(MAX_LABEL_PRIMS) {
+            if !matches!(prim.kind, PrimKind::Poly { .. } | PrimKind::Polyline) {
+                continue;
+            }
+            let ids = d.vertex_point.get(prim.verts.start as usize..prim.verts.end as usize).unwrap_or(&[]);
+            let w: Vec<[f32; 3]> = ids.iter().filter_map(|&i| d.p().get(i as usize).copied()).collect();
+            if w.is_empty() {
+                continue;
+            }
+            let c = w.iter().fold(Vec3::ZERO, |a, &p| a + v3(p)) / w.len() as f32;
+            if let Some((s, z)) = pr.project(c.to_array()) {
+                faces.push((z, pi, s));
+            }
+        }
+        faces.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (_, pi, s) in faces.into_iter().take(MAX_LABELS) {
+            label(s, pi.to_string(), Color32::from_rgb(120, 230, 255));
         }
     }
 }
 
-fn gizmo(painter: &egui::Painter, v: &View, rect: egui::Rect) {
+fn gizmo(painter: &egui::Painter, cam: &Camera, rect: Rect) {
+    let (right, up) = cam.basis();
     let o = rect.left_bottom() + vec2(44.0, -44.0);
     for (axis, col, name) in [
-        ([1.0, 0.0, 0.0], Color32::from_rgb(230, 70, 70), "X"),
-        ([0.0, 1.0, 0.0], Color32::from_rgb(90, 210, 90), "Y"),
-        ([0.0, 0.0, 1.0], Color32::from_rgb(80, 130, 240), "Z"),
+        (Vec3::X, Color32::from_rgb(230, 70, 70), "X"),
+        (Vec3::Y, Color32::from_rgb(90, 210, 90), "Y"),
+        (Vec3::Z, Color32::from_rgb(80, 130, 240), "Z"),
     ] {
-        let tip = o + vec2(dot(axis, v.right), -dot(axis, v.up)) * 30.0;
+        let tip = o + vec2(axis.dot(right), -axis.dot(up)) * 30.0;
         painter.line_segment([o, tip], Stroke::new(2.0, col));
         painter.text(tip, egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(12.0), col);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::PointerButton::{Extra1, Middle, Primary, Secondary};
+
+    fn ndc(cam: &Camera, p: [f32; 3]) -> Vec3 {
+        let (vp, _) = cam.matrices(&Style::default(), 1.5);
+        let c = vp * Vec4::new(p[0], p[1], p[2], 1.0);
+        c.truncate() / c.w
+    }
+
+    #[test]
+    fn houdini_mouse_mapping() {
+        assert_eq!(drag_action(Primary, false), Some(Drag::Orbit)); // alt+LMB and LMB
+        assert_eq!(drag_action(Primary, true), Some(Drag::Pan));
+        assert_eq!(drag_action(Middle, false), Some(Drag::Pan));
+        assert_eq!(drag_action(Secondary, false), Some(Drag::Dolly));
+        assert_eq!(drag_action(Extra1, false), None);
+    }
+
+    #[test]
+    fn orbit_clamps_pitch_and_pan_moves_in_the_view_plane() {
+        let (s, mut c) = (Style::default(), Camera::default());
+        c.drag(Drag::Orbit, vec2(0.0, 1e6), 600.0, &s);
+        assert!((c.pitch - s.pitch_limit).abs() < 1e-6);
+        let mut c = Camera::default();
+        let (e0, (right, up)) = (c.eye(), c.basis());
+        c.drag(Drag::Pan, vec2(30.0, -20.0), 600.0, &s);
+        let d = c.eye() - e0;
+        let fwd = (v3(c.target) - c.eye()).normalize();
+        assert!(d.dot(fwd).abs() < 1e-4, "pan stays in the view plane");
+        assert!(d.dot(right) < 0.0 && d.dot(up) < 0.0, "scene follows the cursor: camera moves opposite");
+    }
+
+    #[test]
+    fn dolly_and_scroll_zoom_in_and_clamp() {
+        let (s, mut c) = (Style::default(), Camera::default());
+        c.drag(Drag::Dolly, vec2(40.0, 0.0), 600.0, &s);
+        assert!(c.dist < 6.0, "drag right = in");
+        c.zoom(-1e9);
+        assert_eq!(c.dist, DIST_RANGE.1);
+        c.zoom(1e9);
+        assert_eq!(c.dist, DIST_RANGE.0);
+    }
+
+    #[test]
+    fn target_projects_to_screen_centre_and_home_frames_the_box() {
+        let mut c = Camera::default();
+        let t = ndc(&c, c.target);
+        assert!(t.x.abs() < 1e-5 && t.y.abs() < 1e-5 && (0.0..1.0).contains(&t.z));
+        let (lo, hi) = ([-2.0, 0.0, -1.0], [3.0, 4.0, 1.0]);
+        c.fit(lo, hi);
+        for i in 0..8 {
+            let p = [if i & 1 == 0 { lo[0] } else { hi[0] }, if i & 2 == 0 { lo[1] } else { hi[1] }, if i & 4 == 0 { lo[2] } else { hi[2] }];
+            let n = ndc(&c, p);
+            assert!(n.x.abs() <= 1.0 && n.y.abs() <= 1.0 && (0.0..=1.0).contains(&n.z), "corner {p:?} -> {n:?}");
+        }
+    }
+
+    #[test]
+    fn overlay_projection_matches_the_gpu_matrix() {
+        let c = Camera::default();
+        let rect = Rect::from_min_size(pos2(10.0, 20.0), vec2(300.0, 200.0));
+        let (vp, _) = c.matrices(&Style::default(), 1.5);
+        let (s, z) = (Proj { vp, rect }).project(c.target).expect("visible");
+        assert!((s.x - 160.0).abs() < 1e-3 && (s.y - 120.0).abs() < 1e-3, "{s:?}");
+        assert!((z - c.dist).abs() < 1e-3);
+        assert!((Proj { vp, rect }).project(c.eye().to_array()).is_none(), "the eye itself is not drawable");
+    }
+
+    #[test]
+    fn opts_label() {
+        assert_eq!(Opts::default().label(), "shaded");
+        assert_eq!(Opts { wire: true, point_nums: true, prim_nums: true }.label(), "wireframe +P +N");
     }
 }
