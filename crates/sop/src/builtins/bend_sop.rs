@@ -274,7 +274,9 @@ mod tests {
         let (mut g, id) = crate::load_scene(include_str!("../../../../examples/twist.json")).expect("loads");
         let d = g.cook(id, 0.0).expect("cooks");
         // box (+-.5), twist 90 over y in [-.5,.5]: top corner (.5,.5,.5) -> (.5,.5,-.5)
-        let src = cube();
+        // the example cooks the real Box SOP: look the corners up in ITS point order (not a hand-built cube)
+        let (mut bg, bid) = crate::load_scene(r#"{"nodes":[{"name":"b","type":"box"}],"display":"b"}"#).expect("loads");
+        let src = bg.cook(bid, 0.0).expect("cooks");
         let i = src.p().iter().position(|p| *p == [0.5, 0.5, 0.5]).expect("corner");
         close(d.p()[i], [0.5, 0.5, -0.5], "top corner");
         let j = src.p().iter().position(|p| *p == [0.5, -0.5, 0.5]).expect("corner");

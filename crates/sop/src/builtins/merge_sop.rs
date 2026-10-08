@@ -124,14 +124,14 @@ mod tests {
         let p = ParamSet::new();
         new().cook(&ctx(&p), inputs)
     }
-    /// Cube corner `i` in the BOX lane's point order (x-major, z fastest: bit2→x, bit1→y, bit0→z), each coordinate ±0.5
-    /// (closed form, independent of any SOP). Generator defines the order; merge only concatenates.
+    /// Cube corner `i` in the BOX SOP's (Houdini) point order: bit2 = top ring, bits 1..0 = ring position
+    /// (-x-z, +x-z, +x+z, -x+z), each coordinate ±0.5 (closed form, independent of any SOP). Merge only concatenates.
     fn corner(i: u32, shift: f32) -> [f32; 3] {
-        let c = |b: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
-        [c(2) + shift, c(1), c(0)]
+        let (x, z) = [(-0.5f32, -0.5f32), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)][(i & 3) as usize];
+        [x + shift, if (i >> 2) & 1 == 1 { 0.5 } else { -0.5 }, z]
     }
     /// Six quad faces over corner indices 0..8.
-    const FACES: [[u32; 4]; 6] = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+    const FACES: [[u32; 4]; 6] = [[1, 0, 4, 5], [2, 1, 5, 6], [3, 2, 6, 7], [0, 3, 7, 4], [2, 3, 0, 1], [5, 4, 7, 6]];
     /// Hand-built box: 8 points, 6 closed quads, no extra attrs.
     fn hand_box(shift: f32) -> Detail {
         let mut d = Detail::default();
@@ -147,9 +147,9 @@ mod tests {
     #[test]
     fn box_order_p0_p1_and_faces_wind_outward() {
         assert_eq!(corner(0, 0.0), [-0.5, -0.5, -0.5]);
-        assert_eq!(corner(1, 0.0), [-0.5, -0.5, 0.5]);
-        assert_eq!(corner(2, 0.0), [-0.5, 0.5, -0.5]);
-        assert_eq!(corner(4, 0.0), [0.5, -0.5, -0.5]);
+        assert_eq!(corner(1, 0.0), [0.5, -0.5, -0.5]);
+        assert_eq!(corner(2, 0.0), [0.5, -0.5, 0.5]);
+        assert_eq!(corner(4, 0.0), [-0.5, 0.5, -0.5]);
         for f in FACES {
             let p: Vec<[f32; 3]> = f.iter().map(|&i| corner(i, 0.0)).collect();
             let (a, b) = (

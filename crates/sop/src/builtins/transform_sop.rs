@@ -298,14 +298,12 @@ mod tests {
     fn v3(a: f32, b: f32, c: f32) -> ParamValue {
         ParamValue::V3([a, b, c])
     }
-    /// Corners (±1,±1,±1) + offset (0.5,0,0), x fastest.
+    /// Corners (±1,±1,±1) + offset (0.5,0,0) in the BOX SOP's Houdini order (bottom ring, top ring; ring = -x-z, +x-z, +x+z, -x+z).
     fn corners() -> Vec<[f32; 3]> {
         let mut v = Vec::new();
-        for z in [-1.0f32, 1.0] {
-            for y in [-1.0f32, 1.0] {
-                for x in [-1.0f32, 1.0] {
-                    v.push([x + 0.5, y, z]);
-                }
+        for y in [-1.0f32, 1.0] {
+            for (x, z) in [(-1.0f32, -1.0f32), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+                v.push([x + 0.5, y, z]);
             }
         }
         v
@@ -316,7 +314,7 @@ mod tests {
         let r = d.add_points(8);
         assert_eq!(r, 0..8);
         *d.p_mut() = corners();
-        for q in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+        for q in [[1, 0, 4, 5], [2, 1, 5, 6], [3, 2, 6, 7], [0, 3, 7, 4], [2, 3, 0, 1], [5, 4, 7, 6]] {
             d.add_poly(&q, true);
         }
         d
@@ -594,15 +592,14 @@ mod tests {
         let mut d = Detail::default();
         d.add_points(8);
         let mut pts = Vec::new();
-        for x in [-0.5f32, 0.5] {
-            for y in [-0.5f32, 0.5] {
-                for z in [-0.5f32, 0.5] {
-                    pts.push(map([x, y, z]));
-                }
+        // Houdini box order: bottom ring then top ring, ring = -x-z, +x-z, +x+z, -x+z
+        for y in [-0.5f32, 0.5] {
+            for (x, z) in [(-0.5f32, -0.5f32), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)] {
+                pts.push(map([x, y, z]));
             }
         }
         *d.p_mut() = pts;
-        for q in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+        for q in [[1, 0, 4, 5], [2, 1, 5, 6], [3, 2, 6, 7], [0, 3, 7, 4], [2, 3, 0, 1], [5, 4, 7, 6]] {
             d.add_poly(&q, true);
         }
         d
