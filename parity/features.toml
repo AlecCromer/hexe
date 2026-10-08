@@ -702,3 +702,40 @@ status = "shipped"
 commands = []
 evidence = ["apps/hexe/src/network.rs::drag_output_dot_onto_input_dot_connects", "apps/hexe/src/network.rs::drag_wire_off_input_disconnects_and_reroutes", "crates/graph/src/graph.rs::remove_node_cuts_edges_and_keeps_ids", "crates/sop/src/scene.rs::save_round_trips_examples", "crates/sop/src/scene.rs::ui_pos_persists_and_hostile_ui_is_dropped"]
 notes = "H19: synthetic egui pointer events drive pane tests; real mouse/Tab popup/keys not exercised. --script hook = proof only. No rename UI, no undo."
+
+[[feature]]
+id = "sop-sort"
+title = "Sort SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["sort"]
+evidence = [
+  "crates/sop/src/builtins/sort_sop.rs::params_and_defaults",
+  "crates/sop/src/builtins/sort_sop.rs::line_of_5_points_reversed_is_exact_order_and_geometry_preserved",
+  "crates/sop/src/builtins/sort_sop.rs::by_axis_attribute_and_expression",
+  "crates/sop/src/builtins/sort_sop.rs::shift_proximity_and_random",
+  "crates/sop/src/builtins/sort_sop.rs::prim_sorts_rebuild_vertices_and_carry_attrs",
+  "crates/sop/src/builtins/sort_sop.rs::string_attribute_sort_and_hostile",
+  "crates/sop/src/builtins/sort_sop.rs::scene_loader_cooks_line_reverse",
+]
+notes = "H25: ptsort/primsort menus none|byx|byy|byz|byattribute|byexpression|random|reverse|shift|proximity; stable; keys computed on the input, point + prim permutations applied together; vertex_point remapped, prim vertex storage rebuilt contiguously in new prim order; attrs/groups travel; identity -> input Arc shared. byexpression = hexe-vex per element. Oracle: line of 5 pts reversed -> x 4,3,2,1,0 + vertex_point 4,3,2,1,0 (polyline geometry unchanged), reverse twice == input; lattice prim reverse/by -y/by x -> exact prim attr order. NOT modelled: vertex sort, by-vector-dot, Houdini ptreverse toggle. UNVERIFIED vs Houdini (hython blocked): random stream (own splitmix64), shift sign, attribute tuple ordering, prim key = centroid."
+
+[[feature]]
+id = "sop-delete"
+title = "Delete SOP"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["delete"]
+evidence = [
+  "crates/sop/src/builtins/delete_sop.rs::params_and_defaults",
+  "crates/sop/src/builtins/delete_sop.rs::grid_delete_points_p_x_gt_0_counts_by_hand",
+  "crates/sop/src/builtins/delete_sop.rs::prim_delete_keeps_points_unless_delete_unused_points",
+  "crates/sop/src/builtins/delete_sop.rs::range_pattern_expression_and_negate",
+  "crates/sop/src/builtins/delete_sop.rs::point_delete_keep_unused_shortens_prims",
+  "crates/sop/src/builtins/delete_sop.rs::groups_and_vertex_attrs_follow",
+  "crates/sop/src/builtins/delete_sop.rs::hostile",
+  "crates/sop/src/builtins/delete_sop.rs::scene_loader_cooks_line_delete_and_registry_has_slot",
+]
+notes = "H25: entity point|prim; selection = AND of group pattern (group-SOP grammar) / range (start,end<0=last,step) / expression (hexe-vex, read-only, non-zero = selected); negate keeps the selection. Point entity: touching prims removed whole, keep_unused = shorten instead (<3 closed / <2 open dropped). Prim entity keeps all points unless delete_unused_points (only points orphaned BY the delete). Oracle (by hand): 3x3 lattice @P.x>0 points -> 6 pts/2 prims; prim @P.x>0 -> 9 pts/2 prims, +delete_unused_points -> 6 pts; 5-pt cloud @ptnum%2==0 -> x 1,3. Shares rebuild/expr host with sort in builtins/selutil.rs. NOT modelled: bbox/normal criteria, edges, vertex entity, fillhole. UNVERIFIED vs Houdini (hython blocked): keep_unused meaning (spec wording ambiguous), default entity/empty-selection = delete all, prim @P = centroid."
