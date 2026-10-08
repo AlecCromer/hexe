@@ -13,6 +13,10 @@ use std::sync::Arc;
 
 /// Largest scene file `graph_load` reads.
 pub const MAX_SCENE_BYTES: u64 = 64 << 20;
+/// Undo / redo depth (oldest snapshot dropped beyond it).
+pub const MAX_UNDO: usize = 100;
+/// Offset (editor px) of each successive paste from the copied nodes.
+pub const PASTE_OFFSET: f32 = 20.0;
 /// Sibling / level pitch of the auto-layout (flow runs top to bottom, like Houdini) for nodes without a stored position.
 const LAYOUT_DX: f32 = 190.0;
 const LAYOUT_DY: f32 = 90.0;
@@ -115,11 +119,48 @@ pub struct Session {
     pos: BTreeMap<String, [f32; 2]>,
     /// Output of the last successful display cook (what the spreadsheet shows); `None` after a failed / empty cook.
     last: Option<Arc<Detail>>,
+    /// `--set node.param=value` overrides: re-applied on EVERY `graph_load`.
+    sets: Vec<String>,
+    /// Failures of the last `--set` re-application (the load itself succeeded).
+    pub set_errors: Vec<String>,
+    undo: Vec<Snap>,
+    redo: Vec<Snap>,
+    /// Coalescing key of the last recorded edit (a scrub = many `node_set_param` = one undo step).
+    last_key: Option<String>,
+    clip: Option<Clip>,
+    pastes: u32,
+}
+
+/// Whole-graph snapshot for undo / redo: the scene text (names, params, wires, `ui.pos`) + the display node name
+/// (the scene format cannot say "no display"). `scene = None` = empty graph.
+#[derive(Clone, Debug, PartialEq)]
+struct Snap {
+    scene: Option<String>,
+    display: Option<String>,
+}
+
+/// Copied nodes: type, original name, param values, position; edges are index pairs `(from, to, input)` inside the set.
+#[derive(Clone, Debug)]
+struct Clip {
+    nodes: Vec<(String, String, Vec<(String, ParamValue)>, [f32; 2])>,
+    edges: Vec<(usize, usize, usize)>,
 }
 
 impl Default for Session {
     fn default() -> Self {
-        Session { graph: Graph::new(), reg: hexe_sop::registry(), pos: BTreeMap::new(), last: None }
+        Session {
+            graph: Graph::new(),
+            reg: hexe_sop::registry(),
+            pos: BTreeMap::new(),
+            last: None,
+            sets: Vec::new(),
+            set_errors: Vec::new(),
+            undo: Vec::new(),
+            redo: Vec::new(),
+            last_key: None,
+            clip: None,
+            pastes: 0,
+        }
     }
 }
 
@@ -182,6 +223,14 @@ pub fn param_from_json(like: &ParamValue, v: &Value) -> Result<ParamValue, Strin
     })
 }
 
+/// `node.param=value` -> `(node, param, value)`.
+pub fn split_set(arg: &str) -> Result<(&str, &str, &str), String> {
+    let bad = || format!("--set {arg}: want node.param=value");
+    let (key, val) = arg.split_once('=').ok_or_else(bad)?;
+    let (node, param) = key.split_once('.').ok_or_else(bad)?;
+    if node.is_empty() || param.is_empty() { Err(bad()) } else { Ok((node, param, val)) }
+}
+
 fn param_info(s: &ParamSpec) -> ParamInfo {
     ParamInfo {
         name: s.name.clone(),
@@ -237,6 +286,13 @@ impl Session {
     pub fn graph_new(&mut self) {
         self.graph = Graph::new();
         self.pos.clear();
+        self.reset_history();
+    }
+
+    fn reset_history(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+        self.last_key = None;
     }
 
     /// Replace the session graph with the scene at `path` (relative `file` SOPs resolve against its directory).
@@ -251,6 +307,8 @@ impl Session {
         self.graph = l.graph;
         self.pos = l.pos;
         self.auto_layout();
+        self.apply_sets();
+        self.reset_history();
         Ok(())
     }
 
@@ -334,8 +392,7 @@ impl Session {
         GraphView { nodes, edges, display: self.graph.display().map(NodeId::index) }
     }
 
-    /// Add a node of `ty` at editor position (x, y); the first node becomes the display node.
-    pub fn node_add(&mut self, ty: &str, x: f32, y: f32) -> Result<u32, String> {
+    fn node_add_raw(&mut self, ty: &str, x: f32, y: f32) -> Result<u32, String> {
         if !x.is_finite() || !y.is_finite() {
             return Err("non-finite position".into());
         }
@@ -355,7 +412,7 @@ impl Session {
         hexe_sop::fill_unwired(&mut self.graph).map_err(|e| e.to_string())
     }
 
-    pub fn node_remove(&mut self, id: u32) -> Result<(), String> {
+    fn node_remove_raw(&mut self, id: u32) -> Result<(), String> {
         let n = self.find(id)?;
         let name = self.graph.name(n).map(str::to_string);
         let was_display = self.graph.display() == Some(n);
@@ -370,8 +427,7 @@ impl Session {
         self.fill()
     }
 
-    /// Move a node in the editor (UI-only state, saved as `ui.pos`).
-    pub fn node_move(&mut self, id: u32, x: f32, y: f32) -> Result<(), String> {
+    fn node_move_raw(&mut self, id: u32, x: f32, y: f32) -> Result<(), String> {
         if !x.is_finite() || !y.is_finite() {
             return Err("non-finite position".into());
         }
@@ -381,7 +437,7 @@ impl Session {
         Ok(())
     }
 
-    pub fn node_set_param(&mut self, id: u32, name: &str, value: &Value) -> Result<(), String> {
+    fn node_set_param_raw(&mut self, id: u32, name: &str, value: &Value) -> Result<(), String> {
         let n = self.find(id)?;
         let spec = self
             .graph
@@ -393,21 +449,282 @@ impl Session {
         self.graph.set_param(n, name, v).map_err(|e| e.to_string())
     }
 
-    pub fn edge_connect(&mut self, from: u32, to: u32, input: usize) -> Result<(), String> {
+    fn edge_connect_raw(&mut self, from: u32, to: u32, input: usize) -> Result<(), String> {
         let (s, d) = (self.find(from)?, self.find(to)?);
         self.graph.connect(s, 0, d, input).map_err(|e| e.to_string())
     }
 
-    /// Cut the wire into `to`'s `input` (the port is re-fed from the hidden empty source).
-    pub fn edge_disconnect(&mut self, to: u32, input: usize) -> Result<(), String> {
+    fn edge_disconnect_raw(&mut self, to: u32, input: usize) -> Result<(), String> {
         let d = self.find(to)?;
         self.graph.disconnect(d, input).map_err(|e| e.to_string())?;
         self.fill()
     }
 
-    pub fn set_display(&mut self, id: u32) -> Result<(), String> {
+    fn set_display_raw(&mut self, id: Option<u32>) -> Result<(), String> {
+        let n = id.map(|i| self.find(i)).transpose()?;
+        self.graph.set_display(n).map_err(|e| e.to_string())
+    }
+
+    /// Add a node of `ty` at editor position (x, y); the first node becomes the display node.
+    pub fn node_add(&mut self, ty: &str, x: f32, y: f32) -> Result<u32, String> {
+        self.mutate(None, |s| s.node_add_raw(ty, x, y))
+    }
+
+    pub fn node_remove(&mut self, id: u32) -> Result<(), String> {
+        self.mutate(None, |s| s.node_remove_raw(id))
+    }
+
+    /// Remove several nodes as ONE undo step (all ids are validated first: nothing is removed on a bad id).
+    pub fn nodes_remove(&mut self, ids: &[u32]) -> Result<(), String> {
+        for &i in ids {
+            self.find(i)?;
+        }
+        self.mutate(None, |s| ids.iter().try_for_each(|&i| s.node_remove_raw(i)))
+    }
+
+    /// Move a node in the editor (UI-only state, saved as `ui.pos`).
+    pub fn node_move(&mut self, id: u32, x: f32, y: f32) -> Result<(), String> {
+        self.mutate(None, |s| s.node_move_raw(id, x, y))
+    }
+
+    /// Set a parameter; consecutive sets of the same parameter coalesce into one undo step (a scrub).
+    pub fn node_set_param(&mut self, id: u32, name: &str, value: &Value) -> Result<(), String> {
+        self.mutate(Some(format!("{id}:{name}")), |s| s.node_set_param_raw(id, name, value))
+    }
+
+    pub fn edge_connect(&mut self, from: u32, to: u32, input: usize) -> Result<(), String> {
+        self.mutate(None, |s| s.edge_connect_raw(from, to, input))
+    }
+
+    /// Cut the wire into `to`'s `input` (the port is re-fed from the hidden empty source).
+    pub fn edge_disconnect(&mut self, to: u32, input: usize) -> Result<(), String> {
+        self.mutate(None, |s| s.edge_disconnect_raw(to, input))
+    }
+
+    /// Set the display node, or clear it (`None`; the UI toggles by sending `None` for the current display node).
+    pub fn set_display(&mut self, id: Option<u32>) -> Result<(), String> {
+        self.mutate(None, |s| s.set_display_raw(id))
+    }
+
+    /// Rename a node. Names are unique and `[A-Za-z0-9_-]+` (they key `ui.pos`, edges and `--set node.param`).
+    pub fn node_rename(&mut self, id: u32, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            return Err(format!("invalid node name `{name}` (letters, digits, `_` and `-` only)"));
+        }
+        self.mutate(None, |s| {
+            let n = s.find(id)?;
+            let old = s.graph.name(n).unwrap_or_default().to_string();
+            if old == name {
+                return Ok(());
+            }
+            s.graph.rename(n, name).map_err(|e| e.to_string())?;
+            if let Some(p) = s.pos.remove(&old) {
+                s.pos.insert(name.to_string(), p);
+            }
+            Ok(())
+        })
+    }
+
+    // ---- undo / redo ----
+
+    fn snapshot(&self) -> Snap {
+        let display = self.graph.display().and_then(|d| self.graph.name(d)).map(str::to_string);
+        Snap { scene: hexe_sop::save_scene(&self.graph, &self.pos).ok(), display }
+    }
+
+    fn restore(&mut self, snap: &Snap) -> Result<(), String> {
+        self.last = None;
+        match &snap.scene {
+            None => {
+                self.graph = Graph::new();
+                self.pos.clear();
+            }
+            Some(text) => {
+                let l = hexe_sop::load_scene_with_base(text, &self.reg, None).map_err(|e| e.to_string())?;
+                self.graph = l.graph;
+                self.pos = l.pos;
+                let d = snap.display.as_deref().and_then(|n| self.graph.node_by_name(n));
+                self.graph.set_display(d).map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Run one graph edit and record the pre-edit snapshot (skipped if the edit changed nothing, or if `key` equals the
+    /// previous edit's key: a scrub). Any edit clears redo.
+    fn mutate<T>(&mut self, key: Option<String>, f: impl FnOnce(&mut Self) -> Result<T, String>) -> Result<T, String> {
+        let before = self.snapshot();
+        let out = f(self)?;
+        if self.snapshot() == before {
+            return Ok(out); // changed nothing: no history entry, the scrub chain stays intact
+        }
+        if key.is_none() || key != self.last_key {
+            self.undo.push(before);
+            if self.undo.len() > MAX_UNDO {
+                self.undo.remove(0);
+            }
+        }
+        self.last_key = key;
+        self.redo.clear();
+        Ok(out)
+    }
+
+    /// Step back one edit. `Ok(false)` = nothing to undo. Node ids are NOT stable across an undo (the UI re-reads the graph).
+    pub fn undo(&mut self) -> Result<bool, String> {
+        let Some(prev) = self.undo.pop() else { return Ok(false) };
+        let now = self.snapshot();
+        self.restore(&prev)?;
+        self.redo.push(now);
+        self.last_key = None;
+        Ok(true)
+    }
+
+    pub fn redo(&mut self) -> Result<bool, String> {
+        let Some(next) = self.redo.pop() else { return Ok(false) };
+        let now = self.snapshot();
+        self.restore(&next)?;
+        self.undo.push(now);
+        self.last_key = None;
+        Ok(true)
+    }
+
+    /// `(undo depth, redo depth)`.
+    pub fn history(&self) -> (usize, usize) {
+        (self.undo.len(), self.redo.len())
+    }
+
+    // ---- copy / paste ----
+
+    /// Copy `ids` (type, params, position, and the wires with both ends inside the set). Returns how many nodes.
+    pub fn copy(&mut self, ids: &[u32]) -> Result<usize, String> {
+        let mut nodes = Vec::new();
+        let mut ord: BTreeMap<u32, usize> = BTreeMap::new();
+        for &i in ids {
+            let n = self.find(i)?;
+            if ord.contains_key(&i) {
+                continue;
+            }
+            let name = self.graph.name(n).unwrap_or_default().to_string();
+            let params = self
+                .graph
+                .param_specs(n)
+                .iter()
+                .filter_map(|sp| Some((sp.name.clone(), self.graph.param(n, &sp.name)?.clone())))
+                .collect();
+            let pos = self.pos.get(&name).copied().unwrap_or([0.0, 0.0]);
+            ord.insert(i, nodes.len());
+            nodes.push((self.graph.node_type(n).unwrap_or_default().to_string(), name, params, pos));
+        }
+        if nodes.is_empty() {
+            return Err("nothing selected to copy".into());
+        }
+        let mut edges = Vec::new();
+        for (&i, &to) in &ord {
+            let n = self.find(i)?;
+            for (port, src) in self.graph.input_sources(n).into_iter().enumerate() {
+                if let Some(&from) = src.and_then(|s| ord.get(&s.index())) {
+                    edges.push((from, to, port));
+                }
+            }
+        }
+        let count = nodes.len();
+        self.clip = Some(Clip { nodes, edges });
+        self.pastes = 0;
+        Ok(count)
+    }
+
+    /// Paste the clipboard as fresh uniquely-named nodes, `PASTE_OFFSET` px further per paste; one undo step.
+    /// Returns the new ids (clipboard order).
+    pub fn paste(&mut self) -> Result<Vec<u32>, String> {
+        let clip = self.clip.clone().ok_or("clipboard is empty (copy nodes first)")?;
+        self.pastes += 1;
+        let off = PASTE_OFFSET * self.pastes as f32;
+        self.mutate(None, |s| {
+            let mut ids: Vec<NodeId> = Vec::new();
+            for (ty, name, params, pos) in &clip.nodes {
+                let node = s.reg.create(ty).ok_or_else(|| format!("unknown node type `{ty}`"))?;
+                let id = s.graph.add_boxed(node, ParamSet::new()).map_err(|e| e.to_string())?;
+                for (k, v) in params {
+                    s.graph.set_param(id, k, v.clone()).map_err(|e| e.to_string())?;
+                }
+                let base = name.trim_end_matches(|c: char| c.is_ascii_digit());
+                let fresh = s.graph.unique_name(if base.is_empty() { ty } else { base });
+                s.graph.rename(id, &fresh).map_err(|e| e.to_string())?;
+                s.pos.insert(fresh, [pos[0] + off, pos[1] + off]);
+                ids.push(id);
+            }
+            for &(from, to, input) in &clip.edges {
+                if let (Some(&a), Some(&b)) = (ids.get(from), ids.get(to)) {
+                    s.graph.connect(a, 0, b, input).map_err(|e| e.to_string())?;
+                }
+            }
+            s.fill()?;
+            Ok(ids.into_iter().map(NodeId::index).collect())
+        })
+    }
+
+    /// `--set node.param=value` overrides, re-applied on every `graph_load` (failures land in `set_errors`).
+    pub fn set_overrides(&mut self, sets: Vec<String>) -> Result<(), String> {
+        for a in &sets {
+            split_set(a)?;
+        }
+        self.sets = sets;
+        Ok(())
+    }
+
+    fn apply_sets(&mut self) {
+        let sets = self.sets.clone();
+        self.set_errors = sets.iter().filter_map(|a| self.set_arg(a).err()).collect();
+        for e in &self.set_errors {
+            eprintln!("hexe: {e}");
+        }
+    }
+
+    /// `node.param=value` typed by the param's kind (`vector3` = `x,y,z`; `toggle` = `1|true|on`). An edit like any other.
+    pub fn set_arg(&mut self, arg: &str) -> Result<(), String> {
+        let (node, param, val) = split_set(arg)?;
+        let id = self.id_of(node).ok_or_else(|| format!("--set {arg}: no node `{node}`"))?;
         let n = self.find(id)?;
-        self.graph.set_display(Some(n)).map_err(|e| e.to_string())
+        let spec = self
+            .graph
+            .param_specs(n)
+            .into_iter()
+            .find(|s| s.name == param)
+            .ok_or_else(|| format!("--set {arg}: node `{node}` has no parameter `{param}`"))?;
+        let bad = || format!("--set {arg}: bad value `{val}`");
+        let json = match spec.default {
+            ParamValue::F(_) | ParamValue::I(_) | ParamValue::Menu(_) => {
+                Value::from(val.trim().parse::<f64>().map_err(|_| bad())?)
+            }
+            ParamValue::B(_) => Value::Bool(matches!(val.trim(), "1" | "true" | "on")),
+            ParamValue::S(_) => Value::String(val.to_string()),
+            ParamValue::V3(_) => {
+                let c: Vec<f64> =
+                    val.split(',').map(|c| c.trim().parse::<f64>().map_err(|_| bad())).collect::<Result<_, _>>()?;
+                if c.len() != 3 {
+                    return Err(bad());
+                }
+                Value::from(c)
+            }
+        };
+        self.node_set_param(id, param, &json)
+    }
+
+    /// Node id by editor name.
+    pub fn id_of(&self, name: &str) -> Option<u32> {
+        self.named().into_iter().find(|n| self.graph.name(*n) == Some(name)).map(NodeId::index)
+    }
+
+    /// Number of named nodes (script auto-placement).
+    pub fn node_count(&self) -> usize {
+        self.named().len()
+    }
+
+    /// Name of node `id`.
+    pub fn name_of(&self, id: u32) -> Option<String> {
+        let n = self.find(id).ok()?;
+        self.graph.name(n).map(str::to_string)
     }
 
     /// Cook the display node. Never panics, never `Err`: a failure is `CookResult.error` (+ `error_node`; the UI shows both).
@@ -582,7 +899,7 @@ mod tests {
         let pe = s.node_add("polyextrude", 200.0, 0.0).expect("pe");
         assert_eq!(s.graph_get().display, Some(b), "first node is the display node");
         s.edge_connect(b, pe, 0).expect("wire");
-        s.set_display(pe).expect("display");
+        s.set_display(Some(pe)).expect("display");
         assert_eq!(s.graph_get().edges, vec![EdgeView { from: b, to: pe, input: 0 }]);
         assert_eq!(s.cook().error, None);
         s.edge_disconnect(pe, 0).expect("cut");
@@ -648,6 +965,213 @@ mod tests {
         assert_eq!((c.error, c.error_node), (None, None));
     }
 
+    fn names(s: &Session) -> Vec<String> {
+        s.graph_get().nodes.into_iter().map(|n| n.name).collect()
+    }
+
+    #[test]
+    fn undo_redo_walks_graph_edits() {
+        let mut s = Session::new();
+        assert_eq!(s.undo(), Ok(false));
+        let b = s.node_add("box", 10.0, 20.0).expect("box");
+        let pe = s.node_add("polyextrude", 200.0, 0.0).expect("pe");
+        s.edge_connect(b, pe, 0).expect("wire");
+        s.set_display(Some(pe)).expect("display");
+        s.node_move(b, 55.0, 66.0).expect("move");
+        assert_eq!(s.history(), (5, 0));
+        // undo the move, then the display change, then the wire
+        assert_eq!(s.undo(), Ok(true));
+        assert_eq!(s.graph_get().nodes.iter().find(|n| n.name == "box1").map(|n| (n.x, n.y)), Some((10.0, 20.0)));
+        assert_eq!(s.undo(), Ok(true));
+        let g = s.graph_get();
+        assert_eq!(g.display, g.nodes.iter().find(|n| n.name == "box1").map(|n| n.id), "display back on box1");
+        assert_eq!(s.undo(), Ok(true));
+        assert!(s.graph_get().edges.is_empty());
+        assert_eq!(s.history(), (2, 3));
+        // redo restores them in order
+        for _ in 0..3 {
+            assert_eq!(s.redo(), Ok(true));
+        }
+        assert_eq!(s.redo(), Ok(false));
+        let g = s.graph_get();
+        assert_eq!((g.edges.len(), g.nodes.iter().find(|n| n.name == "box1").map(|n| n.x)), (1, Some(55.0)));
+        assert_eq!(s.cook().error, None);
+        // a fresh edit clears redo
+        s.undo().expect("undo");
+        s.node_add("null", 0.0, 0.0).expect("null");
+        assert_eq!(s.history().1, 0);
+        // undo all the way back to the empty graph
+        while s.undo().expect("undo") {}
+        assert!(names(&s).is_empty());
+        assert_eq!(s.history().0, 0);
+    }
+
+    #[test]
+    fn undo_keeps_a_cleared_display_and_is_bounded() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 0.0, 0.0).expect("box");
+        s.set_display(None).expect("clear");
+        assert_eq!(s.graph_get().display, None);
+        assert_eq!(s.cook().error.as_deref(), Some("no display node"));
+        s.node_move(b, 1.0, 1.0).expect("move");
+        s.undo().expect("undo move");
+        assert_eq!(s.graph_get().display, None, "cleared display survives the snapshot round trip");
+        s.undo().expect("undo clear");
+        assert!(s.graph_get().display.is_some());
+        for i in 0..(MAX_UNDO + 30) {
+            s.node_move(b, i as f32, 0.0).expect("move");
+        }
+        assert_eq!(s.history().0, MAX_UNDO);
+    }
+
+    #[test]
+    fn param_scrub_is_one_undo_step() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 0.0, 0.0).expect("box");
+        let before = s.graph_get().nodes[0].params["size"].clone();
+        for i in 1..=20 {
+            s.node_set_param(b, "size", &json!([i as f64, 1.0, 1.0])).expect("scrub");
+        }
+        assert_eq!(s.history().0, 2, "add + ONE coalesced scrub");
+        assert_eq!(s.graph_get().nodes[0].params["size"], json!([20.0, 1.0, 1.0]));
+        s.undo().expect("undo");
+        assert_eq!(s.graph_get().nodes[0].params["size"], before);
+        // setting a value that changes nothing records nothing
+        let n = s.history().0;
+        s.node_set_param(s.id_of("box1").expect("id"), "size", &before).expect("same");
+        assert_eq!(s.history().0, n);
+    }
+
+    #[test]
+    fn rename_is_unique_and_keeps_pos_and_wires() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 7.0, 8.0).expect("box");
+        let pe = s.node_add("polyextrude", 0.0, 0.0).expect("pe");
+        s.edge_connect(b, pe, 0).expect("wire");
+        assert!(s.node_rename(pe, "box1").is_err(), "name taken");
+        assert!(s.node_rename(pe, "").is_err());
+        assert!(s.node_rename(pe, "a b").is_err());
+        assert!(s.node_rename(pe, "a.b").is_err());
+        s.node_rename(b, "ground").expect("rename");
+        let g = s.graph_get();
+        let n = g.nodes.iter().find(|n| n.name == "ground").expect("renamed");
+        assert_eq!((n.x, n.y, g.edges.len()), (7.0, 8.0, 1));
+        s.node_rename(b, "ground").expect("same name is a no-op");
+        s.undo().expect("undo");
+        assert!(names(&s).contains(&"box1".to_string()));
+    }
+
+    #[test]
+    fn copy_paste_keeps_inner_wires_and_offsets() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 10.0, 10.0).expect("box");
+        let pe = s.node_add("polyextrude", 10.0, 100.0).expect("pe");
+        let out = s.node_add("null", 10.0, 200.0).expect("null");
+        s.edge_connect(b, pe, 0).expect("w1");
+        s.edge_connect(pe, out, 0).expect("w2");
+        s.node_set_param(pe, "distance", &json!(0.75)).expect("set");
+        assert!(s.paste().is_err(), "empty clipboard");
+        assert_eq!(s.copy(&[b, pe]), Ok(2));
+        let new = s.paste().expect("paste");
+        assert_eq!(new.len(), 2);
+        let g = s.graph_get();
+        assert_eq!(g.nodes.len(), 5);
+        let nb = g.nodes.iter().find(|n| n.id == new[0]).expect("b2");
+        let npe = g.nodes.iter().find(|n| n.id == new[1]).expect("pe2");
+        assert_eq!((nb.name.as_str(), npe.name.as_str()), ("box2", "polyextrude2"));
+        assert_eq!((nb.x, nb.y), (30.0, 30.0));
+        assert_eq!(npe.params["distance"], json!(0.75));
+        assert!(g.edges.contains(&EdgeView { from: nb.id, to: npe.id, input: 0 }), "inner wire kept");
+        assert!(!g.edges.iter().any(|e| e.from == npe.id && e.to == out), "outer wire NOT copied");
+        assert_eq!(g.edges.len(), 3);
+        // second paste goes another 20 px; one undo removes the whole paste
+        let again = s.paste().expect("paste 2");
+        assert_eq!(s.graph_get().nodes.iter().find(|n| n.id == again[0]).map(|n| n.x), Some(50.0));
+        s.undo().expect("undo");
+        assert_eq!(s.graph_get().nodes.len(), 5);
+        assert!(s.copy(&[]).is_err());
+        assert!(s.copy(&[999]).is_err());
+    }
+
+    #[test]
+    fn multi_remove_is_one_step_and_validated() {
+        let mut s = Session::new();
+        let a = s.node_add("box", 0.0, 0.0).expect("a");
+        let b = s.node_add("null", 0.0, 0.0).expect("b");
+        let c = s.node_add("null", 0.0, 0.0).expect("c");
+        assert!(s.nodes_remove(&[a, 999]).is_err());
+        assert_eq!(s.graph_get().nodes.len(), 3, "nothing removed on a bad id");
+        s.nodes_remove(&[a, b]).expect("remove two");
+        assert_eq!(names(&s), ["null2"]);
+        assert_eq!(s.graph_get().display, Some(c).map(|_| s.graph_get().nodes[0].id));
+        s.undo().expect("undo");
+        assert_eq!(s.graph_get().nodes.len(), 3);
+    }
+
+    #[test]
+    fn set_overrides_reapply_on_every_load() {
+        let mut s = Session::new();
+        s.set_overrides(vec!["polyextrude1.distance=0.9".into()]).expect("sets");
+        assert!(s.set_overrides(vec!["nonsense".into()]).is_err());
+        let dist = |s: &Session| {
+            s.graph_get().nodes.iter().find(|n| n.ty == "polyextrude").map(|n| n.params["distance"].clone())
+        };
+        s.graph_load(&example("polyextrude.json")).expect("loads");
+        // the example's node is not named polyextrude1: the override reports instead of silently vanishing
+        assert_eq!(s.set_errors.len(), usize::from(s.id_of("polyextrude1").is_none()));
+        let name = s.graph_get().nodes.iter().find(|n| n.ty == "polyextrude").map(|n| n.name.clone()).expect("pe");
+        s.set_overrides(vec![format!("{name}.distance=0.9")]).expect("sets");
+        s.graph_load(&example("polyextrude.json")).expect("loads");
+        assert!(s.set_errors.is_empty(), "{:?}", s.set_errors);
+        assert_eq!(dist(&s), Some(json!(0.9)));
+        let id = s.id_of(&name).expect("id");
+        s.node_set_param(id, "distance", &json!(0.1)).expect("user edit");
+        s.graph_load(&example("polyextrude.json")).expect("reload");
+        assert_eq!(dist(&s), Some(json!(0.9)), "override wins again after a reload");
+        assert_eq!(s.history(), (0, 0), "loading resets history");
+        assert!(s.set_arg(&format!("{name}.nope=1")).is_err());
+        assert!(s.set_arg(&format!("{name}.distance=abc")).is_err());
+        assert!(s.set_arg("ghost.distance=1").is_err());
+    }
+
+    #[test]
+    fn set_arg_types_by_param_kind() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 0.0, 0.0).expect("box");
+        s.set_arg("box1.size=1,2.5,3").expect("v3");
+        assert_eq!(s.graph_get().nodes[0].params["size"], json!([1.0, 2.5, 3.0]));
+        assert!(s.set_arg("box1.size=1,2").is_err());
+        let _ = b;
+    }
+
+    #[test]
+    fn save_roundtrip_keeps_ui_pos_after_edits() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 12.5, 34.0).expect("box");
+        let pe = s.node_add("polyextrude", 300.0, 150.0).expect("pe");
+        s.edge_connect(b, pe, 0).expect("wire");
+        s.node_rename(pe, "ext").expect("rename");
+        s.copy(&[b]).expect("copy");
+        s.paste().expect("paste");
+        s.undo().expect("undo");
+        s.redo().expect("redo");
+        let out = std::env::temp_dir().join(format!("hexe-tauri-pos-{}.json", std::process::id()));
+        let path = out.to_string_lossy().into_owned();
+        s.graph_save(&path).expect("save");
+        let text = std::fs::read_to_string(&out).expect("read");
+        let mut t = Session::new();
+        t.graph_load(&path).expect("reload");
+        let _ = std::fs::remove_file(&out);
+        let doc: Value = serde_json::from_str(&text).expect("json");
+        assert_eq!(doc["ui"]["pos"]["box1"], json!([12.5, 34.0]));
+        assert_eq!(doc["ui"]["pos"]["ext"], json!([300.0, 150.0]));
+        let pos = |s: &Session| s.graph_get().nodes.into_iter().map(|n| (n.name, n.x, n.y)).collect::<Vec<_>>();
+        let (mut a, mut b2) = (pos(&s), pos(&t));
+        a.sort_by(|x, y| x.0.cmp(&y.0));
+        b2.sort_by(|x, y| x.0.cmp(&y.0));
+        assert_eq!(a, b2, "every node keeps its ui.pos through save -> load");
+    }
+
     #[test]
     fn hostile_input_is_err_not_panic() {
         let mut s = Session::new();
@@ -655,6 +1179,6 @@ mod tests {
         assert_eq!(s.cook().error.as_deref(), Some("no display node"));
         assert!(s.graph_save("/definitely/not/here/out.json").is_err());
         assert!(s.node_move(99, f32::NAN, 0.0).is_err());
-        assert!(s.set_display(5).is_err());
+        assert!(s.set_display(Some(5)).is_err());
     }
 }
