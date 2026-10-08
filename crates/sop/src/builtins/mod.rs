@@ -14,6 +14,8 @@ mod attribdelete_sop;
 //
 mod attribnoise_sop;
 //
+mod attribpromote_sop;
+//
 mod blast_sop;
 //
 mod boolean_sop;
@@ -85,6 +87,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("attribdelete", attribdelete_sop::spec, attribdelete_sop::new);
     //
     r.register("attribnoise", attribnoise_sop::spec, attribnoise_sop::new);
+    //
+    r.register("attribpromote", attribpromote_sop::spec, attribpromote_sop::new);
     //
     r.register("blast", blast_sop::spec, blast_sop::new);
     //
