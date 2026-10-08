@@ -946,3 +946,36 @@ evidence = [
   "crates/sop/src/builtins/clip_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "H29: origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. NOT modelled (DEFERRED): capclip, group filter, N recompute, Houdini 'keep all' vs 'both' naming, polysoup/NURBS. UNVERIFIED vs Houdini (hython blocked): menu order, point/prim order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-connectivity"
+title = "Connectivity SOP (connected-piece class attribute)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["connectivity"]
+evidence = [
+  "crates/sop/src/builtins/connectivity_sop.rs::two_disjoint_boxes_are_classes_0_and_1_on_points_and_prims",
+  "crates/sop/src/builtins/connectivity_sop.rs::chain_pieces_numbered_by_first_appearance_and_loose_point_is_alone",
+  "crates/sop/src/builtins/connectivity_sop.rs::a_late_bridge_prim_merges_earlier_pieces_and_name_is_configurable",
+  "crates/sop/src/builtins/connectivity_sop.rs::hostile_inputs_do_not_panic",
+  "crates/sop/src/builtins/connectivity_sop.rs::example_scene_labels_two_boxes",
+]
+notes = "H29: connecttype menu prim(0, default)|point(1), attribname(class). Union-find over points through every prim (any kind); I32 attr on PRIM or POINT class numbered 0.. by first appearance in ascending element id. Loose point = own piece (point mode); vertex-less prim = own piece. Existing same-name attr replaced. NOT modelled (DEFERRED): group-restricted labelling, attribute-split / edge-only modes. UNVERIFIED vs Houdini (hython blocked): default connecttype, class numbering order. Example: examples/connectivity.json (box + moved box via merge). Analytical oracle only."
+
+[[feature]]
+id = "sop-measure"
+title = "Measure SOP (per-prim area / perimeter / volume)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["measure"]
+evidence = [
+  "crates/sop/src/builtins/measure_sop.rs::unit_box_every_face_has_area_1_and_perimeter_4",
+  "crates/sop/src/builtins/measure_sop.rs::box_volume_contributions_sum_to_the_volume_wherever_the_box_sits",
+  "crates/sop/src/builtins/measure_sop.rs::scaled_box_faces_and_right_triangle",
+  "crates/sop/src/builtins/measure_sop.rs::open_polylines_have_length_but_no_area_and_names_are_configurable",
+  "crates/sop/src/builtins/measure_sop.rs::hostile_inputs_do_not_panic",
+  "crates/sop/src/builtins/measure_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H29: measure menu area|perimeter|volume, attribname (empty = measure name), total (detail attr <name>_sum). Prim F32 attr in f64 maths. Area = half Newell magnitude, perimeter incl. closing edge for closed, volume = signed origin-referenced divergence-theorem term 1/6 sum a.(b x c) over fan tris (a lone face has no volume of its own; closed outward mesh sums to volume, box 2x3x4 at +10 = 24). NOT modelled (DEFERRED): point/vertex entities, curvature/smooth/dihedral types, group filter. UNVERIFIED vs Houdini (hython blocked): volume per-prim definition (Houdini measures closed-surface volume), menu order, non-planar area. Examples: examples/measure.json. Analytical oracle only."

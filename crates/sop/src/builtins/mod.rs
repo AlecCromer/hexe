@@ -31,6 +31,8 @@ mod circle_sop;
 //
 mod clip_sop;
 //
+mod connectivity_sop;
+//
 mod copytopoints_sop;
 //
 mod curve_sop;
@@ -52,6 +54,8 @@ mod groupdelete_sop;
 mod grouppromote_sop;
 //
 mod line_sop;
+//
+mod measure_sop;
 //
 mod merge_sop;
 //
@@ -126,6 +130,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("clip", clip_sop::spec, clip_sop::new);
     //
+    r.register("connectivity", connectivity_sop::spec, connectivity_sop::new);
+    //
     r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
     //
     r.register("curve", curve_sop::spec, curve_sop::new);
@@ -147,6 +153,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("grouppromote", grouppromote_sop::spec, grouppromote_sop::new);
     //
     r.register("line", line_sop::spec, line_sop::new);
+    //
+    r.register("measure", measure_sop::spec, measure_sop::new);
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
     //
