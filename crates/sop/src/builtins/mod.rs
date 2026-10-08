@@ -12,6 +12,8 @@ mod attribnoise_sop;
 //
 mod blast_sop;
 //
+mod boolean_sop;
+//
 mod box_sop;
 //
 mod circle_sop;
@@ -73,6 +75,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("attribnoise", attribnoise_sop::spec, attribnoise_sop::new);
     //
     r.register("blast", blast_sop::spec, blast_sop::new);
+    //
+    r.register("boolean", boolean_sop::spec, boolean_sop::new);
     //
     r.register("box", box_sop::spec, box_sop::new);
     //

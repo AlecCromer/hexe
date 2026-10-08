@@ -1,0 +1,1006 @@
+//! Boolean SOP (token `boolean`): union / subtract (A-B) / intersect of two closed polygon meshes.
+//!
+//! # Semantics (UNVERIFIED vs Houdini: hython blocked; closed-form oracle only)
+//! * Inputs `input0` = A, `input1` = B. Only CLOSED polys with >= 3 corners take part (open / curve / other prims ignored).
+//!   Concave polys are ear-clipped, convex ones kept as n-gons. Non-finite `P` -> `Failed`.
+//! * Algorithm: BSP of each operand (iterative, no recursion; plane = first polygon of the node). Every polygon of A is split
+//!   by B's BSP into fragments tagged `Out` (outside B) / `In` (inside B) / `CoSame` / `CoOpp` (lying on a B face with the
+//!   same / opposite normal); B symmetrically against A. Coplanar parts are decided by clipping against the node's own faces,
+//!   so they are exact (no ordering artefacts).
+//! * Solid mode (`treat_as_solid` on, default): union = A.Out + B.Out + A.CoSame; subtract = A.Out + A.CoOpp + flipped B.In;
+//!   intersect = A.In + B.In + A.CoSame. Face-to-face contact (CoOpp / B.CoSame) is removed where it is interior.
+//!   Off (surface mode, no inside/outside bookkeeping): union = every fragment of A and B (coplanar B dropped); subtract =
+//!   A.Out + A.CoOpp (A trimmed, B contributes nothing); intersect = A.In + A.CoSame (A trimmed to B).
+//! * Cleanup: fragment vertices are welded (1e-5 grid), T-vertices are inserted along edges, fragments of the same source
+//!   face and tag are re-fused when their union is ONE simple loop (so an L-shaped remainder is one hexagon, not 3 quads), then
+//!   vertices collinear in every polygon that uses them are removed. A face with a hole stays as its un-fused fragments.
+//!   Fragments with different tags (e.g. the coplanar overlap and the rest of the same face) are NOT fused.
+//! * Output: `P` only; fresh points (only those used). Prim groups: `a_only` (from A, away from the cut), `b_only` (from B),
+//!   `seam` (from a source face that crosses or lies on the other operand's surface). Disjoint, cover every prim.
+//!   Other attributes / groups of the inputs are NOT carried.
+//! * Empty / no-closed-poly operand: union -> the other input (shared `Arc`), subtract -> A, intersect -> empty.
+//! * Hostile: `operation` > 2 -> `BadParam`; > 16384 polys per side or > 2^20 fragments -> `Failed`.
+use crate::SopNode;
+use hexe_geo::{AttrClass, Detail, Group, PrimKind};
+use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+const INPUTS: [InputSpec; 2] = [InputSpec { name: "input0" }, InputSpec { name: "input1" }];
+/// `operation` menu indices.
+const OP_UNION: u32 = 0;
+const OP_SUBTRACT: u32 = 1;
+const OP_INTERSECT: u32 = 2;
+/// Plane-distance tolerance.
+const EPS: f64 = 1e-6;
+const MAX_PRIMS: usize = 1 << 14;
+const MAX_FRAGS: usize = 1 << 20;
+/// Weld grid (1 / cell size).
+const WELD: f64 = 1e5;
+/// Product cap for the T-vertex scan.
+const MAX_TSCAN: u64 = 400_000_000;
+
+pub fn spec() -> Vec<ParamSpec> {
+    vec![
+        ParamSpec::new("operation", ParamValue::Menu(OP_UNION)).label("Operation"),
+        ParamSpec::new("treat_as_solid", ParamValue::B(true)).label("Treat As Solid"),
+    ]
+}
+pub fn new() -> Box<SopNode> {
+    Box::new(Boolean { specs: spec() })
+}
+struct Boolean {
+    specs: Vec<ParamSpec>,
+}
+fn bad(m: &str) -> CookError {
+    CookError::BadParam(format!("boolean: {m}"))
+}
+fn failed(m: &str) -> CookError {
+    CookError::Failed(format!("boolean: {m}"))
+}
+
+type V3 = [f64; 3];
+fn sub(a: V3, b: V3) -> V3 {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+fn dot(a: V3, b: V3) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+fn cross(a: V3, b: V3) -> V3 {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+fn len(a: V3) -> f64 {
+    dot(a, a).sqrt()
+}
+fn lerp(a: V3, b: V3, t: f64) -> V3 {
+    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+}
+
+/// Convex planar polygon with its supporting plane `n . x = w` (n unit, outward = right-handed corner order).
+#[derive(Clone)]
+struct Poly {
+    v: Vec<V3>,
+    n: V3,
+    w: f64,
+    src: u32,
+}
+
+fn newell(v: &[V3]) -> V3 {
+    let mut s = [0.0; 3];
+    let o = v.first().copied().unwrap_or([0.0; 3]);
+    for i in 0..v.len() {
+        let a = sub(v[i], o);
+        let b = sub(v[(i + 1) % v.len()], o);
+        let c = cross(a, b);
+        s = [s[0] + c[0], s[1] + c[1], s[2] + c[2]];
+    }
+    s
+}
+fn mk_poly(v: Vec<V3>, n: V3, w: f64, src: u32) -> Option<Poly> {
+    (v.len() >= 3 && len(newell(&v)) > 1e-12).then_some(Poly { v, n, w, src })
+}
+
+/// Ear-clip a (possibly concave) polygon with unit normal `n` into triangles (corner order kept).
+fn ear_clip(v: &[V3], n: V3) -> Vec<Vec<V3>> {
+    let k = if n[0].abs() >= n[1].abs() && n[0].abs() >= n[2].abs() {
+        0
+    } else if n[1].abs() >= n[2].abs() {
+        1
+    } else {
+        2
+    };
+    let sg = if n[k] < 0.0 { -1.0 } else { 1.0 };
+    let (a, b) = ((k + 1) % 3, (k + 2) % 3);
+    let p2 = |q: V3| [q[a] * sg, q[b]];
+    let cr = |o: [f64; 2], p: [f64; 2], q: [f64; 2]| (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+    let mut idx: Vec<usize> = (0..v.len()).collect();
+    let mut out = Vec::new();
+    while idx.len() > 3 {
+        let m = idx.len();
+        let ear = (0..m).find(|&i| {
+            let (ia, ib, ic) = (idx[(i + m - 1) % m], idx[i], idx[(i + 1) % m]);
+            let (pa, pb, pc) = (p2(v[ia]), p2(v[ib]), p2(v[ic]));
+            if cr(pa, pb, pc) <= 1e-12 {
+                return false;
+            }
+            !idx.iter().any(|&j| {
+                if j == ia || j == ib || j == ic {
+                    return false;
+                }
+                let q = p2(v[j]);
+                cr(pa, pb, q) >= -1e-12 && cr(pb, pc, q) >= -1e-12 && cr(pc, pa, q) >= -1e-12
+            })
+        });
+        // degenerate input without an ear: clip the first corner anyway (terminates)
+        let i = ear.unwrap_or(0);
+        out.push(vec![v[idx[(i + m - 1) % m]], v[idx[i]], v[idx[(i + 1) % m]]]);
+        idx.remove(i);
+    }
+    if let [x, y, z] = idx[..] {
+        out.push(vec![v[x], v[y], v[z]]);
+    }
+    out
+}
+
+/// Closed polys of `d` as convex `Poly`s (`src` = prim number).
+fn polys_of(d: &Detail) -> Result<Vec<Poly>, CookError> {
+    let pos = super::meshutil::positions(d);
+    if pos.iter().any(|q| q.iter().any(|c| !c.is_finite())) {
+        return Err(failed("non-finite P"));
+    }
+    let mut out = Vec::new();
+    for (qi, pr) in d.prims.iter().enumerate() {
+        let Some(ids) = super::meshutil::closed_poly_pts(d, pr) else { continue };
+        let v: Vec<V3> = ids.iter().filter_map(|&i| pos.get(i).copied()).collect();
+        let nw = newell(&v);
+        let l = len(nw);
+        if l.is_nan() || l <= 1e-12 {
+            continue;
+        }
+        let n = [nw[0] / l, nw[1] / l, nw[2] / l];
+        let w = v.iter().map(|&q| dot(n, q)).sum::<f64>() / v.len() as f64;
+        let src = u32::try_from(qi).map_err(|_| failed("prim id overflow"))?;
+        let convex = (0..v.len()).all(|i| {
+            let (a, b, c) = (v[(i + v.len() - 1) % v.len()], v[i], v[(i + 1) % v.len()]);
+            dot(cross(sub(b, a), sub(c, b)), n) >= -1e-9
+        });
+        if convex {
+            out.extend(mk_poly(v, n, w, src));
+        } else if v.len() <= 512 {
+            out.extend(ear_clip(&v, n).into_iter().filter_map(|t| mk_poly(t, n, w, src)));
+        } else {
+            return Err(failed("concave poly with more than 512 corners"));
+        }
+        if out.len() > MAX_PRIMS {
+            return Err(failed("too many polygons (max 16384 per operand)"));
+        }
+    }
+    Ok(out)
+}
+
+enum Side {
+    Front,
+    Back,
+    Coplanar,
+    Span(Poly, Poly),
+}
+/// Split `p` by the plane `pn . x = pw`.
+fn split(p: &Poly, pn: V3, pw: f64) -> Side {
+    let t: Vec<f64> = p.v.iter().map(|&q| dot(pn, q) - pw).collect();
+    let (nf, nb) = (t.iter().filter(|&&x| x > EPS).count(), t.iter().filter(|&&x| x < -EPS).count());
+    match (nf, nb) {
+        (0, 0) => Side::Coplanar,
+        (_, 0) => Side::Front,
+        (0, _) => Side::Back,
+        _ => {
+            let (mut f, mut b) = (Vec::new(), Vec::new());
+            let m = p.v.len();
+            for i in 0..m {
+                let j = (i + 1) % m;
+                let (vi, vj, ti, tj) = (p.v[i], p.v[j], t[i], t[j]);
+                let (fi, bi) = (ti > EPS, ti < -EPS);
+                let (fj, bj) = (tj > EPS, tj < -EPS);
+                if !bi {
+                    f.push(vi);
+                }
+                if !fi {
+                    b.push(vi);
+                }
+                if (fi && bj) || (bi && fj) {
+                    let x = lerp(vi, vj, ti / (ti - tj));
+                    f.push(x);
+                    b.push(x);
+                }
+            }
+            match (mk_poly(f, p.n, p.w, p.src), mk_poly(b, p.n, p.w, p.src)) {
+                (Some(a), Some(c)) => Side::Span(a, c),
+                (Some(_), None) => Side::Front,
+                (None, Some(_)) => Side::Back,
+                (None, None) => Side::Coplanar,
+            }
+        }
+    }
+}
+
+struct Node2 {
+    n: V3,
+    w: f64,
+    coplanar: Vec<Poly>,
+    front: Option<usize>,
+    back: Option<usize>,
+}
+/// BSP build work item: (parent node, front?) + polygons.
+type Work = (Option<(usize, bool)>, Vec<Poly>);
+/// Iterative BSP build (arena; depth is unbounded but stack-free).
+fn build(polys: Vec<Poly>) -> Result<Vec<Node2>, CookError> {
+    let mut nodes: Vec<Node2> = Vec::new();
+    let mut stack: Vec<Work> = vec![(None, polys)];
+    let mut made = 0usize;
+    while let Some((parent, list)) = stack.pop() {
+        let Some(first) = list.first() else { continue };
+        let (n, w) = (first.n, first.w);
+        let (mut cop, mut fr, mut bk) = (Vec::new(), Vec::new(), Vec::new());
+        for p in list {
+            match split(&p, n, w) {
+                Side::Coplanar => cop.push(p),
+                Side::Front => fr.push(p),
+                Side::Back => bk.push(p),
+                Side::Span(a, b) => {
+                    fr.push(a);
+                    bk.push(b);
+                }
+            }
+            made += 1;
+            if made > MAX_FRAGS {
+                return Err(failed("fragment limit exceeded"));
+            }
+        }
+        let me = nodes.len();
+        nodes.push(Node2 { n, w, coplanar: cop, front: None, back: None });
+        if let Some((pn, is_front)) = parent.and_then(|(pi, f)| nodes.get_mut(pi).map(|n| (n, f))) {
+            if is_front {
+                pn.front = Some(me);
+            } else {
+                pn.back = Some(me);
+            }
+        }
+        stack.push((Some((me, true)), fr));
+        stack.push((Some((me, false)), bk));
+    }
+    Ok(nodes)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Tag {
+    Out,
+    In,
+    CoSame,
+    CoOpp,
+}
+/// `r` clipped to the convex face `q` (same plane): (inside part, outside pieces).
+fn clip_to_face(r: Poly, q: &Poly) -> (Option<Poly>, Vec<Poly>) {
+    let mut outs = Vec::new();
+    let mut cur = Some(r);
+    let m = q.v.len();
+    for i in 0..m {
+        let Some(c) = cur.take() else { break };
+        let (a, b) = (q.v[i], q.v[(i + 1) % m]);
+        let e = cross(q.n, sub(b, a));
+        let l = len(e);
+        if l < 1e-12 {
+            cur = Some(c);
+            continue;
+        }
+        let en = [e[0] / l, e[1] / l, e[2] / l];
+        match split(&c, en, dot(en, a)) {
+            Side::Front | Side::Coplanar => cur = Some(c),
+            Side::Back => outs.push(c),
+            Side::Span(f, bk) => {
+                cur = Some(f);
+                outs.push(bk);
+            }
+        }
+    }
+    (cur, outs)
+}
+/// Classify every polygon of `polys` against the solid bounded by `bsp`.
+fn classify(polys: &[Poly], bsp: &[Node2]) -> Result<Vec<(Poly, Tag)>, CookError> {
+    let mut out: Vec<(Poly, Tag)> = Vec::new();
+    for p in polys {
+        let mut stack: Vec<(Option<usize>, Poly)> = vec![(if bsp.is_empty() { None } else { Some(0) }, p.clone())];
+        while let Some((ni, p)) = stack.pop() {
+            if out.len() > MAX_FRAGS {
+                return Err(failed("fragment limit exceeded"));
+            }
+            let Some(node) = ni.and_then(|i| bsp.get(i)) else {
+                out.push((p, Tag::Out));
+                continue;
+            };
+            let front = |p: Poly, stack: &mut Vec<(Option<usize>, Poly)>, out: &mut Vec<(Poly, Tag)>| match node.front {
+                Some(c) => stack.push((Some(c), p)),
+                None => out.push((p, Tag::Out)),
+            };
+            let back = |p: Poly, stack: &mut Vec<(Option<usize>, Poly)>, out: &mut Vec<(Poly, Tag)>| match node.back {
+                Some(c) => stack.push((Some(c), p)),
+                None => out.push((p, Tag::In)),
+            };
+            match split(&p, node.n, node.w) {
+                Side::Front => front(p, &mut stack, &mut out),
+                Side::Back => back(p, &mut stack, &mut out),
+                Side::Span(f, b) => {
+                    front(f, &mut stack, &mut out);
+                    back(b, &mut stack, &mut out);
+                }
+                Side::Coplanar => {
+                    let mut rem = vec![p.clone()];
+                    for q in &node.coplanar {
+                        let tag = if dot(p.n, q.n) > 0.0 { Tag::CoSame } else { Tag::CoOpp };
+                        let mut next = Vec::new();
+                        for r in rem {
+                            let (inside, outs) = clip_to_face(r, q);
+                            out.extend(inside.map(|i| (i, tag)));
+                            next.extend(outs);
+                        }
+                        rem = next;
+                    }
+                    for r in rem {
+                        front(r, &mut stack, &mut out);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Weld table (1e-5 grid).
+#[derive(Default)]
+struct Welder {
+    map: HashMap<[i64; 3], u32>,
+    pos: Vec<V3>,
+}
+impl Welder {
+    fn id(&mut self, q: V3) -> Result<u32, CookError> {
+        let k = [(q[0] * WELD).round() as i64, (q[1] * WELD).round() as i64, (q[2] * WELD).round() as i64];
+        if let Some(&i) = self.map.get(&k) {
+            return Ok(i);
+        }
+        let i = u32::try_from(self.pos.len()).map_err(|_| failed("point id overflow"))?;
+        self.map.insert(k, i);
+        self.pos.push(q);
+        Ok(i)
+    }
+}
+
+/// Insert, into every loop edge, every point that lies strictly inside it (sorted along the edge).
+fn insert_t_vertices(loops: &mut [Vec<u32>], pos: &[V3]) {
+    let edges: u64 = loops.iter().map(|l| l.len() as u64).sum();
+    if edges.saturating_mul(pos.len() as u64) > MAX_TSCAN {
+        return;
+    }
+    let mut by_x: Vec<u32> = (0..pos.len() as u32).collect();
+    by_x.sort_by(|&a, &b| pos[a as usize][0].total_cmp(&pos[b as usize][0]));
+    let xs: Vec<f64> = by_x.iter().map(|&i| pos[i as usize][0]).collect();
+    for l in loops.iter_mut() {
+        let mut nl = Vec::with_capacity(l.len());
+        for i in 0..l.len() {
+            let (a, b) = (l[i], l[(i + 1) % l.len()]);
+            nl.push(a);
+            let (pa, pb) = (pos[a as usize], pos[b as usize]);
+            let d = sub(pb, pa);
+            let dl = len(d);
+            if dl < 1e-9 {
+                continue;
+            }
+            let (lo, hi) = (pa[0].min(pb[0]) - 2e-5, pa[0].max(pb[0]) + 2e-5);
+            let s = xs.partition_point(|&x| x < lo);
+            let mut hits: Vec<(f64, u32)> = Vec::new();
+            for &c in by_x.iter().skip(s) {
+                let pc = pos[c as usize];
+                if pc[0] > hi {
+                    break;
+                }
+                if c == a || c == b {
+                    continue;
+                }
+                let t = dot(sub(pc, pa), d) / (dl * dl);
+                if t <= 1e-9 || t >= 1.0 - 1e-9 {
+                    continue;
+                }
+                if len(cross(sub(pc, pa), d)) / dl <= 2e-5 {
+                    hits.push((t, c));
+                }
+            }
+            hits.sort_by(|x, y| x.0.total_cmp(&y.0));
+            nl.extend(hits.into_iter().map(|h| h.1));
+        }
+        *l = nl;
+    }
+}
+
+/// Union of loops (same plane, same winding) as one simple loop, or `None` when it is not exactly one loop.
+fn fuse_loops(group: &[Vec<u32>]) -> Option<Vec<u32>> {
+    let mut edges: HashMap<(u32, u32), u32> = HashMap::new();
+    for l in group {
+        for i in 0..l.len() {
+            *edges.entry((l[i], l[(i + 1) % l.len()])).or_default() += 1;
+        }
+    }
+    let keep: Vec<(u32, u32)> =
+        edges.iter().filter(|&(&(a, b), &c)| c == 1 && !edges.contains_key(&(b, a))).map(|(&e, _)| e).collect();
+    if edges.values().any(|&c| c > 1) {
+        return None;
+    }
+    // every cancelled edge must cancel exactly one-to-one
+    let cancelled = edges.keys().filter(|&&(a, b)| edges.contains_key(&(b, a))).count();
+    let total = edges.len();
+    if keep.len() + cancelled != total {
+        return None;
+    }
+    let mut next: HashMap<u32, u32> = HashMap::new();
+    for &(a, b) in &keep {
+        if next.insert(a, b).is_some() {
+            return None;
+        }
+    }
+    let start = keep.iter().map(|e| e.0).min()?;
+    let mut lp = vec![start];
+    let mut cur = *next.get(&start)?;
+    while cur != start {
+        lp.push(cur);
+        if lp.len() > keep.len() {
+            return None;
+        }
+        cur = *next.get(&cur)?;
+    }
+    (lp.len() == keep.len() && lp.len() >= 3).then_some(lp)
+}
+
+/// Drop vertices that are collinear in EVERY loop that uses them; loops left with < 3 corners vanish.
+fn drop_collinear(loops: &mut Vec<(Vec<u32>, usize)>, pos: &[V3]) {
+    for _ in 0..4 {
+        let mut ok: HashMap<u32, bool> = HashMap::new();
+        for (l, _) in loops.iter() {
+            let m = l.len();
+            for i in 0..m {
+                let (a, b, c) = (pos[l[(i + m - 1) % m] as usize], pos[l[i] as usize], pos[l[(i + 1) % m] as usize]);
+                let (u, v) = (sub(b, a), sub(c, b));
+                let flat = len(cross(u, v)) <= 1e-7 * len(u) * len(v) && dot(u, v) > 0.0;
+                let e = ok.entry(l[i]).or_insert(true);
+                *e &= flat;
+            }
+        }
+        let mut changed = false;
+        for (l, _) in loops.iter_mut() {
+            let before = l.len();
+            l.retain(|v| !ok.get(v).copied().unwrap_or(false));
+            changed |= l.len() != before;
+        }
+        loops.retain(|(l, _)| l.len() >= 3);
+        if !changed {
+            break;
+        }
+    }
+}
+
+fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError> {
+    let (pa, pb) = (polys_of(a)?, polys_of(b)?);
+    let (bsp_a, bsp_b) = (build(pa.clone())?, build(pb.clone())?);
+    let ca = classify(&pa, &bsp_b)?;
+    let cb = classify(&pb, &bsp_a)?;
+    // seam: a source face that crosses (Out+In) or lies on (Co*) the other surface
+    let seam_of = |c: &[(Poly, Tag)]| -> HashSet<u32> {
+        let mut tags: HashMap<u32, (bool, bool, bool)> = HashMap::new();
+        for (p, t) in c {
+            let e = tags.entry(p.src).or_default();
+            match t {
+                Tag::Out => e.0 = true,
+                Tag::In => e.1 = true,
+                Tag::CoSame | Tag::CoOpp => e.2 = true,
+            }
+        }
+        tags.into_iter().filter(|(_, (o, i, c))| *c || (*o && *i)).map(|(k, _)| k).collect()
+    };
+    let (seam_a, seam_b) = (seam_of(&ca), seam_of(&cb));
+    // (poly, side 0=A/1=B, tag, flip)
+    let mut kept: Vec<(Poly, u8, Tag, bool)> = Vec::new();
+    for (p, t) in ca {
+        let take = matches!(
+            (op, solid, t),
+            (OP_UNION, true, Tag::Out | Tag::CoSame)
+                | (OP_UNION, false, _)
+                | (OP_SUBTRACT, _, Tag::Out | Tag::CoOpp)
+                | (OP_INTERSECT, _, Tag::In | Tag::CoSame)
+        );
+        if take {
+            kept.push((p, 0, t, false));
+        }
+    }
+    for (p, t) in cb {
+        let (take, flip) = match (op, solid, t) {
+            (OP_UNION, true, Tag::Out) => (true, false),
+            (OP_UNION, false, Tag::Out | Tag::In | Tag::CoOpp) => (true, false),
+            (OP_SUBTRACT, true, Tag::In) => (true, true),
+            (OP_INTERSECT, true, Tag::In) => (true, false),
+            _ => (false, false),
+        };
+        if take {
+            kept.push((p, 1, t, flip));
+        }
+    }
+    // weld
+    let mut w = Welder::default();
+    // (loop, key) where key indexes `meta`
+    let mut meta: Vec<(u8, u32, Tag, bool)> = Vec::new();
+    let mut meta_ix: HashMap<(u8, u32, u8, bool), usize> = HashMap::new();
+    let mut loops: Vec<(Vec<u32>, usize)> = Vec::new();
+    for (p, side, t, flip) in kept {
+        let mut ids: Vec<u32> = Vec::with_capacity(p.v.len());
+        for q in &p.v {
+            let i = w.id(*q)?;
+            if ids.last() != Some(&i) {
+                ids.push(i);
+            }
+        }
+        while ids.len() > 1 && ids.first() == ids.last() {
+            ids.pop();
+        }
+        if ids.len() < 3 {
+            continue;
+        }
+        if flip {
+            ids.reverse();
+        }
+        let key = (side, p.src, t as u8, flip);
+        let m = *meta_ix.entry(key).or_insert_with(|| {
+            meta.push((side, p.src, t, flip));
+            meta.len() - 1
+        });
+        loops.push((ids, m));
+    }
+    // T-vertices, fuse per (source, tag), drop collinear
+    let mut only: Vec<Vec<u32>> = loops.iter().map(|l| l.0.clone()).collect();
+    insert_t_vertices(&mut only, &w.pos);
+    for (l, o) in loops.iter_mut().zip(only) {
+        l.0 = o;
+    }
+    let mut groups: Vec<Vec<usize>> = vec![Vec::new(); meta.len()];
+    for (i, (_, m)) in loops.iter().enumerate() {
+        groups[*m].push(i);
+    }
+    let mut fused: Vec<(Vec<u32>, usize)> = Vec::new();
+    for (m, g) in groups.iter().enumerate() {
+        let ls: Vec<Vec<u32>> = g.iter().filter_map(|&i| loops.get(i).map(|l| l.0.clone())).collect();
+        match (ls.len() > 1).then(|| fuse_loops(&ls)).flatten() {
+            Some(l) => fused.push((l, m)),
+            None => fused.extend(ls.into_iter().map(|l| (l, m))),
+        }
+    }
+    drop_collinear(&mut fused, &w.pos);
+    // emit
+    let mut used: Vec<u32> = fused.iter().flat_map(|(l, _)| l.iter().copied()).collect();
+    used.sort_unstable();
+    used.dedup();
+    let remap: HashMap<u32, u32> = used.iter().enumerate().map(|(k, &o)| (o, k as u32)).collect();
+    let mut d = Detail::default();
+    d.add_points(u32::try_from(used.len()).map_err(|_| failed("point id overflow"))?);
+    *d.p_mut() = used
+        .iter()
+        .map(|&o| {
+            let q = w.pos.get(o as usize).copied().unwrap_or([0.0; 3]);
+            [q[0] as f32, q[1] as f32, q[2] as f32]
+        })
+        .collect();
+    let (mut ga, mut gb, mut gs) = (Vec::new(), Vec::new(), Vec::new());
+    for (l, m) in &fused {
+        let pts: Vec<u32> = l.iter().filter_map(|v| remap.get(v).copied()).collect();
+        d.add_poly(&pts, true);
+        let (side, src, _, _) = meta[*m];
+        let seam = if side == 0 { seam_a.contains(&src) } else { seam_b.contains(&src) };
+        ga.push(side == 0 && !seam);
+        gb.push(side == 1 && !seam);
+        gs.push(seam);
+    }
+    for (name, mask) in [("a_only", ga), ("b_only", gb), ("seam", gs)] {
+        d.groups.push(Group { name: name.into(), class: AttrClass::Prim, mask });
+    }
+    Ok(d)
+}
+
+fn has_solid(d: &Detail) -> bool {
+    d.prims.iter().any(|p| matches!(p.kind, PrimKind::Poly { closed: true }) && p.verts.len() >= 3)
+}
+
+impl Node<Detail> for Boolean {
+    fn type_name(&self) -> &'static str {
+        "boolean"
+    }
+    fn inputs(&self) -> &[InputSpec] {
+        &INPUTS
+    }
+    fn params(&self) -> &[ParamSpec] {
+        &self.specs
+    }
+    fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
+        let p = ctx.params;
+        let op = match p.menu("operation") {
+            Some(v) if v <= OP_INTERSECT => v,
+            _ => return Err(bad("`operation`: missing or menu index out of range 0..=2")),
+        };
+        let solid = p.toggle("treat_as_solid").ok_or_else(|| bad("`treat_as_solid`: missing or not a toggle"))?;
+        let empty = Arc::new(Detail::default());
+        let a = inputs.first().unwrap_or(&empty);
+        let b = inputs.get(1).unwrap_or(&empty);
+        match (has_solid(a), has_solid(b), op) {
+            (false, false, _) => Ok(empty),
+            (false, true, OP_UNION) => Ok(Arc::clone(b)),
+            (false, _, _) => Ok(empty),
+            (true, false, OP_INTERSECT) => Ok(empty),
+            (true, false, _) => Ok(Arc::clone(a)),
+            (true, true, _) => Ok(Arc::new(run(a, b, op, solid)?)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::load_scene;
+    use hexe_graph::ParamSet;
+
+    /// Cube corner `i` (bit2 -> x, bit1 -> y, bit0 -> z), each coordinate centre +- size/2.
+    const FACES: [[u32; 4]; 6] = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+    fn cube(c: [f32; 3], s: [f32; 3]) -> Detail {
+        let mut d = Detail::default();
+        d.add_points(8);
+        for i in 0..8u32 {
+            let k = |b: u32, a: usize| c[a] + if (i >> b) & 1 == 1 { s[a] / 2.0 } else { -s[a] / 2.0 };
+            d.p_mut()[i as usize] = [k(2, 0), k(1, 1), k(0, 2)];
+        }
+        for f in FACES {
+            d.add_poly(&f, true);
+        }
+        d
+    }
+    fn unit(c: [f32; 3]) -> Detail {
+        cube(c, [1.0; 3])
+    }
+    /// L-shaped prism: L (0,0)(2,0)(2,1)(1,1)(1,2)(0,2) extruded z 0..1. Area 3 -> volume 3. Concave caps.
+    fn l_prism() -> Detail {
+        let ring = [[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0], [1.0, 2.0], [0.0, 2.0]];
+        let mut d = Detail::default();
+        d.add_points(12);
+        for (i, q) in ring.iter().enumerate() {
+            d.p_mut()[i] = [q[0], q[1], 0.0];
+            d.p_mut()[6 + i] = [q[0], q[1], 1.0];
+        }
+        d.add_poly(&[5, 4, 3, 2, 1, 0], true);
+        d.add_poly(&[6, 7, 8, 9, 10, 11], true);
+        for i in 0..6u32 {
+            let j = (i + 1) % 6;
+            d.add_poly(&[i, j, 6 + j, 6 + i], true);
+        }
+        d
+    }
+    fn run_with(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Arc<Detail>, CookError> {
+        let p = ParamSet::new().with("operation", ParamValue::Menu(op)).with("treat_as_solid", ParamValue::B(solid));
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+        new().cook(&ctx, &[Arc::new(a.clone()), Arc::new(b.clone())])
+    }
+    fn bool_(a: &Detail, b: &Detail, op: u32) -> Arc<Detail> {
+        run_with(a, b, op, true).expect("cooks")
+    }
+    fn corners(d: &Detail) -> Vec<usize> {
+        let mut v: Vec<usize> = d.prims.iter().map(|p| p.verts.len()).collect();
+        v.sort_unstable();
+        v
+    }
+    /// Signed volume by the divergence theorem (fan triangles), independent of the SOP.
+    fn volume(d: &Detail) -> f64 {
+        let p = |i: u32| d.p()[i as usize].map(f64::from);
+        let mut v = 0.0;
+        for pr in &d.prims {
+            let ids = &d.vertex_point[pr.verts.start as usize..pr.verts.end as usize];
+            for k in 1..ids.len() - 1 {
+                let (a, b, c) = (p(ids[0]), p(ids[k]), p(ids[k + 1]));
+                v += dot(a, cross(b, c)) / 6.0;
+            }
+        }
+        v
+    }
+    /// Every directed edge occurs once and its reverse occurs once (closed 2-manifold, no T-junctions).
+    fn assert_watertight(d: &Detail) {
+        let mut e: HashMap<(u32, u32), u32> = HashMap::new();
+        for pr in &d.prims {
+            let ids = &d.vertex_point[pr.verts.start as usize..pr.verts.end as usize];
+            for i in 0..ids.len() {
+                *e.entry((ids[i], ids[(i + 1) % ids.len()])).or_default() += 1;
+            }
+        }
+        for (&(a, b), &c) in &e {
+            assert_eq!(c, 1, "edge {a}->{b} repeated");
+            assert_eq!(e.get(&(b, a)), Some(&1), "edge {a}->{b} has no unique partner (T-junction / open)");
+        }
+    }
+    fn euler(d: &Detail) -> i64 {
+        let sides: usize = d.prims.iter().map(|p| p.verts.len()).sum();
+        i64::from(d.point_count) - (sides / 2) as i64 + d.prims.len() as i64
+    }
+    fn pts(d: &Detail) -> Vec<[i64; 3]> {
+        let mut v: Vec<[i64; 3]> = d.p().iter().map(|q| q.map(|c| (f64::from(c) * 1000.0).round() as i64)).collect();
+        v.sort_unstable();
+        v
+    }
+    fn group_count(d: &Detail, n: &str) -> usize {
+        d.group(AttrClass::Prim, n).map_or(usize::MAX, |g| g.mask.iter().filter(|b| **b).count())
+    }
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-6
+    }
+
+    #[test]
+    fn params_and_defaults() {
+        let n = new();
+        assert_eq!(n.type_name(), "boolean");
+        let names: Vec<&str> = n.inputs().iter().map(|i| i.name).collect();
+        assert_eq!(names, ["input0", "input1"]);
+        let got: Vec<(&str, ParamValue)> = n.params().iter().map(|s| (s.name.as_str(), s.default.clone())).collect();
+        assert_eq!(got, [("operation", ParamValue::Menu(OP_UNION)), ("treat_as_solid", ParamValue::B(true))]);
+    }
+
+    #[test]
+    fn union_of_cubes_offset_along_x_by_half_is_14_quads_16_points() {
+        // A=[-.5,.5]^3, B=[0,1]x[-.5,.5]^2. Hand count: -x cap (A) + +x cap (B) + 4 sides x 3 strips
+        // (A only x[-.5,0], overlap x[0,.5] once, B only x[.5,1]) = 14; points = 4 x-slices x 4 = 16; chi = 2.
+        let out = bool_(&unit([0.0; 3]), &unit([0.5, 0.0, 0.0]), OP_UNION);
+        assert_eq!((out.point_count, out.prim_count()), (16, 14));
+        assert_eq!(corners(&out), [4; 14]);
+        let mut want = Vec::new();
+        for x in [-500, 0, 500, 1000] {
+            for y in [-500, 500] {
+                for z in [-500, 500] {
+                    want.push([x, y, z]);
+                }
+            }
+        }
+        want.sort_unstable();
+        assert_eq!(pts(&out), want);
+        assert!(close(volume(&out), 1.5), "{}", volume(&out));
+        assert_eq!(euler(&out), 2);
+        assert_watertight(&out);
+        // groups: A cap alone, B cap alone, the 12 side strips lie on the shared surface
+        assert_eq!((group_count(&out, "a_only"), group_count(&out, "b_only"), group_count(&out, "seam")), (1, 1, 12));
+    }
+
+    #[test]
+    fn union_of_cubes_offset_diagonally_is_6_quads_6_hexagons_20_points() {
+        // A=[-.5,.5]^3, B=[0,1]^3. A: 3 faces whole + 3 L-shaped (face minus a .5 square) ; same for B.
+        // Points: 7 + 7 outside corners + 6 cut-curve corners = 20; sides 6*4+6*6 = 60 -> E=30; V-E+F = 20-30+12 = 2.
+        let out = bool_(&unit([0.0; 3]), &unit([0.5; 3]), OP_UNION);
+        assert_eq!((out.point_count, out.prim_count()), (20, 12));
+        assert_eq!(corners(&out), [4, 4, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6]);
+        assert_eq!(euler(&out), 2);
+        assert!(close(volume(&out), 2.0 - 0.125), "{}", volume(&out));
+        assert_watertight(&out);
+        let p = pts(&out);
+        for must in [[500, 0, 0], [0, 500, 500], [500, 500, 0], [0, 0, 500], [1000, 1000, 1000], [-500, -500, -500]] {
+            assert!(p.contains(&must), "missing {must:?}");
+        }
+        for gone in [[500, 500, 500], [0, 0, 0]] {
+            assert!(!p.contains(&gone), "interior corner {gone:?} survived");
+        }
+        assert_eq!(group_count(&out, "a_only") + group_count(&out, "b_only") + group_count(&out, "seam"), 12);
+        assert_eq!((group_count(&out, "a_only"), group_count(&out, "b_only")), (3, 3));
+    }
+
+    #[test]
+    fn subtract_cube_minus_cube_diagonal_is_9_prims_14_points() {
+        // A - B : A's 3 whole faces + 3 hexagons + B's 3 inner squares (flipped). Points 7+3+3+1 = 14; sides 6*4+3*6 = 42.
+        let out = bool_(&unit([0.0; 3]), &unit([0.5; 3]), OP_SUBTRACT);
+        assert_eq!((out.point_count, out.prim_count()), (14, 9));
+        assert_eq!(corners(&out), [4, 4, 4, 4, 4, 4, 6, 6, 6]);
+        assert_eq!(euler(&out), 2);
+        assert!(close(volume(&out), 1.0 - 0.125), "{}", volume(&out));
+        assert_watertight(&out);
+        assert!(pts(&out).contains(&[0, 0, 0]), "inner corner of the notch");
+    }
+
+    #[test]
+    fn intersect_cube_cube_diagonal_is_the_half_cube() {
+        let out = bool_(&unit([0.0; 3]), &unit([0.5; 3]), OP_INTERSECT);
+        assert_eq!((out.point_count, out.prim_count()), (8, 6));
+        let mut want = Vec::new();
+        for x in [0, 500] {
+            for y in [0, 500] {
+                for z in [0, 500] {
+                    want.push([x, y, z]);
+                }
+            }
+        }
+        assert_eq!(pts(&out), want);
+        assert!(close(volume(&out), 0.125), "{}", volume(&out));
+        assert_watertight(&out);
+        // A's three faces and B's three faces contribute 3 each
+        assert_eq!(group_count(&out, "seam"), 6);
+    }
+
+    #[test]
+    fn cube_minus_nested_cube_proxy_for_a_low_res_sphere_is_a_hollow_12_prims_16_points() {
+        let out = bool_(&unit([0.0; 3]), &cube([0.0; 3], [0.5; 3]), OP_SUBTRACT);
+        assert_eq!((out.point_count, out.prim_count()), (16, 12));
+        assert!(close(volume(&out), 1.0 - 0.125), "{}", volume(&out));
+        assert_watertight(&out);
+        assert_eq!((group_count(&out, "a_only"), group_count(&out, "b_only"), group_count(&out, "seam")), (6, 6, 0));
+        // outer shell outward (+1), inner shell inward (-.125 of volume) : union & intersect with a nested cube
+        let u = bool_(&unit([0.0; 3]), &cube([0.0; 3], [0.5; 3]), OP_UNION);
+        assert_eq!((u.point_count, u.prim_count()), (8, 6));
+        let i = bool_(&unit([0.0; 3]), &cube([0.0; 3], [0.5; 3]), OP_INTERSECT);
+        assert_eq!((i.point_count, i.prim_count()), (8, 6));
+        assert!(close(volume(&i), 0.125));
+    }
+
+    #[test]
+    fn cube_minus_cube_poking_out_of_a_face_makes_a_notch_without_t_junctions() {
+        // B = [.25,.75]x[-.25,.25]^2 pokes through A's +x face (a hole in the face: not fusable into one polygon)
+        let b = cube([0.5, 0.0, 0.0], [0.5; 3]);
+        let s = bool_(&unit([0.0; 3]), &b, OP_SUBTRACT);
+        assert!(close(volume(&s), 1.0 - 0.0625), "{}", volume(&s));
+        assert_watertight(&s);
+        let u = bool_(&unit([0.0; 3]), &b, OP_UNION);
+        assert!(close(volume(&u), 1.0 + 0.125 - 0.0625), "{}", volume(&u));
+        assert_watertight(&u);
+        let i = bool_(&unit([0.0; 3]), &b, OP_INTERSECT);
+        assert!(close(volume(&i), 0.0625), "{}", volume(&i));
+        assert_watertight(&i);
+    }
+
+    #[test]
+    fn identical_cubes_union_and_intersect_are_the_cube_and_subtract_is_empty() {
+        let a = unit([0.0; 3]);
+        for op in [OP_UNION, OP_INTERSECT] {
+            let o = bool_(&a, &a, op);
+            assert_eq!((o.point_count, o.prim_count()), (8, 6), "op {op}");
+            assert!(close(volume(&o), 1.0));
+        }
+        let s = bool_(&a, &a, OP_SUBTRACT);
+        assert_eq!((s.point_count, s.prim_count()), (0, 0));
+    }
+
+    #[test]
+    fn face_touching_cubes_union_drops_the_shared_face() {
+        let (a, b) = (unit([0.0; 3]), unit([1.0, 0.0, 0.0]));
+        let u = bool_(&a, &b, OP_UNION);
+        // 12 side quads + 2 outer caps; the contact faces cancel. Points: 3 x-slices x 4.
+        assert_eq!((u.point_count, u.prim_count()), (12, 10));
+        assert!(close(volume(&u), 2.0));
+        assert_watertight(&u);
+        let i = bool_(&a, &b, OP_INTERSECT);
+        assert_eq!((i.point_count, i.prim_count()), (0, 0));
+        let s = bool_(&a, &b, OP_SUBTRACT);
+        assert_eq!((s.point_count, s.prim_count()), (8, 6));
+        assert!(close(volume(&s), 1.0));
+    }
+
+    #[test]
+    fn disjoint_cubes() {
+        let (a, b) = (unit([0.0; 3]), unit([5.0, 0.0, 0.0]));
+        let u = bool_(&a, &b, OP_UNION);
+        assert_eq!((u.point_count, u.prim_count()), (16, 12));
+        assert_eq!((group_count(&u, "a_only"), group_count(&u, "b_only"), group_count(&u, "seam")), (6, 6, 0));
+        assert_eq!(bool_(&a, &b, OP_INTERSECT).prim_count(), 0);
+        let s = bool_(&a, &b, OP_SUBTRACT);
+        assert_eq!((s.point_count, s.prim_count()), (8, 6));
+    }
+
+    #[test]
+    fn concave_operand_l_prism_keeps_hexagon_caps() {
+        // L prism (volume 3) beside a distant cube: 6 side quads + 2 hexagon caps (ear-clipped, then re-fused) + 6 = 14 prims, 12 + 8 points
+        let out = bool_(&l_prism(), &unit([9.0, 9.0, 0.5]), OP_UNION);
+        assert_eq!((out.point_count, out.prim_count()), (20, 14));
+        assert_eq!(corners(&out).iter().filter(|&&c| c == 6).count(), 2);
+        assert!(close(volume(&out), 4.0), "{}", volume(&out));
+        assert_watertight(&out);
+    }
+
+    #[test]
+    fn concave_operand_notch_filled_by_a_cube_gives_a_2x2_slab() {
+        let fill = cube([1.5, 1.5, 0.5], [1.0; 3]);
+        let u = bool_(&l_prism(), &fill, OP_UNION);
+        assert!(close(volume(&u), 4.0), "{}", volume(&u));
+        assert_watertight(&u);
+        // a slab x[-.5,1.5] y[-.5,.5] z[0,1] (caps coplanar with the prism's) overlaps the L in x[0,1.5] y[0,.5]: .75
+        let cut = cube([0.5, 0.0, 0.5], [2.0, 1.0, 1.0]);
+        let s = bool_(&l_prism(), &cut, OP_SUBTRACT);
+        assert!(close(volume(&s), 2.25), "{}", volume(&s));
+        assert_watertight(&s);
+        let i = bool_(&l_prism(), &cut, OP_INTERSECT);
+        assert!(close(volume(&i), 0.75), "{}", volume(&i));
+        assert_watertight(&i);
+    }
+
+    #[test]
+    fn surface_mode_cuts_without_inside_removal() {
+        let (a, b) = (unit([0.0; 3]), unit([0.5; 3]));
+        // A.Out : 3 whole faces + 3 hexagons
+        let s = run_with(&a, &b, OP_SUBTRACT, false).expect("cooks");
+        assert_eq!(corners(&s), [4, 4, 4, 6, 6, 6]);
+        // A.In : 3 squares
+        let i = run_with(&a, &b, OP_INTERSECT, false).expect("cooks");
+        assert_eq!(corners(&i), [4, 4, 4]);
+        // every fragment of both: A 3 + 3*2, B 3 + 3*2
+        let u = run_with(&a, &b, OP_UNION, false).expect("cooks");
+        assert_eq!(u.prim_count(), 18);
+    }
+
+    #[test]
+    fn empty_and_open_operands() {
+        let a = Arc::new(unit([0.0; 3]));
+        let e = Arc::new(Detail::default());
+        let cook = |op, i: &[Arc<Detail>]| {
+            let p = ParamSet::new().with("operation", ParamValue::Menu(op)).with("treat_as_solid", ParamValue::B(true));
+            new().cook(&CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} }, i).expect("cooks")
+        };
+        assert!(Arc::ptr_eq(&cook(OP_UNION, &[Arc::clone(&a), Arc::clone(&e)]), &a));
+        assert!(Arc::ptr_eq(&cook(OP_UNION, &[Arc::clone(&e), Arc::clone(&a)]), &a));
+        assert!(Arc::ptr_eq(&cook(OP_SUBTRACT, &[Arc::clone(&a), Arc::clone(&e)]), &a));
+        assert_eq!(cook(OP_SUBTRACT, &[Arc::clone(&e), Arc::clone(&a)]).prim_count(), 0);
+        assert_eq!(cook(OP_INTERSECT, &[Arc::clone(&a), Arc::clone(&e)]).prim_count(), 0);
+        assert_eq!(cook(OP_UNION, &[]).prim_count(), 0);
+        // an open poly is not a solid
+        let mut open = Detail::default();
+        open.add_points(3);
+        *open.p_mut() = vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        open.add_poly(&[0, 1, 2], false);
+        assert!(Arc::ptr_eq(&cook(OP_UNION, &[Arc::clone(&a), Arc::new(open)]), &a));
+    }
+
+    #[test]
+    fn hostile_params_nan_and_reversed_winding() {
+        let a = unit([0.0; 3]);
+        for op in [3u32, 99] {
+            assert!(matches!(run_with(&a, &a, op, true), Err(CookError::BadParam(_))));
+        }
+        let missing = ParamSet::new();
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &missing, log: &|_| {} };
+        assert!(matches!(new().cook(&ctx, &[Arc::new(a.clone())]), Err(CookError::BadParam(_))));
+        let mut nan = unit([0.0; 3]);
+        nan.p_mut()[3] = [f32::NAN, 0.0, 0.0];
+        assert!(matches!(run_with(&a, &nan, OP_UNION, true), Err(CookError::Failed(_))));
+        // degenerate prims (zero area) are ignored, huge coordinates do not panic
+        let mut big = unit([0.0; 3]);
+        big.p_mut()[0] = [f32::MAX, f32::MIN, 0.0];
+        let _ = run_with(&a, &big, OP_UNION, true);
+        let mut flat = Detail::default();
+        flat.add_points(4);
+        *flat.p_mut() = vec![[0.0; 3]; 4];
+        flat.add_poly(&[0, 1, 2, 3], true);
+        assert_eq!(
+            run_with(&a, &flat, OP_UNION, true).expect("cooks").prim_count(),
+            6,
+            "zero-area poly is not a solid"
+        );
+    }
+
+    #[test]
+    fn many_small_cubes_finish_fast() {
+        // 31 cubes (one overlapping the cutter) : BSP stays fast
+        let mut a = unit([0.0; 3]);
+        for k in 0..30 {
+            a.merge(&cube([k as f32 * 0.01 + 3.0, 0.0, 0.0], [0.1; 3]));
+        }
+        let t = std::time::Instant::now();
+        let out = bool_(&a, &unit([0.3, 0.0, 0.0]), OP_UNION);
+        assert!(out.prim_count() > 0);
+        assert!(t.elapsed().as_secs() < 10, "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn example_scene_cooks_and_registry_has_slot() {
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/boolean.json"))
+            .expect("example present");
+        let (mut g, id) = load_scene(&ex).expect("example loads");
+        let out = g.cook(id, 0.0).expect("example cooks");
+        assert_eq!((out.point_count, out.prim_count()), (14, 9), "box - offset box (diagonal)");
+        assert_eq!(crate::registry().create("boolean").map(|n| n.type_name()), Some("boolean"));
+    }
+}
