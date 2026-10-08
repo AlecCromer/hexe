@@ -7,3 +7,4 @@ fuzz-out/
 dist/
 target/
 file-rop-out.*
+__pycache__/

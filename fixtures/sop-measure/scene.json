@@ -1,0 +1,25 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "measure1",
+   "type": "measure",
+   "params": {
+    "measure": 0,
+    "attribname": "area"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "measure1",
+   0
+  ]
+ ],
+ "display": "measure1"
+}

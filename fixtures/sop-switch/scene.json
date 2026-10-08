@@ -1,0 +1,58 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "null1",
+   "type": "null"
+  },
+  {
+   "name": "switch1",
+   "type": "switch",
+   "params": {
+    "input": 0
+   }
+  },
+  {
+   "name": "out1",
+   "type": "output"
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "null1",
+   0
+  ],
+  [
+   "null1",
+   0,
+   "switch1",
+   0
+  ],
+  [
+   "grid1",
+   0,
+   "switch1",
+   1
+  ],
+  [
+   "switch1",
+   0,
+   "out1",
+   0
+  ]
+ ],
+ "display": "out1"
+}

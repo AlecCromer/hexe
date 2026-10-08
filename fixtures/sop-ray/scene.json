@@ -1,0 +1,53 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3,
+    "size": [
+     0.8,
+     0.8,
+     0
+    ],
+    "t": [
+     0,
+     3,
+     0
+    ]
+   }
+  },
+  {
+   "name": "ray1",
+   "type": "ray",
+   "params": {
+    "method": 1,
+    "dir": [
+     0,
+     -1,
+     0
+    ]
+   }
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "ray1",
+   0
+  ],
+  [
+   "box1",
+   0,
+   "ray1",
+   1
+  ]
+ ],
+ "display": "ray1"
+}

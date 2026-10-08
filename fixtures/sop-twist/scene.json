@@ -1,0 +1,30 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "twist1",
+   "type": "twist",
+   "params": {
+    "origin": [
+     0,
+     -0.5,
+     0
+    ],
+    "length": 1,
+    "angle": 90
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "twist1",
+   0
+  ]
+ ],
+ "display": "twist1"
+}

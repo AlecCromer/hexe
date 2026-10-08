@@ -1,0 +1,44 @@
+{
+ "nodes": [
+  {
+   "name": "line1",
+   "type": "line",
+   "params": {
+    "origin": [
+     0,
+     0,
+     0
+    ],
+    "dir": [
+     0,
+     1,
+     0
+    ],
+    "dist": 4,
+    "points": 5
+   }
+  },
+  {
+   "name": "bend1",
+   "type": "bend",
+   "params": {
+    "length": 4,
+    "angle": 90,
+    "side": [
+     -1,
+     0,
+     0
+    ]
+   }
+  }
+ ],
+ "edges": [
+  [
+   "line1",
+   0,
+   "bend1",
+   0
+  ]
+ ],
+ "display": "bend1"
+}

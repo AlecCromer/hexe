@@ -1,0 +1,30 @@
+{
+ "nodes": [
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 11,
+    "cols": 11
+   }
+  },
+  {
+   "name": "mountain1",
+   "type": "mountain",
+   "params": {
+    "height": 0.5,
+    "elementsize": 3,
+    "seed": 3
+   }
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "mountain1",
+   0
+  ]
+ ],
+ "display": "mountain1"
+}

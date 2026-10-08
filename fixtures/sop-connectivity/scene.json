@@ -1,0 +1,61 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "box2",
+   "type": "box"
+  },
+  {
+   "name": "move",
+   "type": "xform",
+   "params": {
+    "t": [
+     3,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "name": "merge1",
+   "type": "merge"
+  },
+  {
+   "name": "conn1",
+   "type": "connectivity",
+   "params": {
+    "connecttype": 0
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box2",
+   0,
+   "move",
+   0
+  ],
+  [
+   "box1",
+   0,
+   "merge1",
+   0
+  ],
+  [
+   "move",
+   0,
+   "merge1",
+   1
+  ],
+  [
+   "merge1",
+   0,
+   "conn1",
+   0
+  ]
+ ],
+ "display": "conn1"
+}
