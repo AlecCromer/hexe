@@ -22,6 +22,7 @@ mod attribtransfer_sop;
 //
 mod blast_sop;
 //
+mod block_sop;
 mod boolean_sop;
 //
 mod box_sop;
@@ -102,6 +103,9 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("blast", blast_sop::spec, blast_sop::new);
     //
+    r.register("block_begin", block_sop::begin_spec, block_sop::begin_new);
+    //
+    r.register("block_end", block_sop::end_spec, block_sop::end_new);
     r.register("boolean", boolean_sop::spec, boolean_sop::new);
     //
     r.register("box", box_sop::spec, box_sop::new);
