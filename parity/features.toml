@@ -1189,3 +1189,20 @@ evidence = [
   "crates/sop/src/builtins/revolve_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "S2: origin(0) dir(0,1,0) startangle(0) endangle(360) divs(12, >=3 full / >=1 partial) tris(off, extra). Right-hand rotation about dir (+X -> -Z about +Y). |span| >= 360 = full turn, seam wraps (divs columns, no duplicate points), else divs+1 columns. Profile points on the axis (<1e-6) become one shared point (half circle -> closed sphere, volume within 10% of 4/3 pi at 24 divs); segments on the axis emit nothing. Upward profile at +radius -> outward normals. Vertex uv V3 (u = col/divs, v = profile arclength). NOT modelled (DEFERRED): caps, NURBS/Bezier output, attribute inheritance, per-point axis. UNVERIFIED vs Houdini (hython blocked): parm names beyond origin/dir/angles/divs, winding vs Houdini on reversed profiles, uv. Example: examples/revolve.json (torus). Analytical oracle only."
+
+[[feature]]
+id = "sop-skin"
+title = "Skin SOP (ruled loft through the curve prims of one input; resample, closev, quads/triangles)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["skin"]
+evidence = [
+  "crates/sop/src/builtins/skin_sop.rs::two_squares_loft_into_four_outward_quads",
+  "crates/sop/src/builtins/skin_sop.rs::closev_wraps_three_sections_and_uv_spans_the_unit_square",
+  "crates/sop/src/builtins/skin_sop.rs::mismatched_counts_resample_to_the_largest_or_fail",
+  "crates/sop/src/builtins/skin_sop.rs::open_curves_make_an_open_sheet_and_mixed_closure_is_open",
+  "crates/sop/src/builtins/skin_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/skin_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "S2: surftype(quads|triangles) closev(off, needs >=3 sections) resample(on). Sections = curve prims in prim order; closed in u iff ALL closed; differing point counts resample by arclength to the largest count (off -> Failed). Straight ruled loft, Houdini normal = u x v (CCW rings lofted along +axis -> outward). Vertex uv V3. NOT modelled (DEFERRED): keepshape/knot interpolation, uniform, order, extra divs between sections, NURBS output, attribute carry. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini skin has surftype/keepshape/closeu/closev/prim-order), section order, resample rule. Example: examples/skin.json. Analytical oracle only."

@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    { "name": "low", "type": "circle", "params": { "orient": 2, "radius": [1.0, 1.0, 0.0], "divisions": 12 } },
+    { "name": "mid", "type": "circle", "params": { "orient": 2, "center": [0.0, 1.0, 0.0], "radius": [0.5, 0.5, 0.0], "divisions": 8 } },
+    { "name": "high", "type": "circle", "params": { "orient": 2, "center": [0.0, 2.0, 0.0], "radius": [1.0, 1.0, 0.0], "divisions": 12 } },
+    { "name": "merge1", "type": "merge" },
+    { "name": "skin1", "type": "skin" }
+  ],
+  "edges": [["low", 0, "merge1", 0], ["mid", 0, "merge1", 1], ["high", 0, "merge1", 2], ["merge1", 0, "skin1", 0]],
+  "display": "skin1"
+}

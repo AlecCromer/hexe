@@ -122,6 +122,7 @@ mod wrangle_sop;
 mod surfutil;
 mod sweep_sop;
 mod revolve_sop;
+mod skin_sop;
 // --- end S2 mods ---
 
 /// One `r.register("<type>", <mod>::spec, <mod>::new);` per SOP.
@@ -241,6 +242,7 @@ pub(crate) fn builtins(r: &mut Registry) {
 // --- S2 (sops-b) block: keep contiguous, at the end ---
 r.register("sweep", sweep_sop::spec, sweep_sop::new);
 r.register("revolve", revolve_sop::spec, revolve_sop::new);
+r.register("skin", skin_sop::spec, skin_sop::new);
 // --- end S2 registers ---
 }
 
