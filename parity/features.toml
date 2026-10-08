@@ -959,7 +959,7 @@ evidence = [
   "apps/hexe-tauri/src-tauri/src/render.rs::data_url_to_png_with_dims",
   "apps/hexe-tauri/src-tauri/src/render.rs::write_png_checks_dims_and_creates_dirs",
   "apps/hexe-tauri/src-tauri/src/cli.rs::render_flags",
-  "xtask/src/render.rs::dims_come_from_ihdr",
+  "apps/hexe-tauri/src-tauri/src/render.rs::size_parses_and_rejects",
   "apps/hexe-tauri/src-tauri/src/model.rs::sphere_and_tube_prims_become_shapes",
   "apps/hexe-tauri/src-tauri/src/model.rs::cd_is_absent_without_color_and_expanded_per_corner_with_it",
 ]
