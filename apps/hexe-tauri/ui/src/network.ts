@@ -210,7 +210,7 @@ export class Network {
 
   private key(e: KeyboardEvent): void {
     const t = e.target as HTMLElement;
-    const typing = t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA";
+    const typing = (t.tagName === "INPUT" && !["checkbox", "range", "button"].includes((t as HTMLInputElement).type)) || t.tagName === "SELECT" || t.tagName === "TEXTAREA";
     if (this.menu) return;
     if (e.key === "Tab" && !typing) {
       e.preventDefault();
