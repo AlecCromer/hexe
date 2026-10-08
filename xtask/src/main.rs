@@ -10,6 +10,7 @@ mod leakscan;
 mod oracle;
 mod parity;
 mod perf;
+mod render;
 mod size;
 mod version;
 
@@ -33,6 +34,11 @@ const COMMANDS: &[(&str, &str, Command)] = &[
         oracle::run,
     ),
     ("perf", "Release CLI vs perf/budgets.toml + xtask/baselines/perf.json via /usr/bin/time (--tighten)", perf::run),
+    (
+        "render",
+        "Headless app render proof: examples/polyextrude.json -> target/ci/polyextrude.png (asserts non-empty + dims; needs a GUI session)",
+        render::run,
+    ),
     ("size", "Release binary size vs [binary] max_mb and original_mb (ratio)", size::run),
     ("leakscan", "Scan spec/ (or a dir) for decompiler residue; ci runs it only when MODE=clean", leakscan::run),
     ("version", "Print the workspace version, or `version set X.Y.Z[-pre]`", version::run),

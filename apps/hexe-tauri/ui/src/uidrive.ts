@@ -2,6 +2,7 @@
 // here is reachable without the CLI flag). Verbs: click NAME [shift] · rclick NAME · dblclick NAME [name|body] · rename NAME NEW ·
 // pickmode (S key) · pickpt N [shift] · pickat X Y [shift] · pickbox X0 Y0 X1 Y1 [shift] (viewport px) · code TEXT (\s=; \n=newline; types into the script pane + Cmd+Enter) · press SELECTOR · openpath PATH (path field + Enter) · 
 // wire FROM TO [body|N] · drag NAME DX DY · hover NAME · key COMBO (meta+shift+z, delete, d, ...) · scrub PARAM DX · addat TYPE X Y · assert SELECTOR TEXT · wait MS.
+import { api } from "./api";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const centre = (el: Element): { x: number; y: number } => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
 function mouse(target: EventTarget, type: string, p: { x: number; y: number }, extra: MouseEventInit = {}): void {
@@ -126,6 +127,12 @@ export async function drive(args: string[]): Promise<void> {
       ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
       await sleep(500);
       break;
+    }
+    case "selcheck": { // selcheck [N]: Rust `selection_get` == the viewport selection (and N points when given)
+      const hv = ((window as unknown as { __hexe: { viewport: { selection: number[] } } }).__hexe).viewport.selection;
+      const rs = await api.selectionGet();
+      if (JSON.stringify(hv) !== JSON.stringify(rs) || (a[0] !== undefined && rs.length !== Number(a[0]))) throw new Error(`ui selcheck: viewport ${JSON.stringify(hv)} vs selection_get ${JSON.stringify(rs)}${a[0] ? ` (want ${a[0]})` : ""}`);
+      return;
     }
     case "press": {
       const b = document.querySelector<HTMLElement>(a[0]);

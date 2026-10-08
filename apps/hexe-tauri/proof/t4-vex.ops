@@ -1,0 +1,13 @@
+# T4 atom 1: script pane. A wrangle snippet opens as a code editor, Cmd+Enter applies and cooks.
+add grid g @40,30
+add wrangle w @40,140
+connect w 0 g
+display w
+set g.rows=41
+set g.cols=41
+select w
+ui code // ripple\nfloat r = length(@P)\s\n@P.y = sin(r * 12.0) * 0.12\s\n@Cd = set(r, 0.5, 1.0)\s
+ui assert .code-gutter 3
+ui assert #status display: w
+shot ~/.gaia/cache/hexe/proof/t4-vex.png
+quit

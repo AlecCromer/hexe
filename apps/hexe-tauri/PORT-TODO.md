@@ -41,15 +41,16 @@ Checklist = in egui, NOT yet in Tauri. `[ ]` open.
 
 ## app shell (main.rs / script.rs)
 - [x] Cmd+S = save, Cmd+O = reload/open (tauri: buttons only)
-- [ ] Enter in path field = open (tauri HAS this)
+- [x] Enter in path field = open (T4: verified live via `ui openpath`, proof ops inline in report)
 - [x] CLI: `hexe [scene.json]` positional (tauri: `HEXE_OPEN` env only); `--version`
 - [x] CLI `--set node.param=value` (repeatable), re-applied on EVERY reload incl. Cmd+O
 - [x] CLI `--script ops` proof hook: `add|connect|disconnect|remove|display|select|set|view w|p|n|save|shot|quit` (T3: all ops except `view` (viewport is T2b-rest); extras `rename undo redo copy paste ui <verb>`; `proof/*.ops`)
 - [x] status bar: `display: <name>` · `points · prims · verts · cook ms` · green note · `no display node (right-click a node or press D)` hint (tauri: no verts count, no display name)
-- [ ] MAX_SCENE_BYTES 64 MiB Open limit (tauri HAS it, model.rs)
+- [x] MAX_SCENE_BYTES 64 MiB Open limit (T4: `check_scene_size` unit-tested at the boundary + live: a 64 MiB+1 file is refused with a status-bar error)
 - [x] save writes `ui.pos` (tauri HAS node_move; verify save round-trip keeps pos)
 
 ## never existed in egui (DESIGN.md plans, still TODO for Tauri)
-- [ ] script pane / VEX editor (hexe-vex crate exists; no UI in either app)
+- [x] script pane / VEX editor (T4: `ParamSpec::language("vex")` + `choices`; code editor w/ line numbers, Tab, Cmd+Enter apply+cook, inline `line:col` error + red strip, Run Over dropdown; proof/t4-vex*.ops)
 - [x] geometry spreadsheet (points/prims/vertices attribute table)
 - [x] rename node UI · undo/redo [x T3: Cmd+Z, Rust snapshot stack 100] · copy/paste [x T3: Cmd+C/V] · node picking in viewport · MSAA · shaded+edges overlay · per-prim/vertex N (T3: dblclick name / F2)
+- [x] viewport point picking (T4: click = nearest pt within 8 px, drag-box in `S` pick mode, shift adds, `selection_get`/`selection_set`, Group from selection -> point `group` SOP with explicit ptnum pattern, ONE undo step; picks ignore occlusion; proof/t4-pick.ops)

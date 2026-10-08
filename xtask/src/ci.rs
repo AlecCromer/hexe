@@ -1,5 +1,5 @@
 //! `cargo xtask ci`: the whole gate, stops at the first failure.
-//! [leakscan if MODE=clean] → fmt → clippy -D warnings → test → layers → assets → deny (warn if absent) → parity → oracle → perf → size.
+//! [leakscan if MODE=clean] → fmt → clippy -D warnings → test → layers → assets → deny (warn if absent) → parity → oracle → perf → size → render (headless app render proof).
 use crate::{Res, root};
 use std::process::Command;
 use std::time::Instant;
@@ -49,6 +49,7 @@ pub fn run(_: &[String]) -> Res {
         ("oracle", || crate::oracle::run(&[])),
         ("perf", || crate::perf::run(&[])),
         ("size", || crate::size::run(&[])),
+        ("render", || crate::render::run(&[])),
     ]);
     let t0 = Instant::now();
     for (name, step) in &steps {

@@ -78,8 +78,9 @@ export function createCodeEditor(initial: string, apply: (text: string) => void)
   const paintError = () => {
     root.classList.toggle("has-err", !!cur);
     err.textContent = cur ? `${cur.line ? `line ${cur.line}${cur.col ? `:${cur.col}` : ""} \u2014 ` : ""}${cur.msg}` : "";
-    err.style.display = cur ? "block" : "none";
-    paintGutter();
+        err.style.display = cur ? "block" : "none";
+        paintGutter();
+        if (cur) err.scrollIntoView({ block: "nearest" }); // the pane may be short: keep the message in view
   };
   const run = () => { committed = ta.value; apply(ta.value); };
 

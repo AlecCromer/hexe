@@ -1,0 +1,11 @@
+# T4 atom 1: a VEX parse error shows inline under the editor: line:col + red strip on the failing line + red node border.
+add grid g @40,30
+add wrangle w @40,140
+connect w 0 g
+display w
+select w
+ui code // ripple\nfloat r = length(@P)\s\n@P.y = sin(r * 12.0 *) * 0.12\s\n@Cd = set(r, 0.5, 1.0)\s
+ui assert .code-err line 3
+ui assert .code-gutter 3
+shot ~/.gaia/cache/hexe/proof/t4-vex-error.png
+quit

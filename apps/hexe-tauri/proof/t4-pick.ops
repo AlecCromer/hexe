@@ -1,0 +1,13 @@
+# T4 atom 2: viewport picking. S = pick mode, click = nearest point (8 px), drag-box = multi-select, Group from selection.
+ui pickmode
+ui pickpt 0
+ui assert #status pt 0
+ui selcheck 1
+ui pickbox 430 160 740 330
+ui assert #status points selected
+ui selcheck
+ui press #grpsel
+ui assert #status grouped
+ui selcheck
+shot ~/.gaia/cache/hexe/proof/t4-pick.png
+quit
