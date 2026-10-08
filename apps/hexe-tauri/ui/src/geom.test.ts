@@ -60,3 +60,21 @@ test("sphere / tube wire proxies: segment counts + transform + centre", () => {
   expect(tb.length).toBe((2 * 8 * 2 + 4 * 2) * 3);
   expect(Math.max(...Array.from({ length: tb.length / 3 }, (_, i) => tb[i * 3 + 1]))).toBe(2);
 });
+
+import { capCheck, primCentroids, triEstimate, viewState } from "./geom";
+
+test("draw caps skip the over-cap layer with a warning", () => {
+  expect(capCheck(10, 10, 10).warnings).toEqual([]);
+  const c = capCheck(1_000_001, 2_000_001, 500_001);
+  expect([c.mesh, c.edges, c.points]).toEqual([false, false, false]);
+  expect(c.warnings.length).toBe(3);
+  expect(triEstimate([[0, 1, 2, 3], [0, 1]], [true, false])).toBe(2);
+});
+
+test("prim centroids + view-state label", () => {
+  const c = primCentroids([[0, 1], []], [0, 0, 0, 2, 4, 6]);
+  expect([...c.slice(0, 3)]).toEqual([1, 2, 3]);
+  expect(Number.isNaN(c[3])).toBe(true);
+  expect(viewState(false, true, true)).toBe("shaded +P +N");
+  expect(viewState(true, false, false)).toBe("wire");
+});

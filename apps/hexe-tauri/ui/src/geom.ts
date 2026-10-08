@@ -40,6 +40,37 @@ export function triangulate(prims: number[][], closed: boolean[], pos: ArrayLike
   });
   return Uint32Array.from(out);
 }
+export const CAP_TRIS = 1_000_000, CAP_EDGE_VERTS = 2_000_000, CAP_POINTS = 500_000, CAP_LABELS = 500, CAP_LABEL_SCAN = 100_000;
+/** Triangle count `triangulate` will emit for these prims (cheap pre-check so a huge cook never reaches earcut). */
+export function triEstimate(prims: number[][], closed: boolean[]): number {
+  let t = 0;
+  for (let k = 0; k < prims.length; k++) if (closed[k] && prims[k].length >= 3) t += prims[k].length - 2;
+  return t;
+}
+export interface Caps { mesh: boolean; edges: boolean; points: boolean; warnings: string[] }
+/** Draw caps (egui parity): 1M tris / 2M edge verts / 500k points. Over a cap -> that layer is skipped + a warning. */
+export function capCheck(tris: number, edgeVerts: number, points: number): Caps {
+  const c: Caps = { mesh: tris <= CAP_TRIS, edges: edgeVerts <= CAP_EDGE_VERTS, points: points <= CAP_POINTS, warnings: [] };
+  if (!c.mesh) c.warnings.push(`${tris} tris > ${CAP_TRIS}: surface not drawn`);
+  if (!c.edges) c.warnings.push(`${edgeVerts} edge verts > ${CAP_EDGE_VERTS}: edges not drawn`);
+  if (!c.points) c.warnings.push(`${points} pts > ${CAP_POINTS}: points not drawn`);
+  return c;
+}
+/** Mean point of each prim (flat xyz, NaN for prims without points); only the first `limit` prims. */
+export function primCentroids(prims: number[][], pos: ArrayLike<number>, limit = CAP_LABEL_SCAN): Float32Array {
+  const n = Math.min(prims.length, limit);
+  const out = new Float32Array(n * 3).fill(NaN);
+  for (let k = 0; k < n; k++) {
+    const p = prims[k];
+    if (!p.length) continue;
+    let x = 0, y = 0, z = 0;
+    for (const i of p) { x += pos[i * 3]; y += pos[i * 3 + 1]; z += pos[i * 3 + 2]; }
+    out[k * 3] = x / p.length; out[k * 3 + 1] = y / p.length; out[k * 3 + 2] = z / p.length;
+  }
+  return out;
+}
+/** Status text for the viewport view state, e.g. `shaded +P +N`. */
+export const viewState = (wire: boolean, p: boolean, n: boolean): string => `${wire ? "wire" : "shaded"}${p ? " +P" : ""}${n ? " +N" : ""}`;
 export interface Shape { kind: "sphere" | "tube"; center: [number, number, number]; xform: number[]; taper: number }
 /** Wire proxy of a sphere / tube prim as flat xyz segment pairs. Sphere = 3 great circles of the unit sphere; tube = 2 rings
  * (y=+-0.5, top radius = taper) + 4 side lines. Unit shape is mapped by the row-major 3x3 `xform` (column-vector M*p) then

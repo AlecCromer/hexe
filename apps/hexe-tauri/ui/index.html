@@ -14,9 +14,10 @@
         <button id="save">Save</button>
         <button id="new">New</button>
         <span class="sep"></span>
-        <label><input type="checkbox" id="wire" /> wireframe</label>
+        <label title="W (viewport hover)"><input type="checkbox" id="wire" /> wireframe</label>
         <label><input type="checkbox" id="pts" checked /> points</label>
-        <button id="fit">Fit</button>
+        <label title="point size">pt <input type="range" id="ptsize" min="1" max="20" value="6" /></label>
+<button id="fit" title="H / F">Fit</button>
         <span id="status"></span>
       </header>
       <section id="viewport" class="pane"></section>
