@@ -1,6 +1,6 @@
 //! `Graph<T>`: nodes + edges + cache. Cook = lazy (only what the target needs), cached (until dirty / time
 //! change), dirty-propagated (`set_param`/`connect` clear every downstream cache), iterative (explicit stack).
-use crate::node::{CookCtx, GraphError, Node, NodeId, Payload};
+use crate::node::{BlockRole, CookCtx, GraphError, Node, NodeId, Payload};
 use crate::param::{ParamSet, ParamSpec, ParamValue};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,6 +9,11 @@ use std::sync::Arc;
 pub const MAX_NODES: usize = 1 << 20;
 /// Frame rate handed to `CookCtx` unless `set_fps`.
 pub const DEFAULT_FPS: f32 = 24.0;
+/// Most iterations one For-Each block may run (capped allocations, AGENTS.md §4).
+pub const MAX_BLOCK_ITERATIONS: usize = 1 << 16;
+/// Deepest nesting of For-Each blocks cooked at once (bounded recursion, AGENTS.md §4).
+pub const MAX_BLOCK_DEPTH: usize = 8;
+mod block;
 /// Longest node name accepted.
 pub const MAX_NAME: usize = 256;
 
@@ -45,6 +50,8 @@ pub struct Graph<T: Payload> {
     display: Option<NodeId>,
     fps: f32,
     log: Arc<dyn Fn(&str) + Send + Sync>,
+    /// Nesting level of the For-Each blocks currently being cooked (`block.rs`).
+    block_depth: usize,
 }
 
 impl<T: Payload> Default for Graph<T> {
@@ -55,7 +62,14 @@ impl<T: Payload> Default for Graph<T> {
 
 impl<T: Payload> Graph<T> {
     pub fn new() -> Self {
-        Graph { slots: Vec::new(), names: HashMap::new(), display: None, fps: DEFAULT_FPS, log: Arc::new(|_| {}) }
+        Graph {
+            slots: Vec::new(),
+            names: HashMap::new(),
+            display: None,
+            fps: DEFAULT_FPS,
+            log: Arc::new(|_| {}),
+            block_depth: 0,
+        }
     }
 
     /// Live (not removed) nodes.
@@ -347,6 +361,13 @@ impl<T: Payload> Graph<T> {
                     continue;
                 }
                 let slot = self.slot(cur)?;
+                if slot.node.block_role() == BlockRole::End {
+                    // For-Each: the loop is not an edge. The engine cooks the Begin..End sub-network once per
+                    // iteration itself (`block.rs`), so the End node is a leaf here: no cycle, no input walk.
+                    self.cook_block_end(cur, time)?;
+                    visit.insert(cur, Visit::Done);
+                    continue;
+                }
                 visit.insert(cur, Visit::Active);
                 stack.push((cur, true));
                 for (i, src) in slot.inputs.iter().enumerate() {

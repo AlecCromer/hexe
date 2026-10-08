@@ -62,6 +62,26 @@ impl fmt::Display for CookError {
 }
 impl std::error::Error for CookError {}
 
+/// Role of a node in a For-Each block (`block_begin` / `block_end` pair). See `Graph::cook` (engine side, `graph/block.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BlockRole {
+    /// Ordinary node.
+    #[default]
+    None,
+    /// Emits one slice per iteration (`Node::block_count` / `Node::cook_block`).
+    Begin,
+    /// Owns the loop: the engine cooks the sub-network between its Begin and this node once per iteration, then calls
+    /// `Node::block_merge`. Convention: string param `begin` = name of the paired Begin node (empty = nearest upstream Begin).
+    End,
+}
+/// Which iteration a Begin node is cooking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockIter {
+    pub index: usize,
+    pub count: usize,
+    /// `true` = feedback loop: the Begin input is the previous iteration's result (iteration 0: the original source).
+    pub feedback: bool,
+}
 /// A node type. `inputs.len()` of the slice handed to `cook` == `self.inputs().len()`, in port order.
 pub trait Node<T: Payload>: Send + Sync {
     fn type_name(&self) -> &'static str;
@@ -72,6 +92,26 @@ pub trait Node<T: Payload>: Send + Sync {
         false
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<T>]) -> Result<Arc<T>, CookError>;
+    /// For-Each role (default: none). Only block nodes override the four `block_*` methods.
+    fn block_role(&self) -> BlockRole {
+        BlockRole::None
+    }
+    /// Begin: number of iterations for `source` (the cooked input 0).
+    fn block_count(&self, _ctx: &CookCtx, _source: &Arc<T>) -> Result<usize, CookError> {
+        Err(CookError::Unsupported(format!("{} is not a block begin", self.type_name())))
+    }
+    /// Begin: the slice for iteration `iter.index` (`inputs` = `[source]`, or `[previous result]` in feedback mode).
+    fn cook_block(&self, _ctx: &CookCtx, _inputs: &[Arc<T>], _iter: BlockIter) -> Result<Arc<T>, CookError> {
+        Err(CookError::Unsupported(format!("{} is not a block begin", self.type_name())))
+    }
+    /// End: `true` = feedback mode (iteration i output feeds Begin of i+1, only the last result is merged).
+    fn block_feedback(&self, _ctx: &CookCtx) -> bool {
+        false
+    }
+    /// End: combine the per-iteration results (feedback: `[last]`, or `[source]` when there were 0 iterations).
+    fn block_merge(&self, _ctx: &CookCtx, _results: &[Arc<T>]) -> Result<Arc<T>, CookError> {
+        Err(CookError::Unsupported(format!("{} is not a block end", self.type_name())))
+    }
 }
 
 /// Structural / scheduling failure of a `Graph` operation. Never a panic.
