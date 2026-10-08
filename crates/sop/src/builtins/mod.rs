@@ -119,13 +119,13 @@ mod uvunwrap_sop;
 //
 mod wrangle_sop;
 // --- S2 (sops-b) block: keep contiguous, at the end ---
-mod surfutil;
-mod sweep_sop;
+mod convert_sop;
+mod polyfill_sop;
+mod polyreduce_sop;
 mod revolve_sop;
 mod skin_sop;
-mod polyfill_sop;
-mod convert_sop;
-mod polyreduce_sop;
+mod surfutil;
+mod sweep_sop;
 // --- end S2 mods ---
 
 /// One `r.register("<type>", <mod>::spec, <mod>::new);` per SOP.
@@ -242,14 +242,14 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("uvunwrap", uvunwrap_sop::spec, uvunwrap_sop::new);
     //
     r.register("wrangle", wrangle_sop::spec, wrangle_sop::new);
-// --- S2 (sops-b) block: keep contiguous, at the end ---
-r.register("sweep", sweep_sop::spec, sweep_sop::new);
-r.register("revolve", revolve_sop::spec, revolve_sop::new);
-r.register("skin", skin_sop::spec, skin_sop::new);
-r.register("polyfill", polyfill_sop::spec, polyfill_sop::new);
-r.register("convert", convert_sop::spec, convert_sop::new);
-r.register("polyreduce", polyreduce_sop::spec, polyreduce_sop::new);
-// --- end S2 registers ---
+    // --- S2 (sops-b) block: keep contiguous, at the end ---
+    r.register("sweep", sweep_sop::spec, sweep_sop::new);
+    r.register("revolve", revolve_sop::spec, revolve_sop::new);
+    r.register("skin", skin_sop::spec, skin_sop::new);
+    r.register("polyfill", polyfill_sop::spec, polyfill_sop::new);
+    r.register("convert", convert_sop::spec, convert_sop::new);
+    r.register("polyreduce", polyreduce_sop::spec, polyreduce_sop::new);
+    // --- end S2 registers ---
 }
 
 #[cfg(test)]

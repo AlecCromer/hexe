@@ -42,7 +42,9 @@ pub fn spec() -> Vec<ParamSpec> {
             ("sphere", "Sphere"),
             ("tube", "Tube"),
         ]),
-        ParamSpec::new("totype", ParamValue::Menu(0)).label("Convert To").menu(&[("polygon", "Polygon"), ("polyline", "Polyline")]),
+        ParamSpec::new("totype", ParamValue::Menu(0))
+            .label("Convert To")
+            .menu(&[("polygon", "Polygon"), ("polyline", "Polyline")]),
         ParamSpec::new("rows", ParamValue::I(8)).label("Rows").range(1.0, 64.0),
         ParamSpec::new("cols", ParamValue::I(16)).label("Columns").range(3.0, 64.0),
     ]
@@ -89,7 +91,13 @@ fn unit_shape(sphere: bool, taper: f64, closed: bool, rows: usize, cols: usize) 
         for k in 0..=rows {
             let phi = std::f64::consts::PI * k as f64 / rows as f64;
             let r = if k == 0 || k == rows { 0.0 } else { phi.sin() };
-            let y = if k == 0 { 1.0 } else if k == rows { -1.0 } else { phi.cos() };
+            let y = if k == 0 {
+                1.0
+            } else if k == rows {
+                -1.0
+            } else {
+                phi.cos()
+            };
             rings.push(ring_pts(&mut pts, y, r));
         }
     } else {
@@ -208,7 +216,13 @@ impl Node<Detail> for Convert {
         // pass 2: topology
         let mut vertex_point: Vec<u32> = Vec::new();
         let mut prims: Vec<Prim> = Vec::new();
-        let push = |vp: &mut Vec<u32>, ps: &mut Vec<Prim>, rm: &mut Remap, kind: PrimKind, ids: &[u32], vsrc: &[Option<usize>], psrc: usize| {
+        let push = |vp: &mut Vec<u32>,
+                    ps: &mut Vec<Prim>,
+                    rm: &mut Remap,
+                    kind: PrimKind,
+                    ids: &[u32],
+                    vsrc: &[Option<usize>],
+                    psrc: usize| {
             let start = vp.len() as u32;
             vp.extend_from_slice(ids);
             rm.vert_src.extend_from_slice(vsrc);
@@ -218,7 +232,8 @@ impl Node<Detail> for Convert {
         for (pi, (pr, &a)) in src.prims.iter().zip(&acts).enumerate() {
             let vstart = pr.verts.start as usize;
             let c = corners(pr).unwrap_or(&[]);
-            let mapped = |c: &[u32]| -> Vec<u32> { c.iter().map(|&i| new_id.get(i as usize).copied().unwrap_or(i)).collect() };
+            let mapped =
+                |c: &[u32]| -> Vec<u32> { c.iter().map(|&i| new_id.get(i as usize).copied().unwrap_or(i)).collect() };
             match a {
                 Act::Keep => {
                     let ids = mapped(c);
@@ -249,9 +264,12 @@ impl Node<Detail> for Convert {
                         _ => continue,
                     };
                     let m = xf.map(f64::from);
-                    let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
+                    let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
+                        + m[2] * (m[3] * m[7] - m[4] * m[6]);
                     let (upts, faces) = unit_shape(sphere, taper, closed, rows, cols);
-                    if (rm.point_src.len() + upts.len()) as u64 > MAX_ELEMS || (prims.len() + faces.len()) as u64 > MAX_ELEMS {
+                    if (rm.point_src.len() + upts.len()) as u64 > MAX_ELEMS
+                        || (prims.len() + faces.len()) as u64 > MAX_ELEMS
+                    {
                         return Err(failed(OP, "output exceeds the allocation cap"));
                     }
                     let base = rm.point_src.len() as u32;
@@ -324,7 +342,12 @@ mod tests {
         assert_eq!(d.prim_count(), 64 + 30 * 64 + 64);
         let ball = 4.0 / 3.0 * std::f64::consts::PI * 8.0;
         let (lo, hi) = d.bbox();
-        assert!((lo[1] - 0.0).abs() < 1e-5 && (hi[1] - 4.0).abs() < 1e-5 && (lo[0] + 1.0).abs() < 0.01 && (hi[2] - 5.0).abs() < 0.01);
+        assert!(
+            (lo[1] - 0.0).abs() < 1e-5
+                && (hi[1] - 4.0).abs() < 1e-5
+                && (lo[0] + 1.0).abs() < 0.01
+                && (hi[2] - 5.0).abs() < 0.01
+        );
         let c = run(shape(PrimKind::Sphere { xform: scaled([2.0; 3]) }, [0.0; 3]), fine()).expect("cooks");
         assert!((signed_volume(&c) - ball).abs() / ball < 0.01, "{}", signed_volume(&c));
         // a mirroring xform keeps the shell outward
@@ -334,7 +357,9 @@ mod tests {
 
     #[test]
     fn tube_closed_open_and_cone() {
-        let tube = |taper: f32, closed: bool| shape(PrimKind::Tube { xform: scaled([1.0, 2.0, 1.0]), taper, closed }, [0.0; 3]);
+        let tube = |taper: f32, closed: bool| {
+            shape(PrimKind::Tube { xform: scaled([1.0, 2.0, 1.0]), taper, closed }, [0.0; 3])
+        };
         let cyl_area = 0.5 * 64.0 * (std::f64::consts::TAU / 64.0).sin(); // regular 64-gon, R=1
         let c = run(tube(1.0, true), fine()).expect("cooks");
         assert!((signed_volume(&c) - cyl_area * 2.0).abs() < 1e-4, "{}", signed_volume(&c));
@@ -342,7 +367,8 @@ mod tests {
         let open = run(tube(1.0, false), fine()).expect("cooks");
         assert_eq!(open.prim_count(), 32 * 64);
         // taper 0 = cone: apex shared point, top band triangles, cap only at the bottom
-        let cone = run(tube(0.0, true), defaults().with("rows", ParamValue::I(1)).with("cols", ParamValue::I(64))).expect("cooks");
+        let cone = run(tube(0.0, true), defaults().with("rows", ParamValue::I(1)).with("cols", ParamValue::I(64)))
+            .expect("cooks");
         assert_eq!((cone.point_count, cone.prim_count()), (65, 64 + 1));
         let cone_v = cyl_area * 2.0 / 3.0;
         assert!((signed_volume(&cone) - cone_v).abs() < 1e-4);
@@ -378,15 +404,26 @@ mod tests {
         let ctx2 = CookCtx { time: 0.0, fps: 24.0, params: &defaults(), log: &|_| {} };
         assert!(Arc::ptr_eq(&n.cook(&ctx2, std::slice::from_ref(&same)).expect("cooks"), &same));
         // only polys convert with fromtype=poly
-        let o = run(d, defaults().with("fromtype", ParamValue::Menu(FROM_POLY)).with("totype", ParamValue::Menu(1))).expect("cooks");
+        let o = run(d, defaults().with("fromtype", ParamValue::Menu(FROM_POLY)).with("totype", ParamValue::Menu(1)))
+            .expect("cooks");
         assert_eq!(o.prims.iter().filter(|p| p.kind == PrimKind::Polyline).count(), 5);
     }
 
     #[test]
     fn attributes_follow_prims_and_the_centre_point() {
         let mut d = shape(PrimKind::Sphere { xform: I3 }, [0.0; 3]);
-        d.attrs.push(Attribute { name: "Cd".into(), class: AttrClass::Point, data: AttrData::V3(vec![[1.0, 0.5, 0.0]]), type_info: TypeInfo::Color });
-        d.attrs.push(Attribute { name: "id".into(), class: AttrClass::Prim, data: AttrData::I32(vec![7]), type_info: TypeInfo::None });
+        d.attrs.push(Attribute {
+            name: "Cd".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(vec![[1.0, 0.5, 0.0]]),
+            type_info: TypeInfo::Color,
+        });
+        d.attrs.push(Attribute {
+            name: "id".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![7]),
+            type_info: TypeInfo::None,
+        });
         let o = run(d, defaults()).expect("cooks");
         let cd = match o.attr(AttrClass::Point, "Cd").map(|a| &a.data) {
             Some(AttrData::V3(v)) => v.clone(),
@@ -394,7 +431,9 @@ mod tests {
         };
         assert_eq!(cd.len(), o.point_count as usize);
         assert!(cd.iter().all(|c| *c == [1.0, 0.5, 0.0]));
-        assert!(matches!(o.attr(AttrClass::Prim, "id").map(|a| &a.data), Some(AttrData::I32(v)) if v.len() == o.prims.len() && v.iter().all(|&x| x == 7)));
+        assert!(
+            matches!(o.attr(AttrClass::Prim, "id").map(|a| &a.data), Some(AttrData::I32(v)) if v.len() == o.prims.len() && v.iter().all(|&x| x == 7))
+        );
     }
 
     #[test]
@@ -434,13 +473,17 @@ mod tests {
         let huge = shape(PrimKind::Sphere { xform: scaled([f32::MAX; 3]) }, [f32::MAX; 3]);
         let r = run(huge, defaults());
         assert!(r.is_ok() || matches!(r, Err(CookError::Failed(_))));
-        let cap = run(shape(PrimKind::Sphere { xform: I3 }, [0.0; 3]), defaults().with("rows", ParamValue::I(4096)).with("cols", ParamValue::I(4096)));
+        let cap = run(
+            shape(PrimKind::Sphere { xform: I3 }, [0.0; 3]),
+            defaults().with("rows", ParamValue::I(4096)).with("cols", ParamValue::I(4096)),
+        );
         assert!(matches!(cap, Err(CookError::Failed(_))));
     }
 
     #[test]
     fn example_scene_cooks_and_registry_has_slot() {
-        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/convert.json")).expect("example present");
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/convert.json"))
+            .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prims.iter().all(|p| matches!(p.kind, PrimKind::Poly { .. })) && out.prim_count() > 10);

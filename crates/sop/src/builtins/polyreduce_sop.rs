@@ -13,7 +13,7 @@
 //!   (a merged point stays in a group only if all its sources were). Non-poly prims and unused points pass through.
 //!   NOT modelled (DEFERRED): quadric error metric, attribute-seam/UV preservation, `target` modes other than percentage, normal/
 //!   area weights, symmetry.
-use super::meshutil::{Remap, V3, bad, failed, positions, rebuild, toggle, to_f32};
+use super::meshutil::{Remap, V3, bad, failed, positions, rebuild, to_f32, toggle};
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
@@ -50,7 +50,8 @@ impl Mesh {
             .copied()
             .filter(|&f| {
                 self.faces[f].as_ref().is_some_and(|(c, _)| {
-                    (0..c.len()).any(|k| (c[k] == a && c[(k + 1) % c.len()] == b) || (c[k] == b && c[(k + 1) % c.len()] == a))
+                    (0..c.len())
+                        .any(|k| (c[k] == a && c[(k + 1) % c.len()] == b) || (c[k] == b && c[(k + 1) % c.len()] == a))
                 })
             })
             .collect()
@@ -138,7 +139,11 @@ impl Node<Detail> for PolyReduce {
         let mut ver = vec![0u32; np];
         let mut merged: Vec<Vec<usize>> = (0..np).map(|i| vec![i]).collect();
         let mut heap: BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>> = BinaryHeap::new();
-        let push_edges = |heap: &mut BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>>, m: &Mesh, pos: &[V3], ver: &[u32], pt: u32| {
+        let push_edges = |heap: &mut BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>>,
+                          m: &Mesh,
+                          pos: &[V3],
+                          ver: &[u32],
+                          pt: u32| {
             for q in m.neighbours(pt) {
                 let (a, b) = (pt.min(q), pt.max(q));
                 heap.push(Reverse((len_key(pos[a as usize], pos[b as usize]), a, b, ver[a as usize], ver[b as usize])));
@@ -175,7 +180,8 @@ impl Node<Detail> for PolyReduce {
                 continue;
             }
             // collapse b into a at the midpoint
-            let mid = [(pos[ai][0] + pos[bi][0]) / 2.0, (pos[ai][1] + pos[bi][1]) / 2.0, (pos[ai][2] + pos[bi][2]) / 2.0];
+            let mid =
+                [(pos[ai][0] + pos[bi][0]) / 2.0, (pos[ai][1] + pos[bi][1]) / 2.0, (pos[ai][2] + pos[bi][2]) / 2.0];
             pos[ai] = mid;
             alive[bi] = false;
             ver[ai] += 1;
@@ -283,7 +289,14 @@ mod tests {
     fn octahedron() -> Detail {
         let mut d = Detail::default();
         d.add_points(6);
-        *d.p_mut() = vec![[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -1.0]];
+        *d.p_mut() = vec![
+            [1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0],
+        ];
         // outward in the Houdini winding (checked by the volume sign in the test)
         for (a, c, b) in [(0, 2, 4), (2, 1, 4), (1, 3, 4), (3, 0, 4), (2, 0, 5), (1, 2, 5), (3, 1, 5), (0, 3, 5)] {
             d.add_poly(&[a, b, c], true);
@@ -295,7 +308,10 @@ mod tests {
         d.prims
             .iter()
             .map(|pr| {
-                let i: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&x| x as usize).collect();
+                let i: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
+                    .iter()
+                    .map(|&x| x as usize)
+                    .collect();
                 tri_volume(pos[i[0]], pos[i[1]], pos[i[2]])
             })
             .sum()
@@ -305,7 +321,10 @@ mod tests {
         d.prims
             .iter()
             .map(|pr| {
-                let i: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&x| x as usize).collect();
+                let i: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
+                    .iter()
+                    .map(|&x| x as usize)
+                    .collect();
                 let (a, b, c) = (pos[i[0]], pos[i[1]], pos[i[2]]);
                 ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])).abs() / 2.0
             })
@@ -355,8 +374,18 @@ mod tests {
         assert!(Arc::ptr_eq(&n.cook(&ctx, std::slice::from_ref(&a)).expect("cooks"), &a));
         // Cd (point) blends, prim attr copies; a polyline pins its points
         let mut d = g;
-        d.attrs.push(Attribute { name: "Cd".into(), class: AttrClass::Point, data: AttrData::V3((0..16).map(|i| [i as f32, 0.0, 0.0]).collect()), type_info: TypeInfo::Color });
-        d.attrs.push(Attribute { name: "id".into(), class: AttrClass::Prim, data: AttrData::I32((0..18).collect()), type_info: TypeInfo::None });
+        d.attrs.push(Attribute {
+            name: "Cd".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3((0..16).map(|i| [i as f32, 0.0, 0.0]).collect()),
+            type_info: TypeInfo::Color,
+        });
+        d.attrs.push(Attribute {
+            name: "id".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32((0..18).collect()),
+            type_info: TypeInfo::None,
+        });
         d.add_poly(&[0, 1, 2, 3], false);
         let o = run(d, defaults().with("percentage", ParamValue::F(0.0))).expect("cooks");
         assert!(o.prim_count() < 19);
@@ -368,7 +397,9 @@ mod tests {
         assert_eq!(cd.len(), o.point_count as usize);
         // the polyline's four end points are untouched (locked)
         assert_eq!(&o.p()[..4], &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0]]);
-        assert!(matches!(o.attr(AttrClass::Prim, "id").map(|a| &a.data), Some(AttrData::I32(v)) if v.len() == o.prims.len()));
+        assert!(
+            matches!(o.attr(AttrClass::Prim, "id").map(|a| &a.data), Some(AttrData::I32(v)) if v.len() == o.prims.len())
+        );
     }
 
     #[test]
@@ -395,7 +426,8 @@ mod tests {
 
     #[test]
     fn example_scene_cooks_and_registry_has_slot() {
-        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/polyreduce.json")).expect("example present");
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/polyreduce.json"))
+            .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prim_count() > 0 && out.prim_count() < 200, "{}", out.prim_count());

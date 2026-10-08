@@ -121,8 +121,13 @@ pub(super) fn arc_fractions(pos: &[V3], closed: bool) -> Vec<f64> {
     for i in 1..pos.len() {
         acc[i] = acc[i - 1] + dist(pos[i - 1], pos[i]);
     }
-    let total = acc.last().copied().unwrap_or(0.0) + if closed && pos.len() > 1 { dist(pos[pos.len() - 1], pos[0]) } else { 0.0 };
-    if total > 0.0 { acc.iter().map(|a| a / total).collect() } else { (0..pos.len()).map(|i| i as f64 / (pos.len().max(2) - 1) as f64).collect() }
+    let total = acc.last().copied().unwrap_or(0.0)
+        + if closed && pos.len() > 1 { dist(pos[pos.len() - 1], pos[0]) } else { 0.0 };
+    if total > 0.0 {
+        acc.iter().map(|a| a / total).collect()
+    } else {
+        (0..pos.len()).map(|i| i as f64 / (pos.len().max(2) - 1) as f64).collect()
+    }
 }
 
 pub(super) fn dist(a: V3, b: V3) -> f64 {
@@ -143,7 +148,8 @@ pub(super) mod testkit {
         let pos = positions(d);
         let mut v = 0.0;
         for pr in &d.prims {
-            let ids: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| p as usize).collect();
+            let ids: Vec<usize> =
+                d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| p as usize).collect();
             for k in 1..ids.len().saturating_sub(1) {
                 v += tri_volume(pos[ids[0]], pos[ids[k]], pos[ids[k + 1]]);
             }

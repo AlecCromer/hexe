@@ -164,7 +164,8 @@ mod tests {
         assert_eq!((d.point_count, d.prim_count()), (8, 4));
         let pos = positions(&d);
         for pr in &d.prims {
-            let ids: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect();
+            let ids: Vec<usize> =
+                d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect();
             let nrm = prim_normal(&pos, &ids).expect("normal");
             let c: V3 = ids.iter().fold([0.0; 3], |a, &i| add(a, scale(pos[i], 0.25)));
             assert!(nrm[2].abs() < 1e-9 && nrm[0] * c[0] + nrm[1] * c[1] > 0.0);
@@ -187,7 +188,12 @@ mod tests {
         assert_eq!(uv.len(), d.vertex_point.len());
         assert!(uv.iter().any(|c| c[0] == 1.0) && uv.iter().any(|c| c[1] == 1.0));
         // closev with only 2 sections is ignored (would double the same strip)
-        assert_eq!(run(stack(&[(0.0, 1.0), (1.0, 1.0)]), defaults().with("closev", ParamValue::B(true))).expect("cooks").prim_count(), 4);
+        assert_eq!(
+            run(stack(&[(0.0, 1.0), (1.0, 1.0)]), defaults().with("closev", ParamValue::B(true)))
+                .expect("cooks")
+                .prim_count(),
+            4
+        );
     }
 
     #[test]
@@ -214,7 +220,9 @@ mod tests {
 
     #[test]
     fn hostile_params_and_geometry() {
-        for (k, v) in [("surftype", ParamValue::Menu(2)), ("closev", ParamValue::I(1)), ("resample", ParamValue::F(1.0))] {
+        for (k, v) in
+            [("surftype", ParamValue::Menu(2)), ("closev", ParamValue::I(1)), ("resample", ParamValue::F(1.0))]
+        {
             assert!(matches!(run(sq(0.0, 1.0), defaults().with(k, v)), Err(CookError::BadParam(_))), "{k}");
         }
         assert_eq!(run(Detail::default(), defaults()).expect("cooks").prim_count(), 0);
@@ -229,7 +237,8 @@ mod tests {
 
     #[test]
     fn example_scene_cooks_and_registry_has_slot() {
-        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/skin.json")).expect("example present");
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/skin.json"))
+            .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prim_count() >= 12);

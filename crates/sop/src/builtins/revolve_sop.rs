@@ -76,7 +76,10 @@ impl Node<Detail> for Revolve {
         let span = a1 - a0;
         let full = span.abs() >= 360.0 - 1e-9;
         if divs < if full { 3 } else { 1 } || divs > MAX_DIVS {
-            return Err(bad(format!("revolve: `divs` {divs} out of range ({}..={MAX_DIVS})", if full { 3 } else { 1 })));
+            return Err(bad(format!(
+                "revolve: `divs` {divs} out of range ({}..={MAX_DIVS})",
+                if full { 3 } else { 1 }
+            )));
         }
         let divs = divs as usize;
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
@@ -148,10 +151,12 @@ mod tests {
         curve(&[[1.0, 0.0, 0.0], [1.0, 1.0, 0.0]], false)
     }
     fn half_circle() -> Detail {
-        let pts: Vec<[f32; 3]> = (0..=6).map(|k| {
-            let phi = std::f32::consts::PI * (1.0 - k as f32 / 6.0);
-            [phi.sin(), phi.cos(), 0.0]
-        }).collect();
+        let pts: Vec<[f32; 3]> = (0..=6)
+            .map(|k| {
+                let phi = std::f32::consts::PI * (1.0 - k as f32 / 6.0);
+                [phi.sin(), phi.cos(), 0.0]
+            })
+            .collect();
         curve(&pts, false)
     }
 
@@ -161,7 +166,8 @@ mod tests {
         assert_eq!((d.point_count, d.prim_count()), (24, 12));
         let pos = positions(&d);
         for pr in &d.prims {
-            let ids: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect();
+            let ids: Vec<usize> =
+                d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect();
             let n = prim_normal(&pos, &ids).expect("normal");
             let c: V3 = ids.iter().fold([0.0; 3], |a, &i| add(a, scale(pos[i], 0.25)));
             assert!(n[1].abs() < 1e-9 && n[0] * c[0] + n[2] * c[2] > 0.0, "{n:?} {c:?}");
@@ -187,17 +193,29 @@ mod tests {
 
     #[test]
     fn partial_angle_origin_and_axis_params() {
-        let d = run(wall(), defaults().with("endangle", ParamValue::F(90.0)).with("divs", ParamValue::I(4))).expect("cooks");
+        let d = run(wall(), defaults().with("endangle", ParamValue::F(90.0)).with("divs", ParamValue::I(4)))
+            .expect("cooks");
         assert_eq!((d.point_count, d.prim_count()), (10, 4));
         // axis dir=Z through origin (1,0,0): the wall is now ON the axis? (1,0,0)-(1,1,0) is perpendicular -> second point swings
-        let z = run(wall(), defaults().with("dir", ParamValue::V3([0.0, 0.0, 1.0])).with("origin", ParamValue::V3([1.0, 0.0, 0.0]))).expect("cooks");
+        let z = run(
+            wall(),
+            defaults().with("dir", ParamValue::V3([0.0, 0.0, 1.0])).with("origin", ParamValue::V3([1.0, 0.0, 0.0])),
+        )
+        .expect("cooks");
         assert_eq!((z.point_count, z.prim_count()), (13, 12));
         assert!(z.prims.iter().all(|p| p.verts.len() == 3));
         // a wall lying ON the axis emits nothing
         let on = run(curve(&[[0.0; 3], [0.0, 1.0, 0.0]], false), defaults()).expect("cooks");
         assert_eq!((on.point_count, on.prim_count()), (2, 0));
         // negative span turns the other way: +X -> +Z after a quarter
-        let r = run(wall(), defaults().with("startangle", ParamValue::F(0.0)).with("endangle", ParamValue::F(-90.0)).with("divs", ParamValue::I(1))).expect("cooks");
+        let r = run(
+            wall(),
+            defaults()
+                .with("startangle", ParamValue::F(0.0))
+                .with("endangle", ParamValue::F(-90.0))
+                .with("divs", ParamValue::I(1)),
+        )
+        .expect("cooks");
         assert!((r.p()[1][2] - 1.0).abs() < 1e-6, "{:?}", r.p());
     }
 
@@ -209,7 +227,11 @@ mod tests {
             o => panic!("{o:?}"),
         };
         assert_eq!(uv.len(), d.vertex_point.len());
-        assert!(uv.iter().any(|c| c[0] == 1.0) && uv.iter().any(|c| c[1] == 1.0) && uv.iter().all(|c| c[0] * 4.0 == (c[0] * 4.0).round()));
+        assert!(
+            uv.iter().any(|c| c[0] == 1.0)
+                && uv.iter().any(|c| c[1] == 1.0)
+                && uv.iter().all(|c| c[0] * 4.0 == (c[0] * 4.0).round())
+        );
     }
 
     #[test]
@@ -239,7 +261,8 @@ mod tests {
 
     #[test]
     fn example_scene_cooks_and_registry_has_slot() {
-        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/revolve.json")).expect("example present");
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/revolve.json"))
+            .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prim_count() > 50 && signed_volume(&out) > 0.0);

@@ -1017,11 +1017,19 @@ mod tests {
         d.add_poly(&[1, 2, 3], true);
         let none = flatten(&d);
         assert!(none.cd.is_none() && none.cd_point.is_none());
-        let attr = |class, v: Vec<[f32; 3]>| Attribute { name: "Cd".into(), class, data: AttrData::V3(v), type_info: TypeInfo::Color };
+        let attr = |class, v: Vec<[f32; 3]>| Attribute {
+            name: "Cd".into(),
+            class,
+            data: AttrData::V3(v),
+            type_info: TypeInfo::Color,
+        };
         // prim Cd: repeated over each prim's corners
         d.attrs.push(attr(AttrClass::Prim, vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]));
         let c = flatten(&d);
-        assert_eq!(c.cd.as_deref(), Some(&[1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0][..]));
+        assert_eq!(
+            c.cd.as_deref(),
+            Some(&[1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0][..])
+        );
         assert!(c.cd_point.is_none());
         // point Cd beats prim Cd and also fills cd_point
         d.attrs.push(attr(AttrClass::Point, (0..4).map(|i| [i as f32, 0.5, 0.0]).collect()));

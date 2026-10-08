@@ -278,7 +278,10 @@ mod tests {
         let mut d = open_box();
         d.groups.push(Group { name: "side".into(), class: AttrClass::Prim, mask: vec![true; 5] });
         let o = run(d, defaults().with("filledgroup", ParamValue::S("cap".into()))).expect("cooks");
-        assert_eq!(o.group(AttrClass::Prim, "side").map(|g| g.mask.clone()), Some(vec![true, true, true, true, true, false]));
+        assert_eq!(
+            o.group(AttrClass::Prim, "side").map(|g| g.mask.clone()),
+            Some(vec![true, true, true, true, true, false])
+        );
         assert_eq!(o.group(AttrClass::Prim, "cap").map(|g| g.mask.iter().filter(|&&b| b).count()), Some(1));
         let none = run(open_box(), defaults().with("filledgroup", ParamValue::S(String::new()))).expect("cooks");
         assert!(none.groups.is_empty());
@@ -307,7 +310,8 @@ mod tests {
 
     #[test]
     fn example_scene_cooks_and_registry_has_slot() {
-        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/polyfill.json")).expect("example present");
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/polyfill.json"))
+            .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.group(AttrClass::Prim, "filled").is_some());

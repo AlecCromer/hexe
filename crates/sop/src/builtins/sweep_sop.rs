@@ -74,8 +74,20 @@ fn tangents(q: &[V3], closed: bool) -> Vec<V3> {
     let seg = |a: usize, b: usize| normalize(sub(q[b], q[a])).unwrap_or([0.0, 0.0, 1.0]);
     (0..m)
         .map(|k| {
-            let inc = if k > 0 { Some(seg(k - 1, k)) } else if closed { Some(seg(m - 1, 0)) } else { None };
-            let out = if k + 1 < m { Some(seg(k, k + 1)) } else if closed { Some(seg(k, 0)) } else { None };
+            let inc = if k > 0 {
+                Some(seg(k - 1, k))
+            } else if closed {
+                Some(seg(m - 1, 0))
+            } else {
+                None
+            };
+            let out = if k + 1 < m {
+                Some(seg(k, k + 1))
+            } else if closed {
+                Some(seg(k, 0))
+            } else {
+                None
+            };
             match (inc, out) {
                 (Some(a), Some(b)) => normalize(add(a, b)).unwrap_or(a),
                 (Some(a), None) | (None, Some(a)) => a,
@@ -137,7 +149,10 @@ impl Node<Detail> for Sweep {
         let (Some(bb), Some(cs)) = (inputs.first(), inputs.get(1)) else { return Ok(Arc::new(Detail::default())) };
         let (bpos, spos) = (positions(bb), positions(cs));
         let pscale: Option<&Vec<f32>> = useps
-            .then(|| bb.attr(AttrClass::Point, "pscale").and_then(|a| if let AttrData::F32(v) = &a.data { Some(v) } else { None }))
+            .then(|| {
+                bb.attr(AttrClass::Point, "pscale")
+                    .and_then(|a| if let AttrData::F32(v) = &a.data { Some(v) } else { None })
+            })
             .flatten();
         let sections = curves(cs);
         let mut m = Mesh::default();
@@ -240,7 +255,8 @@ mod tests {
         assert_eq!((o.point_count, o.prim_count()), (12, 8));
         let pos = positions(&o);
         for pr in &o.prims {
-            let ids: Vec<usize> = o.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect();
+            let ids: Vec<usize> =
+                o.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect();
             let n = prim_normal(&pos, &ids).expect("normal");
             assert!(n[2].abs() < 1e-9);
             // outward = away from the axis
@@ -342,7 +358,8 @@ mod tests {
 
     #[test]
     fn example_scene_cooks_and_registry_has_slot() {
-        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/sweep.json")).expect("example present");
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/sweep.json"))
+            .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prim_count() > 100 && signed_volume(&out) > 0.0);
