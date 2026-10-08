@@ -436,10 +436,18 @@ fn shot(path: &str) -> Result<(), String> {
 
 struct Shell {
     app: App,
+    /// `--set node.param=value` args: re-applied on EVERY (re)load, not just the first (Cmd+O / Open).
     sets: Vec<String>,
 }
 
 impl Shell {
+    fn new(app: App, sets: Vec<String>) -> Shell {
+        Shell { app, sets }
+    }
+    /// Re-read the scene file (Cmd+O / Open button / Enter in the path field) keeping the `--set` overrides.
+    fn reload(&mut self) {
+        self.app.open(&self.sets);
+    }
     /// Tab popup: search field + registry type list. Returns the type picked (Enter = first match, click = that one).
     fn add_popup(&mut self, ui: &mut egui::Ui) {
         let types = self.app.scene.as_ref().map(Scene::types).unwrap_or_default();
@@ -483,7 +491,8 @@ impl Shell {
 
 impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let Shell { app, sets } = self;
+        let mut reload = false;
+        let Shell { app, .. } = self;
         let (save, open) = ui.input(|i| {
             let cmd = i.modifiers.command || i.modifiers.ctrl;
             (cmd && i.key_pressed(egui::Key::S), cmd && i.key_pressed(egui::Key::O))
@@ -491,22 +500,22 @@ impl eframe::App for Shell {
         if save {
             app.save(None);
         }
-        if open && !app.path.is_empty() {
-            app.open(sets);
-        }
+        reload |= open && !app.path.is_empty();
         egui::Panel::top("open").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label("File: Open");
                 let r = ui.add(egui::TextEdit::singleline(&mut app.path).desired_width(360.0));
                 let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                if ui.button("Open").clicked() || enter {
-                    app.open(sets);
-                }
+                reload |= ui.button("Open").clicked() || enter;
                 if ui.button("Save").clicked() {
                     app.save(None);
                 }
             });
         });
+        if reload {
+            self.reload();
+        }
+        let Shell { app, .. } = self;
         egui::Panel::bottom("status").show(ui, |ui| app.status(ui));
         let mut acts = Vec::new();
         egui::Panel::left("network").default_size(300.0).show(ui, |ui| {
@@ -594,5 +603,33 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default().with_inner_size([1100.0, 700.0]),
         ..Default::default()
     };
-    eframe::run_native("hexe", opts, Box::new(|_cc| Ok(Box::new(Shell { app, sets: Vec::new() }))))
+    eframe::run_native("hexe", opts, Box::new(|_cc| Ok(Box::new(Shell::new(app, sets)))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn example() -> String {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/normal.json").to_string()
+    }
+    fn cusp(app: &App) -> Option<ParamValue> {
+        let s = app.scene.as_ref()?;
+        s.graph.param(s.id("normal1")?, "cusp_angle").cloned()
+    }
+
+    #[test]
+    fn set_overrides_survive_a_cmd_o_reload() {
+        let sets = vec!["normal1.cusp_angle=99".to_string()];
+        let mut app = App::new(example());
+        app.open(&sets);
+        assert_eq!(cusp(&app), Some(ParamValue::F(99.0)), "applied on first load");
+        let mut shell = Shell::new(app, sets);
+        // user fiddles, then Cmd+O re-reads the file: file value is 60, the --set must win again
+        shell.reload();
+        assert_eq!(cusp(&shell.app), Some(ParamValue::F(99.0)), "dropped by reload");
+        shell.reload();
+        assert_eq!(cusp(&shell.app), Some(ParamValue::F(99.0)));
+        assert!(shell.app.error.is_none(), "{:?}", shell.app.error);
+    }
 }
