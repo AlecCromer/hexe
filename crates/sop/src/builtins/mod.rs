@@ -123,6 +123,7 @@ mod surfutil;
 mod sweep_sop;
 mod revolve_sop;
 mod skin_sop;
+mod polyfill_sop;
 // --- end S2 mods ---
 
 /// One `r.register("<type>", <mod>::spec, <mod>::new);` per SOP.
@@ -243,6 +244,7 @@ pub(crate) fn builtins(r: &mut Registry) {
 r.register("sweep", sweep_sop::spec, sweep_sop::new);
 r.register("revolve", revolve_sop::spec, revolve_sop::new);
 r.register("skin", skin_sop::spec, skin_sop::new);
+r.register("polyfill", polyfill_sop::spec, polyfill_sop::new);
 // --- end S2 registers ---
 }
 

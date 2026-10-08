@@ -1206,3 +1206,21 @@ evidence = [
   "crates/sop/src/builtins/skin_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "S2: surftype(quads|triangles) closev(off, needs >=3 sections) resample(on). Sections = curve prims in prim order; closed in u iff ALL closed; differing point counts resample by arclength to the largest count (off -> Failed). Straight ruled loft, Houdini normal = u x v (CCW rings lofted along +axis -> outward). Vertex uv V3. NOT modelled (DEFERRED): keepshape/knot interpolation, uniform, order, extra divs between sections, NURBS output, attribute carry. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini skin has surftype/keepshape/closeu/closev/prim-order), section order, resample rule. Example: examples/skin.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-polyfill"
+title = "PolyFill SOP (close boundary-loop holes: single n-gon / centre fan / centre quads, filled prim group)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["polyfill"]
+evidence = [
+  "crates/sop/src/builtins/polyfill_sop.rs::box_missing_its_top_is_closed_by_one_outward_quad",
+  "crates/sop/src/builtins/polyfill_sop.rs::fan_and_quads_add_a_centre_point_and_keep_the_volume",
+  "crates/sop/src/builtins/polyfill_sop.rs::prism_with_two_holes_single_mode_is_a_watertight_outward_solid",
+  "crates/sop/src/builtins/polyfill_sop.rs::closed_meshes_open_polys_and_non_manifold_edges_pass_through_shared",
+  "crates/sop/src/builtins/polyfill_sop.rs::attributes_and_existing_groups_survive_and_the_group_is_replaceable",
+  "crates/sop/src/builtins/polyfill_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/polyfill_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "S2: fillmode single(0)|fan(1, centre = corner mean, tris)|quads(2, centre + quads, odd tail tri; 3-hole = tri, 4-hole = quad in single/quads) maxedges(0 = unlimited) filledgroup(\"filled\", prim group of new polys, empty = none). Holes = reversed directed boundary edges (no opposite edge, non-manifold ignored) chained into simple loops; winding consistent with neighbours (open box top -> signed volume 1 exactly; hex prism -> 1.5*sqrt3). Nothing to fill = input Arc shared. NOT modelled (DEFERRED): inner-ring holes of one prim, concave planar ear clipping (single = the loop as one n-gon), smooth fill, point-group restriction. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini polyfill menus differ), centre-point rule, quad pairing. Example: examples/polyfill.json. Analytical oracle only."
