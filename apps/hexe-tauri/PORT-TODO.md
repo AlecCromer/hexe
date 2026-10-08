@@ -36,7 +36,7 @@ Checklist = in egui, NOT yet in Tauri. `[ ]` open.
 - [x] shading: headlight `ambient + diffuse*|N.V|` flat per-face Newell normal, double-sided (tauri = three.js Hemisphere+Directional lights, flat, ~similar not identical)
 - [x] round screen-space points w/ depth pull (tauri: square-ish PointsMaterial px)
 - [x] draw caps: 1M tris · 2M edge verts · 500k points · 8192px target (tauri: no caps -> huge cook may freeze webview)
-- [ ] headless PNG render: `hexe scene.json --render out.png [--size WxH] [--wire]` (egui `render_offscreen`, same Scene3d); tauri has NO headless path. Lost capability: GPU-less CI proof renders
+- [x] headless PNG render: `hexe scene.json --render out.png [--size WxH] [--wire]` (egui `render_offscreen`, same Scene3d); tauri has NO headless path. Lost capability: GPU-less CI proof renders (T4: `--render` works: hidden window, canvas toDataURL -> Rust writes the PNG, exit 0/2/3; `cargo xtask render` = ci step; proof/t4-render.png)
 - [x] Sphere/Tube/Volume prims not drawn (also not in egui; tauri counts them `undrawn`) -> T2b: sphere/tube = wire proxies (volume still undrawn)
 
 ## app shell (main.rs / script.rs)
