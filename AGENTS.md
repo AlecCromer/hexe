@@ -16,7 +16,7 @@ This file wins over every other instruction, role or summon text on conflict. Pi
 4. A lane is never in both rooms in one life. Publishing spec/fixtures into this repo = monad only, logged in PROVENANCE.md.
 
 ## 2. Rust only
-Product, xtask, tools: Rust. No python/JS/TS anywhere in the repo. (`tools/` is empty; the only shell script is the skill-side `new-port.sh`, outside the repo.) New tooling = an `xtask` subcommand.
+Product, xtask, tools: Rust. No python/JS/TS anywhere in the repo. (`tools/` is empty; the only shell script is the skill-side `new-port.sh`, outside the repo.) New tooling = an `xtask` subcommand. SOLE EXCEPTION (10-08): `oracle/houdini/*.py` = hython scripts run INSIDE Houdini 20.5 to produce `fixtures/*/houdini.*` — oracle input, never product; invoked only via `cargo xtask oracle --houdini` / `oracle/houdini/run_all.py`.
 
 ## 3. Oracle
 Oracle = the original run on inputs WE authored → `fixtures/<case>/{case.toml,input,expected}` + `fixtures/MANIFEST.toml` (how produced, original's version, sha256). No corpus files with unclear rights, no personal data. Open-tool oracles (poppler, qpdf, ffmpeg…) = subprocess only, never linked.
