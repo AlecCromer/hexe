@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "divide1", "type": "divide", "params": { "convex": true, "numsides": 3 } }
+  ],
+  "edges": [["box1", 0, "divide1", 0]],
+  "display": "divide1"
+}

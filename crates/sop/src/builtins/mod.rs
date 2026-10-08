@@ -41,6 +41,8 @@ mod curve_sop;
 //
 mod delete_sop;
 //
+mod divide_sop;
+//
 mod fuse_sop;
 //
 mod facet_sop;
@@ -55,6 +57,8 @@ mod groupdelete_sop;
 //
 mod grouppromote_sop;
 //
+mod knife_sop;
+//
 mod line_sop;
 //
 mod matchsize_sop;
@@ -62,6 +66,8 @@ mod matchsize_sop;
 mod measure_sop;
 //
 mod merge_sop;
+//
+mod mountain_sop;
 //
 mod normal_sop;
 //
@@ -76,6 +82,8 @@ mod peak_sop;
 mod polybevel_sop;
 //
 mod polyextrude_sop;
+//
+mod ray_sop;
 //
 mod resample_sop;
 //
@@ -144,6 +152,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("delete", delete_sop::spec, delete_sop::new);
     //
+    r.register("divide", divide_sop::spec, divide_sop::new);
+    //
     r.register("fuse", fuse_sop::spec, fuse_sop::new);
     //
     r.register("facet", facet_sop::spec, facet_sop::new);
@@ -158,6 +168,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("grouppromote", grouppromote_sop::spec, grouppromote_sop::new);
     //
+    r.register("knife", knife_sop::spec, knife_sop::new);
+    //
     r.register("line", line_sop::spec, line_sop::new);
     //
     r.register("matchsize", matchsize_sop::spec, matchsize_sop::new);
@@ -165,6 +177,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("measure", measure_sop::spec, measure_sop::new);
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
+    //
+    r.register("mountain", mountain_sop::spec, mountain_sop::new);
     //
     r.register("normal", normal_sop::spec, normal_sop::new);
     //
@@ -175,6 +189,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
     //
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
+    //
+    r.register("ray", ray_sop::spec, ray_sop::new);
     //
     r.register("resample", resample_sop::spec, resample_sop::new);
     //

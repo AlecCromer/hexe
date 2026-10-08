@@ -182,7 +182,7 @@ fn lerp(t: f64, a: f64, b: f64) -> f64 {
 }
 
 /// Classic gradient noise: zero at every integer lattice point, |value| ≤ 1.
-fn perlin(q: [f64; 3], seed: u64, chan: u64) -> f64 {
+pub(super) fn perlin(q: [f64; 3], seed: u64, chan: u64) -> f64 {
     let (ix, iy, iz) = (floor_i(q[0]), floor_i(q[1]), floor_i(q[2]));
     let (fx, fy, fz) = (q[0] - ix as f64, q[1] - iy as f64, q[2] - iz as f64);
     let corner = |dx: i64, dy: i64, dz: i64| {

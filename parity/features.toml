@@ -1029,3 +1029,70 @@ evidence = [
   "crates/sop/src/builtins/bend_sop.rs::example_scenes_cook_and_registry_has_slots",
 ]
 notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0). Rotation about dir by angle*clamp(h/length,0,1), right-handed (Rodrigues): (1,y,0) -> (cos a, y, -sin a) with a=90deg*y/4 (length 4). h<0 unmoved, past region full angle, axis points fixed. Shares bend_sop.rs. NOT modelled (DEFERRED): group, falloff, N update. UNVERIFIED vs Houdini (hython blocked): sign and parm set. Example: examples/twist.json (box, corner (.5,.5,.5) -> (.5,.5,-.5)). Analytical oracle only."
+
+[[feature]]
+id = "sop-mountain"
+title = "Mountain SOP (Perlin displacement along N)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["mountain"]
+evidence = [
+  "crates/sop/src/builtins/mountain_sop.rs::amplitude_zero_is_identity_sharing_the_arc",
+  "crates/sop/src/builtins/mountain_sop.rs::deterministic_bounded_along_n_and_seed_dependent",
+  "crates/sop/src/builtins/mountain_sop.rs::height_is_linear_and_negative_mirrors",
+  "crates/sop/src/builtins/mountain_sop.rs::lattice_points_are_fixed",
+  "crates/sop/src/builtins/mountain_sop.rs::existing_n_attribute_is_the_direction",
+  "crates/sop/src/builtins/mountain_sop.rs::hostile_params_and_inputs",
+  "crates/sop/src/builtins/mountain_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H29: height(1) elementsize(1, >0) seed(0) offset(0). P' = P + N*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. N = point N attr else Newell point normals (as peak). height 0 = Arc shared. NOT modelled (DEFERRED): fractal octaves/roughness, turbulence/attenuation/slope, animate, other noise types, group, N recompute. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize. Example: examples/mountain.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-ray"
+title = "Ray SOP (project points onto a surface along N / dir)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["ray"]
+evidence = [
+  "crates/sop/src/builtins/ray_sop.rs::grid_above_box_lands_on_the_top_face",
+  "crates/sop/src/builtins/ray_sop.rs::forward_only_misses_backwards_and_bidirectional_finds_it",
+  "crates/sop/src/builtins/ray_sop.rs::normal_method_uses_n_attribute_or_computed_normals",
+  "crates/sop/src/builtins/ray_sop.rs::empty_target_and_hostile_params",
+  "crates/sop/src/builtins/ray_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H29: method normal(0, default)|dir(1), dir(0,-1,0), bidirectional(off), hitgroup(\"\" = none; point group of hit points). Input 1 closed polys fan-triangulated (exact for convex), Moller-Trumbore f64 with 1e-9 edge tolerance, NEAREST hit (forward t>=0, or by |t| when bidirectional); miss = point stays. 3x3 points at y=3 over the unit box, dir (0,-1,0) -> all land at y=0.5 (top, not bottom). Work cap points*tris <= 2^26 (Failed). NOT modelled (DEFERRED): lift/scale, normal+uv transfer, farthest/all-hits, minimum-distance method, hit prim/uv outputs, group filter, BVH (brute force). UNVERIFIED vs Houdini (hython blocked): default method, miss behaviour, hitgroup naming. Example: examples/ray.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-divide"
+title = "Divide SOP (polygon -> triangles / <= numsides pieces)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["divide"]
+evidence = [
+  "crates/sop/src/builtins/divide_sop.rs::box_six_quads_become_twelve_triangles",
+  "crates/sop/src/builtins/divide_sop.rs::attrs_follow_their_source_and_small_polys_pass",
+  "crates/sop/src/builtins/divide_sop.rs::hexagon_chunks_and_open_polys_pass_through",
+  "crates/sop/src/builtins/divide_sop.rs::concave_l_shape_is_ear_clipped_exactly",
+  "crates/sop/src/builtins/divide_sop.rs::hostile_params_and_degenerate_polys",
+  "crates/sop/src/builtins/divide_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H29: convex(on) numsides(3, 3..=1024). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). Points unchanged, winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts. Nothing split = Arc shared. NOT modelled (DEFERRED): bricker, removeshared, avoidsmallangles, holes. UNVERIFIED vs Houdini (hython blocked): diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles). Example: examples/divide.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-knife"
+title = "Knife SOP (plane cut keeping both sides, seam marked)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["knife"]
+evidence = [
+  "crates/sop/src/builtins/knife_sop.rs::box_cut_at_y0_keeps_both_halves_welded_with_marked_seam",
+  "crates/sop/src/builtins/knife_sop.rs::seam_includes_on_plane_corners_and_keep_one_side_still_flags",
+  "crates/sop/src/builtins/knife_sop.rs::group_names_are_configurable_replaced_and_optional",
+  "crates/sop/src/builtins/knife_sop.rs::hostile_params",
+  "crates/sop/src/builtins/knife_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H29: = clip core (clip_sop.rs, same plane params, keep default BOTH) + groups: seamgroup(cut, POINT: cut points + kept ON-plane points), abovegroup(above)/belowgroup(below) PRIM groups; empty name = skip. Box at y=0: 12 pts (4 seam), 10 prims (5+5), halves welded on shared cut points. NOT modelled (DEFERRED): cap/fill, remove-seam, keepedges, shatter, second-input cutter surface, group filter. UNVERIFIED vs Houdini (hython blocked): seam group semantics/naming, default keep. Example: examples/knife.json. Analytical oracle only."
