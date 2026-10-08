@@ -13,7 +13,9 @@
 //! vertex copies the vertex attrs of its source vertex. Nothing split = input `Arc` shared.
 //! NOT modelled (DEFERRED): `bricker` (brick/rect decomposition), `removeshared`, `avoidsmallangles`, `usemaxsides`
 //! variants, polys with holes, non-planar fitting.
-use super::meshutil::{MAX_ELEMS, Remap, V3, bad, closed_poly_pts, cross, dot, failed, int, positions, rebuild, sub, toggle};
+use super::meshutil::{
+    MAX_ELEMS, Remap, V3, bad, closed_poly_pts, cross, dot, failed, int, positions, rebuild, sub, toggle,
+};
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};

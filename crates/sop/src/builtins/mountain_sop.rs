@@ -187,7 +187,8 @@ mod tests {
         assert_eq!(cook(&*new(), Detail::default(), &with(1.0)).expect("cooks").point_count, 0);
         let r = cook(&*new(), cube(), &with(f32::MAX).with("offset", ParamValue::V3([0.37; 3])));
         assert!(r.is_ok() || matches!(r, Err(CookError::Failed(_))));
-        let r = cook(&*new(), cube(), &with(1.0).with("seed", ParamValue::I(-5)).with("elementsize", ParamValue::F(1e-30)));
+        let r =
+            cook(&*new(), cube(), &with(1.0).with("seed", ParamValue::I(-5)).with("elementsize", ParamValue::F(1e-30)));
         assert!(r.is_ok() || matches!(r, Err(CookError::Failed(_))));
     }
 

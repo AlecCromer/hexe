@@ -78,7 +78,8 @@ impl Node<Detail> for MatchSize {
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
-        let (doscale, uniform, dotrans) = (toggle(p, "doscale")?, toggle(p, "uniformscale")?, toggle(p, "dotranslate")?);
+        let (doscale, uniform, dotrans) =
+            (toggle(p, "doscale")?, toggle(p, "uniformscale")?, toggle(p, "dotranslate")?);
         let jus = [justify(p, "justifyx")?, justify(p, "justifyy")?, justify(p, "justifyz")?];
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let (tmin, tsize) = match p.menu("targettype") {
@@ -158,7 +159,9 @@ mod tests {
 
     #[test]
     fn justify_min_and_max_pin_the_chosen_faces() {
-        let p = with([2.0, 2.0, 2.0], [10.0, 0.0, 0.0]).with("justifyx", ParamValue::Menu(0)).with("justifyy", ParamValue::Menu(2));
+        let p = with([2.0, 2.0, 2.0], [10.0, 0.0, 0.0])
+            .with("justifyx", ParamValue::Menu(0))
+            .with("justifyy", ParamValue::Menu(2));
         let out = cook(&*new(), cube(), &p).expect("cooks");
         let (lo, hi) = out.bbox();
         assert_eq!(lo[0], 9.0, "x min face pinned to target min x (10-1)");
@@ -172,8 +175,13 @@ mod tests {
         let out = cook(&*new(), cube(), &p).expect("cooks");
         assert_eq!(out.bbox(), ([-1.0; 3], [1.0; 3]), "min factor 2 (z)");
         let q = with([4.0, 4.0, 4.0], [7.0, 7.0, 7.0]).with("dotranslate", ParamValue::B(false));
-        assert_eq!(cook(&*new(), cube(), &q).expect("cooks").bbox(), ([-2.0; 3], [2.0; 3]), "scaled about center, not moved");
-        let both_off = with([4.0; 3], [7.0; 3]).with("dotranslate", ParamValue::B(false)).with("doscale", ParamValue::B(false));
+        assert_eq!(
+            cook(&*new(), cube(), &q).expect("cooks").bbox(),
+            ([-2.0; 3], [2.0; 3]),
+            "scaled about center, not moved"
+        );
+        let both_off =
+            with([4.0; 3], [7.0; 3]).with("dotranslate", ParamValue::B(false)).with("doscale", ParamValue::B(false));
         let a = Arc::new(cube());
         assert!(Arc::ptr_eq(&super::super::meshutil::testkit::cook_arc(&*new(), &a, &both_off).expect("cooks"), &a));
     }

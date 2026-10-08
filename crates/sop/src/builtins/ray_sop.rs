@@ -108,7 +108,8 @@ impl Node<Detail> for Ray {
             return Err(bad("ray: `dir` must be non-zero"));
         }
         let both = p.toggle("bidirectional").ok_or_else(|| bad("ray: `bidirectional`: missing or not a toggle"))?;
-        let group = p.string("hitgroup").ok_or_else(|| bad("ray: `hitgroup`: missing or not a string"))?.trim().to_owned();
+        let group =
+            p.string("hitgroup").ok_or_else(|| bad("ray: `hitgroup`: missing or not a string"))?.trim().to_owned();
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let tris = inputs.get(1).map(|d| triangles(d)).unwrap_or_default();
         if (tris.is_empty() && group.is_empty()) || src.point_count == 0 {

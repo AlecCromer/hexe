@@ -229,7 +229,8 @@ mod tests {
     /// (1,y,0) twisted 90 degrees over length 4 about +Y: angle 22.5 deg * y, right-handed: (cos a, y, -sin a).
     #[test]
     fn twist_rotates_linearly_with_height_right_handed() {
-        let out = cook(&*twist_new(), line(&[0.0, 1.0, 2.0, 3.0, 4.0, 6.0, -2.0], 1.0, 0.0), &twist(4.0, 90.0)).expect("cooks");
+        let out = cook(&*twist_new(), line(&[0.0, 1.0, 2.0, 3.0, 4.0, 6.0, -2.0], 1.0, 0.0), &twist(4.0, 90.0))
+            .expect("cooks");
         for (i, y) in [0.0f64, 1.0, 2.0, 3.0, 4.0].iter().enumerate() {
             let a = (PI / 2.0) * y / 4.0;
             close(out.p()[i], [a.cos(), *y, -a.sin()], &format!("y={y}"));

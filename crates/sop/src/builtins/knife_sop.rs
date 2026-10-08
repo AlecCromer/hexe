@@ -102,7 +102,9 @@ mod tests {
         assert!(a.iter().zip(&b).all(|(x, y)| x != y), "every prim is exactly one side");
         // above prims only touch y >= 0 points, below prims only y <= 0
         for (i, pr) in out.prims.iter().enumerate() {
-            let ys = out.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&v| out.p()[v as usize][1]);
+            let ys = out.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
+                .iter()
+                .map(|&v| out.p()[v as usize][1]);
             assert!(if a[i] { ys.clone().all(|y| y >= 0.0) } else { ys.clone().all(|y| y <= 0.0) });
         }
     }
@@ -132,7 +134,9 @@ mod tests {
         assert!(out.group(AttrClass::Prim, "above").is_none());
         assert_eq!(mask(&out, AttrClass::Prim, "lo").iter().filter(|&&m| m).count(), 5);
         // cutting twice replaces rather than duplicates
-        let again = cook(&*new(), (*cook(&*new(), cube(), &defaults(&*new())).expect("cooks")).clone(), &defaults(&*new())).expect("cooks");
+        let again =
+            cook(&*new(), (*cook(&*new(), cube(), &defaults(&*new())).expect("cooks")).clone(), &defaults(&*new()))
+                .expect("cooks");
         assert_eq!(again.groups.iter().filter(|g| g.name == "cut").count(), 1);
     }
 

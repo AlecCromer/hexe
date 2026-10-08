@@ -96,10 +96,7 @@ struct Emit {
 fn prim_vpts(src: &Detail, pr: &Prim, np: usize) -> Option<Vec<(usize, usize)>> {
     let (lo, hi) = (usize::try_from(pr.verts.start).ok()?, usize::try_from(pr.verts.end).ok()?);
     let vs = src.vertex_point.get(lo..hi)?;
-    vs.iter()
-        .enumerate()
-        .map(|(k, &p)| usize::try_from(p).ok().filter(|&p| p < np).map(|p| (lo + k, p)))
-        .collect()
+    vs.iter().enumerate().map(|(k, &p)| usize::try_from(p).ok().filter(|&p| p < np).map(|p| (lo + k, p))).collect()
 }
 
 #[derive(Default)]
@@ -129,7 +126,18 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
     if u64::from(src.vertex_count()).saturating_mul(4) > MAX_ELEMS {
         return Err(failed(op, "too many vertices"));
     }
-    let side: Vec<i8> = d.iter().map(|&x| if x > EPS { 1 } else if x < -EPS { -1 } else { 0 }).collect();
+    let side: Vec<i8> = d
+        .iter()
+        .map(|&x| {
+            if x > EPS {
+                1
+            } else if x < -EPS {
+                -1
+            } else {
+                0
+            }
+        })
+        .collect();
     let passes: &[i8] = match keep {
         Keep::Above => &[1],
         Keep::Below => &[-1],
@@ -229,7 +237,8 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
         }
     }
     for i in 0..np {
-        if !in_prim.get(i).copied().unwrap_or(true) && passes.iter().any(|&s| side.get(i).is_some_and(|&x| x * s >= 0)) {
+        if !in_prim.get(i).copied().unwrap_or(true) && passes.iter().any(|&s| side.get(i).is_some_and(|&x| x * s >= 0))
+        {
             keep_pt[i] = true;
         }
     }
@@ -267,9 +276,8 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
         above.push(e.above);
         below.push(!e.above);
     }
-    let seam: Vec<bool> = (0..p.len())
-        .map(|k| k >= n_src || kept.get(k).is_some_and(|&i| side.get(i) == Some(&0)))
-        .collect();
+    let seam: Vec<bool> =
+        (0..p.len()).map(|k| k >= n_src || kept.get(k).is_some_and(|&i| side.get(i) == Some(&0))).collect();
     let rm = Remap { point_src, vert_src, prim_src };
     let mut out = rebuild(op, src, vertex_point, prims, &rm, to_f32(op, &p)?)?;
     lerp_cut_attrs(src, &mut out, n_src, &cuts.list, &weights);
