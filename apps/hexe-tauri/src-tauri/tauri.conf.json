@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "hexe",
+  "productName": "Hexe",
   "version": "0.1.0",
-  "identifier": "com.paloptic.hexe",
+  "identifier": "org.gaia-systems.hexe",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1520",
@@ -11,13 +11,16 @@
   },
   "app": {
     "windows": [
-      { "label": "main", "title": "hexe", "width": 1440, "height": 900, "resizable": true }
+      { "label": "main", "title": "Hexe", "width": 1440, "height": 900, "resizable": true }
     ],
     "security": { "csp": null }
   },
   "bundle": {
-    "active": false,
-    "targets": ["app"],
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "GraphicsAndDesign",
+    "shortDescription": "Hexe: procedural geometry node editor",
+    "macOS": { "minimumSystemVersion": "11.0" },
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.png"]
   }
 }
