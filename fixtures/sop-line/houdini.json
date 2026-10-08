@@ -1,0 +1,103 @@
+{
+ "sop": "sop-line",
+ "houdini": "20.5.487",
+ "note": "line origin(-2,0,0) dir(1,0,0) dist 4 points 5 (curves.json)",
+ "points": 5,
+ "prims": 1,
+ "vertices": 5,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  -2.0,
+  0.0,
+  0.0
+ ],
+ "bbox_max": [
+  2.0,
+  0.0,
+  0.0
+ ],
+ "P": [
+  [
+   -2.0,
+   0.0,
+   0.0
+  ],
+  [
+   -1.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   -2.0,
+   0.0,
+   0.0
+  ],
+  [
+   -1.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2,
+   3,
+   4
+  ]
+ ],
+ "prim_closed": [
+  false
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "nodes": [
+  {
+   "name": "a",
+   "type": "box"
+  },
+  {
+   "name": "b",
+   "type": "box"
+  },
+  {
+   "name": "xf",
+   "type": "xform",
+   "params": {
+    "t": [
+     0.5,
+     0.5,
+     0.5
+    ]
+   }
+  },
+  {
+   "name": "bool1",
+   "type": "boolean",
+   "params": {
+    "operation": 1
+   }
+  }
+ ],
+ "edges": [
+  [
+   "b",
+   0,
+   "xf",
+   0
+  ],
+  [
+   "a",
+   0,
+   "bool1",
+   0
+  ],
+  [
+   "xf",
+   0,
+   "bool1",
+   1
+  ]
+ ],
+ "display": "bool1"
+}

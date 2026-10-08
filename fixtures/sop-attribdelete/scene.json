@@ -1,0 +1,41 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "w",
+   "type": "wrangle",
+   "params": {
+    "snippet": "f@v = @ptnum; f@w = 2.0;"
+   }
+  },
+  {
+   "name": "ad",
+   "type": "attribdelete",
+   "params": {
+    "ptdel": "w"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "g",
+   0,
+   "w",
+   0
+  ],
+  [
+   "w",
+   0,
+   "ad",
+   0
+  ]
+ ],
+ "display": "ad"
+}

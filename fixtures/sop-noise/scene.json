@@ -1,0 +1,35 @@
+{
+ "nodes": [
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 11,
+    "cols": 11,
+    "type": 4
+   }
+  },
+  {
+   "name": "noise1",
+   "type": "attribnoise",
+   "params": {
+    "amplitude": 0.5,
+    "frequency": [
+     0.7,
+     0.7,
+     0.7
+    ],
+    "seed": 3
+   }
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "noise1",
+   0
+  ]
+ ],
+ "display": "noise1"
+}

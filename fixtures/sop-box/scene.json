@@ -1,0 +1,10 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  }
+ ],
+ "edges": [],
+ "display": "box1"
+}

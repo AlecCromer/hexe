@@ -1,0 +1,25 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "pe",
+   "type": "polyextrude",
+   "params": {
+    "distance": 0.5,
+    "divisions": 1
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "pe",
+   0
+  ]
+ ],
+ "display": "pe"
+}

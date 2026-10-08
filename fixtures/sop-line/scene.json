@@ -1,0 +1,24 @@
+{
+ "nodes": [
+  {
+   "name": "line1",
+   "type": "line",
+   "params": {
+    "origin": [
+     -2,
+     0,
+     0
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ],
+    "dist": 4,
+    "points": 5
+   }
+  }
+ ],
+ "edges": [],
+ "display": "line1"
+}

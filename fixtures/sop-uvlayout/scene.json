@@ -1,0 +1,38 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "uvu",
+   "type": "uvunwrap",
+   "params": {
+    "tile": 3
+   }
+  },
+  {
+   "name": "uvl",
+   "type": "uvlayout",
+   "params": {
+    "padding": 0.05,
+    "fit": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "uvu",
+   0
+  ],
+  [
+   "uvu",
+   0,
+   "uvl",
+   0
+  ]
+ ],
+ "display": "uvl"
+}

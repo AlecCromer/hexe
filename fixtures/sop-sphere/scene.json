@@ -1,0 +1,13 @@
+{
+ "nodes": [
+  {
+   "name": "sph",
+   "type": "sphere",
+   "params": {
+    "type": 2
+   }
+  }
+ ],
+ "edges": [],
+ "display": "sph"
+}

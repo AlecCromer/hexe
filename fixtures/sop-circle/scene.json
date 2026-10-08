@@ -1,0 +1,18 @@
+{
+ "nodes": [
+  {
+   "name": "circle1",
+   "type": "circle",
+   "params": {
+    "divisions": 6,
+    "radius": [
+     2,
+     1,
+     0
+    ]
+   }
+  }
+ ],
+ "edges": [],
+ "display": "circle1"
+}

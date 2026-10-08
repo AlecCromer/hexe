@@ -1,0 +1,29 @@
+{
+ "nodes": [
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 11,
+    "cols": 11,
+    "type": 4
+   }
+  },
+  {
+   "name": "w",
+   "type": "wrangle",
+   "params": {
+    "snippet": "@P.y = sin(@P.x) * 0.5;"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "w",
+   0
+  ]
+ ],
+ "display": "w"
+}

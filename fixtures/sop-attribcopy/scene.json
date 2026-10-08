@@ -1,0 +1,56 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "s",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "w",
+   "type": "wrangle",
+   "params": {
+    "snippet": "f@v = @ptnum;"
+   }
+  },
+  {
+   "name": "ac",
+   "type": "attribcopy",
+   "params": {
+    "class": 0,
+    "attribs": "v"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "s",
+   0,
+   "w",
+   0
+  ],
+  [
+   "g",
+   0,
+   "ac",
+   0
+  ],
+  [
+   "w",
+   0,
+   "ac",
+   1
+  ]
+ ],
+ "display": "ac"
+}

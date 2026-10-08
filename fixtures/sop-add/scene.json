@@ -1,0 +1,14 @@
+{
+ "nodes": [
+  {
+   "name": "add1",
+   "type": "add",
+   "params": {
+    "points": "0,3,0 1,3,0 2,3,0",
+    "prims": true
+   }
+  }
+ ],
+ "edges": [],
+ "display": "add1"
+}

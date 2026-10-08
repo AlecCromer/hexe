@@ -1,0 +1,13 @@
+{
+ "nodes": [
+  {
+   "name": "f",
+   "type": "file",
+   "params": {
+    "file": "../houdini-ship/joint_link_n/joint_link_n.bgeo"
+   }
+  }
+ ],
+ "edges": [],
+ "display": "f"
+}

@@ -1,0 +1,35 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "m",
+   "type": "merge"
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "m",
+   0
+  ],
+  [
+   "grid1",
+   0,
+   "m",
+   1
+  ]
+ ],
+ "display": "m"
+}

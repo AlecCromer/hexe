@@ -1,0 +1,21 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "rv",
+   "type": "reverse"
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "rv",
+   0
+  ]
+ ],
+ "display": "rv"
+}

@@ -1,0 +1,45 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "top",
+   "type": "group",
+   "params": {
+    "groupname": "top",
+    "grouptype": 1,
+    "normal": true,
+    "dir": [
+     0,
+     1,
+     0
+    ],
+    "angle": 10
+   }
+  },
+  {
+   "name": "gd",
+   "type": "groupdelete",
+   "params": {
+    "group": "top"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "top",
+   0
+  ],
+  [
+   "top",
+   0,
+   "gd",
+   0
+  ]
+ ],
+ "display": "gd"
+}

@@ -1,0 +1,106 @@
+{
+ "sop": "sop-foreach",
+ "houdini": "20.5.487",
+ "note": "add 6 points -> wrangle s@name a/b/c (ptnum%3) -> for-each piece (class point, attrib name) { xform t(0,1,0) } merge (examples/foreach.json)",
+ "points": 6,
+ "prims": 0,
+ "vertices": 0,
+ "attribs": {
+  "point": [
+   "P",
+   "name"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ],
+  "point:name": [
+   "String",
+   1
+  ]
+ },
+ "prim_types": [],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  0.0,
+  1.0,
+  0.0
+ ],
+ "bbox_max": [
+  5.0,
+  1.0,
+  0.0
+ ],
+ "P": [
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   3.0,
+   1.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ],
+  [
+   4.0,
+   1.0,
+   0.0
+  ],
+  [
+   2.0,
+   1.0,
+   0.0
+  ],
+  [
+   5.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   3.0,
+   1.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ],
+  [
+   4.0,
+   1.0,
+   0.0
+  ],
+  [
+   2.0,
+   1.0,
+   0.0
+  ],
+  [
+   5.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [],
+ "prim_closed": []
+}

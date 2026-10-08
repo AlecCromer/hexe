@@ -1,0 +1,28 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "so",
+   "type": "sort",
+   "params": {
+    "ptsort": 7
+   }
+  }
+ ],
+ "edges": [
+  [
+   "g",
+   0,
+   "so",
+   0
+  ]
+ ],
+ "display": "so"
+}

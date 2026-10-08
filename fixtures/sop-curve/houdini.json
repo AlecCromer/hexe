@@ -1,0 +1,81 @@
+{
+ "sop": "sop-curve",
+ "houdini": "20.5.487",
+ "note": "closed poly through (0,1,0) (1,1,0) (1,2,0). Houdini 20.5 curve::2.0 has no coords parm -> twin = curve::1.0 if present else add SOP closed polygon",
+ "points": 3,
+ "prims": 1,
+ "vertices": 3,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  0.0,
+  1.0,
+  0.0
+ ],
+ "bbox_max": [
+  1.0,
+  2.0,
+  0.0
+ ],
+ "P": [
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ],
+  [
+   1.0,
+   2.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ],
+  [
+   1.0,
+   2.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2
+  ]
+ ],
+ "prim_closed": [
+  true
+ ]
+}

@@ -1,0 +1,49 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "top",
+   "type": "group",
+   "params": {
+    "groupname": "top",
+    "grouptype": 1,
+    "normal": true,
+    "dir": [
+     0,
+     1,
+     0
+    ],
+    "angle": 10
+   }
+  },
+  {
+   "name": "pr",
+   "type": "grouppromote",
+   "params": {
+    "group": "top",
+    "fromtype": 1,
+    "totype": 0,
+    "method": 0,
+    "newname": "toppts"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "top",
+   0
+  ],
+  [
+   "top",
+   0,
+   "pr",
+   0
+  ]
+ ],
+ "display": "pr"
+}

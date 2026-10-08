@@ -1,0 +1,25 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "fc",
+   "type": "facet",
+   "params": {
+    "unique_points": true,
+    "post_nml": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "fc",
+   0
+  ]
+ ],
+ "display": "fc"
+}

@@ -1,0 +1,29 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "dl",
+   "type": "delete",
+   "params": {
+    "entity": 1,
+    "group": "0 2"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "g",
+   0,
+   "dl",
+   0
+  ]
+ ],
+ "display": "dl"
+}

@@ -1,0 +1,26 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "sm",
+   "type": "smooth",
+   "params": {
+    "iterations": 2,
+    "strength": 0.5,
+    "pin_boundary": false
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "sm",
+   0
+  ]
+ ],
+ "display": "sm"
+}

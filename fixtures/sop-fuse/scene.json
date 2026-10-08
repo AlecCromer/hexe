@@ -1,0 +1,37 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "pe1",
+   "type": "polyextrude",
+   "params": {
+    "distance": 0.5
+   }
+  },
+  {
+   "name": "fuse1",
+   "type": "fuse",
+   "params": {
+    "distance": 0.001
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "pe1",
+   0
+  ],
+  [
+   "pe1",
+   0,
+   "fuse1",
+   0
+  ]
+ ],
+ "display": "fuse1"
+}
