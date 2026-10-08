@@ -4,7 +4,9 @@
 //! - prim: 1 pt (= `t`), 1 vertex, 1 `Sphere` prim, xform = R·diag(rad·scale)·O (row-major 3x3).
 //! - poly, `freq`=f: 10f²+2 pts, 20f² tris. Icosahedron with poles on the pole axis; every face split on a barycentric
 //!   lattice, shared corner/edge points deduplicated, points projected onto the unit sphere.
-//! - polymesh, `rows`=R `cols`=C: ring points (R-2)·C then the poles (shared: 2; `upole`: 2·C). Prims (R-1)·C =
+//! - polymesh, `rows`=R `cols`=C: the poles FIRST (shared: top 0, bottom 1; `upole`: 2·C) then ring points (R-2)·C; ring angle runs +X toward -Z
+//!   (verified vs real Houdini 20.5, fixtures/sop-sphere/houdini.geo). Houdini lists cells clockwise; hexe emits the same first corner
+//!   reversed (counter-clockwise, outward). Prim order = Houdini: top fan, ring rows, bottom fan. Prims (R-1)·C =
 //!   (R-3)·C quads + 2·C pole faces (tris when `triangularpoles`, else quads that touch the pole). `upole` on: R·C pts.
 //! - P = R(rad·scale ∘ O(unit)) + t. O = pole-axis permutation (y identity, x: (y,z,x), z: (z,x,y)), R = Rx then Ry then Rz.
 use crate::SopNode;
@@ -199,9 +201,9 @@ fn polymesh(rows: usize, cols: usize, upole: bool, tripoles: bool, xf: &Xf, t: [
     let id = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     let mut d = Detail::default();
     d.add_points(id(total));
-    let ring = |i: usize, j: usize| id((i - 1) * cols + j % cols); // i = 1..=rings
-    let top = |j: usize| id(ring_pts + if upole { j % cols } else { 0 });
-    let bot = |j: usize| id(ring_pts + if upole { cols + j % cols } else { 1 });
+    let ring = |i: usize, j: usize| id(pole_pts + (i - 1) * cols + j % cols); // i = 1..=rings; the poles come FIRST (Houdini)
+    let top = |j: usize| id(if upole { j % cols } else { 0 });
+    let bot = |j: usize| id(if upole { cols + j % cols } else { 1 });
     let mut unit = vec![[0.0f64; 3]; total];
     let mut put = |n: u32, u: [f64; 3]| {
         if let Some(slot) = unit.get_mut(n as usize) {
@@ -212,7 +214,7 @@ fn polymesh(rows: usize, cols: usize, upole: bool, tripoles: bool, xf: &Xf, t: [
         let th = PI * i as f64 / (rows - 1) as f64;
         for j in 0..cols {
             let ph = 2.0 * PI * j as f64 / cols as f64;
-            put(ring(i, j), [th.sin() * ph.cos(), th.cos(), th.sin() * ph.sin()]);
+            put(ring(i, j), [th.sin() * ph.cos(), th.cos(), -th.sin() * ph.sin()]);
         }
     }
     for j in 0..(if upole { cols } else { 1 }) {
@@ -224,21 +226,21 @@ fn polymesh(rows: usize, cols: usize, upole: bool, tripoles: bool, xf: &Xf, t: [
     }
     for j in 0..cols {
         if tripoles {
-            d.add_poly(&[top(j), ring(1, j + 1), ring(1, j)], true);
+            d.add_poly(&[top(j), ring(1, j), ring(1, j + 1)], true);
         } else {
-            d.add_poly(&[top(j), top(j + 1), ring(1, j + 1), ring(1, j)], true);
+            d.add_poly(&[top(j), ring(1, j), ring(1, j + 1), top(j + 1)], true);
         }
     }
     for i in 1..rings {
         for j in 0..cols {
-            d.add_poly(&[ring(i, j), ring(i, j + 1), ring(i + 1, j + 1), ring(i + 1, j)], true);
+            d.add_poly(&[ring(i, j), ring(i + 1, j), ring(i + 1, j + 1), ring(i, j + 1)], true);
         }
     }
     for j in 0..cols {
         if tripoles {
-            d.add_poly(&[ring(rings, j), ring(rings, j + 1), bot(j)], true);
+            d.add_poly(&[ring(rings, j), bot(j), ring(rings, j + 1)], true);
         } else {
-            d.add_poly(&[ring(rings, j), ring(rings, j + 1), bot(j + 1), bot(j)], true);
+            d.add_poly(&[ring(rings, j), bot(j), bot(j + 1), ring(rings, j + 1)], true);
         }
     }
     Ok(d)
@@ -476,23 +478,22 @@ mod tests {
     }
     #[test]
     fn polymesh_pole_points_follow_orient_and_rotation() {
-        // ring points first, then top pole, then bottom pole
-        let n = 266usize;
+        // Houdini: top pole = point 0, bottom pole = point 1, then the ring points
         let d = cook(r#"{"type":2,"rad":[2,3,4]}"#);
-        assert_eq!((d.p()[n - 2], d.p()[n - 1]), ([0.0, 3.0, 0.0], [0.0, -3.0, 0.0]));
+        assert_eq!((d.p()[0], d.p()[1]), ([0.0, 3.0, 0.0], [0.0, -3.0, 0.0]));
         let x = cook(r#"{"type":2,"rad":[2,3,4],"orient":0}"#);
-        assert_eq!(x.p()[n - 2], [2.0, 0.0, 0.0]);
+        assert_eq!(x.p()[0], [2.0, 0.0, 0.0]);
         let z = cook(r#"{"type":2,"rad":[2,3,4],"orient":2,"t":[1,1,1]}"#);
-        assert_eq!(z.p()[n - 2], [1.0, 1.0, 5.0]);
+        assert_eq!(z.p()[0], [1.0, 1.0, 5.0]);
         let r = cook(r#"{"type":2,"rad":[2,3,4],"r":[0,0,90]}"#); // Rz(90): (0,3,0) -> (-3,0,0)
-        assert!(r.p()[n - 2].iter().zip([-3.0, 0.0, 0.0]).all(|(a, b)| (a - b).abs() < 1e-5), "{:?}", r.p()[n - 2]);
+        assert!(r.p()[0].iter().zip([-3.0, 0.0, 0.0]).all(|(a, b)| (a - b).abs() < 1e-5), "{:?}", r.p()[0]);
     }
     #[test]
     fn polymesh_first_ring_point_closed_form() {
-        // ring 1, col 0: theta = pi/12 from +Y, phi = 0 -> (sin, cos, 0)
+        // ring 1, col 0 (point 2 after the two poles): theta = pi/12 from +Y, phi = 0 -> (sin, cos, 0)
         let d = cook(r#"{"type":2}"#);
         let th = std::f32::consts::PI / 12.0;
-        let q = d.p()[0];
+        let q = d.p()[2];
         assert!((q[0] - th.sin()).abs() < 1e-6 && (q[1] - th.cos()).abs() < 1e-6 && q[2].abs() < 1e-6, "{q:?}");
     }
 
@@ -623,29 +624,28 @@ mod tests {
     /// 13 point rows from latitude +90deg..-90deg; the two polar rows collapse to one point each (rows 0 and 12).
     fn expected_polymesh_default() -> Detail {
         let (rows, cols) = (13usize, 24usize);
-        let mut pts: Vec<[f32; 3]> = Vec::new();
+        // Houdini order: top pole (0), bottom pole (1), then ring points; ring runs +X toward -Z
+        let mut pts: Vec<[f32; 3]> = vec![[0.0, 1.0, 0.0], [0.0, -1.0, 0.0]];
         for row in 1..rows - 1 {
             let lat = (90.0 - 180.0 * row as f64 / (rows - 1) as f64).to_radians();
             for c in 0..cols {
                 let lon = (360.0 * c as f64 / cols as f64).to_radians();
-                pts.push([(lat.cos() * lon.cos()) as f32, lat.sin() as f32, (lat.cos() * lon.sin()) as f32]);
+                pts.push([(lat.cos() * lon.cos()) as f32, lat.sin() as f32, -(lat.cos() * lon.sin()) as f32]);
             }
         }
-        pts.push([0.0, 1.0, 0.0]);
-        pts.push([0.0, -1.0, 0.0]);
-        let (top, bot) = ((pts.len() - 2) as u32, (pts.len() - 1) as u32);
-        let at = |row: usize, c: usize| ((row - 1) * cols + c % cols) as u32;
+        let (top, bot) = (0u32, 1u32);
+        let at = |row: usize, c: usize| (2 + (row - 1) * cols + c % cols) as u32;
         let mut polys = Vec::new();
         for c in 0..cols {
-            polys.push(vec![top, at(1, c + 1), at(1, c)]);
+            polys.push(vec![top, at(1, c), at(1, c + 1)]);
         }
         for row in 1..rows - 2 {
             for c in 0..cols {
-                polys.push(vec![at(row, c), at(row, c + 1), at(row + 1, c + 1), at(row + 1, c)]);
+                polys.push(vec![at(row, c), at(row + 1, c), at(row + 1, c + 1), at(row, c + 1)]);
             }
         }
         for c in 0..cols {
-            polys.push(vec![at(rows - 2, c), at(rows - 2, c + 1), bot]);
+            polys.push(vec![at(rows - 2, c), bot, at(rows - 2, c + 1)]);
         }
         build(&pts, &polys)
     }
