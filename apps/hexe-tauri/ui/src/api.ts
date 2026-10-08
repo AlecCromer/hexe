@@ -10,9 +10,11 @@ export interface NodeType { type: string; label: string; inputs: string[]; param
 export interface NodeView { id: number; type: string; name: string; x: number; y: number; inputs: string[]; params: Record<string, PVal> }
 export interface EdgeView { from: number; to: number; input: number }
 export interface GraphView { nodes: NodeView[]; edges: EdgeView[]; display: number | null }
+import type { Shape } from "./geom";
 export interface Cooked {
   positions: number[]; prims: number[][]; closed: boolean[];
-  counts: { points: number; prims: number; closed: number; open: number; unsupported: number };
+  shapes: Shape[];
+  counts: { points: number; prims: number; closed: number; open: number; unsupported: number; shapes: number };
   error: string | null;
   /** id of the node whose cook failed (red border), if tied to one */
   error_node: number | null;

@@ -1,4 +1,5 @@
 // Pure geometry helpers for the viewport (no three.js import: unit-tested with `bun test`).
+import earcut from "earcut";
 
 /** Fan-triangulate closed prims (v0,v[i],v[i+1]); prims with <3 points or any out-of-range index are skipped. */
 export function fanTriangulate(prims: number[][], closed: boolean[], pointCount: number): Uint32Array {
@@ -9,7 +10,60 @@ export function fanTriangulate(prims: number[][], closed: boolean[], pointCount:
   });
   return Uint32Array.from(out);
 }
-
+/** Newell normal (unnormalised; length = 2x area) of a polygon given as point indices into flat xyz `pos`. */
+export function newell(p: number[], pos: ArrayLike<number>): [number, number, number] {
+  let x = 0, y = 0, z = 0;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i] * 3, b = p[(i + 1) % p.length] * 3;
+    x += (pos[a + 1] - pos[b + 1]) * (pos[a + 2] + pos[b + 2]);
+    y += (pos[a + 2] - pos[b + 2]) * (pos[a] + pos[b]);
+    z += (pos[a] - pos[b]) * (pos[a + 1] + pos[b + 1]);
+  }
+  return [x, y, z];
+}
+/** Triangulate closed prims with earcut on the plane of each prim's Newell normal (drop the dominant axis); concave
+ * polygons fill correctly. Triangles/quads degenerate to the same result as a fan. A degenerate prim (earcut yields
+ * nothing, e.g. zero area) falls back to the fan so nothing silently vanishes. Skips open/short/out-of-range prims. */
+export function triangulate(prims: number[][], closed: boolean[], pos: ArrayLike<number>): Uint32Array {
+  const out: number[] = [];
+  const n = pos.length / 3;
+  prims.forEach((p, k) => {
+    if (!closed[k] || p.length < 3 || p.some((i) => !(i >= 0 && i < n))) return;
+    if (p.length === 3) { out.push(p[0], p[1], p[2]); return; }
+    const [nx, ny, nz] = newell(p, pos).map(Math.abs);
+    const [u, v] = nx >= ny && nx >= nz ? [1, 2] : ny >= nz ? [2, 0] : [0, 1];
+    const flat: number[] = [];
+    for (const i of p) flat.push(pos[i * 3 + u], pos[i * 3 + v]);
+    const t = earcut(flat);
+    if (t.length >= 3) for (const i of t) out.push(p[i]);
+    else for (let i = 1; i + 1 < p.length; i++) out.push(p[0], p[i], p[i + 1]);
+  });
+  return Uint32Array.from(out);
+}
+export interface Shape { kind: "sphere" | "tube"; center: [number, number, number]; xform: number[]; taper: number }
+/** Wire proxy of a sphere / tube prim as flat xyz segment pairs. Sphere = 3 great circles of the unit sphere; tube = 2 rings
+ * (y=+-0.5, top radius = taper) + 4 side lines. Unit shape is mapped by the row-major 3x3 `xform` (column-vector M*p) then
+ * offset by `center`. UNVERIFIED vs Houdini: tube axis = Y, xform convention. */
+export function shapeWire(s: Shape, seg = 32): Float32Array {
+  const out: number[] = [];
+  const m = s.xform;
+  const put = (x: number, y: number, z: number) => out.push(
+    s.center[0] + m[0] * x + m[1] * y + m[2] * z, s.center[1] + m[3] * x + m[4] * y + m[5] * z, s.center[2] + m[6] * x + m[7] * y + m[8] * z);
+  const ring = (f: (c: number, sn: number) => [number, number, number]) => {
+    for (let i = 0; i < seg; i++) {
+      const a = (i / seg) * Math.PI * 2, b = ((i + 1) / seg) * Math.PI * 2;
+      put(...f(Math.cos(a), Math.sin(a))); put(...f(Math.cos(b), Math.sin(b)));
+    }
+  };
+  if (s.kind === "sphere") {
+    ring((c, sn) => [c, sn, 0]); ring((c, sn) => [c, 0, sn]); ring((c, sn) => [0, c, sn]);
+  } else {
+    const rt = s.taper;
+    ring((c, sn) => [c, -0.5, sn]); ring((c, sn) => [c * rt, 0.5, sn * rt]);
+    for (let q = 0; q < 4; q++) { const c = Math.cos((q * Math.PI) / 2), sn = Math.sin((q * Math.PI) / 2); put(c, -0.5, sn); put(c * rt, 0.5, sn * rt); }
+  }
+  return Float32Array.from(out);
+}
 /** Edge segments (index pairs): every open prim's chain, every closed prim's loop (the wireframe overlay). */
 export function edgeSegments(prims: number[][], closed: boolean[], pointCount: number, onlyOpen = false): Uint32Array {
   const out: number[] = [];

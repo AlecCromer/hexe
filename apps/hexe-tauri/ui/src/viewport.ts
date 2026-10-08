@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Cooked } from "./api";
-import { bounds, edgeSegments, fanTriangulate } from "./geom";
+import { bounds, edgeSegments, shapeWire, triangulate } from "./geom";
 
 export class Viewport {
   private renderer: THREE.WebGLRenderer;
@@ -71,7 +71,7 @@ export class Viewport {
     if (!c.error && n > 0) {
       const pos = new THREE.Float32BufferAttribute(Float32Array.from(c.positions), 3);
       const geo = () => { const g = new THREE.BufferGeometry(); g.setAttribute("position", pos); return g; };
-      const tris = fanTriangulate(c.prims, c.closed, n);
+      const tris = triangulate(c.prims, c.closed, c.positions);
       if (tris.length) {
         const g = geo();
         g.setIndex(new THREE.BufferAttribute(tris, 1));
@@ -95,7 +95,12 @@ export class Viewport {
         this.wire.visible = this.wireOn;
         this.content.add(this.wire);
       }
-      this.points = new THREE.Points(geo(), new THREE.PointsMaterial({ color: 0xffa24a, size: 5, sizeAttenuation: false }));
+      if (c.shapes.length) {
+  const w = new THREE.BufferGeometry();
+  w.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(c.shapes.flatMap((x) => [...shapeWire(x)])), 3));
+  this.content.add(new THREE.LineSegments(w, new THREE.LineBasicMaterial({ color: 0x7fd4ff })));
+}
+this.points = new THREE.Points(geo(), new THREE.PointsMaterial({ color: 0xffa24a, size: 5, sizeAttenuation: false }));
       this.points.visible = this.pointsOn;
       this.content.add(this.points);
       this.fit(c.positions);

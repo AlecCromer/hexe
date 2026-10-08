@@ -20,6 +20,15 @@ author = "mrdoob and three.js contributors"
 source = "https://github.com/mrdoob/three.js (npm three@0.180.0)"
 licence = "MIT"
 
+[[fetched]]
+name = "earcut"
+url = "https://registry.npmjs.org/earcut/-/earcut-3.2.4.tgz"
+sha256 = "2f63624cc056e4f2f8109a84d10fff3daeea37581af14af0f612ff387cc2534a"
+title = "earcut 3.2.4 (polygon triangulation for the viewport)"
+author = "Mapbox"
+source = "https://github.com/mapbox/earcut (npm earcut@3.2.4)"
+licence = "ISC"
+
 [[asset]]
 path = "apps/hexe-tauri/src-tauri/icons/32x32.png"
 title = "hexe app icon (generated blue disc)"

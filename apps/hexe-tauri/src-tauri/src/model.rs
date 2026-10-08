@@ -82,6 +82,17 @@ pub struct Counts {
     pub open: u32,
     /// Prims the viewport cannot draw (spheres, volumes, ...): sent as empty entries.
     pub unsupported: u32,
+    /// Sphere / tube prims: drawn as wire proxies from `CookResult.shapes`.
+    pub shapes: u32,
+}
+
+/// A sphere / tube prim for the viewport's wire proxy: `center` = its point, `xform` = row-major 3x3 (unit shape -> world).
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Shape {
+    pub kind: &'static str,
+    pub center: [f32; 3],
+    pub xform: [f32; 9],
+    pub taper: f32,
 }
 
 #[derive(Serialize, Debug, Default, PartialEq)]
@@ -91,6 +102,7 @@ pub struct CookResult {
     /// Point indices per prim.
     pub prims: Vec<Vec<u32>>,
     pub closed: Vec<bool>,
+    pub shapes: Vec<Shape>,
     pub counts: Counts,
     pub error: Option<String>,
     /// The node whose cook failed (the UI borders it red); `None` when the failure is not tied to one node.
@@ -447,8 +459,25 @@ impl Session {
 pub fn flatten(d: &Detail) -> CookResult {
     let positions: Vec<f32> = d.p().iter().flat_map(|p| p.iter().copied()).collect();
     let mut counts = Counts { points: d.point_count, ..Counts::default() };
-    let (mut prims, mut closed) = (Vec::new(), Vec::new());
+    let (mut prims, mut closed, mut shapes) = (Vec::new(), Vec::new(), Vec::new());
     for pr in &d.prims {
+        let shape = match pr.kind {
+            PrimKind::Sphere { xform } => Some(("sphere", xform, 0.0)),
+            PrimKind::Tube { xform, taper, .. } => Some(("tube", xform, taper)),
+            _ => None,
+        };
+        if let Some((kind, xform, taper)) = shape {
+            let at = d.vertex_point.get(pr.verts.start as usize).and_then(|&i| d.p().get(i as usize).copied());
+            if let Some(center) = at {
+                shapes.push(Shape { kind, center, xform, taper });
+                counts.shapes += 1;
+            } else {
+                counts.unsupported += 1;
+            }
+            prims.push(Vec::new());
+            closed.push(false);
+            continue;
+        }
         let (is_closed, drawable) = match pr.kind {
             PrimKind::Poly { closed } => (closed, true),
             PrimKind::Polyline => (false, true),
@@ -469,7 +498,7 @@ pub fn flatten(d: &Detail) -> CookResult {
         closed.push(is_closed);
     }
     counts.prims = d.prim_count();
-    CookResult { positions, prims, closed, counts, error: None, error_node: None }
+    CookResult { positions, prims, closed, shapes, counts, error: None, error_node: None }
 }
 
 #[cfg(test)]
@@ -512,6 +541,23 @@ mod tests {
         assert_eq!(c.positions.len(), c.counts.points as usize * 3);
         assert!(c.counts.closed > 6, "extruded box has more than the 6 box faces");
         assert!(c.prims.iter().flatten().all(|&i| (i as usize) < c.counts.points as usize));
+    }
+
+    #[test]
+    fn sphere_and_tube_prims_become_shapes() {
+        let mut s = Session::new();
+        s.graph_load(&example("polyextrude.json")).expect("loads");
+        s.cook();
+        let mut d = (**s.last.as_ref().expect("cooked")).clone();
+        let x = [1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0];
+        d.prims[0].kind = PrimKind::Sphere { xform: x };
+        d.prims[1].kind = PrimKind::Tube { xform: x, taper: 0.5, closed: true };
+        let c = flatten(&d);
+        assert_eq!((c.counts.shapes, c.shapes.len()), (2, 2));
+        assert_eq!((c.shapes[0].kind, c.shapes[1].kind, c.shapes[1].taper), ("sphere", "tube", 0.5));
+        assert_eq!(c.shapes[0].xform, x);
+        assert!(c.prims[0].is_empty() && c.prims[1].is_empty(), "shape prims carry no point list");
+        assert_eq!(c.prims.len(), c.closed.len());
     }
 
     #[test]
