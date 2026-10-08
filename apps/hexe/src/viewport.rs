@@ -345,7 +345,11 @@ mod tests {
         let (lo, hi) = ([-2.0, 0.0, -1.0], [3.0, 4.0, 1.0]);
         c.fit(lo, hi);
         for i in 0..8 {
-            let p = [if i & 1 == 0 { lo[0] } else { hi[0] }, if i & 2 == 0 { lo[1] } else { hi[1] }, if i & 4 == 0 { lo[2] } else { hi[2] }];
+            let p = [
+                if i & 1 == 0 { lo[0] } else { hi[0] },
+                if i & 2 == 0 { lo[1] } else { hi[1] },
+                if i & 4 == 0 { lo[2] } else { hi[2] },
+            ];
             let n = ndc(&c, p);
             assert!(n.x.abs() <= 1.0 && n.y.abs() <= 1.0 && (0.0..=1.0).contains(&n.z), "corner {p:?} -> {n:?}");
         }

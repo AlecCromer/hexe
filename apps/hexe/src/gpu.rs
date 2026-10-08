@@ -582,6 +582,7 @@ pub struct Image {
     pub rgba: Vec<u8>,
 }
 impl Image {
+    #[cfg(test)]
     pub fn px(&self, x: u32, y: u32) -> [u8; 4] {
         let i = ((y.min(self.h.saturating_sub(1)) * self.w + x.min(self.w.saturating_sub(1))) * 4) as usize;
         self.rgba.get(i..i + 4).map_or([0; 4], |s| [s[0], s[1], s[2], s[3]])
@@ -654,9 +655,10 @@ mod tests {
     fn detail() -> Detail {
         let mut d = Detail::default();
         let r = d.add_points(6);
-        for (i, p) in [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [3.0, 1.0, 0.0]]
-            .into_iter()
-            .enumerate()
+        for (i, p) in
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [3.0, 1.0, 0.0]]
+                .into_iter()
+                .enumerate()
         {
             d.p_mut()[i] = p;
         }
@@ -692,7 +694,11 @@ mod tests {
         let s = Style { grid_half: 2, grid_step: 0.5, ..Style::default() };
         let g = grid_lines(&s);
         assert_eq!(g.len(), 2 * 2 * 5 + 2, "5 lines per direction + Y axis");
-        assert!(g.iter().any(|v| v.col == s.axis_x) && g.iter().any(|v| v.col == s.axis_z) && g.iter().any(|v| v.col == s.axis_y));
+        assert!(
+            g.iter().any(|v| v.col == s.axis_x)
+                && g.iter().any(|v| v.col == s.axis_z)
+                && g.iter().any(|v| v.col == s.axis_y)
+        );
         assert!(g.iter().all(|v| v.pos.iter().all(|c| c.abs() <= 1.0 + 1e-6)), "extent = half * step");
     }
 }

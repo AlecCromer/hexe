@@ -685,7 +685,8 @@ mod tests {
         for y in cy - r..=cy + r {
             for x in cx - r..=cx + r {
                 let p = img.px(x, y);
-                n += (p[..3].iter().zip(bg).map(|(a, b)| i32::from(*a).abs_diff(i32::from(b))).sum::<u32>() > 24) as usize;
+                n += (p[..3].iter().zip(bg).map(|(a, b)| i32::from(*a).abs_diff(i32::from(b))).sum::<u32>() > 24)
+                    as usize;
             }
         }
         n
@@ -703,7 +704,8 @@ mod tests {
         let m = app.mesh.as_ref().expect("cooked mesh");
         assert!(m.tris.len() > 36 && m.points.len() > 8, "box + sphere: {} tri verts", m.tris.len());
         let size = [320, 240];
-        let render = |opts: &viewport::Opts| gpu::render_offscreen(app.mesh.as_deref(), &app.cam, opts, &app.style, size);
+        let render =
+            |opts: &viewport::Opts| gpu::render_offscreen(app.mesh.as_deref(), &app.cam, opts, &app.style, size);
         let shaded = match render(&app.view) {
             Ok(i) => i,
             Err(e) if e.starts_with("no wgpu adapter") => return eprintln!("SKIP (no GPU): {e}"),
@@ -721,7 +723,13 @@ mod tests {
         let (a, b) = (lit(&shaded, bg, 160, 120, 60), lit(&wire, bg, 160, 120, 60));
         assert!(b > 0 && b < a, "wireframe covers fewer pixels than shaded: {b} vs {a}");
         if let Ok(path) = std::env::var("HEXE_OFFSCREEN_PNG") {
-            let big = gpu::render_offscreen(app.mesh.as_deref(), &app.cam, &app.view, &viewport::Style::default(), [640, 480]);
+            let big = gpu::render_offscreen(
+                app.mesh.as_deref(),
+                &app.cam,
+                &app.view,
+                &viewport::Style::default(),
+                [640, 480],
+            );
             big.expect("png render").write_png(&path).expect("write png");
         }
     }
