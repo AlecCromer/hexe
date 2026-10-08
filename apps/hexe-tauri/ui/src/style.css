@@ -45,3 +45,16 @@ input[type=checkbox] { padding: 0; }
 #tabmenu input { width: 100%; border: 0; border-bottom: 1px solid #44484f; border-radius: 4px 4px 0 0; }
 #tabmenu ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
 #tabmenu li { padding: 3px 8px; cursor: pointer; } #tabmenu li.on, #tabmenu li:hover { background: var(--acc); color: #fff; }
+/* geometry spreadsheet */
+#sheet { grid-area: sheet; display: flex; flex-direction: column; }
+.sh-bar { display: flex; align-items: center; gap: 2px; padding: 3px 4px; background: #2a2d32; border-bottom: 1px solid var(--edge); flex: none; }
+.sh-tab { border-radius: 3px 3px 0 0; background: #24272b; color: var(--dim); padding: 1px 8px; }
+.sh-tab.on { background: #3a3f47; color: var(--fg); border-color: var(--acc); }
+.sh-info { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+.sh-scroll { flex: 1; overflow: auto; min-height: 0; background: #22252a; }
+.sh-scroll table { border-collapse: collapse; font: 11px/18px ui-monospace, "SF Mono", Menlo, monospace; width: max-content; min-width: 100%; }
+.sh-scroll th { position: sticky; top: 0; background: #34383f; color: var(--dim); font-weight: 600; text-align: right; padding: 0 8px; height: 18px; border-right: 1px solid var(--edge); z-index: 1; }
+.sh-scroll td { padding: 0 8px; white-space: nowrap; height: 18px; border-right: 1px solid #2c3036; text-align: left; }
+.sh-scroll td.num { text-align: right; } .sh-scroll td.idx { text-align: right; color: var(--dim); background: #2a2d32; }
+.sh-scroll tr:nth-child(even) td { background: #262a2f; } .sh-scroll tr:nth-child(even) td.idx { background: #2d3035; }
+.sh-scroll tr.pad td, .sh-scroll tr.pad { padding: 0; border: 0; }

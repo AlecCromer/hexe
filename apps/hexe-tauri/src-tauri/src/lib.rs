@@ -8,9 +8,11 @@
     clippy::unreachable
 )]
 pub mod model;
+pub mod sheet;
 
 use model::{CookResult, GraphView, NodeTypeInfo, Session};
 use serde_json::Value;
+use sheet::Sheet;
 use std::sync::{Mutex, MutexGuard};
 use tauri::State;
 
@@ -80,6 +82,11 @@ fn set_display(app: State<App>, id: u32) -> Res<()> {
 fn cook(app: State<App>) -> CookResult {
     app.lock().cook()
 }
+/// One window of the geometry spreadsheet over the last cook (`class` = point|vertex|prim|detail).
+#[tauri::command]
+fn spreadsheet(app: State<App>, class: String, offset: usize, limit: usize) -> Res<Sheet> {
+    app.lock().spreadsheet(&class, offset, limit)
+}
 /// Scene path to open at startup (`HEXE_OPEN`), used by the proof scripts; `None` = start empty.
 #[tauri::command]
 fn startup_scene() -> Option<String> {
@@ -103,6 +110,7 @@ pub fn run() {
             edge_disconnect,
             set_display,
             cook,
+            spreadsheet,
             startup_scene,
         ]);
     if let Err(e) = built.run(tauri::generate_context!()) {

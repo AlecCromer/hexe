@@ -1,13 +1,15 @@
 //! Engine session behind the Tauri commands: one `Graph<Detail>` + editor positions. Pure Rust (no Tauri types) so it
 //! is unit-tested without a window. Every failure is an `Err(String)` (hostile input is the default, AGENTS.md §4).
+use crate::sheet::{self, Sheet};
 use hexe_geo::{Detail, PrimKind};
-use hexe_graph::{Graph, NodeId, ParamSet, ParamSpec, ParamValue};
+use hexe_graph::{Graph, GraphError, NodeId, ParamSet, ParamSpec, ParamValue};
 use hexe_sop::Registry;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::Arc;
 
 /// Largest scene file `graph_load` reads.
 pub const MAX_SCENE_BYTES: u64 = 64 << 20;
@@ -91,17 +93,21 @@ pub struct CookResult {
     pub closed: Vec<bool>,
     pub counts: Counts,
     pub error: Option<String>,
+    /// The node whose cook failed (the UI borders it red); `None` when the failure is not tied to one node.
+    pub error_node: Option<u32>,
 }
 
 pub struct Session {
     graph: Graph<Detail>,
     reg: Registry,
     pos: BTreeMap<String, [f32; 2]>,
+    /// Output of the last successful display cook (what the spreadsheet shows); `None` after a failed / empty cook.
+    last: Option<Arc<Detail>>,
 }
 
 impl Default for Session {
     fn default() -> Self {
-        Session { graph: Graph::new(), reg: hexe_sop::registry(), pos: BTreeMap::new() }
+        Session { graph: Graph::new(), reg: hexe_sop::registry(), pos: BTreeMap::new(), last: None }
     }
 }
 
@@ -392,17 +398,48 @@ impl Session {
         self.graph.set_display(Some(n)).map_err(|e| e.to_string())
     }
 
-    /// Cook the display node. Never panics, never `Err`: a failure is `CookResult.error` (the UI shows it).
+    /// Cook the display node. Never panics, never `Err`: a failure is `CookResult.error` (+ `error_node`; the UI shows both).
     pub fn cook(&mut self) -> CookResult {
-        let Some(display) = self.graph.display() else {
-            return CookResult { error: Some("no display node".into()), ..CookResult::default() };
+        self.last = None;
+        let fail = |error: String, error_node: Option<u32>| CookResult {
+            error: Some(error),
+            error_node,
+            ..CookResult::default()
         };
+        let Some(display) = self.graph.display() else { return fail("no display node".into(), None) };
         let graph = &mut self.graph;
         match catch_unwind(AssertUnwindSafe(|| graph.cook(display, 0.0))) {
-            Ok(Ok(detail)) => flatten(&detail),
-            Ok(Err(e)) => CookResult { error: Some(e.to_string()), ..CookResult::default() },
-            Err(_) => CookResult { error: Some("cook panicked (engine bug)".into()), ..CookResult::default() },
+            Ok(Ok(detail)) => {
+                let out = flatten(&detail);
+                self.last = Some(detail);
+                out
+            }
+            Ok(Err(e)) => {
+                let node = match &e {
+                    GraphError::Node { node, .. }
+                    | GraphError::MissingInput { node, .. }
+                    | GraphError::NoSuchParam { node, .. }
+                    | GraphError::ParamType { node, .. }
+                    | GraphError::BadParamValue { node, .. }
+                    | GraphError::Cycle(node) => Some(*node),
+                    _ => None,
+                };
+                let named = node.and_then(|n| self.graph.name(n).map(|nm| (n, nm.to_string())));
+                let text = match (&e, &named) {
+                    (GraphError::Node { source, .. }, Some((_, nm))) => format!("{nm}: {source}"),
+                    _ => e.to_string(),
+                };
+                fail(text, named.map(|(n, _)| n.index()))
+            }
+            Err(_) => fail("cook panicked (engine bug)".into(), None),
         }
+    }
+
+    /// Rows `offset..offset+limit` of the last cooked geometry for `class` (`point|vertex|prim|detail`).
+    pub fn spreadsheet(&self, class: &str, offset: usize, limit: usize) -> Result<Sheet, String> {
+        let class = sheet::parse_class(class)?;
+        let d = self.last.as_ref().ok_or("nothing cooked (no display geometry)")?;
+        Ok(sheet::sheet(d, class, offset, limit))
     }
 }
 
@@ -432,7 +469,7 @@ pub fn flatten(d: &Detail) -> CookResult {
         closed.push(is_closed);
     }
     counts.prims = d.prim_count();
-    CookResult { positions, prims, closed, counts, error: None }
+    CookResult { positions, prims, closed, counts, error: None, error_node: None }
 }
 
 #[cfg(test)]
@@ -531,6 +568,38 @@ mod tests {
         let pe2 = b.nodes.iter().find(|n| n.ty == "polyextrude").expect("pe2");
         assert_eq!((pe2.x, pe2.y, &pe2.params["distance"]), (321.0, 12.0, &json!(0.25)));
         assert_eq!(s.cook().positions, t.cook().positions);
+    }
+
+    #[test]
+    fn spreadsheet_follows_the_last_cook() {
+        let mut s = Session::new();
+        assert!(s.spreadsheet("point", 0, 10).is_err(), "nothing cooked yet");
+        s.graph_load(&example("polyextrude.json")).expect("loads");
+        let c = s.cook();
+        let pts = s.spreadsheet("point", 0, 5).expect("points");
+        assert_eq!((pts.total, pts.rows.len()), (c.counts.points as usize, 5));
+        assert_eq!(&pts.columns[..4], ["ptnum", "P.x", "P.y", "P.z"]);
+        assert_eq!(s.spreadsheet("prim", 0, 1000).expect("prims").total, c.counts.prims as usize);
+        assert!(s.spreadsheet("edge", 0, 1).is_err());
+    }
+
+    #[test]
+    fn cook_error_names_the_failing_node() {
+        let mut s = Session::new();
+        let k = s.node_add("knife", 0.0, 0.0).expect("knife");
+        let c = s.cook();
+        eprintln!("default knife, no input: {:?} / {:?}", c.error, c.error_node);
+        // a knife whose plane normal is zero fails to cook; the error carries the node (UI: red border + status strip)
+        s.node_set_param(k, "dir", &json!([0.0, 0.0, 0.0])).expect("dir");
+        let c = s.cook();
+        assert_eq!(c.error_node, Some(k));
+        let msg = c.error.expect("error text");
+        assert!(msg.starts_with("knife1: ") && msg.contains("non-zero"), "{msg}");
+        assert!(c.positions.is_empty());
+        assert!(s.spreadsheet("point", 0, 1).is_err(), "a failed cook leaves no stale sheet");
+        s.node_set_param(k, "dir", &json!([0.0, 1.0, 0.0])).expect("dir");
+        let c = s.cook();
+        assert_eq!((c.error, c.error_node), (None, None));
     }
 
     #[test]

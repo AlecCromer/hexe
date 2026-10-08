@@ -14,6 +14,13 @@ export interface Cooked {
   positions: number[]; prims: number[][]; closed: boolean[];
   counts: { points: number; prims: number; closed: number; open: number; unsupported: number };
   error: string | null;
+  /** id of the node whose cook failed (red border), if tied to one */
+  error_node: number | null;
+}
+export type SheetClass = "point" | "vertex" | "prim" | "detail";
+export interface SheetData {
+  class: SheetClass; columns: string[]; rows: (number | string | null)[][]; offset: number; total: number; shown: number;
+  counts: { point: number; vertex: number; prim: number; detail: number };
 }
 
 export const api = {
@@ -30,6 +37,7 @@ export const api = {
   edgeDisconnect: (to: number, input: number) => invoke<void>("edge_disconnect", { to, input }),
   setDisplay: (id: number) => invoke<void>("set_display", { id }),
   cook: () => invoke<Cooked>("cook"),
+  spreadsheet: (cls: SheetClass, offset: number, limit: number) => invoke<SheetData>("spreadsheet", { class: cls, offset, limit }),
   startupScene: () => invoke<string | null>("startup_scene"),
 };
 

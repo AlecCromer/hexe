@@ -4,6 +4,7 @@ import "./style.css";
 import { api, msg, type GraphView, type NodeType, type PVal } from "./api";
 import { Network } from "./network";
 import { renderParams } from "./params";
+import { Spreadsheet } from "./sheet";
 import { Viewport } from "./viewport";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -14,6 +15,7 @@ let types: NodeType[] = [];
 let graph: GraphView = { nodes: [], edges: [], display: null };
 let net: Network;
 const viewport = new Viewport($("viewport"));
+const sheet = new Spreadsheet($("sheet"), (c, o, l) => api.spreadsheet(c, o, l));
 
 // cook requests never overlap: while one is in flight only the latest follow-up is kept
 let cooking = false, again = false;
@@ -26,6 +28,7 @@ async function recook(): Promise<void> {
       const t0 = performance.now();
       const c = await api.cook();
       viewport.show(c);
+      sheet.invalidate(!c.error);
       const ms = (performance.now() - t0).toFixed(0);
       if (c.error) say(c.error, true);
       else say(`${c.counts.points} pts · ${c.counts.prims} prims (${c.counts.closed} poly, ${c.counts.open} open${c.counts.unsupported ? `, ${c.counts.unsupported} undrawn` : ""}) · ${ms} ms`);
