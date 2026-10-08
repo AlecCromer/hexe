@@ -121,10 +121,11 @@ impl Node<Detail> for UvLayout {
         }
         corners.sort_unstable();
         for w in corners.windows(2) {
-            if let [a, b] = w {
-                if a.0 == b.0 && a.1 == b.1 {
-                    union(&mut parent, a.2, b.2);
-                }
+            if let [a, b] = w
+                && a.0 == b.0
+                && a.1 == b.1
+            {
+                union(&mut parent, a.2, b.2);
             }
         }
         // islands in order of first prim
@@ -273,9 +274,9 @@ mod tests {
     fn bbox(uv: &[[f32; 3]]) -> ([f32; 2], [f32; 2]) {
         let mut b = ([f32::MAX; 2], [f32::MIN; 2]);
         for c in uv {
-            for j in 0..2 {
-                b.0[j] = b.0[j].min(c[j]);
-                b.1[j] = b.1[j].max(c[j]);
+            for (j, &x) in c.iter().take(2).enumerate() {
+                b.0[j] = b.0[j].min(x);
+                b.1[j] = b.1[j].max(x);
             }
         }
         b

@@ -833,3 +833,59 @@ status = "partial"
 commands = ["block_begin", "block_end"]
 evidence = ["crates/sop/src/builtins/block_sop.rs::tests::three_pieces_by_name_through_xform_ty1_have_exact_p", "crates/sop/src/builtins/block_sop.rs::tests::count4_feedback_add_one_point_gives_four_points", "crates/sop/src/builtins/block_sop.rs::tests::nested_blocks_pair_automatically", "crates/sop/src/builtins/block_sop.rs::tests::hostile_scenes_are_errors", "crates/graph/src/graph/block.rs::tests::subnetwork_runs_once_per_iteration_and_ends_merge_in_order", "crates/graph/src/graph/block.rs::tests::feedback_is_carried_by_the_engine_not_by_an_edge"]
 notes = "H26: engine cooks the Begin..End sub-network once per iteration (graph/block.rs; End = leaf of the dependency walk, Begin cache seeded per iteration, region caches cleared after). Feedback = engine-carried value, NOT an edge, so cycle detection is untouched (End->Begin wire is still Cycle). block_begin: method piece (class point|prim, attrib default `name`, string or int, first-appearance order) | count | points | prims; slice carries detail attrs iteration/numiterations (no VEX detail() fn in this port: wrangle reads them detail-class @iteration); block_end: mode merge (Detail::merge in order) | feedback (last result; 0 iterations = input), `begin` param pairs explicitly else nearest upstream (nested blocks skipped). Caps: 65536 iterations, nesting 8, 16M merged points. NOT modelled: Houdini fetch-input/metadata/piece-by-index modes, stop condition, compile blocks, multiple block inputs, UI special drawing. UNVERIFIED vs Houdini (hython blocked): piece order, attr names, point renumbering, point-piece prim rule (prim kept iff all verts kept). Oracle fixtures foreach-pieces / foreach-feedback analytical."
+id = "sop-uvproject"
+title = "UVProject SOP (planar|cylindrical|spherical, axis, center, scale/offset, fixseam; writes vertex uv V3)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["uvproject"]
+evidence = [
+  "crates/sop/src/builtins/uvproject_sop::params_and_defaults",
+  "crates/sop/src/builtins/uvproject_sop::planar_grid_2x2_is_exact_for_all_three_axes",
+  "crates/sop/src/builtins/uvproject_sop::cylindrical_circle_points_u_is_angle_over_tau_exact",
+  "crates/sop/src/builtins/uvproject_sop::spherical_v_is_asin_over_pi_plus_half",
+  "crates/sop/src/builtins/uvproject_sop::center_shifts_and_origin_point_is_finite_defined",
+  "crates/sop/src/builtins/uvproject_sop::seam_fix_unwraps_a_face_across_the_seam",
+  "crates/sop/src/builtins/uvproject_sop::uv_is_vertex_class_and_leaves_everything_else_alone",
+  "crates/sop/src/builtins/uvproject_sop::hostile_params_and_geometry",
+  "crates/sop/src/builtins/uvproject_sop::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H23: type(planar|cyl|sph) axis(x|y|z, default z) center scale offset fixseam. Vertex-class V3 uv, TypeInfo::None (AttrClass::Vertex already supported; no geo change). In-plane pair x->(Y,Z) y->(Z,X) z->(X,Y). Cyl u = atan2(b,a)/2pi wrapped to [0,1), v = height; sph v = asin(h/r)/pi + .5; uv = raw*scale+offset, w = offset.z. Closed-form oracle: grid 2x2 uv == P components exact (all 3 axes) + scale .5/offset .5 -> corners {0,1}^2, circle points u = k/N (<2e-7), quarter turns exact, latitudes v = lat/180+.5. NOT modelled: Houdini texture-type menu / uvtexture options, prim groups, point-class output, pole-seam fix on sph v, cylinder cap handling. UNVERIFIED vs Houdini (hython blocked): angle origin/direction, v range for cyl, seam semantics, w component. Example: examples/uvproject.json."
+
+[[feature]]
+id = "sop-uvunwrap"
+title = "UVUnwrap SOP (simple: per-prim best-fit-axis projection into tile x tile cells; writes vertex uv V3)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["uvunwrap"]
+evidence = [
+  "crates/sop/src/builtins/uvunwrap_sop::params_and_defaults",
+  "crates/sop/src/builtins/uvunwrap_sop::z_facing_rect_projects_xy_normalised_and_keeps_aspect",
+  "crates/sop/src/builtins/uvunwrap_sop::back_facing_prim_mirrors_u_and_each_axis_uses_its_pair",
+  "crates/sop/src/builtins/uvunwrap_sop::box_each_face_is_a_full_unit_island_and_tiles_place_them_in_cells",
+  "crates/sop/src/builtins/uvunwrap_sop::slanted_prim_picks_dominant_axis_and_degenerate_falls_back_to_z",
+  "crates/sop/src/builtins/uvunwrap_sop::uv_is_vertex_class_and_leaves_everything_else_alone",
+  "crates/sop/src/builtins/uvunwrap_sop::hostile_params_and_geometry",
+  "crates/sop/src/builtins/uvunwrap_sop::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H23: tile(int 1..1024, default 1). Each prim = own island: Newell best-fit normal -> dominant axis -> project onto the other pair (u mirrored when the dominant component is negative), normalise by longer bbox side (aspect kept), cell (i mod tile, i/tile mod tile), uv=(cell+local)/tile. Closed-form oracle: 4x2 rect -> v max .5, box faces = exact unit squares, tile 3 cells, slanted triangle axis pick. NOT modelled: angle-based/ABF unwrap, seam cutting by edge, island rotation, groups, true best-fit (least squares) normal beyond Newell. UNVERIFIED vs Houdini (hython blocked): the real UV Unwrap algorithm (this is a planar-per-face stand-in), mirror convention, cell order. Example: examples/uv.json."
+
+[[feature]]
+id = "sop-uvlayout"
+title = "UVLayout-lite SOP (island bbox shelf packing, no rotation; padding, fit)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["uvlayout"]
+evidence = [
+  "crates/sop/src/builtins/uvlayout_sop::params_and_defaults",
+  "crates/sop/src/builtins/uvlayout_sop::four_unit_islands_pack_to_exact_quadrants",
+  "crates/sop/src/builtins/uvlayout_sop::padding_and_fit_off_keep_input_units",
+  "crates/sop/src/builtins/uvlayout_sop::mixed_sizes_no_overlap_no_rotation_all_inside_unit_square_shapes_preserved",
+  "crates/sop/src/builtins/uvlayout_sop::shared_points_with_equal_uv_form_one_island_and_cuts_split",
+  "crates/sop/src/builtins/uvlayout_sop::accepts_v2_uv_and_requires_uv",
+  "crates/sop/src/builtins/uvlayout_sop::hostile_params_and_geometry",
+  "crates/sop/src/builtins/uvlayout_sop::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H23: padding(0.01) fit(true). Island = prims connected through a shared point carrying bit-identical uv. Shelf pack sorted by height desc, row width max(widest, sqrt(sum (w+pad)(h+pad))); fit = uniform scale to the unit square. Closed-form oracle: 4 unit islands -> exact quadrants, padding .5 no-fit slots, mixed sizes disjoint + uniform scale + inside [0,1]^2 + corner order untouched, cut vs joined edge. NOT modelled: rotation, rect-packing optimality (shelf only), texel density / target resolution, per-island scale, groups, margin. UNVERIFIED vs Houdini (hython blocked): everything about the real UV Layout (this is bbox lite). Example: examples/uv.json."

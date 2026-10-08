@@ -254,11 +254,11 @@ mod tests {
                 .collect();
             let p = with(with(defaults(), "type", ParamValue::Menu(TYPE_CYLINDRICAL)), "axis", ParamValue::Menu(axis));
             let uv = uvs(&cook(points_as_prims(&pts), p).expect("cooks"));
-            for k in 0..n as usize {
+            for (k, c) in uv.iter().enumerate() {
                 let want = k as f64 / f64::from(n);
-                assert!((f64::from(uv[k][0]) - want).abs() < 2e-7, "axis {axis} k {k}: {} vs {want}", uv[k][0]);
-                assert_eq!(uv[k][1], k as f32 * 0.25, "v = height along the axis");
-                assert_eq!(uv[k][2], 0.0);
+                assert!((f64::from(c[0]) - want).abs() < 2e-7, "axis {axis} k {k}: {} vs {want}", c[0]);
+                assert_eq!(c[1], k as f32 * 0.25, "v = height along the axis");
+                assert_eq!(c[2], 0.0);
             }
         }
         // quarter turns are exact in f32 (0, .25, .5, .75)
