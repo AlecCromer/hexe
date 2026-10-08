@@ -112,7 +112,10 @@ impl Node<Detail> for AttribTransfer {
                     copy_elem(&mut data, i, &a.data, j);
                 }
             }
-            set_attr(&mut out, Attribute { name: a.name.clone(), class: AttrClass::Point, data, type_info: a.type_info });
+            set_attr(
+                &mut out,
+                Attribute { name: a.name.clone(), class: AttrClass::Point, data, type_info: a.type_info },
+            );
         }
         Ok(Arc::new(out))
     }
@@ -172,6 +175,23 @@ mod tests {
         s.add_attr(mk("tag", AttrData::Str { idx: (0..9).collect(), table: tags }));
         (t, Arc::new(s))
     }
+    /// Hand mapping for the +0.6 shifted source (columns at orig-coord + 0.6): target coordinate 1 is nearest to the source whose
+    /// original coordinate is 0; targets -1 and 0 are nearest to the source whose original coordinate is -1.
+    /// Returns the SOURCE point index for target point `i`, found by position (independent of grid point order).
+    fn hand_map(t: &Detail, i: usize) -> usize {
+        let (lo, hi) = t.bbox();
+        let q = t.p()[i];
+        let mut w = q;
+        for k in (0..3).filter(|&k| hi[k] > lo[k]) {
+            w[k] = if q[k] > 0.5 { 0.0 } else { -1.0 };
+        }
+        t.p().iter().position(|r| (0..3).all(|k| (r[k] - w[k]).abs() < 1e-4)).expect("hand-mapped source exists")
+    }
+    /// Target point whose nearest shifted source is within 0.6 (both in-plane coordinates >= 0): d = 0.4*sqrt(2).
+    fn inside(t: &Detail, i: usize) -> bool {
+        let (lo, hi) = t.bbox();
+        (0..3).filter(|&k| hi[k] > lo[k]).all(|k| t.p()[i][k] > -0.5)
+    }
     #[test]
     fn params_and_defaults() {
         let n = super::new();
@@ -186,14 +206,16 @@ mod tests {
         // source columns sit at -0.4, 0.6, 1.6 against target -1, 0, 1 -> nearest column per target = [0, 0, 1]
         let (t, s) = shifted_src();
         let o = xfer(&t, &s, &[]).expect("cooks");
-        let m = [0usize, 0, 1];
-        let want: Vec<f32> = (0..9).map(|i| 10.0 * (3 * m[i / 3] + m[i % 3]) as f32).collect();
+        let want: Vec<f32> = (0..9).map(|i| 10.0 * hand_map(&t, i) as f32).collect();
         assert_eq!(f32s(&o, "v"), want);
-        assert_eq!(o.attr(AttrClass::Point, "n").expect("n").data, AttrData::I32((0..9).map(|i| (3 * m[i / 3] + m[i % 3]) as i32).collect()));
+        assert_eq!(
+            o.attr(AttrClass::Point, "n").expect("n").data,
+            AttrData::I32((0..9).map(|i| hand_map(&t, i) as i32).collect())
+        );
         match &o.attr(AttrClass::Point, "tag").expect("tag").data {
             AttrData::Str { idx, table } => {
                 let got: Vec<&str> = idx.iter().map(|&k| table[k as usize].as_str()).collect();
-                let want: Vec<String> = (0..9).map(|i| format!("t{}", 3 * m[i / 3] + m[i % 3])).collect();
+                let want: Vec<String> = (0..9).map(|i| format!("t{}", hand_map(&t, i))).collect();
                 assert_eq!(got, want.iter().map(String::as_str).collect::<Vec<_>>());
             }
             x => panic!("{x:?}"),
@@ -204,14 +226,12 @@ mod tests {
     #[test]
     fn distance_threshold_gates_points_and_keeps_existing_values() {
         let (t, s) = shifted_src();
-        // distances: 4 points at 0.6*sqrt(2)... no: nearest d = sqrt(0.4^2+0.4^2) = 0.5657 for ids 4,5,7,8
+        // the 4 points with both in-plane coordinates >= 0 have nearest d = sqrt(0.4^2+0.4^2) = 0.5657 <= 0.6; others >= 0.72
         let o = xfer(&t, &s, &[("distancethreshold", f(0.6))]).expect("cooks");
         let v = f32s(&o, "v");
-        let m = [0usize, 0, 1];
-        for i in 0..9 {
-            let inside = (i / 3 >= 1) && (i % 3 >= 1);
-            let want = if inside { 10.0 * (3 * m[i / 3] + m[i % 3]) as f32 } else { 0.0 };
-            assert_eq!(v[i], want, "point {i}");
+        for (i, got) in v.iter().enumerate() {
+            let want = if inside(&t, i) { 10.0 * hand_map(&t, i) as f32 } else { 0.0 };
+            assert_eq!(*got, want, "point {i}");
         }
         assert_eq!(f32s(&xfer(&t, &s, &[("distancethreshold", f(0.5))]).expect("cooks"), "v"), vec![0.0; 9]);
         // existing target values survive outside the threshold
@@ -229,10 +249,9 @@ mod tests {
         let o = xfer(&t, &s, &[("pointattribs", ParamValue::S("* ^v ^tag".into()))]).expect("cooks");
         assert!(o.attr(AttrClass::Point, "n").is_some() && o.attr(AttrClass::Point, "v").is_none());
         let o = xfer(&t, &s, &[("pointattribs", ParamValue::S("P".into()))]).expect("cooks");
-        let m = [0usize, 0, 1];
         let sp = s.p();
         for i in 0..9 {
-            assert_eq!(o.p()[i], sp[3 * m[i / 3] + m[i % 3]], "P snapped to nearest source point {i}");
+            assert_eq!(o.p()[i], sp[hand_map(&t, i)], "P snapped to nearest source point {i}");
         }
         let o = xfer(&t, &s, &[("pointattribs", ParamValue::S(String::new()))]).expect("cooks");
         assert_eq!(*o, *t, "empty pattern transfers nothing");
