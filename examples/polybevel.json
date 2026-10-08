@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "bevel1", "type": "polybevel", "params": { "offset": 0.1, "divisions": 2, "filletshape": 0 } }
+  ],
+  "edges": [["box1", 0, "bevel1", 0]],
+  "display": "bevel1"
+}

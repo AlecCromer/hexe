@@ -60,6 +60,8 @@ mod selutil;
 //
 mod peak_sop;
 //
+mod polybevel_sop;
+//
 mod polyextrude_sop;
 //
 mod resample_sop;
@@ -133,6 +135,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("normal", normal_sop::spec, normal_sop::new);
     //
     r.register("peak", peak_sop::spec, peak_sop::new);
+    //
+    r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
     //
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
     //
