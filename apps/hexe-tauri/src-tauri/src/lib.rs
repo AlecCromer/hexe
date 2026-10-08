@@ -93,10 +93,26 @@ fn startup_scene() -> Option<String> {
     std::env::var("HEXE_OPEN").ok().filter(|p| !p.is_empty())
 }
 
+/// `HEXE_WINDOW_SIZE=WxH` (logical px; layout proof shots at sizes the screen cannot give a user resize).
+fn parse_size(v: &str) -> Option<(f64, f64)> {
+    let (w, h) = v.split_once('x')?;
+    let (w, h) = (w.trim().parse::<f64>().ok()?, h.trim().parse::<f64>().ok()?);
+    (w >= 320.0 && h >= 240.0 && w <= 16384.0 && h <= 16384.0).then_some((w, h))
+}
+
 /// Start the app. A failure to start the webview is reported on stderr (exit 1), never a panic.
 pub fn run() {
-    let built =
-        tauri::Builder::default().manage(App(Mutex::new(Session::new()))).invoke_handler(tauri::generate_handler![
+    let built = tauri::Builder::default()
+        .manage(App(Mutex::new(Session::new())))
+        .setup(|app| {
+            use tauri::Manager;
+            let size = std::env::var("HEXE_WINDOW_SIZE").ok().and_then(|v| parse_size(&v));
+            if let (Some((w, h)), Some(win)) = (size, app.get_webview_window("main")) {
+                let _ = win.set_size(tauri::LogicalSize::new(w, h));
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
             list_node_types,
             graph_new,
             graph_load,
@@ -116,5 +132,19 @@ pub fn run() {
     if let Err(e) = built.run(tauri::generate_context!()) {
         eprintln!("hexe: {e}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod size_tests {
+    use super::parse_size;
+
+    #[test]
+    fn window_size_env_parses_and_rejects_nonsense() {
+        assert_eq!(parse_size("2400x1500"), Some((2400.0, 1500.0)));
+        assert_eq!(parse_size(" 1600 x 1000 "), Some((1600.0, 1000.0)));
+        for bad in ["", "x", "10x10", "99999x100", "axb", "1600"] {
+            assert_eq!(parse_size(bad), None, "{bad}");
+        }
     }
 }
