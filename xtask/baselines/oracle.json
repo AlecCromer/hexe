@@ -1,6 +1,8 @@
 {
   "box-default": 1.0,
   "box-divs222": 1.0,
+  "foreach-feedback": 1.0,
+  "foreach-pieces": 1.0,
   "grid-default": 1.0,
   "grid-tri-3x3": 1.0,
   "merge-empty": 1.0,
