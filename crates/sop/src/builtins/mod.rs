@@ -22,6 +22,8 @@ mod copytopoints_sop;
 //
 mod curve_sop;
 //
+mod delete_sop;
+//
 mod fuse_sop;
 //
 mod facet_sop;
@@ -44,6 +46,8 @@ mod normal_sop;
 //
 mod meshutil;
 //
+mod selutil;
+//
 mod peak_sop;
 //
 mod polyextrude_sop;
@@ -57,6 +61,8 @@ mod rop_geometry_sop;
 mod scatter_sop;
 //
 mod smooth_sop;
+//
+mod sort_sop;
 //
 mod sphere_sop;
 //
@@ -85,6 +91,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
     //
     r.register("curve", curve_sop::spec, curve_sop::new);
+    //
+    r.register("delete", delete_sop::spec, delete_sop::new);
     //
     r.register("fuse", fuse_sop::spec, fuse_sop::new);
     //
@@ -119,6 +127,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("scatter", scatter_sop::spec, scatter_sop::new);
     //
     r.register("smooth", smooth_sop::spec, smooth_sop::new);
+    //
+    r.register("sort", sort_sop::spec, sort_sop::new);
     //
     r.register("sphere", sphere_sop::spec, sphere_sop::new);
     //
