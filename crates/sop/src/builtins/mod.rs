@@ -83,6 +83,12 @@ mod subdivide_sop;
 //
 mod transform_sop;
 //
+mod uvlayout_sop;
+//
+mod uvproject_sop;
+//
+mod uvunwrap_sop;
+//
 mod wrangle_sop;
 
 /// One `r.register("<type>", <mod>::spec, <mod>::new);` per SOP.
@@ -161,6 +167,12 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("subdivide", subdivide_sop::spec, subdivide_sop::new);
     //
     r.register("xform", transform_sop::spec, transform_sop::new);
+    //
+    r.register("uvlayout", uvlayout_sop::spec, uvlayout_sop::new);
+    //
+    r.register("uvproject", uvproject_sop::spec, uvproject_sop::new);
+    //
+    r.register("uvunwrap", uvunwrap_sop::spec, uvunwrap_sop::new);
     //
     r.register("wrangle", wrangle_sop::spec, wrangle_sop::new);
 }

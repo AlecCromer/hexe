@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "uvproject1", "type": "uvproject", "params": { "type": 1, "axis": 1 } }
+  ],
+  "edges": [["box1", 0, "uvproject1", 0]],
+  "display": "uvproject1"
+}

@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "uvunwrap1", "type": "uvunwrap", "params": { "tile": 3 } },
+    { "name": "uvlayout1", "type": "uvlayout", "params": { "padding": 0.05, "fit": true } }
+  ],
+  "edges": [["box1", 0, "uvunwrap1", 0], ["uvunwrap1", 0, "uvlayout1", 0]],
+  "display": "uvlayout1"
+}
