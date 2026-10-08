@@ -8,7 +8,7 @@ Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/pri
 
 Histogram: ORDER-DIFF 26, MATCH 5, ATTRIB-DIFF 4, COUNT-DIFF 3, P-DIFF 2  (N=40)
 
-| sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause (one line) |
+| sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
 | sop-add | 3/1/3 | 3/1/3 | MATCH | MATCH | - |
 | sop-attribcopy | 9/4/16 | 9/4/16 | ORDER-DIFF | ORDER-DIFF | grid Z mirror (point order) |

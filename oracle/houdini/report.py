@@ -57,7 +57,7 @@ L.append("Real Houdini 20.5.487 (hython, Commercial) twin of every `sop-*` ledge
 L.append("Reproduce: `hython oracle/houdini/run_all.py` (all 40 in one process, ~10 s) then `python3 oracle/houdini/compare.py` then `python3 oracle/houdini/report.py`.\n")
 L.append("Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P but prim point lists / closedness differ).\n")
 L.append("Histogram: " + ", ".join("%s %d" % (k, v) for k, v in sorted(hist.items(), key=lambda kv: -kv[1])) + "  (N=%d)\n" % len(R))
-L.append("| sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause (one line) |")
+L.append("| sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |")
 L.append("|---|---|---|---|---|---|")
 for r in R:
     h = "/".join(map(str, r["houdini"])) if "houdini" in r else "-"
