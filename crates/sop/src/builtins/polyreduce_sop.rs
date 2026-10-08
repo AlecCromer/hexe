@@ -23,6 +23,8 @@ use std::sync::Arc;
 
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 const OP: &str = "polyreduce";
+/// Min-heap of `(length bits, a, b, version a, version b)`.
+type EdgeHeap = BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>>;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
@@ -138,12 +140,8 @@ impl Node<Detail> for PolyReduce {
         let mut alive = vec![true; np];
         let mut ver = vec![0u32; np];
         let mut merged: Vec<Vec<usize>> = (0..np).map(|i| vec![i]).collect();
-        let mut heap: BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>> = BinaryHeap::new();
-        let push_edges = |heap: &mut BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>>,
-                          m: &Mesh,
-                          pos: &[V3],
-                          ver: &[u32],
-                          pt: u32| {
+        let mut heap: EdgeHeap = BinaryHeap::new();
+        let push_edges = |heap: &mut EdgeHeap, m: &Mesh, pos: &[V3], ver: &[u32], pt: u32| {
             for q in m.neighbours(pt) {
                 let (a, b) = (pt.min(q), pt.max(q));
                 heap.push(Reverse((len_key(pos[a as usize], pos[b as usize]), a, b, ver[a as usize], ver[b as usize])));
@@ -249,7 +247,7 @@ impl Node<Detail> for PolyReduce {
             rm.prim_src.push(Some(pi));
         }
         let p32 = to_f32(OP, &p_out)?;
-        if vertex_point.iter().any(|&i| i == u32::MAX) {
+        if vertex_point.contains(&u32::MAX) {
             return Err(failed(OP, "internal: dangling point after collapse"));
         }
         Ok(Arc::new(rebuild(OP, src, vertex_point, prims, &rm, p32)?))

@@ -328,7 +328,7 @@ mod tests {
         };
         assert_eq!(uv.len(), d.vertex_point.len());
         assert!(uv.iter().all(|c| (0.0..=1.0).contains(&c[0]) && (0.0..=1.0).contains(&c[1])));
-        assert!(uv.iter().any(|c| c[1] == 1.0) && uv.iter().any(|c| c[0] == 1.0) && uv.iter().any(|c| *c == [0.0; 3]));
+        assert!(uv.iter().any(|c| c[1] == 1.0) && uv.iter().any(|c| c[0] == 1.0) && uv.contains(&[0.0; 3]));
     }
 
     #[test]

@@ -111,7 +111,7 @@ impl Node<Detail> for Revolve {
                 ids.push(row);
             }
             let segs = if c.closed { q.len() } else { q.len() - 1 };
-            let ncols = if full { divs } else { divs };
+            let ncols = divs;
             for i in 0..segs {
                 let i2 = (i + 1) % q.len();
                 let (v0, v1) = (vfr[i] as f32, if i + 1 == q.len() { 1.0 } else { vfr[i + 1] as f32 });
