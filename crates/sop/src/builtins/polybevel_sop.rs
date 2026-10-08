@@ -115,10 +115,10 @@ fn find(parent: &mut [usize], mut x: usize) -> usize {
 }
 fn union(parent: &mut [usize], a: usize, b: usize) {
     let (ra, rb) = (find(parent, a), find(parent, b));
-    if ra != rb {
-        if let Some(s) = parent.get_mut(rb) {
-            *s = ra;
-        }
+    if ra != rb
+        && let Some(s) = parent.get_mut(rb)
+    {
+        *s = ra;
     }
 }
 
@@ -328,10 +328,10 @@ fn bevel(src: &Detail, names: &str, d: f64, div: usize, round: bool) -> Result<O
                 point_src.push(vec![v]);
                 point_src.len() - 1
             });
-            if k == 0 {
-                if let Some(s) = first_pt.get_mut(v) {
-                    *s = id;
-                }
+            if k == 0
+                && let Some(s) = first_pt.get_mut(v)
+            {
+                *s = id;
             }
             if let Some(s) = corner_pt.get_mut(c) {
                 *s = id;
@@ -477,10 +477,11 @@ fn bevel(src: &Detail, names: &str, d: f64, div: usize, round: bool) -> Result<O
             tail = p.last().copied();
             n_used += 1;
         }
-        if n_used == ps.len() && tail == head {
-            if let Some(p) = dedup(ring.into_iter().map(|p| (p, None)).collect()) {
-                emit(&p, None, CLOSED)?;
-            }
+        if n_used == ps.len()
+            && tail == head
+            && let Some(p) = dedup(ring.into_iter().map(|p| (p, None)).collect())
+        {
+            emit(&p, None, CLOSED)?;
         }
     }
     let mut out =
@@ -697,7 +698,7 @@ mod tests {
         for p in &r.p()[24..] {
             let c = p.map(|x| if x < 0.0 { -0.4 } else { 0.4 });
             // the along-edge axis has |coord| = .4 exactly; the other two lie on the circle about the centre
-            let off: Vec<f64> = (0..3).map(|k| f64::from(p[k]) - f64::from(c[k])).collect();
+            let off: Vec<f64> = (0..3).map(|k| f64::from(p[k]) - c[k]).collect();
             let rad = off.iter().map(|x| x * x).sum::<f64>().sqrt();
             assert!((rad - 0.1).abs() < 1e-6, "{p:?} radius {rad}");
         }
