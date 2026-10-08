@@ -10,8 +10,8 @@
 //!   `P' = origin + R sin(phi) a + R (1 - cos(phi)) s + c (cos(phi) s - sin(phi) a) + w`
 //!   `+ max(h - length, 0) (cos(phi) a + sin(phi) s)`  (spine point, rotated cross-section, straight tail past the region).
 //!   Line of 5 points y = 0..4, `length` 4, 90 degrees: `P_i = (R (1 - cos(pi i / 8)), R sin(pi i / 8), 0)`, `R = 8 / pi`.
-//! * `twist`: `angle` F (degrees) rotates the cross-section about the axis by `angle * clamp(h / length, 0, 1)` (right-handed
-//!   about `a`; past the region the full angle). Points on the axis never move.
+//! * `twist`: `angle` F (degrees) rotates the cross-section about the axis by `angle * clamp(h / length, 0, 1)` (Houdini direction: clockwise seen from +a, i.e. LEFT-handed
+//!   about `a` (H32, hython-verified); past the region the full angle). Points on the axis never move.
 //!
 //! NOT modelled (DEFERRED, both): point `group` filter, `capture` regions with falloff / non-linear profile, `rot` pivot
 //! offset, `N` rotation (normals are NOT updated), `ZYX` deformation-order switch, `fixedpts`.
@@ -111,7 +111,8 @@ impl Node<Detail> for Deform {
                 match side {
                     Some(s) => add(o, bend_point(r, h, a, s, len, theta)),
                     None => {
-                        let alpha = theta * (h / len).min(1.0);
+                        // twist direction = Houdini's (H32, hython-verified): +angle turns (-x,-z) to (+x,-z) = clockwise seen from +a
+ let alpha = -theta * (h / len).min(1.0);
                         let axial = scale(a, h);
                         let v = sub(r, axial);
                         let rot = add(
@@ -227,16 +228,16 @@ mod tests {
         assert!(Arc::ptr_eq(&cook_arc(&*twist_new(), &a, &twist(1.0, 0.0)).expect("cooks"), &a));
     }
 
-    /// (1,y,0) twisted 90 degrees over length 4 about +Y: angle 22.5 deg * y, right-handed: (cos a, y, -sin a).
+    /// (1,y,0) twisted 90 degrees over length 4 about +Y: angle 22.5 deg * y, Houdini direction (clockwise seen from +Y): (cos a, y, +sin a).
     #[test]
     fn twist_rotates_linearly_with_height_right_handed() {
         let out = cook(&*twist_new(), line(&[0.0, 1.0, 2.0, 3.0, 4.0, 6.0, -2.0], 1.0, 0.0), &twist(4.0, 90.0))
             .expect("cooks");
         for (i, y) in [0.0f64, 1.0, 2.0, 3.0, 4.0].iter().enumerate() {
             let a = (PI / 2.0) * y / 4.0;
-            close(out.p()[i], [a.cos(), *y, -a.sin()], &format!("y={y}"));
+            close(out.p()[i], [a.cos(), *y, a.sin()], &format!("y={y}"));
         }
-        close(out.p()[5], [0.0, 6.0, -1.0], "past the region: full angle");
+        close(out.p()[5], [0.0, 6.0, 1.0], "past the region: full angle");
         assert_eq!(out.p()[6], [1.0, -2.0, 0.0], "below: untouched");
         // on-axis points never move; axial component z along an offset axis works too
         let axis = cook(&*twist_new(), line(&[1.0, 3.0], 0.0, 0.0), &twist(4.0, 90.0)).expect("cooks");
@@ -273,12 +274,12 @@ mod tests {
         close(d.p()[4], [r, r, 0.0], "bend example end point");
         let (mut g, id) = crate::load_scene(include_str!("../../../../examples/twist.json")).expect("loads");
         let d = g.cook(id, 0.0).expect("cooks");
-        // box (+-.5), twist 90 over y in [-.5,.5]: top corner (.5,.5,.5) -> (.5,.5,-.5)
+        // box (+-.5), twist 90 over y in [-.5,.5]: top corner (.5,.5,.5) -> (-.5,.5,.5) (Houdini direction)
         // the example cooks the real Box SOP: look the corners up in ITS point order (not a hand-built cube)
         let (mut bg, bid) = crate::load_scene(r#"{"nodes":[{"name":"b","type":"box"}],"display":"b"}"#).expect("loads");
         let src = bg.cook(bid, 0.0).expect("cooks");
         let i = src.p().iter().position(|p| *p == [0.5, 0.5, 0.5]).expect("corner");
-        close(d.p()[i], [0.5, 0.5, -0.5], "top corner");
+        close(d.p()[i], [-0.5, 0.5, 0.5], "top corner");
         let j = src.p().iter().position(|p| *p == [0.5, -0.5, 0.5]).expect("corner");
         close(d.p()[j], [0.5, -0.5, 0.5], "bottom corner stays");
         let reg = crate::registry();

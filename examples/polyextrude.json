@@ -1,7 +1,7 @@
 {
   "nodes": [
     { "name": "box1", "type": "box" },
-    { "name": "pe1", "type": "polyextrude", "params": { "distance": 0.5, "divisions": 1 } }
+    { "name": "pe1", "type": "polyextrude", "params": { "splittype": 1, "distance": 0.5, "divisions": 1 } }
   ],
   "edges": [["box1", 0, "pe1", 0]],
   "display": "pe1"

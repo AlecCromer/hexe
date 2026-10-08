@@ -35,7 +35,7 @@
 use super::meshutil::dot;
 use super::meshutil::{
     MAX_ELEMS, Remap, V3, add, bad, closed_poly_pts, failed, float, int, point_normals, positions, rebuild, scale, sub,
-    to_f32, unit_newell,
+    to_f32, prim_normal,
 };
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Detail, Prim, PrimKind};
@@ -159,7 +159,7 @@ fn corner_shift(pos: &[V3], f: &Face, i: usize, prev_b: bool, next_b: bool, d: f
     let p = |k: usize| at(pos, at(&f.pts, k % m, 0), ZERO);
     let (pp, v, q) = (p(i + m - 1), p(i), p(i + 1));
     let (Some(e1), Some(e2)) = (unit(sub(v, pp)), unit(sub(q, v))) else { return ZERO };
-    let (Some(in1), Some(in2)) = (unit(cross(f.nrm, e1)), unit(cross(f.nrm, e2))) else { return ZERO };
+    let (Some(in1), Some(in2)) = (unit(cross(e1, f.nrm)), unit(cross(e2, f.nrm))) else { return ZERO };
     match (prev_b, next_b) {
         (false, false) => ZERO,
         (true, true) => {
@@ -223,7 +223,7 @@ fn bevel(src: &Detail, names: &str, d: f64, div: usize, round: bool) -> Result<O
     for (pi, pr) in src.prims.iter().enumerate() {
         let (Some(pts), Ok(first)) = (closed_poly_pts(src, pr), usize::try_from(pr.verts.start)) else { continue };
         let distinct: HashSet<usize> = pts.iter().copied().collect();
-        let Some(nrm) = unit_newell(&pos, &pts).filter(|_| distinct.len() == pts.len()) else { continue };
+        let Some(nrm) = prim_normal(&pos, &pts).filter(|_| distinct.len() == pts.len()) else { continue };
         if let Some(s) = face_of_prim.get_mut(pi) {
             *s = Some(faces.len());
         }
@@ -494,7 +494,7 @@ fn bevel(src: &Detail, names: &str, d: f64, div: usize, round: bool) -> Result<O
 fn renormal(d: &mut Detail) {
     let pos = positions(d);
     let face_n: Vec<Option<V3>> =
-        d.prims.iter().map(|pr| closed_poly_pts(d, pr).and_then(|pts| unit_newell(&pos, &pts))).collect();
+        d.prims.iter().map(|pr| closed_poly_pts(d, pr).and_then(|pts| prim_normal(&pos, &pts))).collect();
     let pn = point_normals(d, &pos);
     let vn: Vec<V3> = {
         let mut v = vec![ZERO; d.vertex_count() as usize];
@@ -597,7 +597,7 @@ mod tests {
         let (v, e, f) = (d.point_count as i64, dir.len() as i64 / 2, d.prim_count() as i64);
         assert_eq!(v - e + f, 2, "V={v} E={e} F={f}");
     }
-    /// Every prim wound outward of the origin-centred, convex result (Newell normal . centroid > 0).
+    /// Every prim wound outward of the origin-centred, convex result (right-handed Newell normal . centroid < 0: Houdini's clockwise-from-outside winding).
     fn assert_outward(d: &Detail) {
         for i in 0..d.prims.len() {
             let p = prim_pts(d, i);
@@ -612,7 +612,7 @@ mod tests {
                 ];
                 c = [c[0] + a[0], c[1] + a[1], c[2] + a[2]];
             }
-            assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] > 0.0, "prim {i} wound inward: {p:?}");
+            assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] < 0.0, "prim {i} wound inward: {p:?}");
         }
     }
     fn near3(a: [f32; 3], b: [f64; 3]) -> bool {
@@ -692,7 +692,7 @@ mod tests {
     fn divisions_2_round_profile_point_is_on_the_circle_solid_is_the_chord_midpoint() {
         let r = cook(&*new(), cube(), &with(0.1, 2, SHAPE_ROUND, "")).expect("cooks");
         let s = 0.1 * (1.0 - 1.0 / 2f64.sqrt());
-        let mid = [-0.5 + s, -0.5 + s, -0.4];
+        let mid = [-0.5 + s, -0.4, -0.5 + s]; // first profile edge = Houdini-wound cube's first edge
         assert!(near3(r.p()[24], mid), "{:?}", r.p()[24]);
         // all 24 profile points: 0.1 from their cross-section circle centre (+-.4 on all three axes)
         for p in &r.p()[24..] {
@@ -703,7 +703,7 @@ mod tests {
             assert!((rad - 0.1).abs() < 1e-6, "{p:?} radius {rad}");
         }
         let l = cook(&*new(), cube(), &with(0.1, 2, SHAPE_SOLID, "")).expect("cooks");
-        assert!(near3(l.p()[24], [-0.45, -0.45, -0.4]), "{:?}", l.p()[24]);
+        assert!(near3(l.p()[24], [-0.45, -0.4, -0.45]), "{:?}", l.p()[24]);
         assert_eq!((l.point_count, l.prim_count()), (48, 38));
         assert!(has_pt(&r, mid) && !has_pt(&l, mid));
     }

@@ -1,8 +1,9 @@
 //! Reverse SOP (token `reverse`): reverses the vertex order of every selected polygon / polyline.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; closed-form oracle only)
-//! The vertex list of each selected `Poly` / `Polyline` prim is reversed IN PLACE (full reversal, first vertex too), so a
-//! closed polygon's Newell normal is negated. Vertex attributes and vertex-group bits travel with their vertex.
+//! # Semantics (closed-polygon first-vertex rule verified vs Houdini 20.5; rest closed-form oracle)
+//! The vertex list of each selected prim is reversed IN PLACE. CLOSED polygons keep their FIRST vertex (Houdini, verified
+//! in hython: `[1,5,4,0]` -> `[1,0,4,5]`), i.e. the cycle `v1..vn` is reversed; open polys / polylines reverse fully. A
+//! closed polygon's Houdini normal (`meshutil::prim_normal`) is negated either way. Vertex attributes and vertex-group bits travel with their vertex.
 //! Points, prim order, prim attributes and all other classes are untouched. Reversing twice is the identity.
 //! `group`: space-separated PRIM group names (union); empty = all prims. Unknown name -> `CookError::Failed`.
 //! Other prim kinds (spheres, volumes, unknown) and prims with `< 2` vertices pass through. Nothing reversed -> the input
@@ -86,8 +87,12 @@ impl Node<Detail> for Reverse {
             .iter()
             .zip(&sel)
             .filter(|(pr, s)| **s && matches!(pr.kind, PrimKind::Poly { .. } | PrimKind::Polyline))
-            .filter_map(|(pr, _)| Some(usize::try_from(pr.verts.start).ok()?..usize::try_from(pr.verts.end).ok()?))
-            .filter(|r| r.len() >= 2 && r.end <= nverts)
+            .filter_map(|(pr, _)| {
+ let r = usize::try_from(pr.verts.start).ok()?..usize::try_from(pr.verts.end).ok()?;
+ // closed polygons keep their first vertex (Houdini); open ones reverse fully
+ Some(if matches!(pr.kind, PrimKind::Poly { closed: true }) { r.start.checked_add(1)?..r.end } else { r })
+ })
+ .filter(|r| r.len() >= 2 && r.end <= nverts)
             .collect();
         if ranges.is_empty() {
             return Ok(Arc::clone(src));
@@ -114,7 +119,7 @@ mod tests {
         d.add_points(8);
         let c = |b: u32, i: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
         *d.p_mut() = (0..8).map(|i| [c(2, i), c(1, i), c(0, i)]).collect();
-        for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+        for f in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
             d.add_poly(&f, true);
         }
         d
@@ -159,7 +164,18 @@ mod tests {
         assert_eq!(out.p(), src.p(), "points untouched");
     }
     #[test]
-    fn reversed_twice_is_byte_equal_to_input() {
+ fn closed_polygon_keeps_its_first_vertex_open_polyline_reverses_fully() {
+ // Houdini (hython): box prim0 [1,5,4,0] -> [1,0,4,5]
+ let mut d = Detail::default();
+ d.add_points(6);
+ d.add_poly(&[1, 5, 4, 0], true);
+ d.add_poly(&[1, 5, 4, 0], false);
+ let out = cook(Arc::new(d), none()).expect("cooks");
+ assert_eq!(&out.vertex_point[..4], &[1, 0, 4, 5]);
+ assert_eq!(&out.vertex_point[4..], &[0, 4, 5, 1]);
+ }
+ #[test]
+ fn reversed_twice_is_byte_equal_to_input() {
         let mut d = cube();
         d.add_attr(Attribute {
             name: "uv".into(),

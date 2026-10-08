@@ -16,7 +16,7 @@
 //!
 //! Output = the input with vertex `uv` replaced/added; everything else untouched. Hostile: `tile` outside `1..=1024`
 //! or not an int -> `BadParam`.
-use super::meshutil::{bad, int};
+use super::meshutil::{bad, int, newell_corners};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
@@ -39,13 +39,7 @@ struct UvUnwrap {
 
 /// `(axis, negative)` of the best-fit normal of `pts`.
 fn dominant(pts: &[[f64; 3]]) -> (usize, bool) {
-    let mut n = [0.0f64; 3];
-    for (k, a) in pts.iter().enumerate() {
-        let b = pts.get((k + 1) % pts.len()).unwrap_or(a);
-        n[0] += (a[1] - b[1]) * (a[2] + b[2]);
-        n[1] += (a[2] - b[2]) * (a[0] + b[0]);
-        n[2] += (a[0] - b[0]) * (a[1] + b[1]);
-    }
+    let n = newell_corners(pts); // Houdini sign: outward-facing
     let mag = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
     if !mag.is_finite() || mag <= MIN_NEWELL {
         return (2, false);
@@ -56,7 +50,7 @@ fn dominant(pts: &[[f64; 3]]) -> (usize, bool) {
             ax = i;
         }
     }
-    (ax, n[ax] < 0.0)
+    (ax, n[ax] > 0.0) // negative = faces -axis; Houdini normal is the negated right-handed Newell
 }
 /// Projection component indices `(a, b)` for the dominant axis.
 fn pair(axis: usize) -> (usize, usize) {

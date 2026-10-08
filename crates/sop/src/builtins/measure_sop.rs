@@ -6,14 +6,14 @@
 //! * area: closed poly = half the magnitude of the Newell vector sum (planar polys: exact area; non-planar: area of the
 //!   best-fit projection). Open / non-poly prims = 0.
 //! * perimeter: sum of edge lengths; closed polys include the closing edge, open polys / polylines do not. Others 0.
-//! * volume: SIGNED contribution of a closed poly to the divergence-theorem volume w.r.t. the ORIGIN: `1/6 sum a.(b x c)`
+//! * volume: SIGNED contribution of a closed poly to the divergence-theorem volume w.r.t. the ORIGIN: `-1/6 sum a.(b x c)` (Houdini winding: clockwise from outside)
 //!   over the fan triangles (v0, vi, vi+1). Outward-wound closed meshes sum to their volume (unit box: each face 1/6,
 //!   total 1); a lone prim has no volume of its own. Others 0.
 //!
 //! `total` B (default off): also write the DETAIL attribute `<attribname>_sum` = sum over prims (f64 sum, then f32).
 //! NOT modelled (DEFERRED): point / vertex measure entities, curvature, `smooth` / `dihedral` types, group filter, tetra /
 //! volume-prim measures, N-gon holes.
-use super::meshutil::{V3, bad, cross, dot, positions, sub};
+use super::meshutil::{V3, bad, dot, newell_corners, positions, sub, tri_volume};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, PrimKind, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
@@ -101,12 +101,7 @@ impl Node<Detail> for Measure {
 }
 
 fn area(p: &[V3]) -> f64 {
-    let Some(&o) = p.first() else { return 0.0 };
-    let mut nw = [0.0; 3];
-    for w in p.windows(2) {
-        let c = cross(sub(w[0], o), sub(w[1], o));
-        nw = [nw[0] + c[0], nw[1] + c[1], nw[2] + c[2]];
-    }
+    let nw = newell_corners(p);
     0.5 * dot(nw, nw).sqrt()
 }
 fn perimeter(p: &[V3], closed: bool) -> f64 {
@@ -122,7 +117,7 @@ fn perimeter(p: &[V3], closed: bool) -> f64 {
 }
 fn volume(p: &[V3]) -> f64 {
     let Some(&a) = p.first() else { return 0.0 };
-    p.windows(2).map(|w| dot(a, cross(w[0], w[1]))).sum::<f64>() / 6.0
+    p.windows(2).map(|w| tri_volume(a, w[0], w[1])).sum::<f64>()
 }
 
 #[cfg(test)]

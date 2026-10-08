@@ -184,7 +184,7 @@ mod tests {
         assert!(near(&yz.p()[0], [1.0, 1.0, 3.0]) && near(&yz.p()[1], [1.0, 4.0, 1.0]));
         let zx = cook(r#"{"divisions":4,"orient":2}"#).expect("cooks");
         assert!(near(&zx.p()[0], [1.0, 0.0, 0.0]) && near(&zx.p()[1], [0.0, 0.0, 1.0]));
-        // reverse on = clockwise about +Z (Newell -Z); reverse off = counter-clockwise (+Z).
+        // reverse on = clockwise about +Z (Houdini normal +Z); reverse off = counter-clockwise (+Z).
         let xy = cook(r#"{"divisions":4}"#).expect("cooks");
         let q = xy.p();
         let n: f32 = (0..4).map(|i| q[i][0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * q[i][1]).sum();

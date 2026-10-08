@@ -5,9 +5,8 @@
 //! Lattice (order verified against real Houdini 20.5, `fixtures/sop-grid/houdini.geo` + xy/yz/zx cases in docs/HOUDINI-ORACLE.md):
 //! point id = `row*cols + col`; `cols` span the FIRST in-plane axis over `size[0]`, ascending from `-size[0]/2`; `rows` span
 //! the SECOND over `size[1]`, ascending from `-size[1]/2` (row 0 at the LOW end, also for `zx`: row 0 at -Z). Axes: xy: (X, Y);
-//! yz: (Y, Z); zx: (X, Z). Houdini's cell is `[a, a+1, a+cols+1, a+cols]` (clockwise, its normal is the left-hand rule); hexe is
-//! counter-clockwise everywhere so it emits the same first corner reversed `(a, a+cols, a+cols+1, a+1)`: right-hand normal
-//! xy -Z, yz +X, zx +Y = Houdini's own prim normals. `r` rotates about the local origin (degrees,
+//! yz: (Y, Z); zx: (X, Z). Houdini's cell is `[a, a+1, a+cols+1, a+cols]` (clockwise, its normal is the left-hand rule); hexe adopts
+//! that winding globally (H32) and emits it verbatim: `meshutil::prim_normal` xy -Z, yz +X, zx +Y = Houdini's own prim normals. `r` rotates about the local origin (degrees,
 //! Rx then Ry then Rz), then `t` translates. A 1-point axis sits at the center of that axis (no division by zero).
 //! No `N` attribute (existence [?]). `size` is declared `V3` (no V2 variant): `size[2]` is ignored.
 //! `mesh` = ONE `Unknown{ty:"Mesh"}` prim over all `rows*cols` vertices (row-major) with the connectivity token in its
@@ -201,22 +200,21 @@ impl Node<Detail> for Grid {
         if matches!(surf, SURF_TRIANGLES | SURF_QUADS | SURF_ALT | SURF_REV) {
             for row in 0..rows.saturating_sub(1) {
                 for col in 0..cols.saturating_sub(1) {
-                    // cell corners in winding order: a(row,col) b(row+1,col) cc(row+1,col+1) dd(row,col+1). Houdini lists the cell
-                    // clockwise as `[a, dd, cc, b]`; same first corner, reversed here (hexe is counter-clockwise everywhere).
+                    // cell corners in winding order: a(row,col) b(row+1,col) cc(row+1,col+1) dd(row,col+1). Houdini lists the cell // clockwise as `[a, dd, cc, b]`, emitted verbatim (hexe adopts Houdini's winding globally).
                     let (a, b, cc, dd) = (id(row, col)?, id(row + 1, col)?, id(row + 1, col + 1)?, id(row, col + 1)?);
                     // triangles: diagonal a-cc; revtriangles: diagonal b-dd; alttriangles: checkerboard of the two.
                     let rev = surf == SURF_REV || (surf == SURF_ALT && (row + col) % 2 == 1);
                     match (surf, rev) {
                         (SURF_QUADS, _) => {
-                            d.add_poly(&[a, b, cc, dd], true);
+                            d.add_poly(&[a, dd, cc, b], true);
                         }
                         (_, false) => {
-                            d.add_poly(&[a, b, cc], true);
-                            d.add_poly(&[a, cc, dd], true);
+                            d.add_poly(&[a, cc, b], true);
+                            d.add_poly(&[a, dd, cc], true);
                         }
                         (_, true) => {
-                            d.add_poly(&[a, b, dd], true);
-                            d.add_poly(&[b, cc, dd], true);
+                            d.add_poly(&[a, dd, b], true);
+                            d.add_poly(&[b, dd, cc], true);
                         }
                     }
                 }
@@ -253,11 +251,11 @@ mod tests {
     fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
         [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
     }
-    /// Geometric normal of polygon `i` from its first three vertices.
+    /// Houdini-rule (left-hand) geometric normal of polygon `i` from its first three vertices (test-local oracle).
     fn normal(d: &Detail, i: usize) -> [f32; 3] {
         let v = prim_pts(d, i);
         let q: Vec<[f32; 3]> = v.iter().map(|&k| d.p()[k as usize]).collect();
-        cross(sub(q[1], q[0]), sub(q[2], q[0]))
+        cross(sub(q[2], q[0]), sub(q[1], q[0]))
     }
     #[test]
     fn default_is_100_points_81_quads_on_zx_plane() {
@@ -302,24 +300,23 @@ mod tests {
         }
     }
     #[test]
-    fn first_quad_winding_is_0_cols_cols_plus_1_1_for_every_orient() {
+    fn first_quad_winding_is_0_1_cols_plus_1_cols_for_every_orient() {
         for orient in 0..3 {
             for (rows, cols) in [(2, 2), (3, 4), (5, 3)] {
                 let d = ok(&format!(r#"{{"orient":{orient},"rows":{rows},"cols":{cols}}}"#));
                 let c = cols as u32;
-                assert_eq!(prim_pts(&d, 0), vec![0, c, c + 1, 1], "orient {orient} {rows}x{cols}");
+                assert_eq!(prim_pts(&d, 0), vec![0, 1, c + 1, c], "orient {orient} {rows}x{cols}");
                 // second quad of the first row is shifted by one column.
                 assert_eq!(
                     prim_pts(&d, 1.min(d.prims.len() - 1)),
-                    if cols > 2 { vec![1, c + 1, c + 2, 2] } else { vec![0, c, c + 1, 1] }
+                    if cols > 2 { vec![1, 2, c + 2, c + 1] } else { vec![0, 1, c + 1, c] }
                 );
             }
         }
     }
     #[test]
     fn quad_normals_follow_the_orient_plane_normal() {
-        // Houdini prim normals (left-hand rule on its clockwise cells, measured): xy -Z, yz +X, zx +Y; ours = right-hand on the
-        // reversed cell, i.e. the same vectors. Every quad.
+        // Houdini prim normals (left-hand rule on its clockwise cells, measured): xy -Z, yz +X, zx +Y; ours = the same cells // verbatim, so the same vectors. Every quad.
         for (o, axis, sign) in [(0, 2, -1.0f32), (1, 0, 1.0), (2, 1, 1.0)] {
             let d = ok(&format!(r#"{{"orient":{o},"rows":3,"cols":4}}"#));
             for i in 0..d.prims.len() {
@@ -371,13 +368,13 @@ mod tests {
     fn triangle_surftypes_split_cells_by_closed_form() {
         // 3x3 cells row0/col0 = a=0 (b=3, cc=4, dd=1).
         let tri = ok(r#"{"surftype":3,"rows":3,"cols":3}"#);
-        assert_eq!((prim_pts(&tri, 0), prim_pts(&tri, 1)), (vec![0, 3, 4], vec![0, 4, 1]));
-        let rev = ok(r#"{"surftype":6,"rows":3,"cols":3}"#);
-        assert_eq!((prim_pts(&rev, 0), prim_pts(&rev, 1)), (vec![0, 3, 1], vec![3, 4, 1]));
+        assert_eq!((prim_pts(&tri, 0), prim_pts(&tri, 1)), (vec![0, 4, 3], vec![0, 1, 4]));
+ let rev = ok(r#"{"surftype":6,"rows":3,"cols":3}"#);
+        assert_eq!((prim_pts(&rev, 0), prim_pts(&rev, 1)), (vec![0, 1, 3], vec![3, 1, 4]));
         let alt = ok(r#"{"surftype":5,"rows":3,"cols":3}"#);
         // cell (0,0) even = triangles; cell (0,1) odd = reverse (a=1,b=4,cc=5,dd=2).
-        assert_eq!((prim_pts(&alt, 0), prim_pts(&alt, 1)), (vec![0, 3, 4], vec![0, 4, 1]));
-        assert_eq!((prim_pts(&alt, 2), prim_pts(&alt, 3)), (vec![1, 4, 2], vec![4, 5, 2]));
+        assert_eq!((prim_pts(&alt, 0), prim_pts(&alt, 1)), (vec![0, 4, 3], vec![0, 1, 4]));
+ assert_eq!((prim_pts(&alt, 2), prim_pts(&alt, 3)), (vec![1, 2, 4], vec![4, 2, 5]));
         // every triangle of every flavour keeps the +Y normal on zx.
         for d in [&tri, &rev, &alt] {
             assert!((0..d.prims.len()).all(|i| normal(d, i)[1] > 0.0));
@@ -495,7 +492,7 @@ mod tests {
         assert_eq!(out.point_count, 100);
     }
     // ---- analytical oracle fixtures: expected built by INDEPENDENT maths, never by the SOP ----
-    /// `grid-default`: 10x10 lattice on ZX, size 10: x = -5 + 10*i/9 over cols, z = -5 + 10*j/9 over rows (Houdini row 0 at -Z), quads (a,a+10,a+11,a+1).
+    /// `grid-default`: 10x10 lattice on ZX, size 10: x = -5 + 10*i/9 over cols, z = -5 + 10*j/9 over rows (Houdini row 0 at -Z), quads (a,a+1,a+11,a+10) = Houdini's clockwise cell.
     fn expected_default() -> Detail {
         let mut d = Detail::default();
         d.add_points(100);
@@ -507,7 +504,7 @@ mod tests {
         for k in 0..81u32 {
             let (r, c) = (k / 9, k % 9);
             let a = r * 10 + c;
-            d.add_poly(&[a, a + 10, a + 11, a + 1], true);
+            d.add_poly(&[a, a + 1, a + 11, a + 10], true);
         }
         d
     }
@@ -521,8 +518,8 @@ mod tests {
         for (k, slot) in p.iter_mut().enumerate() {
             *slot = [xs[k % 3], 0.0, zs[k / 3]];
         }
-        // cell (r,c): a=3r+c; tris (a, a+3, a+4) and (a, a+4, a+1) for +Y.
-        for tri in [[0, 3, 4], [0, 4, 1], [1, 4, 5], [1, 5, 2], [3, 6, 7], [3, 7, 4], [4, 7, 8], [4, 8, 5]] {
+        // cell (r,c): a=3r+c; tris (a, a+4, a+3) and (a, a+1, a+4): +Y under Houdini's left-hand rule.
+        for tri in [[0, 4, 3], [0, 1, 4], [1, 5, 4], [1, 2, 5], [3, 7, 6], [3, 4, 7], [4, 8, 7], [4, 5, 8]] {
             d.add_poly(&tri, true);
         }
         d

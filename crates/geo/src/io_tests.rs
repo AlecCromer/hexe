@@ -7,7 +7,7 @@ fn scratch(name: &str) -> std::path::PathBuf {
     let _ = std::fs::create_dir_all(&dir);
     dir.join(name)
 }
-/// Unit cube: 8 points, 6 quads, 24 corners (outward, counter-clockwise).
+/// Unit cube: 8 points, 6 quads, 24 corners (outward, Houdini winding: clockwise seen from outside).
 pub(crate) fn cube() -> Detail {
     let mut d = Detail::default();
     let r = d.add_points(8);
@@ -16,7 +16,7 @@ pub(crate) fn cube() -> Detail {
         .collect();
     *d.p_mut() = pts;
     assert_eq!(r, 0..8);
-    for q in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
+    for q in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
         d.add_poly(&q, true);
     }
     d

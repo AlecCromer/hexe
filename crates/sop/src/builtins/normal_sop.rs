@@ -17,6 +17,7 @@
 //! Output = the input with `N` (V3, type Normal) of the chosen class replaced/added; everything else untouched.
 //! Hostile: non-finite `cusp_angle` / menu out of range -> `BadParam`; unknown group, or vertex-mode per-point work
 //! above `MAX_WORK` pair tests -> `Failed`.
+use super::meshutil::newell_corners;
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, PrimKind, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
@@ -60,9 +61,6 @@ fn failed(m: &str) -> CookError {
 }
 fn sub(a: V3, b: V3) -> V3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-fn cross(a: V3, b: V3) -> V3 {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 fn dot(a: V3, b: V3) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -120,13 +118,8 @@ fn face_of<'a>(src: &'a Detail, prim: &hexe_geo::Prim) -> Option<Face<'a>> {
     }
     let mut f = Face { pts, normal: [0.0; 3], area: 0.0 };
     let p = src.p();
-    let o = f.pos(p, 0)?;
-    let mut nw = [0.0; 3];
-    for k in 0..pts.len() {
-        let (a, b) = (f.pos(p, k)?, f.pos(p, (k + 1) % pts.len())?);
-        let t = cross(sub(a, o), sub(b, o));
-        nw = [nw[0] + t[0], nw[1] + t[1], nw[2] + t[2]];
-    }
+    let corners: Vec<V3> = (0..pts.len()).map(|k| f.pos(p, k)).collect::<Option<_>>()?;
+    let nw = newell_corners(&corners);
     let len = dot(nw, nw).sqrt();
     if !len.is_finite() || len <= MIN_NEWELL {
         return None;
@@ -312,13 +305,13 @@ mod tests {
             ParamValue::Menu(w),
         )
     }
-    /// Unit box (corners +-0.5, 8 shared points), 6 outward-wound quads, closed form.
+    /// Unit box (corners +-0.5, 8 shared points), 6 quads in Houdini winding (clockwise from outside), closed form.
     fn cube() -> Detail {
         let mut d = Detail::default();
         d.add_points(8);
         let c = |b: u32, i: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
         *d.p_mut() = (0..8).map(|i| [c(2, i), c(1, i), c(0, i)]).collect();
-        for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+        for f in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
             d.add_poly(&f, true);
         }
         d
@@ -332,7 +325,7 @@ mod tests {
     fn near(a: [f32; 3], b: [f32; 3]) -> bool {
         (0..3).all(|j| (a[j] - b[j]).abs() < 1e-6)
     }
-    /// Independent unit normal of a prim: Newell via the textbook (a-b)x(a+b) form.
+    /// Independent unit normal of a prim: textbook (a-b)x(a+b) Newell form, NEGATED = Houdini's left-hand rule.
     fn newell(d: &Detail, i: usize) -> [f32; 3] {
         let pr = &d.prims[i];
         let q: Vec<[f64; 3]> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
@@ -346,8 +339,8 @@ mod tests {
             n[1] += (a[2] - b[2]) * (a[0] + b[0]);
             n[2] += (a[0] - b[0]) * (a[1] + b[1]);
         }
-        let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-        [(n[0] / l) as f32, (n[1] / l) as f32, (n[2] / l) as f32]
+        let l = -(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+ [(n[0] / l) as f32, (n[1] / l) as f32, (n[2] / l) as f32]
     }
     const AXES: [[f32; 3]; 6] =
         [[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0, 1.0]];
@@ -439,13 +432,13 @@ mod tests {
         let mut q = Detail::default();
         q.add_points(4);
         *q.p_mut() = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
-        q.add_poly(&[0, 1, 2, 3], true);
+        q.add_poly(&[0, 3, 2, 1], true); // clockwise from +Z = Houdini normal +Z
         let out = cook(q, params(TYPE_DETAIL, 60.0, W_AREA)).expect("cooks");
         assert_eq!(v3(&out, AttrClass::Detail), [[0.0, 0.0, 1.0]]);
     }
     #[test]
     fn angle_weighting_differs_from_area_on_unequal_faces() {
-        // fan around point 0: big quad (+Z), tiny triangle (-X by right-hand rule)
+        // fan around point 0: big quad (+Z), tiny triangle (-X, Houdini rule)
         let mut d = Detail::default();
         d.add_points(6);
         *d.p_mut() = vec![
@@ -456,8 +449,8 @@ mod tests {
             [0.0, 0.0, 1.0],
             [0.0, 1.0, 0.0],
         ];
-        d.add_poly(&[0, 1, 2, 3], true); // +Z, area 100, corner angle 90
-        d.add_poly(&[0, 4, 5], true); // -X, area .5, corner angle 90
+        d.add_poly(&[0, 3, 2, 1], true); // +Z, area 100, corner angle 90
+ d.add_poly(&[0, 5, 4], true); // -X, area .5, corner angle 90
         let a = v3(&cook(d.clone(), params(TYPE_POINT, 60.0, W_AREA)).expect("cooks"), AttrClass::Point)[0];
         let g = v3(&cook(d.clone(), params(TYPE_POINT, 60.0, W_ANGLE)).expect("cooks"), AttrClass::Point)[0];
         let u = v3(&cook(d, params(TYPE_POINT, 60.0, W_UNIFORM)).expect("cooks"), AttrClass::Point)[0];

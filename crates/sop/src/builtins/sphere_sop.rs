@@ -5,8 +5,8 @@
 //! - poly, `freq`=f: 10f²+2 pts, 20f² tris. Icosahedron with poles on the pole axis; every face split on a barycentric
 //!   lattice, shared corner/edge points deduplicated, points projected onto the unit sphere.
 //! - polymesh, `rows`=R `cols`=C: the poles FIRST (shared: top 0, bottom 1; `upole`: 2·C) then ring points (R-2)·C; ring angle runs +X toward -Z
-//!   (verified vs real Houdini 20.5, fixtures/sop-sphere/houdini.geo). Houdini lists cells clockwise; hexe emits the same first corner
-//!   reversed (counter-clockwise, outward). Prim order = Houdini: top fan, ring rows, bottom fan. Prims (R-1)·C =
+//!   (verified vs real Houdini 20.5, fixtures/sop-sphere/houdini.geo). Houdini lists cells clockwise; hexe emits them verbatim (H32:
+//!   Houdini winding is global). Prim order = Houdini: top fan, ring rows, bottom fan. Prims (R-1)·C =
 //!   (R-3)·C quads + 2·C pole faces (tris when `triangularpoles`, else quads that touch the pole). `upole` on: R·C pts.
 //! - P = R(rad·scale ∘ O(unit)) + t. O = pole-axis permutation (y identity, x: (y,z,x), z: (z,x,y)), R = Rx then Ry then Rz.
 use crate::SopNode;
@@ -112,7 +112,7 @@ fn ico_vertices() -> Vec<[f64; 3]> {
     v.push([0.0, -1.0, 0.0]);
     v
 }
-/// 20 outward-CCW faces (vertex indices into `ico_vertices`): per k top, down, up, bottom.
+/// 20 faces, counter-clockwise from outside (construction order; `poly` emits them reversed = Houdini winding) (vertex indices into `ico_vertices`): per k top, down, up, bottom.
 fn ico_faces() -> Vec<[usize; 3]> {
     let mut f = Vec::with_capacity(20);
     for k in 0..5usize {
@@ -181,7 +181,7 @@ fn poly(freq: usize, xf: &Xf, t: [f32; 3]) -> Detail {
         *dst = xf.p(*u, t);
     }
     for tri in &tris {
-        d.add_poly(tri, true);
+        d.add_poly(&[tri[0], tri[2], tri[1]], true); // Houdini winding: clockwise from outside
     }
     d
 }
@@ -226,21 +226,21 @@ fn polymesh(rows: usize, cols: usize, upole: bool, tripoles: bool, xf: &Xf, t: [
     }
     for j in 0..cols {
         if tripoles {
-            d.add_poly(&[top(j), ring(1, j), ring(1, j + 1)], true);
+            d.add_poly(&[top(j), ring(1, j + 1), ring(1, j)], true);
         } else {
-            d.add_poly(&[top(j), ring(1, j), ring(1, j + 1), top(j + 1)], true);
+            d.add_poly(&[top(j), top(j + 1), ring(1, j + 1), ring(1, j)], true);
         }
     }
     for i in 1..rings {
         for j in 0..cols {
-            d.add_poly(&[ring(i, j), ring(i + 1, j), ring(i + 1, j + 1), ring(i, j + 1)], true);
+            d.add_poly(&[ring(i, j), ring(i, j + 1), ring(i + 1, j + 1), ring(i + 1, j)], true);
         }
     }
     for j in 0..cols {
         if tripoles {
-            d.add_poly(&[ring(rings, j), bot(j), ring(rings, j + 1)], true);
+            d.add_poly(&[ring(rings, j), ring(rings, j + 1), bot(j)], true);
         } else {
-            d.add_poly(&[ring(rings, j), bot(j), bot(j + 1), ring(rings, j + 1)], true);
+            d.add_poly(&[ring(rings, j), ring(rings, j + 1), bot(j + 1), bot(j)], true);
         }
     }
     Ok(d)
@@ -352,14 +352,14 @@ mod tests {
             let f = face_pts(d, pr);
             let pos: Vec<[f32; 3]> = f.iter().map(|&i| p[i as usize]).collect();
             let c = pos.iter().fold([0.0; 3], |a, q| [a[0] + q[0], a[1] + q[1], a[2] + q[2]]);
-            // Newell normal
+            // right-handed Newell sum about the origin: points INWARD for Houdini's clockwise-from-outside faces
             let mut n = [0.0f32; 3];
             for i in 0..pos.len() {
                 let (a, b) = (pos[i], pos[(i + 1) % pos.len()]);
                 let x = cross(a, b);
                 n = [n[0] + x[0], n[1] + x[1], n[2] + x[2]];
             }
-            assert!(dot(n, c) > 0.0, "face not outward: {f:?}");
+            assert!(dot(n, c) < 0.0, "face not outward: {f:?}");
             for i in 0..f.len() {
                 let (a, b) = (f[i], f[(i + 1) % f.len()]);
                 if a != b {
@@ -612,7 +612,8 @@ mod tests {
             let (mab, mac) = (mid(&mut u, a, b), mid(&mut u, a, c));
             let mbc = mid(&mut u, b, c);
             let (a, b, c) = (a as u32, b as u32, c as u32);
-            polys.extend([vec![a, mab, mac], vec![mab, mbc, mac], vec![mab, b, mbc], vec![mac, mbc, c]]);
+            // the faces are counter-clockwise (construction); Houdini winding = each reversed after its first corner
+ polys.extend([vec![a, mac, mab], vec![mab, mac, mbc], vec![mab, mbc, b], vec![mac, c, mbc]]);
         }
         let (rad, t) = ([1.0, 2.0, 3.0], [0.5, 0.0, -1.0]);
         let pts: Vec<[f32; 3]> = u
@@ -637,15 +638,15 @@ mod tests {
         let at = |row: usize, c: usize| (2 + (row - 1) * cols + c % cols) as u32;
         let mut polys = Vec::new();
         for c in 0..cols {
-            polys.push(vec![top, at(1, c), at(1, c + 1)]);
+            polys.push(vec![top, at(1, c + 1), at(1, c)]);
         }
         for row in 1..rows - 2 {
             for c in 0..cols {
-                polys.push(vec![at(row, c), at(row + 1, c), at(row + 1, c + 1), at(row, c + 1)]);
+                polys.push(vec![at(row, c), at(row, c + 1), at(row + 1, c + 1), at(row + 1, c)]);
             }
         }
         for c in 0..cols {
-            polys.push(vec![at(rows - 2, c), bot, at(rows - 2, c + 1)]);
+            polys.push(vec![at(rows - 2, c), at(rows - 2, c + 1), bot]);
         }
         build(&pts, &polys)
     }

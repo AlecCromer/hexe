@@ -6,8 +6,8 @@
 //!   high), per layer the ring `(-x,-z) → (+x,-z) → (+x,+z) → (-x,+z)` (default box = Houdini's bottom ring then top ring);
 //! * `consolidatepts` off: every face owns its own `nu × nv` points (default box = 24 points; order UNVERIFIED);
 //! * prims = quads, faces in Houdini's order -z,+x,+z,-x,-y,+y, each cell starts at Houdini's first corner (prim 0 = ids
-//!   `[1,5,4,0]` in Houdini, `[1,0,4,5]` here); the cycle runs counter-clockwise seen from outside (outward normals,
-//!   right-handed) where Houdini runs clockwise: a global handedness difference, see docs/HOUDINI-ORACLE.md;
+//!   `[1,5,4,0]`, verbatim); the cycle runs clockwise seen from outside = Houdini's winding (outward normals under
+//!   `meshutil::prim_normal`, the left-hand rule);
 //! * attributes: `P` only.
 //!
 //! `divrate` (mesh types only in Houdini) is validated (hard min 1, allocation cap) but has no effect for `poly`.
@@ -188,10 +188,9 @@ const FACES: [Face; 6] = [
     Face { f: 1, high: false, u: 0, v: 2, h: [[1, 1], [1, 0], [0, 0], [0, 1]] },
     Face { f: 1, high: true, u: 0, v: 2, h: [[1, 0], [1, 1], [0, 1], [0, 0]] },
 ];
-/// Houdini lists each cell CLOCKWISE seen from outside (its prim normal is the left-hand rule); hexe is counter-clockwise
-/// everywhere (Newell, right-handed). Same first corner, reversed direction: `[h0, h3, h2, h1]`. A global handedness
-/// switch is the open item in docs/HOUDINI-ORACLE.md.
-const CCW: [usize; 4] = [0, 3, 2, 1];
+/// Houdini lists each cell CLOCKWISE seen from outside (its prim normal is the left-hand rule, `meshutil::prim_normal`);
+/// hexe adopts that globally (H32), so the cell is emitted verbatim: `[h0, h1, h2, h3]`.
+const CELL: [usize; 4] = [0, 1, 2, 3];
 
 fn cook_box(p: &ParamSet) -> Result<Detail, CookError> {
     match p.menu("type") {
@@ -252,7 +251,7 @@ fn cook_box(p: &ParamSet) -> Result<Detail, CookError> {
         for iu in 0..nu - 1 {
             for iv in 0..nv - 1 {
                 let mut ids = [0u32; 4];
-                for (slot, &w) in ids.iter_mut().zip(&CCW) {
+                for (slot, &w) in ids.iter_mut().zip(&CELL) {
                     let [du, dv] = fc.h.get(w).copied().unwrap_or([0, 0]);
                     let (cu, cv) = (iu + du, iv + dv);
                     *slot = if consolidate {
@@ -374,8 +373,8 @@ mod tests {
                         co[v] = iv + dv;
                         ids[&co]
                     };
-                    // hexe: same first corner as Houdini, counter-clockwise
-                    d.add_poly(&[corner(cw[0]), corner(cw[3]), corner(cw[2]), corner(cw[1])], true);
+                    // Houdini's clockwise cell, verbatim
+                    d.add_poly(&[corner(cw[0]), corner(cw[1]), corner(cw[2]), corner(cw[3])], true);
                 }
             }
         }
@@ -456,7 +455,8 @@ mod tests {
                     let n =
                         [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
                     let mid = [0, 1, 2].map(|a| (v[0][a] + v[1][a] + v[2][a] + v[3][a]) / 4.0 - c[a]);
-                    assert!(n[0] * mid[0] + n[1] * mid[1] + n[2] * mid[2] > 0.0, "inward quad {q:?}");
+                    // right-handed e1 x e2 points INWARD for Houdini's clockwise-from-outside cells
+                    assert!(n[0] * mid[0] + n[1] * mid[1] + n[2] * mid[2] < 0.0, "inward quad {q:?}");
                     for w in 0..4 {
                         *edges.entry((q[w], q[(w + 1) % 4])).or_default() += 1;
                     }
@@ -584,7 +584,7 @@ mod tests {
     }
 
     /// Real Houdini 20.5 default box (`fixtures/sop-box/houdini.geo`): P in index order, prim order and first corner equal;
-    /// each cell is Houdini's clockwise cycle reversed (hexe is counter-clockwise).
+    /// each cell is Houdini's clockwise cycle verbatim.
     #[test]
     fn default_box_matches_houdini_fixture_order() {
         let h = read_geo(HOUDINI_BOX).expect("houdini.geo parses");
@@ -594,7 +594,7 @@ mod tests {
         assert_eq!(hq.first(), Some(&vec![1, 5, 4, 0]));
         assert_eq!(hq.len(), dq.len());
         for (a, b) in hq.iter().zip(&dq) {
-            assert_eq!(b, &vec![a[0], a[3], a[2], a[1]]);
+            assert_eq!(b, a);
         }
     }
     #[test]

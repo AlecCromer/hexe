@@ -310,9 +310,9 @@ mod tests {
             let want = [exact * sgn(2), exact * sgn(1), exact * sgn(0)];
             assert!((0..3).all(|j| near(c[j], want[j])), "corner {i}: {c:?} vs {want:?}");
         }
-        // edge point 14 = edge (0,1) = (-h,-h,-h)-(-h,-h,h), faces x=-h (centre (-h,0,0)) and y=-h (centre (0,-h,0)):
-        // (A + B + F1 + F2) / 4 = ((-1,-1,0) + (-1/2,0,0) + (0,-1/2,0)) / 4 = (-3/8, -3/8, 0)
-        assert_eq!(out.p()[14], [-0.375, -0.375, 0.0]);
+        // edge point 14 = edge (0,2) (first edge of Houdini-wound face [0,2,3,1]) = (-h,-h,-h)-(-h,h,-h), faces x=-h (centre
+ // (-h,0,0)) and z=-h (centre (0,0,-h)): (A + B + F1 + F2) / 4 = ((-1,0,-1) + (-1/2,0,0) + (0,0,-1/2)) / 4 = (-3/8, 0, -3/8)
+ assert_eq!(out.p()[14], [-0.375, 0.0, -0.375]);
         assert_eq!(out.p()[8], [-0.5, 0.0, 0.0]);
     }
     #[test]
@@ -432,8 +432,8 @@ mod tests {
         let Some(AttrData::F32(w)) = out.attr(AttrClass::Point, "w").map(|a| &a.data) else { panic!("w lost") };
         assert_eq!(w.len(), 26);
         assert_eq!(w[..8], [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
-        assert_eq!(w[8], 1.5); // face [0,1,3,2] mean
-        assert_eq!(w[14], 0.5); // edge (0,1) midpoint of the weights... first edge of face 0
+        assert_eq!(w[8], 1.5); // face [0,2,3,1] mean
+        assert_eq!(w[14], 1.0); // edge (0,2) midpoint of the weights... first edge of face 0
         let Some(AttrData::I32(id)) = out.attr(AttrClass::Prim, "id").map(|a| &a.data) else { panic!("id lost") };
         assert_eq!(id[..4], [0, 0, 0, 0]);
         assert_eq!(id.len(), 24);

@@ -77,16 +77,34 @@ pub(super) fn closed_poly_pts(d: &Detail, prim: &Prim) -> Option<Vec<usize>> {
         .collect::<Option<_>>()?;
     (pts.len() >= 3).then_some(pts)
 }
-/// Unit Newell normal of the polygon `pts` (right-handed in corner order); `None` when degenerate / non-finite.
-pub(super) fn unit_newell(pos: &[V3], pts: &[usize]) -> Option<V3> {
-    let o = *pos.get(*pts.first()?)?;
+/// THE polygon-normal rule of hexe (H32): Houdini's. Houdini lists a front face CLOCKWISE seen from its front, so its prim
+/// normal is the LEFT-hand rule of the corner order = the negated textbook (right-handed) Newell sum. Unnormalised
+/// (length = 2 x area), computed relative to the first corner for precision. Every SOP that needs a face normal,
+/// face orientation or signed volume goes through this module; no local cross-product copies.
+pub(super) fn newell_corners(c: &[V3]) -> V3 {
+    let Some(&o) = c.first() else { return [0.0; 3] };
     let mut nw = [0.0; 3];
-    for (i, &a) in pts.iter().enumerate() {
-        let b = *pts.get((i + 1) % pts.len())?;
-        nw = add(nw, cross(sub(*pos.get(a)?, o), sub(*pos.get(b)?, o)));
+    for (i, a) in c.iter().enumerate() {
+        let b = c.get((i + 1) % c.len()).copied().unwrap_or(o);
+        nw = sub(nw, cross(sub(*a, o), sub(b, o)));
     }
+    nw
+}
+/// Unit Houdini normal of corner positions; `None` when degenerate / non-finite.
+pub(super) fn unit_corners(c: &[V3]) -> Option<V3> {
+    let nw = newell_corners(c);
     let l = dot(nw, nw).sqrt();
     (l.is_finite() && l > MIN_NEWELL).then(|| scale(nw, 1.0 / l))
+}
+/// Unit Houdini normal (`unit_corners`) of the polygon with point ids `pts`; `None` when degenerate / bad id.
+pub(super) fn prim_normal(pos: &[V3], pts: &[usize]) -> Option<V3> {
+    let c: Vec<V3> = pts.iter().map(|&i| pos.get(i).copied()).collect::<Option<_>>()?;
+    unit_corners(&c)
+}
+/// Signed volume contribution of triangle `(a, b, c)` seen from the origin: POSITIVE when the triangle faces away from
+/// the origin in Houdini's winding (outward-facing triangles of a closed mesh sum to its positive volume).
+pub(super) fn tri_volume(a: V3, b: V3, c: V3) -> f64 {
+    -dot(a, cross(b, c)) / 6.0
 }
 /// Uniform-averaged point normals: per point, normalise the plain sum of the unit Newell normals of the closed polys
 /// that use it (every corner counts once). Points without a usable face get `[0; 3]`.
@@ -94,7 +112,7 @@ pub(super) fn point_normals(d: &Detail, pos: &[V3]) -> Vec<V3> {
     let mut acc = vec![[0.0f64; 3]; pos.len()];
     for pr in &d.prims {
         let Some(pts) = closed_poly_pts(d, pr) else { continue };
-        let Some(n) = unit_newell(pos, &pts) else { continue };
+        let Some(n) = prim_normal(pos, &pts) else { continue };
         for &p in &pts {
             if let Some(a) = acc.get_mut(p) {
                 *a = add(*a, n);
@@ -258,25 +276,25 @@ pub(super) mod testkit {
     pub fn cook(n: &SopNode, d: Detail, p: &ParamSet) -> Result<Arc<Detail>, CookError> {
         cook_arc(n, &Arc::new(d), p)
     }
-    /// Unit box (corners +-0.5, 8 shared points), 6 outward-wound quads.
+    /// Unit box (corners +-0.5, 8 shared points), 6 outward quads in Houdini winding (clockwise seen from outside).
     pub fn cube() -> Detail {
         let mut d = Detail::default();
         d.add_points(8);
         let c = |b: u32, i: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
         *d.p_mut() = (0..8).map(|i| [c(2, i), c(1, i), c(0, i)]).collect();
-        for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
+        for f in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
             d.add_poly(&f, true);
         }
         d
     }
-    /// 3x3 POINTS (2x2 quads), z = 0, +Z normals, points row-major.
+    /// 3x3 POINTS (2x2 quads), z = 0, +Z (Houdini-rule) normals, points row-major.
     pub fn grid3() -> Detail {
         let mut d = Detail::default();
         d.add_points(9);
         *d.p_mut() = (0..9).map(|i| [(i % 3) as f32, (i / 3) as f32, 0.0]).collect();
         for (r, c) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
             let a = r * 3 + c;
-            d.add_poly(&[a, a + 1, a + 4, a + 3], true);
+            d.add_poly(&[a, a + 3, a + 4, a + 1], true);
         }
         d
     }

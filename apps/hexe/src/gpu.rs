@@ -43,7 +43,7 @@ pub struct Mesh {
     pub points: Vec<[f32; 3]>,
 }
 impl Mesh {
-    /// Fan-triangulate closed polys (flat Newell normal per face); edges from polys + polylines; every point.
+    /// Fan-triangulate closed polys (flat Houdini-rule normal per face); edges from polys + polylines; every point.
     pub fn build(d: &Detail, style: &Style) -> Mesh {
         let (mut tris, mut edges) = (Vec::new(), Vec::new());
         let p = d.p();
@@ -75,7 +75,8 @@ impl Mesh {
                     n[2] += (a[0] - b[0]) * (a[1] + b[1]);
                 }
                 let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-                let nrm = if l > 1e-20 { [n[0] / l, n[1] / l, n[2] / l] } else { [0.0, 1.0, 0.0] };
+                // Houdini's rule (H32): clockwise from the front = front-facing, i.e. the NEGATED right-handed Newell sum
+ let nrm = if l > 1e-20 { [-n[0] / l, -n[1] / l, -n[2] / l] } else { [0.0, 1.0, 0.0] };
                 for k in 1..w.len() - 1 {
                     for q in [w[0], w[k], w[k + 1]] {
                         tris.push(Vertex { pos: q, nrm });

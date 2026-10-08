@@ -337,14 +337,14 @@ mod tests {
     fn fuse(d: Detail, dist: f32) -> Arc<Detail> {
         cook(Arc::new(d), dist, SNAP_AVERAGE, "").expect("cooks")
     }
-    /// Unit box as 6 separate quads (24 points), outward winding.
+    /// Unit box as 6 separate quads (24 points), outward, Houdini winding.
     fn soup_box() -> Detail {
         let mut d = Detail::default();
         let c = |b: u32, i: u32| if (i >> b) & 1 == 1 { 0.5f32 } else { -0.5 };
         let corner = |i: u32| [c(2, i), c(1, i), c(0, i)];
         let mut pos = Vec::new();
-        for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]] {
-            pos.extend(f.iter().map(|&i| corner(i)));
+        for f in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
+ pos.extend(f.iter().map(|&i| corner(i)));
         }
         d.add_points(24);
         *d.p_mut() = pos;
@@ -606,9 +606,16 @@ mod tests {
             .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
-        // box 6 quads -> polyextrude 0.5: 48 pts / 30 prims; fuse welds shared corners
+                // box -> polyextrude 0.5 (connected components = Houdini default: a closed box has no boundary, 8 pts / 6 prims,
+        // identical to Houdini) -> fuse 0.001: nothing left to weld
+        assert_eq!((out.point_count, out.prim_count(), out.vertex_count()), (8, 6, 24));
+        // splittype 1 (individual faces) = the old soup: 48 pts / 30 prims; fuse welds shared corners
+        let soup = ex.replace("\"distance\": 0.5", "\"distance\": 0.5, \"splittype\": 1");
+        let (mut g, id) = load_scene(&soup).expect("soup loads");
+        let out = g.cook(id, 0.0).expect("soup cooks");
         assert_eq!(out.prim_count(), 30);
         assert_eq!(out.point_count, 8 + 24, "24 coincident base corners weld to 8; 24 lifted corners stay distinct");
+
         assert_eq!(crate::registry().create("fuse").map(|n| n.type_name()), Some("fuse"));
     }
 }

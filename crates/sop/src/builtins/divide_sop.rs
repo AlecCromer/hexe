@@ -15,7 +15,7 @@
 //! NOT modelled (DEFERRED): `bricker` (brick/rect decomposition), `removeshared`, `avoidsmallangles`, `usemaxsides`
 //! variants, polys with holes, non-planar fitting.
 use super::meshutil::{
-    MAX_ELEMS, Remap, V3, bad, closed_poly_pts, cross, dot, failed, int, positions, rebuild, sub, toggle,
+    MAX_ELEMS, Remap, V3, bad, closed_poly_pts, dot, failed, int, newell_corners, positions, rebuild, toggle,
 };
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
@@ -55,19 +55,15 @@ fn chunk_fan(n: usize, k: usize) -> Vec<Vec<usize>> {
 
 /// Dominant-axis projection of the corner positions plus the sign that makes the poly counter-clockwise.
 fn project(pts: &[V3]) -> Option<(Vec<[f64; 2]>, f64)> {
-    let o = *pts.first()?;
-    let mut nw = [0.0; 3];
-    for w in pts.windows(2) {
-        let c = cross(sub(w[0], o), sub(w[1], o));
-        nw = [nw[0] + c[0], nw[1] + c[1], nw[2] + c[2]];
-    }
+    pts.first()?;
+    let nw = newell_corners(pts); // Houdini sign: the projected loop is counter-clockwise where this is negative
     if dot(nw, nw) < 1e-24 {
         return None;
     }
     let ax = (0..3).max_by(|&a, &b| nw[a].abs().total_cmp(&nw[b].abs()))?;
     let (u, v) = ((ax + 1) % 3, (ax + 2) % 3); // right-handed pair about `ax`
     let flat = pts.iter().map(|p| [p[u], p[v]]).collect();
-    Some((flat, if nw[ax] >= 0.0 { 1.0 } else { -1.0 }))
+    Some((flat, if nw[ax] >= 0.0 { -1.0 } else { 1.0 }))
 }
 fn turn(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> f64 {
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])

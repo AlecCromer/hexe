@@ -6,6 +6,7 @@
 //!   triangle, rejection against the max corner weight gives density ∝ interpolated weight. Negative weights clamp to 0.
 //! - PRNG: SplitMix64 seeded by `seed` (i32 param, sign-extended to u64). Same seed + input → byte-identical output.
 //! - output: points only. `P`, `sourceprim` (int, input prim index), `N` (prim attr `N` if present, else geometric normal).
+use super::meshutil::{cross, newell_corners};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, PrimKind, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
@@ -51,9 +52,6 @@ struct Tri {
 }
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 fn len(a: [f64; 3]) -> f64 {
     (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt()
@@ -111,7 +109,7 @@ fn triangles(d: &Detail, dens: &Density) -> Vec<Tri> {
     }
     out
 }
-/// Prim normal: prim attr `N` if present, else Newell normal of the polygon (zero if degenerate).
+/// Prim normal: prim attr `N` if present, else Houdini normal of the polygon (`meshutil::newell_corners`; zero if degenerate).
 fn prim_normal(d: &Detail, prim: usize) -> [f32; 3] {
     if let Some(AttrData::V3(n)) = d.attr(AttrClass::Prim, "N").map(|a| &a.data)
         && let Some(v) = n.get(prim)
@@ -121,15 +119,8 @@ fn prim_normal(d: &Detail, prim: usize) -> [f32; 3] {
     let Some(pr) = d.prims.get(prim) else { return [0.0; 3] };
     let vs = d.vertex_point.get(pr.verts.start as usize..pr.verts.end as usize).unwrap_or(&[]);
     let pos = d.p();
-    let mut n = [0.0f64; 3];
-    for (i, &a) in vs.iter().enumerate() {
-        let b = vs.get((i + 1) % vs.len()).copied().unwrap_or(a);
-        let (Some(&pa), Some(&pb)) = (pos.get(a as usize), pos.get(b as usize)) else { continue };
-        let (pa, pb) = (widen(pa), widen(pb));
-        n[0] += (pa[1] - pb[1]) * (pa[2] + pb[2]);
-        n[1] += (pa[2] - pb[2]) * (pa[0] + pb[0]);
-        n[2] += (pa[0] - pb[0]) * (pa[1] + pb[1]);
-    }
+    let corners: Vec<[f64; 3]> = vs.iter().filter_map(|&a| pos.get(a as usize).copied().map(widen)).collect();
+    let n = newell_corners(&corners);
     let l = len(n);
     if l > 0.0 && l.is_finite() { [(n[0] / l) as f32, (n[1] / l) as f32, (n[2] / l) as f32] } else { [0.0; 3] }
 }

@@ -20,6 +20,7 @@
 //!   Other attributes / groups of the inputs are NOT carried.
 //! * Empty / no-closed-poly operand: union -> the other input (shared `Arc`), subtract -> A, intersect -> empty.
 //! * Hostile: `operation` > 2 -> `BadParam`; > 16384 polys per side or > 2^20 fragments -> `Failed`.
+use super::meshutil::{cross, newell_corners};
 use crate::SopNode;
 use hexe_geo::{AttrClass, Detail, Group, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
@@ -66,9 +67,6 @@ fn sub(a: V3, b: V3) -> V3 {
 fn dot(a: V3, b: V3) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
-fn cross(a: V3, b: V3) -> V3 {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
-}
 fn len(a: V3) -> f64 {
     dot(a, a).sqrt()
 }
@@ -76,7 +74,7 @@ fn lerp(a: V3, b: V3, t: f64) -> V3 {
     [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
-/// Convex planar polygon with its supporting plane `n . x = w` (n unit, outward = right-handed corner order).
+/// Convex planar polygon with its supporting plane `n . x = w` (n unit, outward = Houdini corner order (clockwise seen from outside)).
 #[derive(Clone)]
 struct Poly {
     v: Vec<V3>,
@@ -85,22 +83,12 @@ struct Poly {
     src: u32,
 }
 
-fn newell(v: &[V3]) -> V3 {
-    let mut s = [0.0; 3];
-    let o = v.first().copied().unwrap_or([0.0; 3]);
-    for i in 0..v.len() {
-        let a = sub(v[i], o);
-        let b = sub(v[(i + 1) % v.len()], o);
-        let c = cross(a, b);
-        s = [s[0] + c[0], s[1] + c[1], s[2] + c[2]];
-    }
-    s
-}
 fn mk_poly(v: Vec<V3>, n: V3, w: f64, src: u32) -> Option<Poly> {
-    (v.len() >= 3 && len(newell(&v)) > 1e-12).then_some(Poly { v, n, w, src })
+    (v.len() >= 3 && len(newell_corners(&v)) > 1e-12).then_some(Poly { v, n, w, src })
 }
 
-/// Ear-clip a (possibly concave) polygon with unit normal `n` into triangles (corner order kept).
+/// Ear-clip a (possibly concave) polygon into triangles (corner order kept). `n` = the RIGHT-handed (counter-clockwise)
+/// unit normal, i.e. the negated Houdini normal: the 2D projection below needs the polygon counter-clockwise.
 fn ear_clip(v: &[V3], n: V3) -> Vec<Vec<V3>> {
     let k = if n[0].abs() >= n[1].abs() && n[0].abs() >= n[2].abs() {
         0
@@ -152,7 +140,7 @@ fn polys_of(d: &Detail) -> Result<Vec<Poly>, CookError> {
     for (qi, pr) in d.prims.iter().enumerate() {
         let Some(ids) = super::meshutil::closed_poly_pts(d, pr) else { continue };
         let v: Vec<V3> = ids.iter().filter_map(|&i| pos.get(i).copied()).collect();
-        let nw = newell(&v);
+        let nw = newell_corners(&v);
         let l = len(nw);
         if l.is_nan() || l <= 1e-12 {
             continue;
@@ -162,12 +150,12 @@ fn polys_of(d: &Detail) -> Result<Vec<Poly>, CookError> {
         let src = u32::try_from(qi).map_err(|_| failed("prim id overflow"))?;
         let convex = (0..v.len()).all(|i| {
             let (a, b, c) = (v[(i + v.len() - 1) % v.len()], v[i], v[(i + 1) % v.len()]);
-            dot(cross(sub(b, a), sub(c, b)), n) >= -1e-9
+            dot(cross(sub(b, a), sub(c, b)), n) <= 1e-9
         });
         if convex {
             out.extend(mk_poly(v, n, w, src));
         } else if v.len() <= 512 {
-            out.extend(ear_clip(&v, n).into_iter().filter_map(|t| mk_poly(t, n, w, src)));
+            out.extend(ear_clip(&v, [-n[0], -n[1], -n[2]]).into_iter().filter_map(|t| mk_poly(t, n, w, src)));
         } else {
             return Err(failed("concave poly with more than 512 corners"));
         }
@@ -285,7 +273,7 @@ fn clip_to_face(r: Poly, q: &Poly) -> (Option<Poly>, Vec<Poly>) {
     for i in 0..m {
         let Some(c) = cur.take() else { break };
         let (a, b) = (q.v[i], q.v[(i + 1) % m]);
-        let e = cross(q.n, sub(b, a));
+        let e = cross(sub(b, a), q.n);
         let l = len(e);
         if l < 1e-12 {
             cur = Some(c);
@@ -649,7 +637,7 @@ mod tests {
     use hexe_graph::ParamSet;
 
     /// Cube corner `i` (bit2 -> x, bit1 -> y, bit0 -> z), each coordinate centre +- size/2.
-    const FACES: [[u32; 4]; 6] = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+    const FACES: [[u32; 4]; 6] = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]];
     fn cube(c: [f32; 3], s: [f32; 3]) -> Detail {
         let mut d = Detail::default();
         d.add_points(8);
@@ -674,11 +662,11 @@ mod tests {
             d.p_mut()[i] = [q[0], q[1], 0.0];
             d.p_mut()[6 + i] = [q[0], q[1], 1.0];
         }
-        d.add_poly(&[5, 4, 3, 2, 1, 0], true);
-        d.add_poly(&[6, 7, 8, 9, 10, 11], true);
+        d.add_poly(&[0, 1, 2, 3, 4, 5], true);
+ d.add_poly(&[11, 10, 9, 8, 7, 6], true);
         for i in 0..6u32 {
             let j = (i + 1) % 6;
-            d.add_poly(&[i, j, 6 + j, 6 + i], true);
+            d.add_poly(&[i, 6 + i, 6 + j, j], true);
         }
         d
     }
@@ -703,7 +691,7 @@ mod tests {
             let ids = &d.vertex_point[pr.verts.start as usize..pr.verts.end as usize];
             for k in 1..ids.len() - 1 {
                 let (a, b, c) = (p(ids[0]), p(ids[k]), p(ids[k + 1]));
-                v += dot(a, cross(b, c)) / 6.0;
+                v += super::super::meshutil::tri_volume(a, b, c);
             }
         }
         v

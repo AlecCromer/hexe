@@ -131,7 +131,7 @@ mod tests {
         [x + shift, if (i >> 2) & 1 == 1 { 0.5 } else { -0.5 }, z]
     }
     /// Six quad faces over corner indices 0..8.
-    const FACES: [[u32; 4]; 6] = [[1, 0, 4, 5], [2, 1, 5, 6], [3, 2, 6, 7], [0, 3, 7, 4], [2, 3, 0, 1], [5, 4, 7, 6]];
+    const FACES: [[u32; 4]; 6] = [[1, 5, 4, 0], [2, 6, 5, 1], [3, 7, 6, 2], [0, 4, 7, 3], [2, 1, 0, 3], [5, 6, 7, 4]];
     /// Hand-built box: 8 points, 6 closed quads, no extra attrs.
     fn hand_box(shift: f32) -> Detail {
         let mut d = Detail::default();
@@ -158,7 +158,8 @@ mod tests {
             );
             let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
             let c: Vec<f32> = (0..3).map(|k| p.iter().map(|q| q[k]).sum::<f32>() / 4.0).collect();
-            assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] > 0.0, "face {f:?} winds inward");
+            // right-handed cross points INWARD for Houdini's clockwise-from-outside faces
+ assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] < 0.0, "face {f:?} winds inward");
         }
     }
     fn arc(d: Detail) -> Arc<Detail> {
@@ -448,7 +449,7 @@ mod tests {
 
     /// Expected for box -> xform(t=1,2,3) -> merge(sphere poly freq 1): 8 box-order corners + (1,2,3), then the 12 unit
     /// icosahedron points in the sphere lane's documented order (pole +Y, upper ring of 5 at y=+1/sqrt5 starting at
-    /// angle 0, lower ring of 5 at y=-1/sqrt5 offset 36 deg, pole -Y), faces outward-CCW. Closed form only; the sphere
+    /// angle 0, lower ring of 5 at y=-1/sqrt5 offset 36 deg, pole -Y), faces outward, Houdini (clockwise) winding. Closed form only; the sphere
     /// lane's private helpers are deliberately NOT reused.
     fn expected_smoke() -> Detail {
         let mut pts: Vec<[f32; 3]> =
@@ -470,7 +471,8 @@ mod tests {
         }
         for k in 0..5u32 {
             let n = (k + 1) % 5;
-            for tri in [[0, 1 + n, 1 + k], [1 + k, 1 + n, 6 + k], [6 + k, 6 + (k + 4) % 5, 1 + k], [6 + k, 6 + n, 11]] {
+            // counter-clockwise construction order, each emitted reversed after its first corner (Houdini winding)
+ for tri in [[0, 1 + k, 1 + n], [1 + k, 6 + k, 1 + n], [6 + k, 1 + k, 6 + (k + 4) % 5], [6 + k, 11, 6 + n]] {
                 d.add_poly(&tri.map(|i| i + 8), true);
             }
         }

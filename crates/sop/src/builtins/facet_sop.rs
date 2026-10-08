@@ -16,7 +16,7 @@
 //! No option on -> the input `Arc` is shared. Output above `MAX_ELEMS` points -> `Failed`.
 use super::meshutil::{
     MAX_ELEMS, Remap, V3, closed_poly_pts, dot, failed, float, point_normals, positions, rebuild, to_f32, toggle,
-    unit_newell,
+    prim_normal,
 };
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
@@ -47,7 +47,7 @@ fn vertex_normals(d: &Detail, pos: &[V3]) -> Vec<Option<V3>> {
     let mut out = vec![None; d.vertex_point.len()];
     for pr in &d.prims {
         let Some(pts) = closed_poly_pts(d, pr) else { continue };
-        let Some(n) = unit_newell(pos, &pts) else { continue };
+        let Some(n) = prim_normal(pos, &pts) else { continue };
         let (lo, hi) = (usize::try_from(pr.verts.start).unwrap_or(0), usize::try_from(pr.verts.end).unwrap_or(0));
         for v in out.get_mut(lo..hi).unwrap_or(&mut []) {
             *v = Some(n);

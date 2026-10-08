@@ -17,6 +17,7 @@
 //!   Missing existing group = empty. The group is always created (possibly empty).
 //!
 //! Defaults `grouptype=prim`, `dir=(0,1,0)`, `angle=45`, `bbox_size=(1,1,1)` are guesses (UNVERIFIED).
+use super::meshutil::newell_corners;
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, Group, Prim};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
@@ -288,7 +289,7 @@ pub(super) fn compact(src: &Detail, keep_pt: &[bool], keep_prim: &[bool], who: &
     })
 }
 
-/// Unit Newell normal of a prim; `None` for non-polygons / < 3 corners / zero or non-finite area / bad ids.
+/// Unit Houdini normal of a prim (`meshutil::newell_corners`); `None` for non-polygons / < 3 corners / zero or non-finite area / bad ids.
 fn prim_normal(d: &Detail, pr: &Prim) -> Option<V3> {
     if !matches!(pr.kind, hexe_geo::PrimKind::Poly { .. }) {
         return None;
@@ -304,13 +305,7 @@ fn prim_normal(d: &Detail, pr: &Prim) -> Option<V3> {
     if pos.len() < 3 || pos.iter().flatten().any(|c| !c.is_finite()) {
         return None;
     }
-    let o = *pos.first()?;
-    let mut nw = [0.0; 3];
-    for (i, a) in pos.iter().enumerate() {
-        let b = pos.get((i + 1) % pos.len())?;
-        let (a, b) = ([a[0] - o[0], a[1] - o[1], a[2] - o[2]], [b[0] - o[0], b[1] - o[1], b[2] - o[2]]);
-        nw = [nw[0] + a[1] * b[2] - a[2] * b[1], nw[1] + a[2] * b[0] - a[0] * b[2], nw[2] + a[0] * b[1] - a[1] * b[0]];
-    }
+    let nw = newell_corners(&pos);
     unit(nw)
 }
 fn unit(a: V3) -> Option<V3> {
