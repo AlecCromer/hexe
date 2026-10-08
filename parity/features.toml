@@ -1224,3 +1224,22 @@ evidence = [
   "crates/sop/src/builtins/polyfill_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "S2: fillmode single(0)|fan(1, centre = corner mean, tris)|quads(2, centre + quads, odd tail tri; 3-hole = tri, 4-hole = quad in single/quads) maxedges(0 = unlimited) filledgroup(\"filled\", prim group of new polys, empty = none). Holes = reversed directed boundary edges (no opposite edge, non-manifold ignored) chained into simple loops; winding consistent with neighbours (open box top -> signed volume 1 exactly; hex prism -> 1.5*sqrt3). Nothing to fill = input Arc shared. NOT modelled (DEFERRED): inner-ring holes of one prim, concave planar ear clipping (single = the loop as one n-gon), smooth fill, point-group restriction. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini polyfill menus differ), centre-point rule, quad pairing. Example: examples/polyfill.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-convert"
+title = "Convert SOP (polygon <-> polyline, sphere / tube -> polygons; fromtype filter)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["convert"]
+evidence = [
+  "crates/sop/src/builtins/convert_sop.rs::sphere_becomes_an_outward_closed_shell_at_its_centre_and_drops_the_centre_point",
+  "crates/sop/src/builtins/convert_sop.rs::tube_closed_open_and_cone",
+  "crates/sop/src/builtins/convert_sop.rs::poly_polyline_round_trip_is_exact",
+  "crates/sop/src/builtins/convert_sop.rs::fromtype_filters_and_unmatched_input_is_shared",
+  "crates/sop/src/builtins/convert_sop.rs::attributes_follow_prims_and_the_centre_point",
+  "crates/sop/src/builtins/convert_sop.rs::centre_point_shared_with_a_kept_prim_survives",
+  "crates/sop/src/builtins/convert_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/convert_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "S2: fromtype all|poly|polyline|sphere|tube, totype polygon|polyline, rows(8) cols(16). polygon->polyline: Polyline prim, closed poly repeats first corner; polyline->polygon: first==last (>=4) = closed poly else open (exact round trip pinned). Sphere (poles +-Y) / Tube (Y axis, r=1 at y=-.5, r=taper at +.5, closed = caps) tessellated through the prim's 3x3 xform + point offset, outward winding (sphere r=2 volume within 1%, cylinder exact to the 64-gon, cone 1/3), mirroring xform compensated, poles/apex shared (tris), centre point dropped unless shared, new points copy the centre point attrs, new polys the prim attrs. Nothing to convert = Arc shared. NOT modelled (DEFERRED): NURBS/Bezier/metaball/volume/packed sources, polysoup, polyedges, LOD parms. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini convert has fromtype/totype with many more targets), tube axis/taper convention (mirrors the viewport proxy), sphere tessellation layout. Example: examples/convert.json. Analytical oracle only."

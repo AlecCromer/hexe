@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "sphere1", "type": "sphere", "params": { "rad": [0.8, 0.8, 0.8] } },
+    { "name": "convert1", "type": "convert", "params": { "rows": 10, "cols": 20 } }
+  ],
+  "edges": [["sphere1", 0, "convert1", 0]],
+  "display": "convert1"
+}
