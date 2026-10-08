@@ -9,6 +9,7 @@
 //! * `convex` on (default): a poly that is convex (all Newell-projected turns the same way) is split as above; a concave one is
 //!   ear-clipped into triangles first (area-preserving; falls back to the fan for degenerate / self-touching input).
 //!   So `convex` on + `numsides` 3 always triangulates; pieces of a concave poly are triangles even when `numsides` > 3.
+//!
 //! Corners keep their winding. Each piece copies the prim attrs / group membership of its parent prim, and every piece
 //! vertex copies the vertex attrs of its source vertex. Nothing split = input `Arc` shared.
 //! NOT modelled (DEFERRED): `bricker` (brick/rect decomposition), `removeshared`, `avoidsmallangles`, `usemaxsides`

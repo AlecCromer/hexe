@@ -229,17 +229,17 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
     let mut keep_pt = vec![false; np];
     for e in &emits {
         for (r, _) in &e.corners {
-            if let PRef::S(i) = r {
-                if let Some(f) = keep_pt.get_mut(*i) {
-                    *f = true;
-                }
+            if let PRef::S(i) = r
+                && let Some(f) = keep_pt.get_mut(*i)
+            {
+                *f = true;
             }
         }
     }
-    for i in 0..np {
+    for (i, kp) in keep_pt.iter_mut().enumerate() {
         if !in_prim.get(i).copied().unwrap_or(true) && passes.iter().any(|&s| side.get(i).is_some_and(|&x| x * s >= 0))
         {
-            keep_pt[i] = true;
+            *kp = true;
         }
     }
     let kept: Vec<usize> = (0..np).filter(|&i| keep_pt.get(i).copied().unwrap_or(false)).collect();

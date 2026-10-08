@@ -12,6 +12,7 @@
 //!   Line of 5 points y = 0..4, `length` 4, 90 degrees: `P_i = (R (1 - cos(pi i / 8)), R sin(pi i / 8), 0)`, `R = 8 / pi`.
 //! * `twist`: `angle` F (degrees) rotates the cross-section about the axis by `angle * clamp(h / length, 0, 1)` (right-handed
 //!   about `a`; past the region the full angle). Points on the axis never move.
+//!
 //! NOT modelled (DEFERRED, both): point `group` filter, `capture` regions with falloff / non-linear profile, `rot` pivot
 //! offset, `N` rotation (normals are NOT updated), `ZYX` deformation-order switch, `fixedpts`.
 use super::meshutil::{V3, add, bad, dot, failed, positions, scale, sub, to_f32};

@@ -6,6 +6,7 @@
 //! welded along the seam. On top of `clip` the knife writes groups:
 //! * `seamgroup` S `cut`: POINT group = the cut points plus kept source points lying ON the plane ("" = no group);
 //! * `abovegroup` S `above` / `belowgroup` S `below`: PRIM groups of the pieces from the above / below pass ("" = none).
+//!
 //! An existing group of the same name and class is replaced; names must not contain spaces.
 //! Box cut at y=0, both sides: 12 points (4 seam), 10 prims (5 above + 5 below).
 //! NOT modelled (DEFERRED): Houdini's `cap`/`remove seam`/`fill` modes, `keepedges`, group filter, `shatter`, the second-input

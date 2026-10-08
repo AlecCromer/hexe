@@ -9,6 +9,7 @@
 //! * volume: SIGNED contribution of a closed poly to the divergence-theorem volume w.r.t. the ORIGIN: `1/6 sum a.(b x c)`
 //!   over the fan triangles (v0, vi, vi+1). Outward-wound closed meshes sum to their volume (unit box: each face 1/6,
 //!   total 1); a lone prim has no volume of its own. Others 0.
+//!
 //! `total` B (default off): also write the DETAIL attribute `<attribname>_sum` = sum over prims (f64 sum, then f32).
 //! NOT modelled (DEFERRED): point / vertex measure entities, curvature, `smooth` / `dihedral` types, group filter, tetra /
 //! volume-prim measures, N-gon holes.

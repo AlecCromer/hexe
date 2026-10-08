@@ -9,6 +9,7 @@
 //!   box, the target anchor `t` = the same face/center of the target box.
 //! * `dotranslate` B on (default): `P' = t + (P - a) * f` (anchor lands on the target anchor). Off: `P' = a + (P - a) * f`
 //!   (scales about the anchor, no move). Scale and translate both off = input `Arc` shared.
+//!
 //! Only `P` changes (N, uv, ... untouched: N is NOT rescaled). Negative / non-finite target size = `BadParam`.
 //! NOT modelled (DEFERRED): `scale`/`offset` post-modifiers, rotate-to-match, per-component N update, point group filter.
 use super::meshutil::{V3, bad, failed, positions, to_f32, toggle};
