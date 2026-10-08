@@ -1,12 +1,13 @@
 //! Box SOP (wave 2): generator, `type = poly` only. Axis-aligned box of `size` (× `scale`) centred on `t`.
 //!
-//! Topology (Houdini poly box; order is UNVERIFIED, hython blocked, see parity/features.toml `sop-box`):
+//! Topology (Houdini poly box; DEFAULT box order verified against real Houdini 20.5, `fixtures/sop-box/houdini.geo`):
 //! * lattice of `n = (nx, ny, nz)` points per axis, `n = 2` unless `dodivs` (then `divs`, values < 2 treated as 2);
-//! * consolidated (`consolidatepts` on): only the lattice SURFACE points, one shared point each, ordered x-major,
-//!   then y, then z fastest, each axis running low → high (so the first point is (-x,-y,-z));
-//! * `consolidatepts` off: every face owns its own `nb × nc` points (default box = 24 points);
-//! * prims = quads, faces in order -x,+x,-y,+y,-z,+z, cells `b`-major `c`-minor with `(a,b,c)` cyclic axes;
-//!   all quads wind counter-clockwise seen from outside (outward normals, right-handed);
+//! * consolidated (`consolidatepts` on): only the lattice SURFACE points, one shared point each, y-layer by y-layer (low →
+//!   high), per layer the ring `(-x,-z) → (+x,-z) → (+x,+z) → (-x,+z)` (default box = Houdini's bottom ring then top ring);
+//! * `consolidatepts` off: every face owns its own `nu × nv` points (default box = 24 points; order UNVERIFIED);
+//! * prims = quads, faces in Houdini's order -z,+x,+z,-x,-y,+y, each cell starts at Houdini's first corner (prim 0 = ids
+//!   `[1,5,4,0]` in Houdini, `[1,0,4,5]` here); the cycle runs counter-clockwise seen from outside (outward normals,
+//!   right-handed) where Houdini runs clockwise: a global handedness difference, see docs/HOUDINI-ORACLE.md;
 //! * attributes: `P` only.
 //!
 //! `divrate` (mesh types only in Houdini) is validated (hard min 1, allocation cap) but has no effect for `poly`.
@@ -94,39 +95,67 @@ fn counts(p: &ParamSet, name: &str) -> Result<[u64; 3], CookError> {
     Ok(out)
 }
 
-/// Shared-point lattice: surface points of an `n`-point-per-axis grid, x-major / z-fastest.
+/// Shared-point lattice in Houdini's layer order: y-layer by y-layer (low → high); per layer the boundary RING first
+/// (start `(-x,-z)`, +x along the `-z` edge, +z along the `+x` edge, -x along the `+z` edge, -z back along the `-x` edge),
+/// and on the two end layers (`y` low / high) the interior grid points after the ring (x-major, z fastest).
+/// Derived from `fixtures/sop-box/houdini.geo` (default box); the divisions extension is UNVERIFIED (Houdini's own
+/// `divsx/y/z` are segment counts with a different point set, see docs/HOUDINI-ORACLE.md).
 struct Lattice {
     n: [u64; 3],
 }
 
 impl Lattice {
+    /// Ring points per layer `2(nx-1) + 2(nz-1)`.
+    fn ring(&self) -> u64 {
+        let [x, _, z] = self.n;
+        2 * (x - 1) + 2 * (z - 1)
+    }
+    /// Points of an end layer (ring + interior grid).
+    fn end_layer(&self) -> u64 {
+        let [x, _, z] = self.n;
+        self.ring() + (x - 2) * (z - 2)
+    }
     /// Surface point count `nx·ny·nz − (nx−2)(ny−2)(nz−2)` (all `n ≥ 2`).
     fn points(&self) -> u64 {
-        let [x, y, z] = self.n;
-        x * y * z - (x - 2) * (y - 2) * (z - 2)
-    }
-    /// Points of one `x = const` slice that is not an end slice: the ring around the interior.
-    fn ring(&self) -> u64 {
-        let [_, y, z] = self.n;
-        y * z - (y - 2) * (z - 2)
+        let [_, y, _] = self.n;
+        2 * self.end_layer() + (y - 2) * self.ring()
     }
     /// Point id of surface lattice coordinate `(i,j,k)` (caller guarantees it lies on the surface).
     fn index(&self, i: u64, j: u64, k: u64) -> u64 {
         let [x, y, z] = self.n;
-        let full = y * z;
-        if i == 0 || i == x - 1 {
-            let base = if i == 0 { 0 } else { full + (x - 2) * self.ring() };
-            return base + j * z + k;
-        }
-        let base = full + (i - 1) * self.ring();
-        let within = if j == 0 {
-            k
+        let base = if j == 0 {
+            0
         } else if j == y - 1 {
-            z + (y - 2) * 2 + k
+            self.end_layer() + (y - 2) * self.ring()
         } else {
-            z + (j - 1) * 2 + u64::from(k != 0)
+            self.end_layer() + (j - 1) * self.ring()
+        };
+        let within = if k == 0 {
+            i
+        } else if i == x - 1 {
+            (x - 1) + k
+        } else if k == z - 1 {
+            (x - 1) + (z - 1) + (x - 1 - i)
+        } else if i == 0 {
+            2 * (x - 1) + (z - 1) + (z - 1 - k)
+        } else {
+            self.ring() + (i - 1) * (z - 2) + (k - 1)
         };
         base + within
+    }
+    /// `(i,k)` of one layer's points in id order (ring, then the interior grid on the two end layers).
+    fn layer_order(&self, end: bool) -> Vec<(u64, u64)> {
+        let [x, _, z] = self.n;
+        let mut v: Vec<(u64, u64)> = (0..x).map(|i| (i, 0)).collect();
+        v.extend((1..z).map(|k| (x - 1, k)));
+        v.extend((0..x - 1).rev().map(|i| (i, z - 1)));
+        v.extend((1..z - 1).rev().map(|k| (0, k)));
+        if end {
+            for i in 1..x - 1 {
+                v.extend((1..z - 1).map(|k| (i, k)));
+            }
+        }
+        v
     }
 }
 
@@ -142,12 +171,27 @@ fn pos(c: [u64; 3], n: [u64; 3], size: [f32; 3], t: [f32; 3], scale: f32) -> [f3
     }
     o
 }
-
-/// The four corners (b/c lattice indices) of cell `(ib, ic)` on a face, CCW seen from outside.
-fn quad(side: u64, ib: u64, ic: u64) -> [[u64; 2]; 4] {
-    let (b0, b1, c0, c1) = (ib, ib + 1, ic, ic + 1);
-    if side == 1 { [[b0, c0], [b1, c0], [b1, c1], [b0, c1]] } else { [[b0, c0], [b0, c1], [b1, c1], [b1, c0]] }
+/// One box face in Houdini's face order (-Z, +X, +Z, -X, -Y, +Y): fixed axis `f` at its low / high end, varying axes
+/// `(u, v)`, and the four corners `(du, dv)` of a cell in HOUDINI's order (default box prim 0 = `[1,5,4,0]`).
+struct Face {
+    f: usize,
+    high: bool,
+    u: usize,
+    v: usize,
+    h: [[u64; 2]; 4],
 }
+const FACES: [Face; 6] = [
+    Face { f: 2, high: false, u: 0, v: 1, h: [[1, 0], [1, 1], [0, 1], [0, 0]] },
+    Face { f: 0, high: true, u: 2, v: 1, h: [[1, 0], [1, 1], [0, 1], [0, 0]] },
+    Face { f: 2, high: true, u: 0, v: 1, h: [[0, 0], [0, 1], [1, 1], [1, 0]] },
+    Face { f: 0, high: false, u: 2, v: 1, h: [[0, 0], [0, 1], [1, 1], [1, 0]] },
+    Face { f: 1, high: false, u: 0, v: 2, h: [[1, 1], [1, 0], [0, 0], [0, 1]] },
+    Face { f: 1, high: true, u: 0, v: 2, h: [[1, 0], [1, 1], [0, 1], [0, 0]] },
+];
+/// Houdini lists each cell CLOCKWISE seen from outside (its prim normal is the left-hand rule); hexe is counter-clockwise
+/// everywhere (Newell, right-handed). Same first corner, reversed direction: `[h0, h3, h2, h1]`. A global handedness
+/// switch is the open item in docs/HOUDINI-ORACLE.md.
+const CCW: [usize; 4] = [0, 3, 2, 1];
 
 fn cook_box(p: &ParamSet) -> Result<Detail, CookError> {
     match p.menu("type") {
@@ -177,33 +221,23 @@ fn cook_box(p: &ParamSet) -> Result<Detail, CookError> {
     debug_assert_eq!(u64::from(range.end - range.start), npts);
     let mut ps: Vec<[f32; 3]> = Vec::with_capacity(us(npts));
     if consolidate {
-        for i in 0..nx {
-            for j in 0..ny {
-                let edge = i == 0 || i == nx - 1 || j == 0 || j == ny - 1;
-                if edge {
-                    ps.extend((0..nz).map(|k| pos([i, j, k], n, size, t, scale)));
-                } else {
-                    ps.push(pos([i, j, 0], n, size, t, scale));
-                    ps.push(pos([i, j, nz - 1], n, size, t, scale));
-                }
-            }
+        for j in 0..ny {
+            let end = j == 0 || j == ny - 1;
+            ps.extend(lat.layer_order(end).into_iter().map(|(i, k)| pos([i, j, k], n, size, t, scale)));
         }
     } else {
-        for a in 0..3usize {
-            let (b, c) = ((a + 1) % 3, (a + 2) % 3);
-            let (na, nb, nc) =
-                (n.get(a).copied().unwrap_or(2), n.get(b).copied().unwrap_or(2), n.get(c).copied().unwrap_or(2));
-            for side in 0..2u64 {
-                for ib in 0..nb {
-                    for ic in 0..nc {
-                        let mut co = [0u64; 3];
-                        for (axis, v) in [(a, side * (na - 1)), (b, ib), (c, ic)] {
-                            if let Some(s) = co.get_mut(axis) {
-                                *s = v;
-                            }
+        for fc in &FACES {
+            let (nu, nv) = (n.get(fc.u).copied().unwrap_or(2), n.get(fc.v).copied().unwrap_or(2));
+            let fixed = if fc.high { n.get(fc.f).copied().unwrap_or(2) - 1 } else { 0 };
+            for iu in 0..nu {
+                for iv in 0..nv {
+                    let mut co = [0u64; 3];
+                    for (axis, v) in [(fc.f, fixed), (fc.u, iu), (fc.v, iv)] {
+                        if let Some(s) = co.get_mut(axis) {
+                            *s = v;
                         }
-                        ps.push(pos(co, n, size, t, scale));
                     }
+                    ps.push(pos(co, n, size, t, scale));
                 }
             }
         }
@@ -212,36 +246,34 @@ fn cook_box(p: &ParamSet) -> Result<Detail, CookError> {
         *slot = v;
     }
     let mut face_base = 0u64;
-    for a in 0..3usize {
-        let (b, c) = ((a + 1) % 3, (a + 2) % 3);
-        let (na, nb, nc) =
-            (n.get(a).copied().unwrap_or(2), n.get(b).copied().unwrap_or(2), n.get(c).copied().unwrap_or(2));
-        for side in 0..2u64 {
-            for ib in 0..nb - 1 {
-                for ic in 0..nc - 1 {
-                    let mut ids = [0u32; 4];
-                    for (slot, [pb, pc]) in ids.iter_mut().zip(quad(side, ib, ic)) {
-                        *slot = if consolidate {
-                            let mut co = [0u64; 3];
-                            for (axis, v) in [(a, side * (na - 1)), (b, pb), (c, pc)] {
-                                if let Some(s) = co.get_mut(axis) {
-                                    *s = v;
-                                }
+    for fc in &FACES {
+        let (nu, nv) = (n.get(fc.u).copied().unwrap_or(2), n.get(fc.v).copied().unwrap_or(2));
+        let fixed = if fc.high { n.get(fc.f).copied().unwrap_or(2) - 1 } else { 0 };
+        for iu in 0..nu - 1 {
+            for iv in 0..nv - 1 {
+                let mut ids = [0u32; 4];
+                for (slot, &w) in ids.iter_mut().zip(&CCW) {
+                    let [du, dv] = fc.h.get(w).copied().unwrap_or([0, 0]);
+                    let (cu, cv) = (iu + du, iv + dv);
+                    *slot = if consolidate {
+                        let mut co = [0u64; 3];
+                        for (axis, v) in [(fc.f, fixed), (fc.u, cu), (fc.v, cv)] {
+                            if let Some(s) = co.get_mut(axis) {
+                                *s = v;
                             }
-                            id(lat.index(co[0], co[1], co[2]))?
-                        } else {
-                            id(face_base + pb * nc + pc)?
-                        };
-                    }
-                    d.add_poly(&ids, true);
+                        }
+                        id(lat.index(co[0], co[1], co[2]))?
+                    } else {
+                        id(face_base + cu * nv + cv)?
+                    };
                 }
+                d.add_poly(&ids, true);
             }
-            face_base += nb * nc;
         }
+        face_base += nu * nv;
     }
     Ok(d)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,7 +311,8 @@ mod tests {
         2 * (s[0] * s[1] + s[1] * s[2] + s[0] * s[2])
     }
 
-    /// INDEPENDENT expected builder (BTreeMap lattice, no `Lattice::index`), consolidated points.
+    /// INDEPENDENT expected builder (BTreeMap lattice, perimeter walk, no `Lattice::index`), consolidated points, Houdini
+    /// order: layers low → high, ring from (0,0) walking +x,+z,-x,-z, then the end-layer interior; faces -z,+x,+z,-x,-y,+y.
     fn expected(n: [u64; 3], size: [f64; 3], t: [f64; 3], scale: f64) -> Detail {
         let at = |c: [u64; 3]| -> [f32; 3] {
             let f = |a: usize| (t[a] + scale * size[a] * (c[a] as f64 / (n[a] - 1) as f64 - 0.5)) as f32;
@@ -287,13 +320,28 @@ mod tests {
         };
         let mut ids = BTreeMap::new();
         let mut pts = Vec::new();
-        for i in 0..n[0] {
-            for j in 0..n[1] {
-                for k in 0..n[2] {
-                    let c = [i, j, k];
-                    if (0..3).any(|a| c[a] == 0 || c[a] == n[a] - 1) {
-                        ids.insert(c, ids.len() as u32);
-                        pts.push(at(c));
+        for j in 0..n[1] {
+            let (mut i, mut k) = (0u64, 0u64);
+            let ring = 2 * (n[0] - 1) + 2 * (n[2] - 1);
+            for _ in 0..ring {
+                ids.insert([i, j, k], ids.len() as u32);
+                pts.push(at([i, j, k]));
+                // walk the perimeter: +x on k=0, +z on i=max, -x on k=max, -z on i=0
+                if k == 0 && i < n[0] - 1 {
+                    i += 1;
+                } else if i == n[0] - 1 && k < n[2] - 1 {
+                    k += 1;
+                } else if k == n[2] - 1 && i > 0 {
+                    i -= 1;
+                } else {
+                    k -= 1;
+                }
+            }
+            if j == 0 || j == n[1] - 1 {
+                for i in 1..n[0] - 1 {
+                    for k in 1..n[2] - 1 {
+                        ids.insert([i, j, k], ids.len() as u32);
+                        pts.push(at([i, j, k]));
                     }
                 }
             }
@@ -303,26 +351,31 @@ mod tests {
         for (s, v) in d.p_mut().iter_mut().zip(pts) {
             *s = v;
         }
-        for a in 0..3 {
-            let (b, c) = ((a + 1) % 3, (a + 2) % 3);
-            for side in [0u64, 1] {
-                let fixed = side * (n[a] - 1);
-                for ib in 0..n[b] - 1 {
-                    for ic in 0..n[c] - 1 {
-                        let corner = |db: u64, dc: u64| {
-                            let mut co = [0u64; 3];
-                            co[a] = fixed;
-                            co[b] = ib + db;
-                            co[c] = ic + dc;
-                            ids[&co]
-                        };
-                        let q = if side == 1 {
-                            [corner(0, 0), corner(1, 0), corner(1, 1), corner(0, 1)]
-                        } else {
-                            [corner(0, 0), corner(0, 1), corner(1, 1), corner(1, 0)]
-                        };
-                        d.add_poly(&q, true);
-                    }
+        let hi = |a: usize| n[a] - 1;
+        // (fixed axis, fixed value, u axis, v axis, Houdini cell corners (du,dv))
+        type Fc = (usize, u64, usize, usize, [(u64, u64); 4]);
+        let cw_a: [(u64, u64); 4] = [(1, 0), (1, 1), (0, 1), (0, 0)];
+        let cw_b: [(u64, u64); 4] = [(0, 0), (0, 1), (1, 1), (1, 0)];
+        let faces: [Fc; 6] = [
+            (2, 0, 0, 1, cw_a),
+            (0, hi(0), 2, 1, cw_a),
+            (2, hi(2), 0, 1, cw_b),
+            (0, 0, 2, 1, cw_b),
+            (1, 0, 0, 2, [(1, 1), (1, 0), (0, 0), (0, 1)]),
+            (1, hi(1), 0, 2, cw_a),
+        ];
+        for (f, fv, u, v, cw) in faces {
+            for iu in 0..n[u] - 1 {
+                for iv in 0..n[v] - 1 {
+                    let corner = |(du, dv): (u64, u64)| {
+                        let mut co = [0u64; 3];
+                        co[f] = fv;
+                        co[u] = iu + du;
+                        co[v] = iv + dv;
+                        ids[&co]
+                    };
+                    // hexe: same first corner as Houdini, counter-clockwise
+                    d.add_poly(&[corner(cw[0]), corner(cw[3]), corner(cw[2]), corner(cw[1])], true);
                 }
             }
         }
@@ -346,13 +399,11 @@ mod tests {
         assert!(quads(&d).iter().all(|q| q.len() == 4));
         assert_eq!(d.attrs.len(), 1, "only P");
         assert!(d.attr(AttrClass::Point, "P").is_some());
-        // closed form: P = ±size/2 + t; documented order: x-major, z fastest, low → high
+        // closed form: P = ±size/2 + t; Houdini order: bottom ring (-x-z, +x-z, +x+z, -x+z) then top ring
         let mut want = Vec::new();
-        for sx in [-0.5f32, 0.5] {
-            for sy in [-0.5f32, 0.5] {
-                for sz in [-0.5f32, 0.5] {
-                    want.push([sx, sy, sz]);
-                }
+        for sy in [-0.5f32, 0.5] {
+            for (sx, sz) in [(-0.5f32, -0.5f32), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)] {
+                want.push([sx, sy, sz]);
             }
         }
         assert_eq!(d.p(), want.as_slice());
@@ -518,6 +569,7 @@ mod tests {
         assert!(g.cook(id, 0.0).is_err());
     }
 
+    const HOUDINI_BOX: &[u8] = include_bytes!("../../../../fixtures/sop-box/houdini.geo");
     const DEFAULT_SCENE: &str = include_str!("../../../../fixtures/box-default/scene.json");
     const DIVS_SCENE: &str = include_str!("../../../../fixtures/box-divs222/scene.json");
     const DEFAULT_GEO: &[u8] = include_bytes!("../../../../fixtures/box-default/expected.geo");
@@ -531,6 +583,20 @@ mod tests {
         expected([3, 3, 3], [2.0, 4.0, 6.0], [1.0, -1.0, 0.5], 1.0)
     }
 
+    /// Real Houdini 20.5 default box (`fixtures/sop-box/houdini.geo`): P in index order, prim order and first corner equal;
+    /// each cell is Houdini's clockwise cycle reversed (hexe is counter-clockwise).
+    #[test]
+    fn default_box_matches_houdini_fixture_order() {
+        let h = read_geo(HOUDINI_BOX).expect("houdini.geo parses");
+        let d = run(&defaults()).expect("cooks");
+        assert_eq!(d.p(), h.p());
+        let (hq, dq) = (quads(&h), quads(&d));
+        assert_eq!(hq.first(), Some(&vec![1, 5, 4, 0]));
+        assert_eq!(hq.len(), dq.len());
+        for (a, b) in hq.iter().zip(&dq) {
+            assert_eq!(b, &vec![a[0], a[3], a[2], a[1]]);
+        }
+    }
     #[test]
     fn fixture_box_default_matches_analytical_expected() {
         let want = read_geo(DEFAULT_GEO).expect("expected.geo parses");

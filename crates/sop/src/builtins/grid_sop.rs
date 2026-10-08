@@ -2,10 +2,12 @@
 //! `type`: poly | polysoup | mesh | points implemented; nurbs | bezier -> `CookError::Unsupported` (never a fallback).
 //! `surftype` (poly/polysoup/mesh; ignored for points): rows cols rowcol triangles quads alttriangles revtriangles.
 //! `orderu/orderv/interpu/interpv` are read (declared, typed) but IGNORED: they only matter for nurbs/bezier.
-//! Lattice (UNVERIFIED vs Houdini, hython blocked): point id = `row*cols + col`; `cols` span the FIRST in-plane axis over
-//! `size[0]`, ascending from `-size[0]/2`; `rows` span the SECOND over `size[1]`, ascending from `-size[1]/2`, except `zx`
-//! whose row axis points along -Z (row 0 at +Z), so ONE winding `(a, a+1, a+cols+1, a+cols)` gives the plane normal for every
-//! orient (xy +Z, yz +X, zx +Y). Axes: xy: (X, Y); yz: (Y, Z); zx: (X, -Z). `r` rotates about the local origin (degrees,
+//! Lattice (order verified against real Houdini 20.5, `fixtures/sop-grid/houdini.geo` + xy/yz/zx cases in docs/HOUDINI-ORACLE.md):
+//! point id = `row*cols + col`; `cols` span the FIRST in-plane axis over `size[0]`, ascending from `-size[0]/2`; `rows` span
+//! the SECOND over `size[1]`, ascending from `-size[1]/2` (row 0 at the LOW end, also for `zx`: row 0 at -Z). Axes: xy: (X, Y);
+//! yz: (Y, Z); zx: (X, Z). Houdini's cell is `[a, a+1, a+cols+1, a+cols]` (clockwise, its normal is the left-hand rule); hexe is
+//! counter-clockwise everywhere so it emits the same first corner reversed `(a, a+cols, a+cols+1, a+1)`: right-hand normal
+//! xy -Z, yz +X, zx +Y = Houdini's own prim normals. `r` rotates about the local origin (degrees,
 //! Rx then Ry then Rz), then `t` translates. A 1-point axis sits at the center of that axis (no division by zero).
 //! No `N` attribute (existence [?]). `size` is declared `V3` (no V2 variant): `size[2]` is ignored.
 //! `mesh` = ONE `Unknown{ty:"Mesh"}` prim over all `rows*cols` vertices (row-major) with the connectivity token in its
@@ -157,8 +159,8 @@ impl Node<Detail> for Grid {
                 let u = axis(col, cols, size[0]);
                 let local = match orient {
                     ORIENT_XY => [u, v, 0.0],
-                    ORIENT_YZ => [0.0, u, v],
-                    _ => [u, 0.0, -v],
+                    ORIENT_YZ => [0.0, v, u],
+                    _ => [u, 0.0, v],
                 };
                 let q = rotate(local, rot);
                 pos.push([(c[0] + q[0]) as f32, (c[1] + q[1]) as f32, (c[2] + q[2]) as f32]);
@@ -199,8 +201,9 @@ impl Node<Detail> for Grid {
         if matches!(surf, SURF_TRIANGLES | SURF_QUADS | SURF_ALT | SURF_REV) {
             for row in 0..rows.saturating_sub(1) {
                 for col in 0..cols.saturating_sub(1) {
-                    // cell corners in winding order: a(row,col) b(row,col+1) cc(row+1,col+1) dd(row+1,col)
-                    let (a, b, cc, dd) = (id(row, col)?, id(row, col + 1)?, id(row + 1, col + 1)?, id(row + 1, col)?);
+                    // cell corners in winding order: a(row,col) b(row+1,col) cc(row+1,col+1) dd(row,col+1). Houdini lists the cell
+                    // clockwise as `[a, dd, cc, b]`; same first corner, reversed here (hexe is counter-clockwise everywhere).
+                    let (a, b, cc, dd) = (id(row, col)?, id(row + 1, col)?, id(row + 1, col + 1)?, id(row, col + 1)?);
                     // triangles: diagonal a-cc; revtriangles: diagonal b-dd; alttriangles: checkerboard of the two.
                     let rev = surf == SURF_REV || (surf == SURF_ALT && (row + col) % 2 == 1);
                     match (surf, rev) {
@@ -262,11 +265,11 @@ mod tests {
         assert_eq!((d.point_count, d.vertex_count(), d.prim_count()), (100, 324, 81));
         assert!(d.prims.iter().all(|p| matches!(p.kind, PrimKind::Poly { closed: true }) && p.verts.len() == 4));
         assert!(d.p().iter().all(|p| p[1] == 0.0));
-        // zx: x ascends over cols, z DEscends over rows: point 0 = (-5,0,+5).
-        assert!(near(d.p()[0], [-5.0, 0.0, 5.0]));
-        assert!(near(d.p()[9], [5.0, 0.0, 5.0]));
-        assert!(near(d.p()[90], [-5.0, 0.0, -5.0]));
-        assert!(near(d.p()[99], [5.0, 0.0, -5.0]));
+        // zx: x ascends over cols, z ASCENDS over rows (Houdini: row 0 at -Z): point 0 = (-5,0,-5).
+        assert!(near(d.p()[0], [-5.0, 0.0, -5.0]));
+        assert!(near(d.p()[9], [5.0, 0.0, -5.0]));
+        assert!(near(d.p()[90], [-5.0, 0.0, 5.0]));
+        assert!(near(d.p()[99], [5.0, 0.0, 5.0]));
         assert!(d.attr(AttrClass::Point, "P").is_some() && d.attrs.len() == 1);
     }
     #[test]
@@ -299,45 +302,46 @@ mod tests {
         }
     }
     #[test]
-    fn first_quad_winding_is_0_1_cols_plus_1_cols_for_every_orient() {
+    fn first_quad_winding_is_0_cols_cols_plus_1_1_for_every_orient() {
         for orient in 0..3 {
             for (rows, cols) in [(2, 2), (3, 4), (5, 3)] {
                 let d = ok(&format!(r#"{{"orient":{orient},"rows":{rows},"cols":{cols}}}"#));
                 let c = cols as u32;
-                assert_eq!(prim_pts(&d, 0), vec![0, 1, c + 1, c], "orient {orient} {rows}x{cols}");
+                assert_eq!(prim_pts(&d, 0), vec![0, c, c + 1, 1], "orient {orient} {rows}x{cols}");
                 // second quad of the first row is shifted by one column.
                 assert_eq!(
                     prim_pts(&d, 1.min(d.prims.len() - 1)),
-                    if cols > 2 { vec![1, 2, c + 2, c + 1] } else { vec![0, 1, c + 1, c] }
+                    if cols > 2 { vec![1, c + 1, c + 2, 2] } else { vec![0, c, c + 1, 1] }
                 );
             }
         }
     }
     #[test]
     fn quad_normals_follow_the_orient_plane_normal() {
-        // xy: +Z, yz: +X, zx: +Y; every quad, both default and rotated-free.
-        for (o, axis) in [(0, 2), (1, 0), (2, 1)] {
+        // Houdini prim normals (left-hand rule on its clockwise cells, measured): xy -Z, yz +X, zx +Y; ours = right-hand on the
+    // reversed cell, i.e. the same vectors. Every quad.
+        for (o, axis, sign) in [(0, 2, -1.0f32), (1, 0, 1.0), (2, 1, 1.0)] {
             let d = ok(&format!(r#"{{"orient":{o},"rows":3,"cols":4}}"#));
             for i in 0..d.prims.len() {
                 let n = normal(&d, i);
-                assert!(n[axis] > 0.0, "orient {o} prim {i}: {n:?}");
+                assert!(n[axis] * sign > 0.0, "orient {o} prim {i}: {n:?}");
                 assert!(n.iter().enumerate().all(|(k, c)| k == axis || c.abs() < 1e-4));
             }
         }
     }
     #[test]
     fn corner_positions_for_each_orient_size_and_center() {
-        // 2x3 lattice, size (4,2), center (10,20,30): u in {-2,0,2} over cols, v in {-1,1} over rows.
+        // 2x3 lattice, size (4,2), center (10,20,30): u in {-2,0,2} over cols, v in {-1,1} over rows; cols = X (xy, zx) or Z (yz), rows = Y (xy, yz) or Z (zx).
         let base = |o: u32| ok(&format!(r#"{{"orient":{o},"rows":2,"cols":3,"size":[4,2,0],"t":[10,20,30]}}"#));
         let xy = base(0);
         assert!(near(xy.p()[0], [8.0, 19.0, 30.0]) && near(xy.p()[2], [12.0, 19.0, 30.0]));
         assert!(near(xy.p()[3], [8.0, 21.0, 30.0]) && near(xy.p()[5], [12.0, 21.0, 30.0]));
         let yz = base(1);
-        assert!(near(yz.p()[0], [10.0, 18.0, 29.0]) && near(yz.p()[2], [10.0, 22.0, 29.0]));
-        assert!(near(yz.p()[3], [10.0, 18.0, 31.0]) && near(yz.p()[5], [10.0, 22.0, 31.0]));
+        assert!(near(yz.p()[0], [10.0, 19.0, 28.0]) && near(yz.p()[2], [10.0, 19.0, 32.0]));
+        assert!(near(yz.p()[3], [10.0, 21.0, 28.0]) && near(yz.p()[5], [10.0, 21.0, 32.0]));
         let zx = base(2);
-        assert!(near(zx.p()[0], [8.0, 20.0, 31.0]) && near(zx.p()[2], [12.0, 20.0, 31.0]));
-        assert!(near(zx.p()[3], [8.0, 20.0, 29.0]) && near(zx.p()[5], [12.0, 20.0, 29.0]));
+        assert!(near(zx.p()[0], [8.0, 20.0, 29.0]) && near(zx.p()[2], [12.0, 20.0, 29.0]));
+        assert!(near(zx.p()[3], [8.0, 20.0, 31.0]) && near(zx.p()[5], [12.0, 20.0, 31.0]));
     }
     #[test]
     fn interior_points_are_evenly_spaced() {
@@ -351,29 +355,29 @@ mod tests {
     }
     #[test]
     fn rotate_param_turns_the_plane_about_the_center() {
-        // zx 2x2 size 10 center (1,2,3): point 0 local (-5,0,5). Ry(90): (x,z) -> (z,-x) => (5,0,5).
+        // zx 2x2 size 10 center (1,2,3): point 0 local (-5,0,-5). Ry(90): (x,z) -> (z,-x) => (-5,0,5).
         let d = ok(r#"{"rows":2,"cols":2,"r":[0,90,0],"t":[1,2,3]}"#);
-        assert!(near(d.p()[0], [6.0, 2.0, 8.0]));
-        assert!(near(d.p()[1], [6.0, 2.0, -2.0]));
+        assert!(near(d.p()[0], [-4.0, 2.0, 8.0]));
+        assert!(near(d.p()[1], [-4.0, 2.0, -2.0]));
         // Rx(90) on xy: local (x,y,0) -> (x,0,y): the XY grid lies flat in the XZ plane.
         let d = ok(r#"{"orient":0,"rows":2,"cols":2,"size":[2,2,0],"r":[90,0,0]}"#);
         assert!(d.p().iter().all(|p| p[1].abs() < 1e-5));
         assert!(near(d.p()[3], [1.0, 0.0, 1.0]));
-        // rotation preserves winding handedness: xy +Z normal -> Rx(90) -> -Y.
+        // rotation preserves winding handedness: xy -Z normal (Houdini) -> Rx(90) -> +Y.
         let n = normal(&d, 0);
-        assert!(n[1] < 0.0 && n[0].abs() < 1e-5 && n[2].abs() < 1e-5);
+        assert!(n[1] > 0.0 && n[0].abs() < 1e-5 && n[2].abs() < 1e-5);
     }
     #[test]
     fn triangle_surftypes_split_cells_by_closed_form() {
-        // 3x3 cells row0/col0 = a=0 (b=1, cc=4, dd=3).
+        // 3x3 cells row0/col0 = a=0 (b=3, cc=4, dd=1).
         let tri = ok(r#"{"surftype":3,"rows":3,"cols":3}"#);
-        assert_eq!((prim_pts(&tri, 0), prim_pts(&tri, 1)), (vec![0, 1, 4], vec![0, 4, 3]));
+        assert_eq!((prim_pts(&tri, 0), prim_pts(&tri, 1)), (vec![0, 3, 4], vec![0, 4, 1]));
         let rev = ok(r#"{"surftype":6,"rows":3,"cols":3}"#);
-        assert_eq!((prim_pts(&rev, 0), prim_pts(&rev, 1)), (vec![0, 1, 3], vec![1, 4, 3]));
+        assert_eq!((prim_pts(&rev, 0), prim_pts(&rev, 1)), (vec![0, 3, 1], vec![3, 4, 1]));
         let alt = ok(r#"{"surftype":5,"rows":3,"cols":3}"#);
-        // cell (0,0) even = triangles; cell (0,1) odd = reverse (a=1,b=2,cc=5,dd=4).
-        assert_eq!((prim_pts(&alt, 0), prim_pts(&alt, 1)), (vec![0, 1, 4], vec![0, 4, 3]));
-        assert_eq!((prim_pts(&alt, 2), prim_pts(&alt, 3)), (vec![1, 2, 4], vec![2, 5, 4]));
+        // cell (0,0) even = triangles; cell (0,1) odd = reverse (a=1,b=4,cc=5,dd=2).
+        assert_eq!((prim_pts(&alt, 0), prim_pts(&alt, 1)), (vec![0, 3, 4], vec![0, 4, 1]));
+        assert_eq!((prim_pts(&alt, 2), prim_pts(&alt, 3)), (vec![1, 4, 2], vec![4, 5, 2]));
         // every triangle of every flavour keeps the +Y normal on zx.
         for d in [&tri, &rev, &alt] {
             assert!((0..d.prims.len()).all(|i| normal(d, i)[1] > 0.0));
@@ -440,9 +444,9 @@ mod tests {
         let d = ok(r#"{"rows":4,"cols":3}"#);
         assert_eq!((d.point_count, d.prim_count()), (12, 6));
         let d = ok(r#"{"size":[2,6,0]}"#);
-        assert!(near(d.p()[0], [-1.0, 0.0, 3.0]) && near(d.p()[99], [1.0, 0.0, -3.0]));
+        assert!(near(d.p()[0], [-1.0, 0.0, -3.0]) && near(d.p()[99], [1.0, 0.0, 3.0]));
         let d = ok(r#"{"size":[-2,2,0],"rows":2,"cols":2}"#);
-        assert!(near(d.p()[0], [1.0, 0.0, 1.0]));
+        assert!(near(d.p()[0], [1.0, 0.0, -1.0]));
     }
     #[test]
     fn hostile_params_are_errors() {
@@ -491,19 +495,19 @@ mod tests {
         assert_eq!(out.point_count, 100);
     }
     // ---- analytical oracle fixtures: expected built by INDEPENDENT maths, never by the SOP ----
-    /// `grid-default`: 10x10 lattice on ZX, size 10: x = -5 + 10*i/9 over cols, z = +5 - 10*j/9 over rows, quads (a,a+1,a+11,a+10).
+    /// `grid-default`: 10x10 lattice on ZX, size 10: x = -5 + 10*i/9 over cols, z = -5 + 10*j/9 over rows (Houdini row 0 at -Z), quads (a,a+10,a+11,a+1).
     fn expected_default() -> Detail {
         let mut d = Detail::default();
         d.add_points(100);
         let coord = |i: usize| (-5.0 + 10.0 * (i as f64) / 9.0) as f32;
         let p = d.p_mut();
         for (k, slot) in p.iter_mut().enumerate() {
-            *slot = [coord(k % 10), 0.0, -coord(k / 10)];
+            *slot = [coord(k % 10), 0.0, coord(k / 10)];
         }
         for k in 0..81u32 {
             let (r, c) = (k / 9, k % 9);
             let a = r * 10 + c;
-            d.add_poly(&[a, a + 1, a + 11, a + 10], true);
+            d.add_poly(&[a, a + 10, a + 11, a + 1], true);
         }
         d
     }
@@ -512,13 +516,13 @@ mod tests {
         let mut d = Detail::default();
         d.add_points(9);
         let xs = [-5.0f32, 0.0, 5.0];
-        let zs = [5.0f32, 0.0, -5.0];
+        let zs = [-5.0f32, 0.0, 5.0];
         let p = d.p_mut();
         for (k, slot) in p.iter_mut().enumerate() {
             *slot = [xs[k % 3], 0.0, zs[k / 3]];
         }
-        // cell (r,c): a=3r+c; tris (a, a+1, a+4) and (a, a+4, a+3) for +Y.
-        for tri in [[0, 1, 4], [0, 4, 3], [1, 2, 5], [1, 5, 4], [3, 4, 7], [3, 7, 6], [4, 5, 8], [4, 8, 7]] {
+        // cell (r,c): a=3r+c; tris (a, a+3, a+4) and (a, a+4, a+1) for +Y.
+        for tri in [[0, 3, 4], [0, 4, 1], [1, 4, 5], [1, 5, 2], [3, 6, 7], [3, 7, 4], [4, 7, 8], [4, 8, 5]] {
             d.add_poly(&tri, true);
         }
         d
