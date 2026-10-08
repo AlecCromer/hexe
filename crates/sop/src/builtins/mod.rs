@@ -59,6 +59,8 @@ mod meshutil;
 //
 mod selutil;
 //
+mod output_sop;
+//
 mod peak_sop;
 //
 mod polybevel_sop;
@@ -80,6 +82,8 @@ mod sort_sop;
 mod sphere_sop;
 //
 mod subdivide_sop;
+//
+mod switch_sop;
 //
 mod transform_sop;
 //
@@ -144,6 +148,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("normal", normal_sop::spec, normal_sop::new);
     //
+    r.register("output", output_sop::spec, output_sop::new);
+    //
     r.register("peak", peak_sop::spec, peak_sop::new);
     //
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
@@ -165,6 +171,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("sphere", sphere_sop::spec, sphere_sop::new);
     //
     r.register("subdivide", subdivide_sop::spec, subdivide_sop::new);
+    //
+    r.register("switch", switch_sop::spec, switch_sop::new);
     //
     r.register("xform", transform_sop::spec, transform_sop::new);
     //

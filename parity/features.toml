@@ -899,3 +899,31 @@ status = "shipped"
 commands = []
 evidence = ["apps/hexe/src/main.rs::offscreen_box_and_sphere_has_lit_centre_and_background_corners", "apps/hexe/src/main.rs::home_frames_the_display_node_and_size_arg_is_bounded", "apps/hexe/src/viewport.rs::houdini_mouse_mapping", "apps/hexe/src/viewport.rs::orbit_clamps_pitch_and_pan_moves_in_the_view_plane", "apps/hexe/src/viewport.rs::dolly_and_scroll_zoom_in_and_clamp", "apps/hexe/src/viewport.rs::target_projects_to_screen_centre_and_home_frames_the_box", "apps/hexe/src/viewport.rs::overlay_projection_matches_the_gpu_matrix", "apps/hexe/src/gpu.rs::mesh_fan_triangulates_with_flat_normals_and_edges_points", "apps/hexe/src/gpu.rs::degenerate_faces_never_produce_nan_normals", "apps/hexe/src/gpu.rs::grid_has_axes_and_respects_params"]
 notes = "H28: replaces the egui-painter viewport. gpu.rs Scene3d renders into an offscreen Rgba8 + Depth32 target inside an egui_wgpu paint callback, then blits into the viewport rect (eframe feature wgpu, no glow). Flat Newell normal per face, fan triangulation, abs(N.V) headlight; W = edges only; points = round screen-space quads; ground grid + axes. Camera: LMB/alt+LMB orbit, MMB (shift+LMB) pan, RMB drag + scroll dolly, H/F frame-all (default camera when nothing displayed). W/P/N overlays (numbers) stay egui-painted using the same view-proj matrix. Display-flag node = the cooked detail (unchanged). All look/rate/grid params in viewport::Style (Default = shipped look). Caps: 1M tris, 2M edge verts, 500k points, 8192 px target. Headless: `hexe scene.json --render out.png [--size WxH] [--wire]` = same Scene3d (examples/viewport.json box+sphere). Test skips (prints SKIP) when no GPU adapter. NOT done: MSAA, shaded+edges overlay, per-prim/vertex N (flat only), Sphere/Tube/Volume prims not drawn, picking/selection, no frustum/occlusion culling, point size fixed in px. UNVERIFIED: real mouse drags + alt-modifier on a real pointer (math unit-tested only); Linux/Windows surfaces (macOS Metal Bgra8Unorm only)."
+
+# --- wave4/h29: SOP batch
+[[feature]]
+id = "sop-switch"
+title = "Switch SOP (select one of N inputs)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["switch"]
+evidence = [
+  "crates/sop/src/builtins/switch_sop.rs::selects_each_input_by_index_sharing_the_arc",
+  "crates/sop/src/builtins/switch_sop.rs::index_clamps_and_unconnected_is_empty",
+  "crates/sop/src/builtins/switch_sop.rs::example_scene_switches_between_box_and_grid",
+]
+notes = "H29: input I 0, 4 fixed ports (Houdini: many), index clamped to 0..=3 (UNVERIFIED vs Houdini clamp vs error), chosen Arc shared. NOT modelled: expression-driven per-frame input (no channel exprs), unconnected-input fallthrough. Example: examples/switch.json (null -> switch -> output). Analytical oracle only."
+
+[[feature]]
+id = "sop-output"
+title = "Output SOP (network output marker, passthrough)"
+area = "A"
+tier = "P2"
+status = "partial"
+commands = ["output"]
+evidence = [
+  "crates/sop/src/builtins/output_sop.rs::passes_input_through_same_arc",
+  "crates/sop/src/builtins/output_sop.rs::empty_when_unconnected_and_idx_validated",
+]
+notes = "H29: outputidx I 0 (0..=9, validated, otherwise no effect: no subnet/HDA output routing in this graph). Input 0 Arc shared. `null` stays on row sop-registry. Example: examples/switch.json. Analytical oracle only."
