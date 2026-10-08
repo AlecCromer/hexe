@@ -42,7 +42,6 @@ pub const TABLE: &[(&str, Class)] = &[
     ("sop", Class::Layer(2)),
     // L1 formats · L2 model · L3 services · L4 features · L5 interaction · L6 engine · L7 platform/ui: add rows here
     // ("testkit", Class::Testkit),
-    ("hexe", Class::Exempt),
     ("cli", Class::Exempt),
     ("tauri", Class::Exempt),
     ("xtask", Class::Exempt),

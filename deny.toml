@@ -29,7 +29,3 @@ unknown-git = "deny"
 [advisories]
 yanked = "warn"
 ignore = []
-# egui's default UI fonts (Ubuntu-Light, Hack, emoji-icon-font): attributed in ATTRIBUTION.toml as [[bundled]].
-[[licenses.exceptions]]
-crate = "epaint_default_fonts"
-allow = ["OFL-1.1", "Ubuntu-font-1.0"]

@@ -8,9 +8,11 @@
 Rules: numbers come from tools (`parity`, `oracle`, `size`, `perf`), never from vibes. "Fidelity" = oracle score, else write "no". Feel = Pascal's hands, logged below.
 
 ## Gaps (highest tier first)
+- [ ] UI: work PORT-TODO.md (Houdini camera mapping, hotkeys H/W/P/N/D/Cmd+S, point/prim numbers, script/VEX pane, spreadsheet)
 - [ ] P0: intake done, first fixture proven, thinnest vertical slice (input → one op → output = oracle match)
 
 ## Session log
+- T2a: app = Tauri (`apps/hexe-tauri`); egui `apps/hexe` retired, port backlog in apps/hexe-tauri/PORT-TODO.md; bundle config on (Hexe / org.gaia-systems.hexe, app+dmg).
 | date | agent | hours | atom (ledger id) | result | CI |
 |---|---|---|---|---|---|
 | YYYY-MM-DD | scaffold (new-port.sh) | 0 | template | workspace compiles, `xtask ci` green on empty | green |

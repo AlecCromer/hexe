@@ -1,7 +1,7 @@
 # HEXE — Houdini, clean-room, pure Rust
 
 Working name HEXE (witch ↔ Houdini the magician) — Pascal renames. Owner Pascal · 家長 Nyari · 10-07.
-Sibling of PrintCraft's shape (pure-Rust clean-room DCC, egui+wgpu, static binary, no telemetry).
+Sibling of PrintCraft's shape (clean-room DCC; pure-Rust engine, Tauri 2 desktop shell, no telemetry).
 Oracle = real Houdini 20.5 at `/Applications/Houdini/Houdini20.5.487` (hython) → cook same graph both sides, diff `.geo`.
 
 ## Law
@@ -19,12 +19,12 @@ hexe/
   crates/graph          Node/Port/Param, cook engine, dirty/cache, time   (atom B)
   crates/sop            SOP nodes: box grid sphere line transform merge scatter copytopoints wrangle noise
   crates/vex            v0 = rhai-backed wrangle (`@P`, `@N`, `@ptnum`, `chf()`); v1 = own VEX subset → cranelift
-  apps/hexe             egui + wgpu: node editor (egui-snarl) · viewport (points/lines/polys, wireframe+flat) · param pane · geometry spreadsheet
+  apps/hexe-tauri       Tauri 2 app (src-tauri = Rust commands over hexe-graph; ui = vite/TS): SVG network editor · three.js viewport · param pane. Port backlog: apps/hexe-tauri/PORT-TODO.md (script/VEX pane, spreadsheet, shading modes, hotkeys)
   apps/hexe-cli         `hexe cook graph.json -o out.geo` · `hexe geo info|convert`
   tools/oracle.py       hython script → cook reference graphs → tests/oracle/*.geo
   tests/oracle/         fixtures (checked in, small)
 ```
-Deps: glam · serde/serde_json · egui/eframe/wgpu (PrintCraft-proven on M1) · egui-snarl · rhai (v0) · rayon.
+Deps: glam · serde/serde_json · tauri 2 + three.js + vite (bun) · rhai (v0) · rayon. egui/eframe/snarl RETIRED (T2a); history: `git show 805b5aa:apps/hexe`.
 
 ## crates/geo contract (all lanes code against THIS)
 ```rust
@@ -61,7 +61,7 @@ Registry: `sop::register(&mut Registry)` → `Registry::create(type_name)`.
 
 ## Waves
 0 scaffold (serial): repo · workspace · empty crates compile · DESIGN.md · `tools/oracle.py` cooks box+grid+sphere+scatter in hython → `tests/oracle/*.geo` committed.
-1 parallel (3 worktrees): A geo+IO (oracle round-trip) · B graph engine (unit tests w/ a dummy node) · C app shell (window, viewport draws a Detail passed in, snarl node editor empty).
+1 parallel (3 worktrees): A geo+IO (oracle round-trip) · B graph engine (unit tests w/ a dummy node) · C app shell (Tauri window, viewport draws a cooked Detail, network editor empty).
 2 parallel: SOP atoms, each one node + oracle test (box · grid · sphere · transform · merge · scatter · copytopoints · wrangle via rhai · noise).
 3 integration: app cooks a graph live; `hexe-cli cook`; parity table vs Houdini.
 Non-goals v0: DOPs · CHOPs · Karma/render · VEX JIT · packed prims · volumes · HDAs.

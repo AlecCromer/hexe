@@ -40,5 +40,5 @@ Oracle = the original run on inputs WE authored → `fixtures/<case>/{case.toml,
 Never /tmp · never `pkill -f` · one live test at a time · each lane own worktree + own `CARGO_TARGET_DIR` · trunk merges · commit per ledger id (`<id>: <what>`) · green only (`cargo xtask ci`).
 
 ## Layout
-`crates/*` libs (layers in `xtask/src/layers.rs` TABLE) · `apps/hexe` egui window · `apps/hexe-cli` CLI + oracle entry · `xtask/` gates · `parity/` ledger · `fixtures/` oracle cases · `spec/` prose spec · `perf/` budgets.
+`crates/*` libs (layers in `xtask/src/layers.rs` TABLE) · `apps/hexe-tauri` Tauri app (egui retired; backlog PORT-TODO.md) · `apps/hexe-cli` CLI + oracle entry · `xtask/` gates · `parity/` ledger · `fixtures/` oracle cases · `spec/` prose spec · `perf/` budgets.
 Commands: `cargo xtask ci|layers|assets|parity|oracle|perf|size|deny|leakscan|version`.

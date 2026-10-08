@@ -10,14 +10,6 @@
 [policy]
 original_vendor = []
 
-# egui's default UI fonts (eframe feature `default_fonts`); remove together with that feature.
-[[bundled]]
-crate = "epaint_default_fonts"
-title = "egui default fonts (Ubuntu-Light, Hack, emoji-icon-font)"
-author = "emilk and contributors; Canonical (Ubuntu), Hack authors"
-source = "https://github.com/emilk/egui (crate epaint_default_fonts)"
-licence = "OFL-1.1 AND Ubuntu-font-1.0"
-
 # hexe-tauri UI: three.js (viewport), fetched by `bun install` in apps/hexe-tauri and bundled into the app JS by Vite.
 [[fetched]]
 name = "three"
