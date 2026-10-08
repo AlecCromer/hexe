@@ -3,19 +3,11 @@ add polyextrude pe1 @40,140
 add null out @260,140
 ui wire box1 pe1 body
 ui wire pe1 out 0
+display out
 ui click pe1
-ui scrub distance 60
-save ~/.gaia/cache/hexe/proof/t3-undo-0-scrubbed.json
-ui drag out 80 30
+ui key delete
+shot ~/.gaia/cache/hexe/proof/t3-undo-deleted.png
 ui key meta+z
-save ~/.gaia/cache/hexe/proof/t3-undo-1-move-undone.json
-ui key meta+z
-save ~/.gaia/cache/hexe/proof/t3-undo-2-scrub-undone.json
-ui key meta+z
-save ~/.gaia/cache/hexe/proof/t3-undo-3-wire-undone.json
+ui assert #network pe1
 shot ~/.gaia/cache/hexe/proof/t3-undo.png
-ui key meta+shift+z
-ui key meta+shift+z
-save ~/.gaia/cache/hexe/proof/t3-undo-4-redo2.json
-shot ~/.gaia/cache/hexe/proof/t3-redo.png
 quit

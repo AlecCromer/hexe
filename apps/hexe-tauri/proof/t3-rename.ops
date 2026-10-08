@@ -1,7 +1,9 @@
 add box box1 @40,30
 add polyextrude pe1 @40,140
 connect pe1 0 box1
+display pe1
 ui rename pe1 extrude
+ui assert #status extrude
 save ~/.gaia/cache/hexe/proof/t3-rename.json
 shot ~/.gaia/cache/hexe/proof/t3-rename.png
 ui rename extrude box1
