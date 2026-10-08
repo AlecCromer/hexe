@@ -211,7 +211,8 @@ impl Session {
             return Err(format!("{path}: scene larger than {MAX_SCENE_BYTES} bytes"));
         }
         let json = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-        let l = hexe_sop::load_scene_with_base(&json, &self.reg, Path::new(path).parent()).map_err(|e| e.to_string())?;
+        let l =
+            hexe_sop::load_scene_with_base(&json, &self.reg, Path::new(path).parent()).map_err(|e| e.to_string())?;
         self.graph = l.graph;
         self.pos = l.pos;
         self.auto_layout();
@@ -276,9 +277,10 @@ impl Session {
                 .iter()
                 .map(|s| (s.name.clone(), param_json(self.graph.param(id, &s.name).unwrap_or(&s.default))))
                 .collect();
-            let inputs = self.reg.create(self.graph.node_type(id).unwrap_or_default()).map_or_else(Vec::new, |n| {
-                n.inputs().iter().map(|i| i.name.to_string()).collect()
-            });
+            let inputs = self
+                .reg
+                .create(self.graph.node_type(id).unwrap_or_default())
+                .map_or_else(Vec::new, |n| n.inputs().iter().map(|i| i.name.to_string()).collect());
             nodes.push(NodeView {
                 id: id.index(),
                 ty: self.graph.node_type(id).unwrap_or_default().to_string(),

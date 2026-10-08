@@ -88,22 +88,23 @@ fn startup_scene() -> Option<String> {
 
 /// Start the app. A failure to start the webview is reported on stderr (exit 1), never a panic.
 pub fn run() {
-    let built = tauri::Builder::default().manage(App(Mutex::new(Session::new()))).invoke_handler(tauri::generate_handler![
-        list_node_types,
-        graph_new,
-        graph_load,
-        graph_save,
-        graph_get,
-        node_add,
-        node_remove,
-        node_move,
-        node_set_param,
-        edge_connect,
-        edge_disconnect,
-        set_display,
-        cook,
-        startup_scene,
-    ]);
+    let built =
+        tauri::Builder::default().manage(App(Mutex::new(Session::new()))).invoke_handler(tauri::generate_handler![
+            list_node_types,
+            graph_new,
+            graph_load,
+            graph_save,
+            graph_get,
+            node_add,
+            node_remove,
+            node_move,
+            node_set_param,
+            edge_connect,
+            edge_disconnect,
+            set_display,
+            cook,
+            startup_scene,
+        ]);
     if let Err(e) = built.run(tauri::generate_context!()) {
         eprintln!("hexe: {e}");
         std::process::exit(1);
