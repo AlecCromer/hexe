@@ -2,8 +2,9 @@
 //!
 //! # Semantics (UNVERIFIED vs Houdini: hython blocked; closed-form oracle only)
 //! * Clustering (uniform grid hash, cell = `distance`, O(n) expected): points are visited in ascending point number;
-//!   an unclaimed point becomes a LEADER and claims every still-unclaimed selected point within `distance` (Euclidean,
-//!   `<=`) of the LEADER. Not transitive: a chain A-B-C with A-C > `distance` yields {A,B} and {C}. `distance` 0 merges
+//!   an unclaimed point becomes a LEADER and flood-claims every still-unclaimed selected point within `distance` (Euclidean,
+//!   `<=`) of ANY point already in its cluster: TRANSITIVE (connected components), so a chain A-B-C with A-C > `distance`
+//!   but A-B, B-C <= `distance` yields one cluster {A,B,C}. `distance` 0 merges
 //!   exactly coincident points only. Points with non-finite `P` never merge.
 //! * Output points = one per cluster, ordered by leader (lowest point number) -> unmerged points keep relative order.
 //! * `snap` menu `average | lowest-point` (0 | 1, default average): average = float point attributes (incl. `P`) are the
@@ -49,7 +50,9 @@ fn cell_of(q: [f64; 3], size: f64) -> Cell {
     // `as` saturates for huge ratios; neighbours use saturating_add below
     [(q[0] / size).floor() as i64, (q[1] / size).floor() as i64, (q[2] / size).floor() as i64]
 }
-/// Clusters as ascending-by-leader lists of ascending point numbers.
+/// Clusters as ascending-by-leader lists of ascending point numbers. TRANSITIVE: connected components of the "within
+/// `dist`" graph (flood fill over the grid hash; each point is claimed once and leaves its cell list, so a dense cluster
+/// costs O(members)).
 fn cluster(pos: &[[f32; 3]], selected: &[bool], dist: f64) -> Vec<Vec<u32>> {
     let size = if dist > 0.0 { dist } else { 1.0 };
     let d2 = dist * dist;
@@ -71,30 +74,38 @@ fn cluster(pos: &[[f32; 3]], selected: &[bool], dist: f64) -> Vec<Vec<u32>> {
         claimed[i] = true;
         let Ok(id) = u32::try_from(i) else { continue };
         let mut members = vec![id];
-        if let (true, Some(q)) = (usable(i), at(i)) {
-            let c = cell_of(q, size);
-            for dx in -1i64..=1 {
-                for dy in -1i64..=1 {
-                    for dz in -1i64..=1 {
-                        let key = [c[0].saturating_add(dx), c[1].saturating_add(dy), c[2].saturating_add(dz)];
-                        let Some(list) = grid.get_mut(&key) else { continue };
-                        list.retain(|&j| !claimed.get(j as usize).copied().unwrap_or(true));
-                        for &j in list.iter() {
-                            let Some(r) = at(j as usize) else { continue };
-                            let dd = (r[0] - q[0]).powi(2) + (r[1] - q[1]).powi(2) + (r[2] - q[2]).powi(2);
-                            if dd <= d2 {
-                                members.push(j);
+        if usable(i) {
+            let mut queue = vec![id];
+            while let Some(cur) = queue.pop() {
+                let Some(q) = at(cur as usize) else { continue };
+                let c = cell_of(q, size);
+                for dx in -1i64..=1 {
+                    for dy in -1i64..=1 {
+                        for dz in -1i64..=1 {
+                            let key = [c[0].saturating_add(dx), c[1].saturating_add(dy), c[2].saturating_add(dz)];
+                            let Some(list) = grid.get_mut(&key) else { continue };
+                            list.retain(|&j| !claimed.get(j as usize).copied().unwrap_or(true));
+                            let hits: Vec<u32> = list
+                                .iter()
+                                .copied()
+                                .filter(|&j| {
+                                    at(j as usize).is_some_and(|r| {
+                                        (r[0] - q[0]).powi(2) + (r[1] - q[1]).powi(2) + (r[2] - q[2]).powi(2) <= d2
+                                    })
+                                })
+                                .collect();
+                            for &j in &hits {
+                                if let Some(f) = claimed.get_mut(j as usize) {
+                                    *f = true;
+                                }
                             }
+                            members.extend_from_slice(&hits);
+                            queue.extend_from_slice(&hits);
                         }
                     }
                 }
             }
             members.sort_unstable();
-            for &m in &members {
-                if let Some(c) = claimed.get_mut(m as usize) {
-                    *c = true;
-                }
-            }
         }
         out.push(members);
     }
@@ -502,12 +513,22 @@ mod tests {
         assert_eq!(cd[0], [1.0, 0.0, 0.0]);
     }
     #[test]
-    fn clustering_is_leader_centred_not_transitive() {
+    fn clustering_is_transitive_union_of_chained_neighbours() {
+        // a<->b and b<->c within distance, a<->c NOT: one point (mean = b), regardless of point order
+        for order in [[0usize, 1, 2], [2, 0, 1], [1, 2, 0]] {
+            let base = [[0.0, 0.0, 0.0], [0.0008, 0.0, 0.0], [0.0016, 0.0, 0.0]];
+            let mut d = Detail::default();
+            d.add_points(3);
+            *d.p_mut() = order.iter().map(|&i| base[i]).collect();
+            let out = fuse(d, 0.001);
+            assert_eq!(out.point_count, 1, "order {order:?}");
+            assert!((out.p()[0][0] - 0.0008).abs() < 1e-7);
+        }
+        // a gap > distance still separates: 0, 0.0008, | 0.0030
         let mut d = Detail::default();
         d.add_points(3);
-        *d.p_mut() = vec![[0.0, 0.0, 0.0], [0.0008, 0.0, 0.0], [0.0016, 0.0, 0.0]];
-        let out = fuse(d, 0.001);
-        assert_eq!(out.point_count, 2);
+        *d.p_mut() = vec![[0.0, 0.0, 0.0], [0.0008, 0.0, 0.0], [0.003, 0.0, 0.0]];
+        assert_eq!(fuse(d, 0.001).point_count, 2);
     }
     #[test]
     fn group_restricts_fusing_vertex_prim_attrs_follow() {
