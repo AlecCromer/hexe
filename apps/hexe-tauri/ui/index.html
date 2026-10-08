@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>hexe</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="bar">
+        <b class="brand">hexe</b>
+        <input id="path" spellcheck="false" placeholder="scene.json path" />
+        <button id="open">Open</button>
+        <button id="save">Save</button>
+        <button id="new">New</button>
+        <span class="sep"></span>
+        <label><input type="checkbox" id="wire" /> wireframe</label>
+        <label><input type="checkbox" id="pts" checked /> points</label>
+        <button id="fit">Fit</button>
+        <span id="status"></span>
+      </header>
+      <section id="viewport" class="pane"></section>
+      <section id="params" class="pane"></section>
+      <section id="network" class="pane" tabindex="0"></section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

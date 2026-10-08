@@ -11,7 +11,7 @@ use std::path::Path;
 
 /// Largest scene file `graph_load` reads.
 pub const MAX_SCENE_BYTES: u64 = 64 << 20;
-/// Column / row pitch of the auto-layout used for nodes without a stored position.
+/// Sibling / level pitch of the auto-layout (flow runs top to bottom, like Houdini) for nodes without a stored position.
 const LAYOUT_DX: f32 = 190.0;
 const LAYOUT_DY: f32 = 90.0;
 
@@ -224,7 +224,7 @@ impl Session {
         std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))
     }
 
-    /// Give every named node without a stored position a column = depth, row = order within the column.
+    /// Give every named node without a stored position a level (y) = depth, slot (x) = order within the level.
     fn auto_layout(&mut self) {
         let ids: Vec<NodeId> = self.named();
         let mut depth: BTreeMap<u32, usize> = BTreeMap::new();
@@ -254,7 +254,7 @@ impl Session {
             let Some(name) = self.graph.name(id).map(str::to_string) else { continue };
             let d = depth.get(&id.index()).copied().unwrap_or(0);
             let row = rows.entry(d).or_insert(0);
-            self.pos.entry(name).or_insert([40.0 + d as f32 * LAYOUT_DX, 30.0 + *row as f32 * LAYOUT_DY]);
+            self.pos.entry(name).or_insert([40.0 + *row as f32 * LAYOUT_DX, 30.0 + d as f32 * LAYOUT_DY]);
             *row += 1;
         }
     }
