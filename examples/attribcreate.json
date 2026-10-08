@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    {
+      "name": "attribcreate1",
+      "type": "attribcreate",
+      "params": {
+        "numattr": 2,
+        "name1": "Cd", "class1": 2, "type1": 2, "value1v1": 0.9, "value1v2": 0.3, "value1v3": 0.1, "group": "0-2",
+        "name2": "mass", "class2": 0, "type2": 0, "value2v1": 2.5
+      }
+    }
+  ],
+  "edges": [["box1", 0, "attribcreate1", 0]],
+  "display": "attribcreate1"
+}

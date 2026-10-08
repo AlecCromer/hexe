@@ -200,6 +200,24 @@ evidence = [
 notes = "S1: group(prim pattern) origin(0) dir(0,1,0) dist(0) keepOriginal(on) reverse(on) consolidate(off) consolidatetol(0.001). Plane = origin + normalize(dir)*dist. Keep on: input + reflected copy of selected prims (fresh points, attrs/groups follow source); off: points reflected in place. reverse flips closed-poly winding of reflected prims. Normal/Vector-typed V3 point+vertex attrs reflected on the copy. NOT modelled: sphere/tube xform reflection, output group. UNVERIFIED vs Houdini (hython not run): parm defaults of reverse/consolidate, in-place semantics for shared points. Example: examples/mirror.json."
 
 [[feature]]
+id = "sop-attribcreate"
+title = "Attribute Create SOP (constant attributes)"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["attribcreate"]
+evidence = [
+  "crates/sop/src/builtins/attribcreate_sop.rs::default_node_is_a_noop",
+  "crates/sop/src/builtins/attribcreate_sop.rs::float_vector_int_string_and_detail_values",
+  "crates/sop/src/builtins/attribcreate_sop.rs::sizes_map_to_tuple_types",
+  "crates/sop/src/builtins/attribcreate_sop.rs::group_limits_writes_and_keeps_existing_values",
+  "crates/sop/src/builtins/attribcreate_sop.rs::several_slots_and_overwrite_different_shape",
+  "crates/sop/src/builtins/attribcreate_sop.rs::hostile_params",
+  "crates/sop/src/builtins/attribcreate_sop.rs::scene_loader_and_registry_slot",
+]
+notes = "S1: numattr(1, 0..=4 static slots) group; per slot name{i} class{i}(point|vertex|prim|detail) type{i}(float|int|vector|string) size{i}(1..=4) value{i}v1..4 string{i} writevalues{i}(on). Empty name = skipped slot (default node no-op). Float size 2/3/4 -> V2/V3/V4 else FN, int -> I32/IN, vector = V3 (N -> Normal, Cd -> Color). Group = pattern over the slot's class; unselected elements keep the existing same-shape value else 0. NOT modelled: default{i} multiparm, index type, unbounded multiparm, per-slot groups. UNVERIFIED vs Houdini (hython not run): default name/size, int rounding. Example: examples/attribcreate.json."
+
+[[feature]]
 id = "sop-merge"
 title = "Merge SOP"
 area = "A"

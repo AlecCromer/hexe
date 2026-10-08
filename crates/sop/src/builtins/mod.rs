@@ -12,6 +12,8 @@ mod attribs;
 //
 mod attribcopy_sop;
 //
+mod attribcreate_sop;
+//
 mod attribdelete_sop;
 //
 mod attribnoise_sop;
@@ -122,6 +124,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("add", add_sop::spec, add_sop::new);
     //
     r.register("attribcopy", attribcopy_sop::spec, attribcopy_sop::new);
+    //
+    r.register("attribcreate", attribcreate_sop::spec, attribcreate_sop::new);
     //
     r.register("attribdelete", attribdelete_sop::spec, attribdelete_sop::new);
     //
