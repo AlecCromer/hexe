@@ -195,7 +195,7 @@ fn polymesh(rows: usize, cols: usize, upole: bool, tripoles: bool, xf: &Xf, t: [
     let ring_pts = rings.checked_mul(cols);
     let pole_pts = if upole { 2 * cols } else { 2 };
     let total = ring_pts.and_then(|n| n.checked_add(pole_pts)).filter(|&n| n <= MAX_POINTS);
-    let (Some(ring_pts), Some(total)) = (ring_pts, total) else {
+    let (Some(_), Some(total)) = (ring_pts, total) else {
         return Err(CookError::Failed(format!("sphere: rows {rows} x cols {cols} exceeds {MAX_POINTS} points")));
     };
     let id = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
