@@ -16,10 +16,13 @@
 //!
 //! Even samples sit at `L * k / n`. Point attributes are re-sampled: float-like (`F32` `V2` `V3` `V4` `FN`) lerp between the
 //! two bracketing source points; int / string take the nearer source point. Prim attributes copy from the source prim, detail
-//! attributes pass through. Vertex attributes and groups are dropped. Prims that are not curves (other kinds, < 2 vertices,
-//! zero length) are DROPPED, as are closed polygons when `resample_closed` is off (kept as-is would need their points).
+//! attributes pass through. Vertex attributes and groups of the re-sampled curves are dropped.
+//! Non-curve prims (other kinds, < 2 vertices) and closed polygons when `resample_closed` is off PASS THROUGH untouched
+//! (points, vertices, attributes, groups copied via `compact`), appended after the re-sampled curves. Zero-length curves are
+//! dropped.
 //! Hostile input: non-finite `P`, a vertex without a point, or > `MAX_POINTS` output points → `Failed`;
 //! `length` ≤ 0 / non-finite, `segments` < 1 → `BadParam`.
+use super::group_sop::compact;
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
@@ -186,17 +189,19 @@ impl Node<Detail> for Resample {
         let pos = src.p();
         let mut samples: Vec<Sample> = Vec::new();
         let mut shapes: Vec<(usize, usize, bool)> = Vec::new(); // (source prim, sample count, closed)
+        let mut keep_prim = vec![false; src.prims.len()]; // pass-through prims
         for (pi, prim) in src.prims.iter().enumerate() {
             let closed = match prim.kind {
                 PrimKind::Poly { closed } => closed,
                 PrimKind::Polyline => false,
-                _ => continue,
+                _ => {
+                    keep_prim[pi] = true;
+                    continue;
+                }
             };
-            if closed && !rclosed {
-                continue;
-            }
             let verts = src.vertex_point.get(prim.verts.start as usize..prim.verts.end as usize).unwrap_or(&[]);
-            if verts.len() < 2 {
+            if (closed && !rclosed) || verts.len() < 2 {
+                keep_prim[pi] = true;
                 continue;
             }
             let pts: Vec<usize> = verts.iter().map(|&v| v as usize).collect();
@@ -258,6 +263,18 @@ impl Node<Detail> for Resample {
             out.add_attr(Attribute { name: a.name.clone(), class: a.class, data, type_info: a.type_info });
         }
         out.canonicalize();
+        if keep_prim.iter().any(|&k| k) {
+            let mut keep_pt = vec![false; src.point_count as usize];
+            for (pr, _) in src.prims.iter().zip(&keep_prim).filter(|(_, k)| **k) {
+                for &q in src.vertex_point.get(pr.verts.start as usize..pr.verts.end as usize).unwrap_or(&[]) {
+                    if let Some(k) = keep_pt.get_mut(q as usize) {
+                        *k = true;
+                    }
+                }
+            }
+            out.merge(&compact(src, &keep_pt, &keep_prim, "resample")?);
+            out.canonicalize();
+        }
         Ok(Arc::new(out))
     }
 }
@@ -343,7 +360,7 @@ mod tests {
     #[test]
     fn closed_curve_pass_through_toggle_and_non_curves_dropped() {
         let off = cook(&circle(r#""divisions":4"#), r#"{"resample_closed":false}"#).expect("cooks");
-        assert_eq!((off.point_count, off.prim_count()), (0, 0));
+        assert_eq!((off.point_count, off.prim_count()), (4, 1)); // passed through untouched
         let grid = r#"{"name":"h","type":"grid","params":{"rows":3,"cols":3,"surftype":0}}"#;
         let rows = cook(grid, r#"{"method":1,"segments":4}"#).expect("cooks");
         assert_eq!((rows.point_count, rows.prim_count()), (15, 3));
@@ -351,6 +368,46 @@ mod tests {
         assert_eq!(cook(quads, r#"{"method":1,"segments":4}"#).expect("cooks").point_count, 4 * 4); // 4 closed quads x 4 loop samples
     }
 
+    #[test]
+    fn merged_grid_and_line_non_curves_pass_through_untouched() {
+        // line (open, resampled to 5 pts) + 2x2-quad grid; resample_closed off => the 4 closed quads pass through as-is
+        let s = r#"{"nodes":[
+            {"name":"l","type":"line","params":{}},
+            {"name":"g","type":"grid","params":{"rows":3,"cols":3}},
+            {"name":"m","type":"merge"},
+            {"name":"r","type":"resample","params":{"length":0.25,"resample_closed":false}}],
+            "edges":[["l",0,"m",0],["g",0,"m",1],["m",0,"r",0]],"display":"r"}"#;
+        let (mut g, id) = load_scene(s).expect("loads");
+        let out = g.cook(id, 0.0).expect("cooks");
+        let (mut g2, id2) = load_scene(
+            &s.replace(r#""name":"r""#, r#""name":"rr""#)
+                .replace(r#""r",0]"#, r#""rr",0]"#)
+                .replace(r#""display":"r""#, r#""display":"m""#),
+        )
+        .expect("loads");
+        let merged = g2.cook(id2, 0.0).expect("cooks");
+        // 5 new line points + all 9 grid points; 1 resampled line + 4 untouched quads
+        assert_eq!((out.point_count, out.prim_count(), out.vertex_count()), (5 + merged.point_count - 2, 5, 5 + 16));
+        let quads: Vec<_> = out.prims.iter().filter(|p| matches!(p.kind, PrimKind::Poly { closed: true })).collect();
+        assert_eq!(quads.len(), 4);
+        // the grid's 9 points survive bit-exact (same P multiset as the merged source's grid points)
+        let grid_p: Vec<[f32; 3]> = merged.p()[2..].to_vec();
+        assert_eq!(&out.p()[5..], &grid_p[..]);
+        // each pass-through quad has the same 4 positions as in the source
+        let src_q = |d: &Detail| -> Vec<Vec<[f32; 3]>> {
+            d.prims
+                .iter()
+                .filter(|p| matches!(p.kind, PrimKind::Poly { closed: true }))
+                .map(|p| {
+                    d.vertex_point[p.verts.start as usize..p.verts.end as usize]
+                        .iter()
+                        .map(|&v| d.p()[v as usize])
+                        .collect()
+                })
+                .collect()
+        };
+        assert_eq!(src_q(&out), src_q(&merged));
+    }
     #[test]
     fn attributes_lerp_ints_pick_nearest_prim_and_detail_pass() {
         let mut src = Detail::default();
