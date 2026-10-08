@@ -1,0 +1,2874 @@
+[
+ {
+  "sop": "sop-add",
+  "houdini": [
+   3,
+   1,
+   3
+  ],
+  "hexe": [
+   3,
+   1,
+   3
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     3.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     3.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-attribcopy",
+  "houdini": [
+   9,
+   4,
+   16
+  ],
+  "hexe": [
+   9,
+   4,
+   16
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "v"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "v"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-attribdelete",
+  "houdini": [
+   9,
+   4,
+   16
+  ],
+  "hexe": [
+   9,
+   4,
+   16
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "v"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "v"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-attribpromote",
+  "houdini": [
+   9,
+   4,
+   16
+  ],
+  "hexe": [
+   9,
+   4,
+   16
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "w"
+    ],
+    "prim": [
+     "v"
+    ],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "w"
+    ],
+    "prim": [
+     "v"
+    ],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-attribtransfer",
+  "houdini": [
+   9,
+   4,
+   16
+  ],
+  "hexe": [
+   9,
+   4,
+   16
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "v"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "v"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-blast",
+  "houdini": [
+   8,
+   5,
+   20
+  ],
+  "hexe": [
+   8,
+   5,
+   20
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-boolean",
+  "houdini": [
+   14,
+   9,
+   42
+  ],
+  "hexe": [
+   14,
+   9,
+   42
+  ],
+  "attrib_diff": {
+   "prim_groups": {
+    "houdini": [],
+    "hexe": [
+     "a_only",
+     "b_only",
+     "seam"
+    ]
+   }
+  },
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ATTRIB-DIFF",
+   "ORDER-DIFF"
+  ],
+  "verdict": "ATTRIB-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-box",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-circle",
+  "houdini": [
+   6,
+   1,
+   6
+  ],
+  "hexe": [
+   6,
+   1,
+   6
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -2.0,
+     -0.866025,
+     0.0
+    ],
+    [
+     2.0,
+     0.866025,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     -2.0,
+     -0.866025,
+     0.0
+    ],
+    [
+     2.0,
+     0.866025,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-copytopoints",
+  "houdini": [
+   72,
+   54,
+   216
+  ],
+  "hexe": [
+   72,
+   54,
+   216
+  ],
+  "attrib_diff": {
+   "point": {
+    "houdini_only": [],
+    "hexe_only": [
+     "copynum"
+    ]
+   },
+   "prim": {
+    "houdini_only": [],
+    "hexe_only": [
+     "copynum"
+    ]
+   }
+  },
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ATTRIB-DIFF",
+   "ORDER-DIFF"
+  ],
+  "verdict": "ATTRIB-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.5,
+     -0.5,
+     -5.5
+    ],
+    [
+     5.5,
+     0.5,
+     5.5
+    ]
+   ],
+   "hexe": [
+    [
+     -5.5,
+     -0.5,
+     -5.5
+    ],
+    [
+     5.5,
+     0.5,
+     5.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "copynum"
+    ],
+    "prim": [
+     "copynum"
+    ],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-curve",
+  "houdini": [
+   3,
+   1,
+   3
+  ],
+  "hexe": [
+   3,
+   1,
+   3
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     2.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     2.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-delete",
+  "houdini": [
+   9,
+   2,
+   8
+  ],
+  "hexe": [
+   9,
+   2,
+   8
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-facet",
+  "houdini": [
+   24,
+   6,
+   24
+  ],
+  "hexe": [
+   24,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "N",
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "N",
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-file",
+  "houdini": [
+   6,
+   8,
+   24
+  ],
+  "hexe": [
+   6,
+   8,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.04,
+     -0.04,
+     -1.0
+    ],
+    [
+     0.04,
+     0.04,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     -0.04,
+     -0.04,
+     -1.0
+    ],
+    [
+     0.04,
+     0.04,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "Cd",
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "N"
+    ],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "Cd",
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "N"
+    ],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-foreach",
+  "houdini": [
+   6,
+   0,
+   0
+  ],
+  "hexe": [
+   6,
+   0,
+   0
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     5.0,
+     1.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     5.0,
+     1.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [],
+   "hexe": []
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "name"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "name"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-fuse",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   32,
+   30,
+   120
+  ],
+  "p": "n/a",
+  "flags": [
+   "COUNT-DIFF"
+  ],
+  "verdict": "COUNT-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-grid",
+  "houdini": [
+   12,
+   6,
+   24
+  ],
+  "hexe": [
+   12,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -3.0,
+     0.0,
+     -2.0
+    ],
+    [
+     3.0,
+     0.0,
+     2.0
+    ]
+   ],
+   "hexe": [
+    [
+     -3.0,
+     0.0,
+     -2.0
+    ],
+    [
+     3.0,
+     0.0,
+     2.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-group",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-groupdelete",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-grouppromote",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-line",
+  "houdini": [
+   5,
+   1,
+   5
+  ],
+  "hexe": [
+   5,
+   1,
+   5
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.0,
+     0.0,
+     0.0
+    ],
+    [
+     2.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     -2.0,
+     0.0,
+     0.0
+    ],
+    [
+     2.0,
+     0.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-merge",
+  "houdini": [
+   17,
+   10,
+   40
+  ],
+  "hexe": [
+   17,
+   10,
+   40
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     -0.5,
+     -5.0
+    ],
+    [
+     5.0,
+     0.5,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     -0.5,
+     -5.0
+    ],
+    [
+     5.0,
+     0.5,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-noise",
+  "houdini": [
+   121,
+   0,
+   0
+  ],
+  "hexe": [
+   121,
+   0,
+   0
+  ],
+  "p_unmatched_points": 121,
+  "p_maxdev_nearest": 10.75974,
+  "p": "P-DIFF",
+  "flags": [
+   "P-DIFF"
+  ],
+  "verdict": "P-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -4.609555,
+     0.39509,
+     -4.528774
+    ],
+    [
+     5.70772,
+     0.766918,
+     5.75868
+    ]
+   ],
+   "hexe": [
+    [
+     -5.188845,
+     -0.283293,
+     -5.149786
+    ],
+    [
+     5.267472,
+     0.299358,
+     5.275408
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [],
+   "hexe": []
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-normal",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "N"
+    ],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "N"
+    ],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-peak",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.644338,
+     -0.644338,
+     -0.644338
+    ],
+    [
+     0.644338,
+     0.644338,
+     0.644338
+    ]
+   ],
+   "hexe": [
+    [
+     -0.644338,
+     -0.644338,
+     -0.644338
+    ],
+    [
+     0.644338,
+     0.644338,
+     0.644338
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-polybevel",
+  "houdini": [
+   56,
+   54,
+   216
+  ],
+  "hexe": [
+   48,
+   38,
+   168
+  ],
+  "p": "n/a",
+  "flags": [
+   "COUNT-DIFF"
+  ],
+  "verdict": "COUNT-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-polyextrude",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   48,
+   30,
+   120
+  ],
+  "p": "n/a",
+  "flags": [
+   "COUNT-DIFF"
+  ],
+  "verdict": "COUNT-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-registry",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-resample",
+  "houdini": [
+   24,
+   1,
+   24
+  ],
+  "hexe": [
+   24,
+   1,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -2.0,
+     -0.866025,
+     0.0
+    ],
+    [
+     2.0,
+     0.866025,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     -2.0,
+     -0.866025,
+     0.0
+    ],
+    [
+     2.0,
+     0.866025,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-reverse",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-scatter",
+  "houdini": [
+   500,
+   0,
+   0
+  ],
+  "hexe": [
+   500,
+   0,
+   0
+  ],
+  "attrib_diff": {
+   "point": {
+    "houdini_only": [],
+    "hexe_only": [
+     "N",
+     "sourceprim"
+    ]
+   }
+  },
+  "p_unmatched_points": 500,
+  "p_maxdev_nearest": 8.987924,
+  "p": "P-DIFF",
+  "flags": [
+   "ATTRIB-DIFF",
+   "P-DIFF"
+  ],
+  "verdict": "ATTRIB-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -4.966263,
+     0.0,
+     -4.958756
+    ],
+    [
+     4.941212,
+     0.0,
+     4.945692
+    ]
+   ],
+   "hexe": [
+    [
+     -4.978752,
+     0.0,
+     -4.993153
+    ],
+    [
+     4.992688,
+     0.0,
+     4.994955
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [],
+   "hexe": []
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "N",
+     "P",
+     "sourceprim"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-smooth",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p_unmatched_points": 8,
+  "p_maxdev_nearest": 0.206349,
+  "p": "P-DIFF",
+  "flags": [
+   "P-DIFF"
+  ],
+  "verdict": "P-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.428571,
+     -0.428571,
+     -0.428571
+    ],
+    [
+     0.428571,
+     0.428571,
+     0.428571
+    ]
+   ],
+   "hexe": [
+    [
+     -0.222222,
+     -0.222222,
+     -0.222222
+    ],
+    [
+     0.222222,
+     0.222222,
+     0.222222
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-sort",
+  "houdini": [
+   9,
+   4,
+   16
+  ],
+  "hexe": [
+   9,
+   4,
+   16
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-sphere",
+  "houdini": [
+   266,
+   288,
+   1104
+  ],
+  "hexe": [
+   266,
+   288,
+   1104
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-subdivide",
+  "houdini": [
+   26,
+   24,
+   96
+  ],
+  "hexe": [
+   26,
+   24,
+   96
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-transform",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     0.316987,
+     1.0,
+     2.316987
+    ],
+    [
+     1.683013,
+     3.0,
+     3.683013
+    ]
+   ],
+   "hexe": [
+    [
+     0.316987,
+     1.0,
+     2.316987
+    ],
+    [
+     1.683013,
+     3.0,
+     3.683013
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-uvlayout",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "attrib_diff": {
+   "detail": {
+    "houdini_only": [
+     "coverage",
+     "numnonpacked"
+    ],
+    "hexe_only": []
+   }
+  },
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ATTRIB-DIFF",
+   "ORDER-DIFF"
+  ],
+  "verdict": "ATTRIB-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": [
+     "coverage",
+     "numnonpacked"
+    ]
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-uvproject",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-uvunwrap",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-wrangle",
+  "houdini": [
+   121,
+   0,
+   0
+  ],
+  "hexe": [
+   121,
+   0,
+   0
+  ],
+  "p": "ORDER-DIFF",
+  "flags": [
+   "ORDER-DIFF"
+  ],
+  "verdict": "ORDER-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     -0.479462,
+     -5.0
+    ],
+    [
+     5.0,
+     0.479462,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     -0.479462,
+     -5.0
+    ],
+    [
+     5.0,
+     0.479462,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [],
+   "hexe": []
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ }
+]
