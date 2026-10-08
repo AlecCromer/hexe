@@ -44,6 +44,7 @@ pub const TABLE: &[(&str, Class)] = &[
     // ("testkit", Class::Testkit),
     ("hexe", Class::Exempt),
     ("cli", Class::Exempt),
+    ("tauri", Class::Exempt),
     ("xtask", Class::Exempt),
 ];
 /// Workspace crates a standalone crate may use, e.g. `("cos", &["filters", "geom"])`.
@@ -51,7 +52,7 @@ pub const STANDALONE_DEPS: &[(&str, &[&str])] = &[];
 /// Allowed same-layer edges `(from, to)`.
 pub const SIDEWAYS: &[(&str, &str)] = &[];
 /// External crates that are UI toolkits / windowing (`*` suffix = prefix match).
-pub const UI_CRATES: &[&str] = &["egui", "eframe", "winit", "egui_kittest", "egui_extras", "rfd", "wgpu*"];
+pub const UI_CRATES: &[&str] = &["egui", "eframe", "tauri*", "winit", "egui_kittest", "egui_extras", "rfd", "wgpu*"];
 pub const UI_MIN_LAYER: u8 = 7;
 
 pub struct Rules<'a> {
@@ -287,7 +288,7 @@ mod tests {
 
     #[test]
     fn ui_crates_below_l7_flagged() {
-        for dep in ["egui", "eframe", "winit", "wgpu", "wgpu-core"] {
+        for dep in ["egui", "eframe", "tauri*", "winit", "wgpu", "wgpu-core"] {
             let v = R.check(&[c("engine", &[(dep, Normal, false)])]);
             assert!(matches!(v[..], [Violation::UiBelowL7 { layer: 6, .. }]), "{dep}");
         }

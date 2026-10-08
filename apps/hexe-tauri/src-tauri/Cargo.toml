@@ -1,0 +1,31 @@
+[package]
+name = "hexe-tauri"
+description = "hexe desktop app (Tauri 2 shell + web UI) on the hexe engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+default-run = "hexe-tauri"
+
+[lib]
+name = "hexe_tauri_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hexe-tauri"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+hexe-core = { workspace = true }
+hexe-geo = { workspace = true }
+hexe-graph = { workspace = true }
+hexe-sop = { workspace = true }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/*", "xtask"]
+members = ["crates/*", "apps/hexe", "apps/hexe-cli", "apps/hexe-tauri/src-tauri", "xtask"]
 
 [workspace.package]
 version = "0.1.0"

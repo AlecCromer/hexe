@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "main window: core events + the explicit hexe commands (no fs/shell plugins)",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
