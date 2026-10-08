@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "grid1", "type": "grid", "params": { "rows": 11, "cols": 11 } },
+    { "name": "divide1", "type": "divide" },
+    { "name": "polyreduce1", "type": "polyreduce", "params": { "percentage": 25, "lockboundary": true } }
+  ],
+  "edges": [["grid1", 0, "divide1", 0], ["divide1", 0, "polyreduce1", 0]],
+  "display": "polyreduce1"
+}

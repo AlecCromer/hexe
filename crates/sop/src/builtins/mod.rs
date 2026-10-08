@@ -125,6 +125,7 @@ mod revolve_sop;
 mod skin_sop;
 mod polyfill_sop;
 mod convert_sop;
+mod polyreduce_sop;
 // --- end S2 mods ---
 
 /// One `r.register("<type>", <mod>::spec, <mod>::new);` per SOP.
@@ -247,6 +248,7 @@ r.register("revolve", revolve_sop::spec, revolve_sop::new);
 r.register("skin", skin_sop::spec, skin_sop::new);
 r.register("polyfill", polyfill_sop::spec, polyfill_sop::new);
 r.register("convert", convert_sop::spec, convert_sop::new);
+r.register("polyreduce", polyreduce_sop::spec, polyreduce_sop::new);
 // --- end S2 registers ---
 }
 

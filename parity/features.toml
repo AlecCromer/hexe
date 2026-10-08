@@ -1243,3 +1243,19 @@ evidence = [
   "crates/sop/src/builtins/convert_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "S2: fromtype all|poly|polyline|sphere|tube, totype polygon|polyline, rows(8) cols(16). polygon->polyline: Polyline prim, closed poly repeats first corner; polyline->polygon: first==last (>=4) = closed poly else open (exact round trip pinned). Sphere (poles +-Y) / Tube (Y axis, r=1 at y=-.5, r=taper at +.5, closed = caps) tessellated through the prim's 3x3 xform + point offset, outward winding (sphere r=2 volume within 1%, cylinder exact to the 64-gon, cone 1/3), mirroring xform compensated, poles/apex shared (tris), centre point dropped unless shared, new points copy the centre point attrs, new polys the prim attrs. Nothing to convert = Arc shared. NOT modelled (DEFERRED): NURBS/Bezier/metaball/volume/packed sources, polysoup, polyedges, LOD parms. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini convert has fromtype/totype with many more targets), tube axis/taper convention (mirrors the viewport proxy), sphere tessellation layout. Example: examples/convert.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-polyreduce"
+title = "PolyReduce SOP (shortest-edge collapse to a target percentage; quadric-free)"
+area = "A"
+tier = "P2"
+status = "partial"
+commands = ["polyreduce"]
+evidence = [
+  "crates/sop/src/builtins/polyreduce_sop.rs::grid_reduces_to_about_half_with_boundary_locked_and_area_preserved",
+  "crates/sop/src/builtins/polyreduce_sop.rs::closed_octahedron_collapses_staying_a_closed_outward_manifold",
+  "crates/sop/src/builtins/polyreduce_sop.rs::percentage_extremes_attributes_and_non_poly_prims",
+  "crates/sop/src/builtins/polyreduce_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/polyreduce_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "S2 (PARTIAL by design): percentage(50, share of closed polys kept, 100 = Arc shared) lockboundary(off). Greedy shortest-edge collapse to the midpoint (ties: lowest ids), link-condition guard (common neighbours must lie in a poly sharing the edge), no collapse of points used by non-poly prims, boundary-pair guard; stops at target or when no legal edge is left (result may stay above target; quads degrade to tris, only triangle pairs drop polys). Grid 6x6 tris 50 -> <=26 with boundary locked and area exactly 25; octahedron stays a closed outward 2-manifold; Cd blends via meshutil::rebuild, prim attrs copy. NOT modelled (DEFERRED): quadric error metric, flip/normal-deviation test, seam/UV preservation, target modes other than percentage, symmetry. UNVERIFIED vs Houdini (hython blocked): everything about parm set and result quality (Houdini polyreduce is quadric-based). Example: examples/polyreduce.json. Analytical oracle only."
