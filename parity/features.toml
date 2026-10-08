@@ -121,7 +121,7 @@ evidence = [
   "crates/sop/src/builtins/box_sop.rs::fixture_box_default_matches_analytical_expected",
   "crates/sop/src/builtins/box_sop.rs::fixture_box_divs222_matches_analytical_expected",
 ]
-notes = "wave 2: type=poly only (other menu values -> BadParam 'unsupported in wave 2'); params type consolidatepts size t scale divrate dodivs divs. EXCLUDED: surftype r orderrate rebar orientedbbox vertexnormals, input-0 bbox mode (generator only). divrate validated (min 1, cap) but inert for poly (mesh types only). divs = points per axis (<2 treated as 2). Oracle cases box-default, box-divs222 (analytical, not Houdini-observed; hython blocked). UNVERIFIED vs Houdini: point/prim order (here x-major z-fastest low->high, faces -x+x-y+y-z+z), winding, consolidatepts-off with divs, divs=1, negative size, scale-about-centre (t unscaled), attr list (P only)."
+notes = "wave 2: type=poly only (other menu values -> BadParam 'unsupported in wave 2'); params type consolidatepts size t scale divrate dodivs divs. EXCLUDED: surftype r orderrate rebar orientedbbox vertexnormals, input-0 bbox mode (generator only). divrate validated (min 1, cap) but inert for poly (mesh types only). divs = points per axis (<2 treated as 2). Oracle cases box-default, box-divs222 (analytical, not Houdini-observed; hython blocked). UNVERIFIED vs Houdini: point/prim order (here x-major z-fastest low->high, faces -x+x-y+y-z+z), winding, consolidatepts-off with divs, divs=1, negative size, scale-about-centre (t unscaled), attr list (P only). H31: DEFAULT box point/prim order now equals real Houdini 20.5 (fixtures/sop-box/houdini.geo, pinned by box_sop.rs::default_box_matches_houdini_fixture_order; supersedes every order claim above); hexe runs each cell the other way (CCW) -> winding only; dodivs/divs semantics differ from Houdini (it uses segment counts + interior points), divisions order UNVERIFIED. Houdini-oracle (H31): WINDING-DIFF."
 
 [[feature]]
 id = "sop-grid"
@@ -133,7 +133,7 @@ commands = ["grid"]
 evidence = [
   "crates/sop/src/builtins/grid_sop.rs::default_is_100_points_81_quads_on_zx_plane",
   "crates/sop/src/builtins/grid_sop.rs::closed_form_counts_for_every_surftype",
-  "crates/sop/src/builtins/grid_sop.rs::first_quad_winding_is_0_1_cols_plus_1_cols_for_every_orient",
+  "crates/sop/src/builtins/grid_sop.rs::first_quad_winding_is_0_cols_cols_plus_1_1_for_every_orient",
   "crates/sop/src/builtins/grid_sop.rs::quad_normals_follow_the_orient_plane_normal",
   "crates/sop/src/builtins/grid_sop.rs::corner_positions_for_each_orient_size_and_center",
   "crates/sop/src/builtins/grid_sop.rs::interior_points_are_evenly_spaced",
@@ -150,7 +150,7 @@ evidence = [
   "crates/sop/src/builtins/grid_sop.rs::wrong_typed_params_are_errors",
   "crates/sop/src/builtins/grid_sop.rs::fixtures_match_sop_output",
 ]
-notes = "All 12 parms declared+honoured: type poly|polysoup|mesh|points implemented, nurbs|bezier -> CookError::Unsupported (new variant, never a fallback); surftype rows cols rowcol triangles quads alttriangles revtriangles; orient xy/yz/zx; size, t, r (Rx,Ry,Rz deg about center), rows, cols (hard min 1, 1-sample axis = center); orderu/orderv/interpu/interpv typed+ignored (nurbs/bezier only). Fixtures grid-default, grid-tri-3x3 are ANALYTICAL, not Houdini-observed. UNVERIFIED vs Houdini: zx row axis along -Z (row 0 at +Z, point 0=(-5,0,5)) so ONE winding (0,1,cols+1,cols) holds for every orient, yz axes (cols=Y, rows=Z) and size[0]/size[1] axis assignment, triangle diagonals (triangles a-cc, revtriangles b-dd, alttriangles checkerboard from even), rows/cols polyline direction, rowcol order (rows then cols), polysoup emitted as ordinary polys (no POLYSOUP prim kind; Houdini = 1 soup prim), mesh = one Unknown{Mesh} prim w/ json body layout invented (vertex,ucount,vcount,uwrap,vwrap,connectivity), r order/pivot, N attr absent, negative size accepted (flips), size declared V3 (z ignored), 2^20 point cap is ours."
+notes = "All 12 parms declared+honoured: type poly|polysoup|mesh|points implemented, nurbs|bezier -> CookError::Unsupported (new variant, never a fallback); surftype rows cols rowcol triangles quads alttriangles revtriangles; orient xy/yz/zx; size, t, r (Rx,Ry,Rz deg about center), rows, cols (hard min 1, 1-sample axis = center); orderu/orderv/interpu/interpv typed+ignored (nurbs/bezier only). Fixtures grid-default, grid-tri-3x3 are ANALYTICAL, not Houdini-observed. UNVERIFIED vs Houdini: zx row axis along -Z (row 0 at +Z, point 0=(-5,0,5)) so ONE winding (0,1,cols+1,cols) holds for every orient, yz axes (cols=Y, rows=Z) and size[0]/size[1] axis assignment, triangle diagonals (triangles a-cc, revtriangles b-dd, alttriangles checkerboard from even), rows/cols polyline direction, rowcol order (rows then cols), polysoup emitted as ordinary polys (no POLYSOUP prim kind; Houdini = 1 soup prim), mesh = one Unknown{Mesh} prim w/ json body layout invented (vertex,ucount,vcount,uwrap,vwrap,connectivity), r order/pivot, N attr absent, negative size accepted (flips), size declared V3 (z ignored), 2^20 point cap is ours. H31: lattice order now equals real Houdini 20.5 for xy/yz/zx (row 0 at the low end of the second axis, yz cols along Z; supersedes the zx -Z claims above); cells reversed (CCW) vs Houdini -> winding only. Houdini-oracle (H31): WINDING-DIFF."
 
 [[feature]]
 id = "sop-sphere"
@@ -160,7 +160,7 @@ tier = "P0"
 status = "shipped"
 commands = ["sphere"]
 evidence = ["crates/sop/src/builtins/sphere_sop.rs::default_is_one_point_one_sphere_prim", "crates/sop/src/builtins/sphere_sop.rs::poly_counts_are_10f2_plus_2_and_20f2", "crates/sop/src/builtins/sphere_sop.rs::poly_is_closed_outward_unit_sphere", "crates/sop/src/builtins/sphere_sop.rs::polymesh_default_closed_form_counts", "crates/sop/src/builtins/sphere_sop.rs::hostile_params_are_errors_not_panics", "crates/sop/src/builtins/sphere_sop.rs::fixtures_match_sop_output_and_independent_expected"]
-notes = "types prim/poly/polymesh only (mesh/nurbs/bezier/polysoup = BadParam; polymesh surftype quads only). Skipped params: orderu/orderv/imperfect (NURBS), accurate (no input). ALL UNVERIFIED vs Houdini (hython blocked, analytical fixtures): polymesh counts (R-2)C+2 pts / (R-1)C prims (tri poles), point order (rings top-down, then top pole, bottom pole), ring angle start/direction, poly icosahedron orientation + point/tri order, orient permutation, rotate order Rx,Ry,Rz, scale on rad only, Sphere xform row/col convention, upole/triangularpoles semantics, freq cap 100 (UI max 10), no N/uv attrs"
+notes = "types prim/poly/polymesh only (mesh/nurbs/bezier/polysoup = BadParam; polymesh surftype quads only). Skipped params: orderu/orderv/imperfect (NURBS), accurate (no input). ALL UNVERIFIED vs Houdini (hython blocked, analytical fixtures): polymesh counts (R-2)C+2 pts / (R-1)C prims (tri poles), point order (rings top-down, then top pole, bottom pole), ring angle start/direction, poly icosahedron orientation + point/tri order, orient permutation, rotate order Rx,Ry,Rz, scale on rad only, Sphere xform row/col convention, upole/triangularpoles semantics, freq cap 100 (UI max 10), no N/uv attrs H31: polymesh order now equals real Houdini 20.5 (poles points 0/1 first, ring +X toward -Z; supersedes the order claims above); cells reversed (CCW) vs Houdini -> winding only. Houdini-oracle (H31): WINDING-DIFF."
 
 [[feature]]
 id = "sop-transform"
@@ -177,7 +177,7 @@ evidence = [
   "crates/sop/src/builtins/transform_sop.rs::normals_use_inverse_transpose",
   "crates/sop/src/builtins/transform_sop.rs::hostile_params_are_errors",
 ]
-notes = "Wave 2B. token xform. Registered: group(point-group NAME only; grouptype guess/points) grouptype xOrd rOrd t r s shear scale p pr(must be 0, else BadParam) updatenmls invertxform. NOT registered: prexform_*, movecentroid/movepivot, attribs, updateaffectednmls, vlength, addattrib/outputattrib/outputmerge. Matrix T(-p).X1.X2.X3.T(p) row-vector, glam f64; shear form, xOrd/rOrd apply order, pivot placement for non-srt orders, N handling (transformed always via inverse-transpose; length kept unless updatenmls, which is really Houdini 'recompute from geometry') are all UNVERIFIED vs Houdini (hython blocked). Sphere/Tube prim xforms not updated. Oracle fixtures xform-translate/xform-rot90y have EMPTY input (no generator SOP / geo source yet) = smoke only; real maths covered by in-file closed-form tests; upgrade fixtures to box->xform once box ships."
+notes = "Wave 2B. token xform. Registered: group(point-group NAME only; grouptype guess/points) grouptype xOrd rOrd t r s shear scale p pr(must be 0, else BadParam) updatenmls invertxform. NOT registered: prexform_*, movecentroid/movepivot, attribs, updateaffectednmls, vlength, addattrib/outputattrib/outputmerge. Matrix T(-p).X1.X2.X3.T(p) row-vector, glam f64; shear form, xOrd/rOrd apply order, pivot placement for non-srt orders, N handling (transformed always via inverse-transpose; length kept unless updatenmls, which is really Houdini 'recompute from geometry') are all UNVERIFIED vs Houdini (hython blocked). Sphere/Tube prim xforms not updated. Oracle fixtures xform-translate/xform-rot90y have EMPTY input (no generator SOP / geo source yet) = smoke only; real maths covered by in-file closed-form tests; upgrade fixtures to box->xform once box ships. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-merge"
@@ -195,7 +195,7 @@ evidence = [
   "crates/sop/src/builtins/merge_sop.rs::empty_inputs_are_skipped_and_all_empty_is_empty",
   "crates/sop/src/builtins/merge_sop.rs::fixture_expected_equals_merge_of_hand_built_boxes",
 ]
-notes = "wave 2: max 4 inputs (input0..3; Houdini 9999); variadic ports = graph wave 3. 0 params (doc-labelled 0; hidden parms [?] unknown, none modelled). Single live input shares the Arc; empty inputs skipped. UNVERIFIED vs Houdini (hython blocked): attr default-fill (0 / empty string), type/tuple-size conflict = Failed (Houdini may drop/convert), group union, detail attr first-wins, bypass-exports-input-1 not modelled. Oracle: fixtures/merge-empty scores; fixtures/merge-two-boxes is xfail until the box SOP lane lands (point order/params of box unverified). Analytical expecteds, not Houdini-observed."
+notes = "wave 2: max 4 inputs (input0..3; Houdini 9999); variadic ports = graph wave 3. 0 params (doc-labelled 0; hidden parms [?] unknown, none modelled). Single live input shares the Arc; empty inputs skipped. UNVERIFIED vs Houdini (hython blocked): attr default-fill (0 / empty string), type/tuple-size conflict = Failed (Houdini may drop/convert), group union, detail attr first-wins, bypass-exports-input-1 not modelled. Oracle: fixtures/merge-empty scores; fixtures/merge-two-boxes is xfail until the box SOP lane lands (point order/params of box unverified). Analytical expecteds, not Houdini-observed. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-polybevel"
@@ -217,7 +217,7 @@ evidence = [
 "crates/sop/src/builtins/polybevel_sop.rs::hostile_params_degenerate_prims_and_caps",
 "crates/sop/src/builtins/polybevel_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
 ]
-notes = "H22: params group/offset/divisions/filletshape = OUR minimal subset. Bevelable edge = exactly 2 valid closed polys, opposite winding (boundary / non-manifold edges never beveled). offset = in-face perpendicular distance (cube chamfer width = offset*sqrt2). Vertex splits into sectors (corners joined across unbeveled edges) + cap polys for closed sector loops; cube all-edges: div1 = 24 pts/26 prims (6 quads+12 strips+8 tris), div2 = 48/38 (8 hexagon caps). round = conic arc w=sin(theta/2) (exact circle at 90deg), solid = straight profile. Group = 'a-b' edge pairs or point groups (both ends in group); no edge-group class in Detail. Point attrs copy source vertex (profile pts too), strips inherit first face prim attrs, existing N (point/vertex/prim) recomputed flat/uniform. LIMITS: a lone beveled edge (vertex with 1 beveled edge) tapers = no strip (selection needs loops/ends meeting 2+ beveled edges); no uv fix-up, per-edge offset, angle limit, offset-collision cleanup. UNVERIFIED vs Houdini (hython blocked): offset semantics (in-face vs along-edge), fillet-shape menu (round|solid meaning), profile param spacing, prim order, vertex-attr handling on strips. Example: examples/polybevel.json. Analytical oracle only."
+notes = "H22: params group/offset/divisions/filletshape = OUR minimal subset. Bevelable edge = exactly 2 valid closed polys, opposite winding (boundary / non-manifold edges never beveled). offset = in-face perpendicular distance (cube chamfer width = offset*sqrt2). Vertex splits into sectors (corners joined across unbeveled edges) + cap polys for closed sector loops; cube all-edges: div1 = 24 pts/26 prims (6 quads+12 strips+8 tris), div2 = 48/38 (8 hexagon caps). round = conic arc w=sin(theta/2) (exact circle at 90deg), solid = straight profile. Group = 'a-b' edge pairs or point groups (both ends in group); no edge-group class in Detail. Point attrs copy source vertex (profile pts too), strips inherit first face prim attrs, existing N (point/vertex/prim) recomputed flat/uniform. LIMITS: a lone beveled edge (vertex with 1 beveled edge) tapers = no strip (selection needs loops/ends meeting 2+ beveled edges); no uv fix-up, per-edge offset, angle limit, offset-collision cleanup. UNVERIFIED vs Houdini (hython blocked): offset semantics (in-face vs along-edge), fillet-shape menu (round|solid meaning), profile param spacing, prim order, vertex-attr handling on strips. Example: examples/polybevel.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): COUNT-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-polyextrude"
@@ -236,7 +236,7 @@ evidence = [
   "crates/sop/src/builtins/polyextrude_sop.rs::hostile_non_polygon_and_degenerate_pass_through",
   "crates/sop/src/builtins/polyextrude_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
 ]
-notes = "H9: individual mode only (no shared-edge welding). Params distance/inset/divisions/output_front/output_side/output_back/group = OUR minimal subset, not the harvested parm table. Inset = mitre edge offset toward centroid, applied before distance; divisions interpolate linearly. Prim order: front, sides (layer-major), back, in place. Input points used only by extruded prims are dropped (box 6 quads -> 48 pts). NOT modelled: extrusion spacing/twist/taper, local/global transform, N/uv updates, thickness, vertex-normal extrude mode, point/edge groups, output groups (front/back/side), connected (welded) mode. UNVERIFIED vs Houdini (hython blocked): side/front order, inset formula on concave n-gons, group-miss = Failed. Example: examples/polyextrude.json. Analytical oracle only."
+notes = "H9: individual mode only (no shared-edge welding). Params distance/inset/divisions/output_front/output_side/output_back/group = OUR minimal subset, not the harvested parm table. Inset = mitre edge offset toward centroid, applied before distance; divisions interpolate linearly. Prim order: front, sides (layer-major), back, in place. Input points used only by extruded prims are dropped (box 6 quads -> 48 pts). NOT modelled: extrusion spacing/twist/taper, local/global transform, N/uv updates, thickness, vertex-normal extrude mode, point/edge groups, output groups (front/back/side), connected (welded) mode. UNVERIFIED vs Houdini (hython blocked): side/front order, inset formula on concave n-gons, group-miss = Failed. Example: examples/polyextrude.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): COUNT-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-subdivide"
@@ -254,7 +254,7 @@ evidence = [
   "crates/sop/src/builtins/subdivide_sop.rs::open_grid_3x3_is_25_points_16_quads_boundary_corners_on_boundary",
   "crates/sop/src/builtins/subdivide_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
 ]
-notes = "H18: iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear; >=2 OpenSubdiv = Unsupported) / group. CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Output = quads only; face/edge pts appended after input pts. NOT modelled: creases, OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), crack protection vs unselected prims, subdivision of non-poly prims. UNVERIFIED vs Houdini (hython blocked). Example: examples/subdivide.json."
+notes = "H18: iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear; >=2 OpenSubdiv = Unsupported) / group. CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Output = quads only; face/edge pts appended after input pts. NOT modelled: creases, OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), crack protection vs unselected prims, subdivision of non-poly prims. UNVERIFIED vs Houdini (hython blocked). Example: examples/subdivide.json. Houdini-oracle (H31, real Houdini 20.5): ORDER-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-smooth"
@@ -268,7 +268,7 @@ evidence = [
   "crates/sop/src/builtins/smooth_sop.rs::zero_strength_zero_iterations_and_empty_share_the_arc",
   "crates/sop/src/builtins/smooth_sop.rs::pin_boundary_keeps_grid_border_and_moves_only_the_free_centre",
 ]
-notes = "H18: iterations I (0..=1000) / strength F / pin_boundary B. P += strength*(avg(distinct edge neighbours)-P), Jacobi. NOT modelled: Houdini's other smoothing modes (cotangent/volume-preserving), groups, attribute smoothing, N update. UNVERIFIED vs Houdini (hython blocked)."
+notes = "H18: iterations I (0..=1000) / strength F / pin_boundary B. P += strength*(avg(distinct edge neighbours)-P), Jacobi. NOT modelled: Houdini's other smoothing modes (cotangent/volume-preserving), groups, attribute smoothing, N update. UNVERIFIED vs Houdini (hython blocked). Houdini-oracle (H31, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-peak"
@@ -282,7 +282,7 @@ evidence = [
   "crates/sop/src/builtins/peak_sop.rs::zero_distance_and_empty_share_the_arc",
   "crates/sop/src/builtins/peak_sop.rs::existing_n_is_used_as_is_and_negative_distance_reverses",
 ]
-notes = "H18: distance F only. P += N*distance; N = existing point N as-is, else uniform-averaged unit Newell. NOT modelled: group, N update. UNVERIFIED vs Houdini (hython blocked)."
+notes = "H18: distance F only. P += N*distance; N = existing point N as-is, else uniform-averaged unit Newell. NOT modelled: group, N update. UNVERIFIED vs Houdini (hython blocked). Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-facet"
@@ -297,7 +297,7 @@ evidence = [
   "crates/sop/src/builtins/facet_sop.rs::flat_grid_cusp_60_is_unchanged_and_shares_the_arc",
   "crates/sop/src/builtins/facet_sop.rs::post_nml_unique_gives_face_normals_and_shared_gives_diagonals",
 ]
-notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N). NOT modelled: remove_inline, group, prim-normal flip/ consolidate options. UNVERIFIED vs Houdini (hython blocked)."
+notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N). NOT modelled: remove_inline, group, prim-normal flip/ consolidate options. UNVERIFIED vs Houdini (hython blocked). Houdini-oracle (H31, real Houdini 20.5): ORDER-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-scatter"
@@ -312,7 +312,7 @@ evidence = [
   "crates/sop/src/builtins/scatter_sop.rs::same_seed_is_byte_equal_other_seed_differs",
   "crates/sop/src/builtins/scatter_sop.rs::example_scene_cooks",
 ]
-notes = "H6: params npts(1000) seed(0, i32 sign-extended to u64) density_attrib(empty). Area-weighted CDF + sqrt-barycentric, fan n-gons, SplitMix64; density = area*mean corner weight + in-tri rejection; out = P + sourceprim + N. NOT modelled: the other ~30 doc params (relax, attribute transfer, group, vol modes). UNVERIFIED vs Houdini (hython blocked): RNG stream, N when no prim N (we compute geometric), density attr lookup order (prim wins). Statistical parity only."
+notes = "H6: params npts(1000) seed(0, i32 sign-extended to u64) density_attrib(empty). Area-weighted CDF + sqrt-barycentric, fan n-gons, SplitMix64; density = area*mean corner weight + in-tri rejection; out = P + sourceprim + N. NOT modelled: the other ~30 doc params (relax, attribute transfer, group, vol modes). UNVERIFIED vs Houdini (hython blocked): RNG stream, N when no prim N (we compute geometric), density attr lookup order (prim wins). Statistical parity only. Houdini-oracle (H31, real Houdini 20.5): ATTRIB-DIFF (+P-DIFF), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-copytopoints"
@@ -328,37 +328,37 @@ evidence = [
   "crates/sop/src/builtins/copytopoints_sop.rs::copynum_off_by_default_and_numbers_points_and_prims_when_on",
   "crates/sop/src/builtins/copytopoints_sop.rs::scene_loader_wires_box_and_grid_and_example_cooks",
 ]
-notes = "H5: translate + pscale + optional orient (N/up, +Z=N) + optional copynum; params use_orient/use_pscale/copynum are OUR names, not the harvested v2 parm table. Missing vs Houdini v2: source/target groups, piece attr, pack, targetattribs transfer, orient/scale attrs, implicit N, vertex-class N from target. Frame convention (+Z=N, +Y=up) UNVERIFIED (hython blocked). Example: examples/copytopoints.json. Analytical oracle only."
+notes = "H5: translate + pscale + optional orient (N/up, +Z=N) + optional copynum; params use_orient/use_pscale/copynum are OUR names, not the harvested v2 parm table. Missing vs Houdini v2: source/target groups, piece attr, pack, targetattribs transfer, orient/scale attrs, implicit N, vertex-class N from target. Frame convention (+Z=N, +Y=up) UNVERIFIED (hython blocked). Example: examples/copytopoints.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): ATTRIB-DIFF (+WINDING-DIFF), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-line"
 title = "Line SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["line"]
 evidence = [
   "crates/sop/src/builtins/line_sop.rs::defaults_are_two_points_p1_is_0_1_0_one_open_prim",
   "crates/sop/src/builtins/line_sop.rs::five_points_dist_4_spacing_exactly_1",
   "crates/sop/src/builtins/line_sop.rs::hostile_params_are_errors",
 ]
-notes = "H17: origin(0,0,0) dir(0,1,0) dist(1) points(2) -> one open Poly. POINT ORDER: point i = origin + normalize(dir)*dist*i/(points-1), ids ascend from origin, prim verts 0..n in order (generator-defined, UNVERIFIED vs Houdini, hython blocked). dir normalised (length ignored). Missing: NURBS/Bezier output, Houdini's other line modes (attribute-driven, distance-from-points). Analytical oracle only."
+notes = "H17: origin(0,0,0) dir(0,1,0) dist(1) points(2) -> one open Poly. POINT ORDER: point i = origin + normalize(dir)*dist*i/(points-1), ids ascend from origin, prim verts 0..n in order (generator-defined, UNVERIFIED vs Houdini, hython blocked). dir normalised (length ignored). Missing: NURBS/Bezier output, Houdini's other line modes (attribute-driven, distance-from-points). Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-line/houdini.geo."
 
 [[feature]]
 id = "sop-circle"
 title = "Circle SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["circle"]
 evidence = [
   "crates/sop/src/builtins/circle_sop.rs::four_divisions_radius_1_xy_is_the_four_axis_points_one_closed_prim",
   "crates/sop/src/builtins/circle_sop.rs::polyline_type_is_open_same_points",
   "crates/sop/src/builtins/circle_sop.rs::arc_0_to_90_four_divisions_is_five_points_open",
-  "crates/sop/src/builtins/circle_sop.rs::orient_yz_zx_are_ccw_about_plane_normal_with_radius_and_center",
+  "crates/sop/src/builtins/circle_sop.rs::orient_yz_zx_follow_houdini_axes_with_radius_and_center",
   "crates/sop/src/builtins/circle_sop.rs::nurbs_bezier_unsupported_and_hostile_divisions_rejected",
 ]
-notes = "H17: type polygon|polyline (nurbs/bezier -> Unsupported), orient xy|yz|zx, radius (declared V3, [2] ignored), center, divisions(12), arc closed|open_arc + beginangle/endangle(deg). POINT ORDER: right-handed cyclic in-plane axes xy(X,Y) yz(Y,Z) zx(Z,X) so every orient is CCW about its normal; point 0 on axis 0; closed = divisions pts (closing pt not repeated), open_arc = divisions+1 pts, a_i = begin+(end-begin)*i/divisions. Prim closed iff polygon && arc closed. UNVERIFIED vs Houdini (hython blocked): start axis/winding of yz+zx, closed-polyline-without-repeat. Missing: slice/sectors arc types, uniform scale, rotate, NURBS."
+notes = "H17: type polygon|polyline (nurbs/bezier -> Unsupported), orient xy|yz|zx, radius (declared V3, [2] ignored), center, divisions(12), arc closed|open_arc + beginangle/endangle(deg). POINT ORDER: right-handed cyclic in-plane axes xy(X,Y) yz(Y,Z) zx(Z,X) so every orient is CCW about its normal; point 0 on axis 0; closed = divisions pts (closing pt not repeated), open_arc = divisions+1 pts, a_i = begin+(end-begin)*i/divisions. Prim closed iff polygon && arc closed. UNVERIFIED vs Houdini (hython blocked): start axis/winding of yz+zx, closed-polyline-without-repeat. Missing: slice/sectors arc types, uniform scale, rotate, NURBS. Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-circle/houdini.geo."
 
 [[feature]]
 id = "sop-curve"
@@ -372,14 +372,14 @@ evidence = [
   "crates/sop/src/builtins/curve_sop.rs::empty_and_whitespace_variants",
   "crates/sop/src/builtins/curve_sop.rs::hostile_coords_are_errors",
 ]
-notes = "H17: coords S = whitespace-separated x,y,z triples, close B -> one Poly (open/closed), point i = i-th triple (generator-defined). Missing: NURBS/Bezier curve types, interactive-draw/multi-curve, 'method' menu, order/knots. Analytical oracle only."
+notes = "H17: coords S = whitespace-separated x,y,z triples, close B -> one Poly (open/closed), point i = i-th triple (generator-defined). Missing: NURBS/Bezier curve types, interactive-draw/multi-curve, 'method' menu, order/knots. Analytical oracle only. Houdini-oracle (H31): MATCH but the twin is an Add SOP (curve::2.0 has no scriptable coords parm) so the Curve SOP itself is NOT verified; stays partial."
 
 [[feature]]
 id = "sop-resample"
 title = "Resample SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["resample"]
 evidence = [
   "crates/sop/src/builtins/resample_sop.rs::line_dist_1_two_points_length_quarter_is_five_points_spacing_exact",
@@ -390,14 +390,14 @@ evidence = [
   "crates/sop/src/builtins/resample_sop.rs::hostile_params_and_geometry_are_errors",
   "crates/sop/src/builtins/resample_sop.rs::example_scene_cooks",
 ]
-notes = "H17: method length|segments, length(0.1), segments(10), lastsegment(on = edge_length_exact: shorter last segment; off = stretch to even spacing <= length), resample_closed(on). Output = new points curve by curve, one prim per source curve (same closedness); even samples at L*k/n. Point attrs: float-like lerp, int/string nearest; prim attrs copied; detail attrs kept; vertex attrs + groups dropped; non-curve prims DROPPED (Houdini likely passes them through: UNVERIFIED). Missing: per-curve/attrib-driven length, tangent/curveu outputs, subdivide-by-curvature, group filter. Analytical oracle only."
+notes = "H17: method length|segments, length(0.1), segments(10), lastsegment(on = edge_length_exact: shorter last segment; off = stretch to even spacing <= length), resample_closed(on). Output = new points curve by curve, one prim per source curve (same closedness); even samples at L*k/n. Point attrs: float-like lerp, int/string nearest; prim attrs copied; detail attrs kept; vertex attrs + groups dropped; non-curve prims DROPPED (Houdini likely passes them through: UNVERIFIED). Missing: per-curve/attrib-driven length, tangent/curveu outputs, subdivide-by-curvature, group filter. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-resample/houdini.geo."
 
 [[feature]]
 id = "sop-add"
 title = "Add SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["add"]
 evidence = [
   "crates/sop/src/builtins/add_sop.rs::three_coords_no_prims_is_three_points_zero_prims",
@@ -406,17 +406,17 @@ evidence = [
   "crates/sop/src/builtins/add_sop.rs::added_points_follow_input_points_and_delete_geometry_keeps_only_added",
   "crates/sop/src/builtins/add_sop.rs::no_change_passes_input_through_and_bad_coords_error",
 ]
-notes = "H17: points S (x,y,z triples), prims B, connect all|none, delete_geometry B. Order: input pts then added pts; input prims then ONE open polyline over ALL output points in id order (connect=all, prims on, >=2 pts). Missing: Houdini polygon-by-group/pattern, closed toggle, per-point weights, attribute defaults for added points (zero). UNVERIFIED vs Houdini (hython blocked). Example: examples/curves.json."
+notes = "H17: points S (x,y,z triples), prims B, connect all|none, delete_geometry B. Order: input pts then added pts; input prims then ONE open polyline over ALL output points in id order (connect=all, prims on, >=2 pts). Missing: Houdini polygon-by-group/pattern, closed toggle, per-point weights, attribute defaults for added points (zero). UNVERIFIED vs Houdini (hython blocked). Example: examples/curves.json. Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-add/houdini.geo."
 
 [[feature]]
 id = "sop-wrangle"
 title = "Attribute Wrangle SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["wrangle"]
 evidence = ["crates/sop/src/builtins/wrangle_sop.rs::oracle_p_y_plus_one", "crates/vex/src/tests.rs::builtins_oracles"]
-notes = "VEX subset v0 (crates/vex, clean-room, own lexer/parser/interp; supersedes the rhai plan). point|prim|vertex|detail, @attr typed prefixes, control flow, ~35 builtins, addpoint/removepoint/addprim/setpointattrib/point/npoints. Missing: arrays, user functions, matrices, other geometry handles, most of the VEX stdlib, point-group snippet filter, Houdini-exact rand/noise streams (UNVERIFIED). removepoint also drops prims using the point (guess)"
+notes = "VEX subset v0 (crates/vex, clean-room, own lexer/parser/interp; supersedes the rhai plan). point|prim|vertex|detail, @attr typed prefixes, control flow, ~35 builtins, addpoint/removepoint/addprim/setpointattrib/point/npoints. Missing: arrays, user functions, matrices, other geometry handles, most of the VEX stdlib, point-group snippet filter, Houdini-exact rand/noise streams (UNVERIFIED). removepoint also drops prims using the point (guess) Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-wrangle/houdini.geo."
 
 [[feature]]
 id = "sop-noise"
@@ -433,7 +433,7 @@ evidence = [
   "crates/sop/src/builtins/attribnoise_sop.rs::missing_attrib_is_failed_and_bad_params_are_rejected",
   "crates/sop/src/builtins/attribnoise_sop.rs::example_scene_cooks",
 ]
-notes = "H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). NOT modelled: Houdini noise-pattern menu, turbulence/fractal, rest, normals, groups. UNVERIFIED vs Houdini (hython blocked): noise streams, remap/amp semantics, default ranges. Example: examples/attribnoise.json."
+notes = "H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). NOT modelled: Houdini noise-pattern menu, turbulence/fractal, rest, normals, groups. UNVERIFIED vs Houdini (hython blocked): noise streams, remap/amp semantics, default ranges. Example: examples/attribnoise.json. Houdini-oracle (H31, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
 
 
 [[feature]]
@@ -455,7 +455,7 @@ evidence = [
   "crates/sop/src/builtins/normal_sop.rs::hostile_degenerate_open_and_bad_params",
   "crates/sop/src/builtins/normal_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H15: type(point|vertex|prim|detail, default vertex) cusp_angle(60) weighting(area|angle|uniform, default area) add_normals_to(prim group). Face N = unit Newell; point N = weighted sum of incident faces, normalised, zero-area -> 0; vertex N = same restricted to faces within cusp of the vertex own face (point-local test, NOT edge-connectivity). Closed-form oracle: box prim N = 6 axes exact, box corner N = (+-1,+-1,+-1)/sqrt3, grid 3x3 flat = plane normal derived from P, cusp 60 -> face normals, cusp 100 -> corner average. NOT modelled: edge-connected cusp, N on open/non-poly prims, Houdini default weighting (angle) - ours is area per task. UNVERIFIED vs Houdini (hython blocked). Example: examples/normal.json."
+notes = "H15: type(point|vertex|prim|detail, default vertex) cusp_angle(60) weighting(area|angle|uniform, default area) add_normals_to(prim group). Face N = unit Newell; point N = weighted sum of incident faces, normalised, zero-area -> 0; vertex N = same restricted to faces within cusp of the vertex own face (point-local test, NOT edge-connectivity). Closed-form oracle: box prim N = 6 axes exact, box corner N = (+-1,+-1,+-1)/sqrt3, grid 3x3 flat = plane normal derived from P, cusp 60 -> face normals, cusp 100 -> corner average. NOT modelled: edge-connected cusp, N on open/non-poly prims, Houdini default weighting (angle) - ours is area per task. UNVERIFIED vs Houdini (hython blocked). Example: examples/normal.json. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-fuse"
@@ -478,7 +478,7 @@ evidence = [
   "crates/sop/src/builtins/fuse_sop.rs::linear_time_on_a_large_lattice",
   "crates/sop/src/builtins/fuse_sop.rs::example_scene_welds_the_extruded_box_soup",
 ]
-notes = "H15: distance(0.001) snap(average|lowest-point) group(point). Grid-hash O(n) leader-centred clustering (NOT transitive; ascending ptnum leaders), output points ordered by leader; average = float attrs incl P mean, lowest = leader; int/string attrs copy leader. Prims touching a merged point drop consecutive duplicate verts, deleted at <3 (closed) / <2 (open); verbatim otherwise; nothing merged -> input Arc shared. Oracle: 2 quads/8 pts -> 6 pts/2 prims; 6-quad soup box 24 -> 8 pts; distance 0 on shared = same Arc; grid 3x3 d10 -> 1 pt 0 prims; 80k pts linear-time. NOT modelled: Houdini unique-point / consolidate-only modes, attribute-aware snap, prim-group, tolerance on attribs. UNVERIFIED vs Houdini (hython blocked): clustering order, degenerate-prim rule. Example: examples/fuse.json."
+notes = "H15: distance(0.001) snap(average|lowest-point) group(point). Grid-hash O(n) leader-centred clustering (NOT transitive; ascending ptnum leaders), output points ordered by leader; average = float attrs incl P mean, lowest = leader; int/string attrs copy leader. Prims touching a merged point drop consecutive duplicate verts, deleted at <3 (closed) / <2 (open); verbatim otherwise; nothing merged -> input Arc shared. Oracle: 2 quads/8 pts -> 6 pts/2 prims; 6-quad soup box 24 -> 8 pts; distance 0 on shared = same Arc; grid 3x3 d10 -> 1 pt 0 prims; 80k pts linear-time. NOT modelled: Houdini unique-point / consolidate-only modes, attribute-aware snap, prim-group, tolerance on attribs. UNVERIFIED vs Houdini (hython blocked): clustering order, degenerate-prim rule. Example: examples/fuse.json. Houdini-oracle (H31, real Houdini 20.5): COUNT-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-boolean"
@@ -506,7 +506,7 @@ evidence = [
   "crates/sop/src/builtins/boolean_sop.rs::many_small_cubes_finish_fast",
   "crates/sop/src/builtins/boolean_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H21: operation(union|subtract|intersect = 0|1|2, task order) treat_as_solid(on). Iterative BSP per operand; each polygon of A is fragmented against B (Out|In|CoSame|CoOpp, coplanar parts decided by clipping to the coplanar node faces) and vice versa; solid mode: union=A.Out+B.Out+A.CoSame, subtract=A.Out+A.CoOpp+flip(B.In), intersect=A.In+B.In+A.CoSame. Cleanup: 1e-5 weld, T-vertex insertion, per-(source face,tag) re-fusing when the union is ONE simple loop (L-remainder = 1 hexagon), removal of vertices collinear in every user. Concave input polys are ear-clipped. Output P only + prim groups a_only/b_only/seam (seam = source face crossing or lying on the other surface). Oracle (hand-derived, never the port output): cube U cube offset (.5,0,0) = 14 quads/16 pts, offset (.5,.5,.5) = 6 quads+6 hexagons/20 pts (chi 2), A-B diag = 9 prims/14 pts, A^B = half cube 6/8, cube-nested cube = 12/16, + signed volumes by divergence theorem + watertight directed-edge check on every case. DELTAS vs Houdini (UNVERIFIED, hython blocked): no attribute transfer/interpolation beyond P (Houdini keeps point/vertex/prim attribs), no abooleanprim/'resolve' modes, no intersection-edge group or shatter/cut modes, treat_as_solid=off is OUR surface mode (A trimmed, no inside bookkeeping), menu order ours (task) not Houdini's, coplanar overlap strips stay separate from the rest of their source face (14 not 6 for the x-offset union), faces with holes / pinched remainders stay as un-fused fragments, non-closed prims ignored, 1e-6 plane / 1e-5 weld tolerance (absolute), >16384 polys/operand = Failed. Example: examples/boolean.json."
+notes = "H21: operation(union|subtract|intersect = 0|1|2, task order) treat_as_solid(on). Iterative BSP per operand; each polygon of A is fragmented against B (Out|In|CoSame|CoOpp, coplanar parts decided by clipping to the coplanar node faces) and vice versa; solid mode: union=A.Out+B.Out+A.CoSame, subtract=A.Out+A.CoOpp+flip(B.In), intersect=A.In+B.In+A.CoSame. Cleanup: 1e-5 weld, T-vertex insertion, per-(source face,tag) re-fusing when the union is ONE simple loop (L-remainder = 1 hexagon), removal of vertices collinear in every user. Concave input polys are ear-clipped. Output P only + prim groups a_only/b_only/seam (seam = source face crossing or lying on the other surface). Oracle (hand-derived, never the port output): cube U cube offset (.5,0,0) = 14 quads/16 pts, offset (.5,.5,.5) = 6 quads+6 hexagons/20 pts (chi 2), A-B diag = 9 prims/14 pts, A^B = half cube 6/8, cube-nested cube = 12/16, + signed volumes by divergence theorem + watertight directed-edge check on every case. DELTAS vs Houdini (UNVERIFIED, hython blocked): no attribute transfer/interpolation beyond P (Houdini keeps point/vertex/prim attribs), no abooleanprim/'resolve' modes, no intersection-edge group or shatter/cut modes, treat_as_solid=off is OUR surface mode (A trimmed, no inside bookkeeping), menu order ours (task) not Houdini's, coplanar overlap strips stay separate from the rest of their source face (14 not 6 for the x-offset union), faces with holes / pinched remainders stay as un-fused fragments, non-closed prims ignored, 1e-6 plane / 1e-5 weld tolerance (absolute), >16384 polys/operand = Failed. Example: examples/boolean.json. Houdini-oracle (H31, real Houdini 20.5): ATTRIB-DIFF (+ORDER-DIFF), see docs/HOUDINI-ORACLE.md."
 [[feature]]
 id = "sop-reverse"
 title = "Reverse SOP"
@@ -523,7 +523,7 @@ evidence = [
   "crates/sop/src/builtins/reverse_sop.rs::hostile_short_and_foreign_prims_pass_through",
   "crates/sop/src/builtins/reverse_sop.rs::scene_loader_and_registry",
 ]
-notes = "H15: group(prim). Full in-place vertex-order reversal of selected Poly/Polyline prims; vertex attrs + vertex groups travel with their vertex; nothing selected -> input Arc shared. Oracle: box reversed -> every prim Newell exactly negated; reversed twice == input (Detail eq incl. vertex attrs/groups). NOT modelled: Houdini reverse modes (sort/sequence), keep-first-vertex variant, curve/NURBS prims. UNVERIFIED vs Houdini (hython blocked)."
+notes = "H15: group(prim). Full in-place vertex-order reversal of selected Poly/Polyline prims; vertex attrs + vertex groups travel with their vertex; nothing selected -> input Arc shared. Oracle: box reversed -> every prim Newell exactly negated; reversed twice == input (Detail eq incl. vertex attrs/groups). NOT modelled: Houdini reverse modes (sort/sequence), keep-first-vertex variant, curve/NURBS prims. UNVERIFIED vs Houdini (hython blocked). Houdini-oracle (H31, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
 [[feature]]
 id = "core.cook-model"
 title = "SOP cook model (lazy, dirty flags, time dependence)"
@@ -610,7 +610,7 @@ evidence = [
   "crates/sop/src/builtins/group_sop.rs::pattern_refers_to_existing_groups_and_unknown_fails",
   "crates/sop/src/builtins/group_sop.rs::vertex_group_edge_unsupported_and_hostile_params",
 ]
-notes = "H16: point/prim/vertex groups (edge = Unsupported); pattern ranges/*/!/group names/globs; bbox (inclusive faces); normal (Newell, points = averaged unit prim normals, angle boundary INCLUSIVE so 90 keeps perpendicular sides); merge_op replace|union|intersect|subtract. Empty pattern with no filter = all elements. Defaults grouptype=prim, dir=(0,1,0), angle=45, bbox_size=1 are guesses. NOT modelled: edge groups, prim:vertex syntax, include-by-edges, base-group-vs-pattern split, unshared/convex options. UNVERIFIED vs Houdini (hython blocked); analytical oracle only. Example: examples/group-blast.json."
+notes = "H16: point/prim/vertex groups (edge = Unsupported); pattern ranges/*/!/group names/globs; bbox (inclusive faces); normal (Newell, points = averaged unit prim normals, angle boundary INCLUSIVE so 90 keeps perpendicular sides); merge_op replace|union|intersect|subtract. Empty pattern with no filter = all elements. Defaults grouptype=prim, dir=(0,1,0), angle=45, bbox_size=1 are guesses. NOT modelled: edge groups, prim:vertex syntax, include-by-edges, base-group-vs-pattern split, unshared/convex options. UNVERIFIED vs Houdini (hython blocked); analytical oracle only. Example: examples/group-blast.json. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-groupdelete"
@@ -623,7 +623,7 @@ evidence = [
   "crates/sop/src/builtins/groupdelete_sop.rs::deletes_named_and_glob_groups_geometry_untouched",
   "crates/sop/src/builtins/groupdelete_sop.rs::nothing_matched_shares_the_arc",
 ]
-notes = "H16: names with */? glob, all classes; geometry untouched; no match (or empty field) = same Arc. NOT modelled: per-type filters, negate, numeric/pattern selection. UNVERIFIED: empty field = nothing here, may be all in Houdini."
+notes = "H16: names with */? glob, all classes; geometry untouched; no match (or empty field) = same Arc. NOT modelled: per-type filters, negate, numeric/pattern selection. UNVERIFIED: empty field = nothing here, may be all in Houdini. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-grouppromote"
@@ -637,7 +637,7 @@ evidence = [
   "crates/sop/src/builtins/grouppromote_sop.rs::box_one_corner_point_to_prims_any_3_all_0",
   "crates/sop/src/builtins/grouppromote_sop.rs::vertex_roundtrip_same_type_rename_remove_and_hostile",
 ]
-notes = "H16: point/prim/vertex both ways, routed through vertices; method any|all (all needs >=1 incident vertex); newname / removesource. prim->point any = all points of the group's prims. NOT modelled: edge class, multi-group source. UNVERIFIED vs Houdini (hython blocked); analytical oracle only."
+notes = "H16: point/prim/vertex both ways, routed through vertices; method any|all (all needs >=1 incident vertex); newname / removesource. prim->point any = all points of the group's prims. NOT modelled: edge class, multi-group source. UNVERIFIED vs Houdini (hython blocked); analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-attribpromote"
@@ -653,7 +653,7 @@ evidence = [
   "crates/sop/src/builtins/attribpromote_sop.rs::rename_delete_ints_vectors_strings",
   "crates/sop/src/builtins/attribpromote_sop.rs::hostile_params_and_empty_input",
 ]
-notes = "H24: point/vertex/prim/detail both ways; methods max|min|average|first|last|sum (menu order = that); ints round; strings first/last only; inname/inclass/outclass/useoutname/outname/method/deloriginal. point->prim counts per vertex; prim->point over DISTINCT prims. NOT modelled: mode/median/sumsq/rms methods. UNVERIFIED vs Houdini (hython blocked): parm names, defaults, int rounding, empty-set default 0; analytical oracle (grid v=index -> prim avg 3r+c+2)."
+notes = "H24: point/vertex/prim/detail both ways; methods max|min|average|first|last|sum (menu order = that); ints round; strings first/last only; inname/inclass/outclass/useoutname/outname/method/deloriginal. point->prim counts per vertex; prim->point over DISTINCT prims. NOT modelled: mode/median/sumsq/rms methods. UNVERIFIED vs Houdini (hython blocked): parm names, defaults, int rounding, empty-set default 0; analytical oracle (grid v=index -> prim avg 3r+c+2). Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-attribtransfer"
@@ -669,7 +669,7 @@ evidence = [
   "crates/sop/src/builtins/attribtransfer_sop.rs::kernel_blend_is_linear_falloff_and_off_by_default",
   "crates/sop/src/builtins/attribtransfer_sop.rs::empty_inputs_and_hostile_params",
 ]
-notes = "H24: nearest source POINT (brute force, tie -> lowest idx) onto input-0 points; pointattribs pattern (default `* ^P`), distancethreshold (default 1), kernelradius (default 0 = off; linear falloff blend). NOT modelled: vertex/prim/detail transfer, prim-surface nearest, lod, maxsamplecount, other kernels. UNVERIFIED vs Houdini (hython blocked): parm names/defaults, kernel shape, threshold semantics; analytical oracle (offset grid by hand)."
+notes = "H24: nearest source POINT (brute force, tie -> lowest idx) onto input-0 points; pointattribs pattern (default `* ^P`), distancethreshold (default 1), kernelradius (default 0 = off; linear falloff blend). NOT modelled: vertex/prim/detail transfer, prim-surface nearest, lod, maxsamplecount, other kernels. UNVERIFIED vs Houdini (hython blocked): parm names/defaults, kernel shape, threshold semantics; analytical oracle (offset grid by hand). Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-attribcopy"
@@ -685,7 +685,7 @@ evidence = [
   "crates/sop/src/builtins/attribcopy_sop.rs::classes_pattern_p_opt_in_and_strings",
   "crates/sop/src/builtins/attribcopy_sop.rs::empty_source_and_hostile_params",
 ]
-notes = "H24: copy input-1 attribute values onto input 0 by matching index (any class) or by P within tolerance (point only; closest, ties lowest idx); attribs pattern (default `* ^P`). UNVERIFIED vs Houdini (hython blocked): this is a model of attribcopy (Houdini group-driven src/dest parms not modelled); analytical oracle only."
+notes = "H24: copy input-1 attribute values onto input 0 by matching index (any class) or by P within tolerance (point only; closest, ties lowest idx); attribs pattern (default `* ^P`). UNVERIFIED vs Houdini (hython blocked): this is a model of attribcopy (Houdini group-driven src/dest parms not modelled); analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-attribdelete"
@@ -700,7 +700,7 @@ evidence = [
   "crates/sop/src/builtins/attribdelete_sop.rs::nothing_matched_shares_the_arc_and_hostile",
   "crates/sop/src/builtins/attribs.rs::pattern_grammar",
 ]
-notes = "H24: ptdel/vtxdel/primdel/dtldel patterns (space-sep, glob, `^` exclusion; leading `^` = from all) + negate; point P never deleted; groups untouched. UNVERIFIED vs Houdini (hython blocked): leading-exclusion semantics, empty-pattern=nothing, negate on empty classes."
+notes = "H24: ptdel/vtxdel/primdel/dtldel patterns (space-sep, glob, `^` exclusion; leading `^` = from all) + negate; point P never deleted; groups untouched. UNVERIFIED vs Houdini (hython blocked): leading-exclusion semantics, empty-pattern=nothing, negate on empty classes. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-blast"
@@ -716,7 +716,7 @@ evidence = [
   "crates/sop/src/builtins/blast_sop.rs::attributes_and_orphans_follow",
   "crates/sop/src/builtins/blast_sop.rs::scene_tests::scene_loader_cooks_group_blast_example_and_registry_has_slots",
 ]
-notes = "H16: point|prim mode, negate, removeunused (default on; only points orphaned BY the blast, pre-existing unused points kept). Deleting points deletes whole prims using them. Empty group = all elements. Order, attributes, groups compact with survivors. NOT modelled: edge/vertex mode, delete-non-selected on unshared geometry, fillhole. UNVERIFIED vs Houdini (hython blocked); analytical oracle only."
+notes = "H16: point|prim mode, negate, removeunused (default on; only points orphaned BY the blast, pre-existing unused points kept). Deleting points deletes whole prims using them. Empty group = all elements. Order, attributes, groups compact with survivors. NOT modelled: edge/vertex mode, delete-non-selected on unshared geometry, fillhole. UNVERIFIED vs Houdini (hython blocked); analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 # --- H20: IO (obj/ply, file SOP, rop_geometry, convert)
 [[feature]]
@@ -764,10 +764,10 @@ id = "sop-file"
 title = "File SOP (read_any by extension; missing = error|no_geometry; cached by path+mtime+size)"
 area = "A"
 tier = "P0"
-status = "partial"
+status = "shipped"
 commands = ["file"]
-evidence = ["crates/sop/src/builtins/file_sop.rs::tests::reads_houdini_ship_bgeo", "crates/sop/src/builtins/file_sop.rs::tests::missing_menu_error_or_no_geometry", "crates/sop/src/builtins/file_sop.rs::tests::reread_when_path_changes_and_when_file_changes", "crates/sop/src/builtins/file_sop.rs::tests::relative_path_resolves_against_scene_dir_then_cwd"]
-notes = "joint_link_n.bgeo -> 6/24/8. Relative path: scene dir (when loaded via load_scene_in / `hexe-cli cook`) if the file exists there, else cwd. No live file watching, no $HIP/$F expansion, no reload button, no frame-sequence paths."
+evidence = ["crates/sop/src/builtins/file_sop.rs::reads_houdini_ship_bgeo", "crates/sop/src/builtins/file_sop.rs::missing_menu_error_or_no_geometry", "crates/sop/src/builtins/file_sop.rs::reread_when_path_changes_and_when_file_changes", "crates/sop/src/builtins/file_sop.rs::relative_path_resolves_against_scene_dir_then_cwd"]
+notes = "joint_link_n.bgeo -> 6/24/8. Relative path: scene dir (when loaded via load_scene_in / `hexe-cli cook`) if the file exists there, else cwd. No live file watching, no $HIP/$F expansion, no reload button, no frame-sequence paths. Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-file/houdini.geo."
 
 [[feature]]
 id = "rop-geometry"
@@ -804,7 +804,7 @@ evidence = [
   "crates/sop/src/builtins/sort_sop.rs::string_attribute_sort_and_hostile",
   "crates/sop/src/builtins/sort_sop.rs::scene_loader_cooks_line_reverse",
 ]
-notes = "H25: ptsort/primsort menus none|byx|byy|byz|byattribute|byexpression|random|reverse|shift|proximity; stable; keys computed on the input, point + prim permutations applied together; vertex_point remapped, prim vertex storage rebuilt contiguously in new prim order; attrs/groups travel; identity -> input Arc shared. byexpression = hexe-vex per element. Oracle: line of 5 pts reversed -> x 4,3,2,1,0 + vertex_point 4,3,2,1,0 (polyline geometry unchanged), reverse twice == input; lattice prim reverse/by -y/by x -> exact prim attr order. NOT modelled: vertex sort, by-vector-dot, Houdini ptreverse toggle. UNVERIFIED vs Houdini (hython blocked): random stream (own splitmix64), shift sign, attribute tuple ordering, prim key = centroid."
+notes = "H25: ptsort/primsort menus none|byx|byy|byz|byattribute|byexpression|random|reverse|shift|proximity; stable; keys computed on the input, point + prim permutations applied together; vertex_point remapped, prim vertex storage rebuilt contiguously in new prim order; attrs/groups travel; identity -> input Arc shared. byexpression = hexe-vex per element. Oracle: line of 5 pts reversed -> x 4,3,2,1,0 + vertex_point 4,3,2,1,0 (polyline geometry unchanged), reverse twice == input; lattice prim reverse/by -y/by x -> exact prim attr order. NOT modelled: vertex sort, by-vector-dot, Houdini ptreverse toggle. UNVERIFIED vs Houdini (hython blocked): random stream (own splitmix64), shift sign, attribute tuple ordering, prim key = centroid. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-delete"
@@ -823,16 +823,16 @@ evidence = [
   "crates/sop/src/builtins/delete_sop.rs::hostile",
   "crates/sop/src/builtins/delete_sop.rs::scene_loader_cooks_line_delete_and_registry_has_slot",
 ]
-notes = "H25: entity point|prim; selection = AND of group pattern (group-SOP grammar) / range (start,end<0=last,step) / expression (hexe-vex, read-only, non-zero = selected); negate keeps the selection. Point entity: touching prims removed whole, keep_unused = shorten instead (<3 closed / <2 open dropped). Prim entity keeps all points unless delete_unused_points (only points orphaned BY the delete). Oracle (by hand): 3x3 lattice @P.x>0 points -> 6 pts/2 prims; prim @P.x>0 -> 9 pts/2 prims, +delete_unused_points -> 6 pts; 5-pt cloud @ptnum%2==0 -> x 1,3. Shares rebuild/expr host with sort in builtins/selutil.rs. NOT modelled: bbox/normal criteria, edges, vertex entity, fillhole. UNVERIFIED vs Houdini (hython blocked): keep_unused meaning (spec wording ambiguous), default entity/empty-selection = delete all, prim @P = centroid."
+notes = "H25: entity point|prim; selection = AND of group pattern (group-SOP grammar) / range (start,end<0=last,step) / expression (hexe-vex, read-only, non-zero = selected); negate keeps the selection. Point entity: touching prims removed whole, keep_unused = shorten instead (<3 closed / <2 open dropped). Prim entity keeps all points unless delete_unused_points (only points orphaned BY the delete). Oracle (by hand): 3x3 lattice @P.x>0 points -> 6 pts/2 prims; prim @P.x>0 -> 9 pts/2 prims, +delete_unused_points -> 6 pts; 5-pt cloud @ptnum%2==0 -> x 1,3. Shares rebuild/expr host with sort in builtins/selutil.rs. NOT modelled: bbox/normal criteria, edges, vertex entity, fillhole. UNVERIFIED vs Houdini (hython blocked): keep_unused meaning (spec wording ambiguous), default entity/empty-selection = delete all, prim @P = centroid. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 [[feature]]
 id = "sop-foreach"
 title = "For-Each block: block_begin / block_end (piece|count|points|prims; merge|feedback)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["block_begin", "block_end"]
-evidence = ["crates/sop/src/builtins/block_sop.rs::tests::three_pieces_by_name_through_xform_ty1_have_exact_p", "crates/sop/src/builtins/block_sop.rs::tests::count4_feedback_add_one_point_gives_four_points", "crates/sop/src/builtins/block_sop.rs::tests::nested_blocks_pair_automatically", "crates/sop/src/builtins/block_sop.rs::tests::hostile_scenes_are_errors", "crates/graph/src/graph/block.rs::tests::subnetwork_runs_once_per_iteration_and_ends_merge_in_order", "crates/graph/src/graph/block.rs::tests::feedback_is_carried_by_the_engine_not_by_an_edge"]
-notes = "H26: engine cooks the Begin..End sub-network once per iteration (graph/block.rs; End = leaf of the dependency walk, Begin cache seeded per iteration, region caches cleared after). Feedback = engine-carried value, NOT an edge, so cycle detection is untouched (End->Begin wire is still Cycle). block_begin: method piece (class point|prim, attrib default `name`, string or int, first-appearance order) | count | points | prims; slice carries detail attrs iteration/numiterations (no VEX detail() fn in this port: wrangle reads them detail-class @iteration); block_end: mode merge (Detail::merge in order) | feedback (last result; 0 iterations = input), `begin` param pairs explicitly else nearest upstream (nested blocks skipped). Caps: 65536 iterations, nesting 8, 16M merged points. NOT modelled: Houdini fetch-input/metadata/piece-by-index modes, stop condition, compile blocks, multiple block inputs, UI special drawing. UNVERIFIED vs Houdini (hython blocked): piece order, attr names, point renumbering, point-piece prim rule (prim kept iff all verts kept). Oracle fixtures foreach-pieces / foreach-feedback analytical."
+evidence = ["crates/sop/src/builtins/block_sop.rs::three_pieces_by_name_through_xform_ty1_have_exact_p", "crates/sop/src/builtins/block_sop.rs::count4_feedback_add_one_point_gives_four_points", "crates/sop/src/builtins/block_sop.rs::nested_blocks_pair_automatically", "crates/sop/src/builtins/block_sop.rs::hostile_scenes_are_errors", "crates/graph/src/graph/block.rs::subnetwork_runs_once_per_iteration_and_ends_merge_in_order", "crates/graph/src/graph/block.rs::feedback_is_carried_by_the_engine_not_by_an_edge"]
+notes = "H26: engine cooks the Begin..End sub-network once per iteration (graph/block.rs; End = leaf of the dependency walk, Begin cache seeded per iteration, region caches cleared after). Feedback = engine-carried value, NOT an edge, so cycle detection is untouched (End->Begin wire is still Cycle). block_begin: method piece (class point|prim, attrib default `name`, string or int, first-appearance order) | count | points | prims; slice carries detail attrs iteration/numiterations (no VEX detail() fn in this port: wrangle reads them detail-class @iteration); block_end: mode merge (Detail::merge in order) | feedback (last result; 0 iterations = input), `begin` param pairs explicitly else nearest upstream (nested blocks skipped). Caps: 65536 iterations, nesting 8, 16M merged points. NOT modelled: Houdini fetch-input/metadata/piece-by-index modes, stop condition, compile blocks, multiple block inputs, UI special drawing. UNVERIFIED vs Houdini (hython blocked): piece order, attr names, point renumbering, point-piece prim rule (prim kept iff all verts kept). Oracle fixtures foreach-pieces / foreach-feedback analytical. Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-foreach/houdini.geo."
 [[feature]]
 id = "sop-uvproject"
 title = "UVProject SOP (planar|cylindrical|spherical, axis, center, scale/offset, fixseam; writes vertex uv V3)"
@@ -851,7 +851,7 @@ evidence = [
   "crates/sop/src/builtins/uvproject_sop::hostile_params_and_geometry",
   "crates/sop/src/builtins/uvproject_sop::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H23: type(planar|cyl|sph) axis(x|y|z, default z) center scale offset fixseam. Vertex-class V3 uv, TypeInfo::None (AttrClass::Vertex already supported; no geo change). In-plane pair x->(Y,Z) y->(Z,X) z->(X,Y). Cyl u = atan2(b,a)/2pi wrapped to [0,1), v = height; sph v = asin(h/r)/pi + .5; uv = raw*scale+offset, w = offset.z. Closed-form oracle: grid 2x2 uv == P components exact (all 3 axes) + scale .5/offset .5 -> corners {0,1}^2, circle points u = k/N (<2e-7), quarter turns exact, latitudes v = lat/180+.5. NOT modelled: Houdini texture-type menu / uvtexture options, prim groups, point-class output, pole-seam fix on sph v, cylinder cap handling. UNVERIFIED vs Houdini (hython blocked): angle origin/direction, v range for cyl, seam semantics, w component. Example: examples/uvproject.json."
+notes = "H23: type(planar|cyl|sph) axis(x|y|z, default z) center scale offset fixseam. Vertex-class V3 uv, TypeInfo::None (AttrClass::Vertex already supported; no geo change). In-plane pair x->(Y,Z) y->(Z,X) z->(X,Y). Cyl u = atan2(b,a)/2pi wrapped to [0,1), v = height; sph v = asin(h/r)/pi + .5; uv = raw*scale+offset, w = offset.z. Closed-form oracle: grid 2x2 uv == P components exact (all 3 axes) + scale .5/offset .5 -> corners {0,1}^2, circle points u = k/N (<2e-7), quarter turns exact, latitudes v = lat/180+.5. NOT modelled: Houdini texture-type menu / uvtexture options, prim groups, point-class output, pole-seam fix on sph v, cylinder cap handling. UNVERIFIED vs Houdini (hython blocked): angle origin/direction, v range for cyl, seam semantics, w component. Example: examples/uvproject.json. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-uvunwrap"
@@ -870,7 +870,7 @@ evidence = [
   "crates/sop/src/builtins/uvunwrap_sop::hostile_params_and_geometry",
   "crates/sop/src/builtins/uvunwrap_sop::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H23: tile(int 1..1024, default 1). Each prim = own island: Newell best-fit normal -> dominant axis -> project onto the other pair (u mirrored when the dominant component is negative), normalise by longer bbox side (aspect kept), cell (i mod tile, i/tile mod tile), uv=(cell+local)/tile. Closed-form oracle: 4x2 rect -> v max .5, box faces = exact unit squares, tile 3 cells, slanted triangle axis pick. NOT modelled: angle-based/ABF unwrap, seam cutting by edge, island rotation, groups, true best-fit (least squares) normal beyond Newell. UNVERIFIED vs Houdini (hython blocked): the real UV Unwrap algorithm (this is a planar-per-face stand-in), mirror convention, cell order. Example: examples/uv.json."
+notes = "H23: tile(int 1..1024, default 1). Each prim = own island: Newell best-fit normal -> dominant axis -> project onto the other pair (u mirrored when the dominant component is negative), normalise by longer bbox side (aspect kept), cell (i mod tile, i/tile mod tile), uv=(cell+local)/tile. Closed-form oracle: 4x2 rect -> v max .5, box faces = exact unit squares, tile 3 cells, slanted triangle axis pick. NOT modelled: angle-based/ABF unwrap, seam cutting by edge, island rotation, groups, true best-fit (least squares) normal beyond Newell. UNVERIFIED vs Houdini (hython blocked): the real UV Unwrap algorithm (this is a planar-per-face stand-in), mirror convention, cell order. Example: examples/uv.json. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-uvlayout"
@@ -889,7 +889,7 @@ evidence = [
   "crates/sop/src/builtins/uvlayout_sop::hostile_params_and_geometry",
   "crates/sop/src/builtins/uvlayout_sop::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H23: padding(0.01) fit(true). Island = prims connected through a shared point carrying bit-identical uv. Shelf pack sorted by height desc, row width max(widest, sqrt(sum (w+pad)(h+pad))); fit = uniform scale to the unit square. Closed-form oracle: 4 unit islands -> exact quadrants, padding .5 no-fit slots, mixed sizes disjoint + uniform scale + inside [0,1]^2 + corner order untouched, cut vs joined edge. NOT modelled: rotation, rect-packing optimality (shelf only), texel density / target resolution, per-island scale, groups, margin. UNVERIFIED vs Houdini (hython blocked): everything about the real UV Layout (this is bbox lite). Example: examples/uv.json."
+notes = "H23: padding(0.01) fit(true). Island = prims connected through a shared point carrying bit-identical uv. Shelf pack sorted by height desc, row width max(widest, sqrt(sum (w+pad)(h+pad))); fit = uniform scale to the unit square. Closed-form oracle: 4 unit islands -> exact quadrants, padding .5 no-fit slots, mixed sizes disjoint + uniform scale + inside [0,1]^2 + corner order untouched, cut vs joined edge. NOT modelled: rotation, rect-packing optimality (shelf only), texel density / target resolution, per-island scale, groups, margin. UNVERIFIED vs Houdini (hython blocked): everything about the real UV Layout (this is bbox lite). Example: examples/uv.json. Houdini-oracle (H31, real Houdini 20.5): ATTRIB-DIFF (+WINDING-DIFF), see docs/HOUDINI-ORACLE.md."
 [[feature]]
 id = "ui-viewport-wgpu"
 title = "wgpu viewport (egui-wgpu paint callback): flat-shaded tris + headlight, wireframe, points, grid + axes, Houdini camera (orbit/pan/dolly, H home), headless PNG render"
@@ -913,7 +913,7 @@ evidence = [
   "crates/sop/src/builtins/switch_sop.rs::index_clamps_and_unconnected_is_empty",
   "crates/sop/src/builtins/switch_sop.rs::example_scene_switches_between_box_and_grid",
 ]
-notes = "H29: input I 0, 4 fixed ports (Houdini: many), index clamped to 0..=3 (UNVERIFIED vs Houdini clamp vs error), chosen Arc shared. NOT modelled: expression-driven per-frame input (no channel exprs), unconnected-input fallthrough. Example: examples/switch.json (null -> switch -> output). Analytical oracle only."
+notes = "H29: input I 0, 4 fixed ports (Houdini: many), index clamped to 0..=3 (UNVERIFIED vs Houdini clamp vs error), chosen Arc shared. NOT modelled: expression-driven per-frame input (no channel exprs), unconnected-input fallthrough. Example: examples/switch.json (null -> switch -> output). Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-output"
@@ -926,7 +926,7 @@ evidence = [
   "crates/sop/src/builtins/output_sop.rs::passes_input_through_same_arc",
   "crates/sop/src/builtins/output_sop.rs::empty_when_unconnected_and_idx_validated",
 ]
-notes = "H29: outputidx I 0 (0..=9, validated, otherwise no effect: no subnet/HDA output routing in this graph). Input 0 Arc shared. `null` stays on row sop-registry. Example: examples/switch.json. Analytical oracle only."
+notes = "H29: outputidx I 0 (0..=9, validated, otherwise no effect: no subnet/HDA output routing in this graph). Input 0 Arc shared. `null` stays on row sop-registry. Example: examples/switch.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-clip"
@@ -945,7 +945,7 @@ evidence = [
   "crates/sop/src/builtins/clip_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/clip_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. NOT modelled (DEFERRED): capclip, group filter, N recompute, Houdini 'keep all' vs 'both' naming, polysoup/NURBS. UNVERIFIED vs Houdini (hython blocked): menu order, point/prim order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only."
+notes = "H29: origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. NOT modelled (DEFERRED): capclip, group filter, N recompute, Houdini 'keep all' vs 'both' naming, polysoup/NURBS. UNVERIFIED vs Houdini (hython blocked): menu order, point/prim order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): ORDER-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-connectivity"
@@ -961,7 +961,7 @@ evidence = [
   "crates/sop/src/builtins/connectivity_sop.rs::hostile_inputs_do_not_panic",
   "crates/sop/src/builtins/connectivity_sop.rs::example_scene_labels_two_boxes",
 ]
-notes = "H29: connecttype menu prim(0, default)|point(1), attribname(class). Union-find over points through every prim (any kind); I32 attr on PRIM or POINT class numbered 0.. by first appearance in ascending element id. Loose point = own piece (point mode); vertex-less prim = own piece. Existing same-name attr replaced. NOT modelled (DEFERRED): group-restricted labelling, attribute-split / edge-only modes. UNVERIFIED vs Houdini (hython blocked): default connecttype, class numbering order. Example: examples/connectivity.json (box + moved box via merge). Analytical oracle only."
+notes = "H29: connecttype menu prim(0, default)|point(1), attribname(class). Union-find over points through every prim (any kind); I32 attr on PRIM or POINT class numbered 0.. by first appearance in ascending element id. Loose point = own piece (point mode); vertex-less prim = own piece. Existing same-name attr replaced. NOT modelled (DEFERRED): group-restricted labelling, attribute-split / edge-only modes. UNVERIFIED vs Houdini (hython blocked): default connecttype, class numbering order. Example: examples/connectivity.json (box + moved box via merge). Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-measure"
@@ -978,7 +978,7 @@ evidence = [
   "crates/sop/src/builtins/measure_sop.rs::hostile_inputs_do_not_panic",
   "crates/sop/src/builtins/measure_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: measure menu area|perimeter|volume, attribname (empty = measure name), total (detail attr <name>_sum). Prim F32 attr in f64 maths. Area = half Newell magnitude, perimeter incl. closing edge for closed, volume = signed origin-referenced divergence-theorem term 1/6 sum a.(b x c) over fan tris (a lone face has no volume of its own; closed outward mesh sums to volume, box 2x3x4 at +10 = 24). NOT modelled (DEFERRED): point/vertex entities, curvature/smooth/dihedral types, group filter. UNVERIFIED vs Houdini (hython blocked): volume per-prim definition (Houdini measures closed-surface volume), menu order, non-planar area. Examples: examples/measure.json. Analytical oracle only."
+notes = "H29: measure menu area|perimeter|volume, attribname (empty = measure name), total (detail attr <name>_sum). Prim F32 attr in f64 maths. Area = half Newell magnitude, perimeter incl. closing edge for closed, volume = signed origin-referenced divergence-theorem term 1/6 sum a.(b x c) over fan tris (a lone face has no volume of its own; closed outward mesh sums to volume, box 2x3x4 at +10 = 24). NOT modelled (DEFERRED): point/vertex entities, curvature/smooth/dihedral types, group filter. UNVERIFIED vs Houdini (hython blocked): volume per-prim definition (Houdini measures closed-surface volume), menu order, non-planar area. Examples: examples/measure.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-matchsize"
@@ -996,14 +996,14 @@ evidence = [
   "crates/sop/src/builtins/matchsize_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/matchsize_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: targettype explicit(0, default: targetsize(1,1,1) targetcenter(0)) | input1 (bbox of 2nd input; empty = Failed), doscale(on) uniformscale(off: min factor, fits inside) dotranslate(on) justifyx/y/z min|center|max (anchor on source and target box). Flat source axis (size<=1e-12) keeps factor 1. P only; N NOT rescaled. NOT modelled (DEFERRED): scale/offset post-modifiers, point group, rotate-to-match. UNVERIFIED vs Houdini (hython blocked): menu order/defaults, uniform = min vs max, flat-axis rule. Example: examples/matchsize.json. Analytical oracle only."
+notes = "H29: targettype explicit(0, default: targetsize(1,1,1) targetcenter(0)) | input1 (bbox of 2nd input; empty = Failed), doscale(on) uniformscale(off: min factor, fits inside) dotranslate(on) justifyx/y/z min|center|max (anchor on source and target box). Flat source axis (size<=1e-12) keeps factor 1. P only; N NOT rescaled. NOT modelled (DEFERRED): scale/offset post-modifiers, point group, rotate-to-match. UNVERIFIED vs Houdini (hython blocked): menu order/defaults, uniform = min vs max, flat-axis rule. Example: examples/matchsize.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-bend"
 title = "Bend SOP (circular-arc space bend along an axis)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["bend"]
 evidence = [
   "crates/sop/src/builtins/bend_sop.rs::bend_line_of_five_by_90_degrees_lands_on_the_derived_arc",
@@ -1013,7 +1013,7 @@ evidence = [
   "crates/sop/src/builtins/bend_sop.rs::hostile_params",
   "crates/sop/src/builtins/bend_sop.rs::example_scenes_cook_and_registry_has_slots",
 ]
-notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0) side(1,0,0). Capture region 0<=h<=length along dir; arc radius R=length/angle(rad) bending toward side (orthogonalised); cross-section rotates with the spine; h<0 unmoved; h>length straight tangent tail. 5-pt line y=0..4, 90 deg: P_i=(R(1-cos(pi i/8)), R sin(pi i/8), 0), R=8/pi. Angle 0 = Arc shared. NOT modelled (DEFERRED): group, falloff/capture profile, pivot offset, N update, fixedpts. UNVERIFIED vs Houdini (hython blocked): Houdini's Bend parm set (capture origin/dir/length, bend angle, 'roll'/'twist') and sign convention are ours. Example: examples/bend.json. Analytical oracle only."
+notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0) side(1,0,0). Capture region 0<=h<=length along dir; arc radius R=length/angle(rad) bending toward side (orthogonalised); cross-section rotates with the spine; h<0 unmoved; h>length straight tangent tail. 5-pt line y=0..4, 90 deg: P_i=(R(1-cos(pi i/8)), R sin(pi i/8), 0), R=8/pi. Angle 0 = Arc shared. NOT modelled (DEFERRED): group, falloff/capture profile, pivot offset, N update, fixedpts. UNVERIFIED vs Houdini (hython blocked): Houdini's Bend parm set (capture origin/dir/length, bend angle, 'roll'/'twist') and sign convention are ours. Example: examples/bend.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): MATCH vs fixtures/sop-bend/houdini.geo."
 
 [[feature]]
 id = "sop-twist"
@@ -1028,7 +1028,7 @@ evidence = [
   "crates/sop/src/builtins/bend_sop.rs::hostile_params",
   "crates/sop/src/builtins/bend_sop.rs::example_scenes_cook_and_registry_has_slots",
 ]
-notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0). Rotation about dir by angle*clamp(h/length,0,1), right-handed (Rodrigues): (1,y,0) -> (cos a, y, -sin a) with a=90deg*y/4 (length 4). h<0 unmoved, past region full angle, axis points fixed. Shares bend_sop.rs. NOT modelled (DEFERRED): group, falloff, N update. UNVERIFIED vs Houdini (hython blocked): sign and parm set. Example: examples/twist.json (box, corner (.5,.5,.5) -> (.5,.5,-.5)). Analytical oracle only."
+notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0). Rotation about dir by angle*clamp(h/length,0,1), right-handed (Rodrigues): (1,y,0) -> (cos a, y, -sin a) with a=90deg*y/4 (length 4). h<0 unmoved, past region full angle, axis points fixed. Shares bend_sop.rs. NOT modelled (DEFERRED): group, falloff, N update. UNVERIFIED vs Houdini (hython blocked): sign and parm set. Example: examples/twist.json (box, corner (.5,.5,.5) -> (.5,.5,-.5)). Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): ORDER-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-mountain"
@@ -1046,7 +1046,7 @@ evidence = [
   "crates/sop/src/builtins/mountain_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/mountain_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: height(1) elementsize(1, >0) seed(0) offset(0). P' = P + N*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. N = point N attr else Newell point normals (as peak). height 0 = Arc shared. NOT modelled (DEFERRED): fractal octaves/roughness, turbulence/attenuation/slope, animate, other noise types, group, N recompute. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize. Example: examples/mountain.json. Analytical oracle only."
+notes = "H29: height(1) elementsize(1, >0) seed(0) offset(0). P' = P + N*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. N = point N attr else Newell point normals (as peak). height 0 = Arc shared. NOT modelled (DEFERRED): fractal octaves/roughness, turbulence/attenuation/slope, animate, other noise types, group, N recompute. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize. Example: examples/mountain.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-ray"
@@ -1062,7 +1062,7 @@ evidence = [
   "crates/sop/src/builtins/ray_sop.rs::empty_target_and_hostile_params",
   "crates/sop/src/builtins/ray_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: method normal(0, default)|dir(1), dir(0,-1,0), bidirectional(off), hitgroup(\"\" = none; point group of hit points). Input 1 closed polys fan-triangulated (exact for convex), Moller-Trumbore f64 with 1e-9 edge tolerance, NEAREST hit (forward t>=0, or by |t| when bidirectional); miss = point stays. 3x3 points at y=3 over the unit box, dir (0,-1,0) -> all land at y=0.5 (top, not bottom). Work cap points*tris <= 2^26 (Failed). NOT modelled (DEFERRED): lift/scale, normal+uv transfer, farthest/all-hits, minimum-distance method, hit prim/uv outputs, group filter, BVH (brute force). UNVERIFIED vs Houdini (hython blocked): default method, miss behaviour, hitgroup naming. Example: examples/ray.json. Analytical oracle only."
+notes = "H29: method normal(0, default)|dir(1), dir(0,-1,0), bidirectional(off), hitgroup(\"\" = none; point group of hit points). Input 1 closed polys fan-triangulated (exact for convex), Moller-Trumbore f64 with 1e-9 edge tolerance, NEAREST hit (forward t>=0, or by |t| when bidirectional); miss = point stays. 3x3 points at y=3 over the unit box, dir (0,-1,0) -> all land at y=0.5 (top, not bottom). Work cap points*tris <= 2^26 (Failed). NOT modelled (DEFERRED): lift/scale, normal+uv transfer, farthest/all-hits, minimum-distance method, hit prim/uv outputs, group filter, BVH (brute force). UNVERIFIED vs Houdini (hython blocked): default method, miss behaviour, hitgroup naming. Example: examples/ray.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): WINDING-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-divide"
@@ -1079,7 +1079,7 @@ evidence = [
   "crates/sop/src/builtins/divide_sop.rs::hostile_params_and_degenerate_polys",
   "crates/sop/src/builtins/divide_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: convex(on) numsides(3, 3..=1024). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). Points unchanged, winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts. Nothing split = Arc shared. NOT modelled (DEFERRED): bricker, removeshared, avoidsmallangles, holes. UNVERIFIED vs Houdini (hython blocked): diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles). Example: examples/divide.json. Analytical oracle only."
+notes = "H29: convex(on) numsides(3, 3..=1024). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). Points unchanged, winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts. Nothing split = Arc shared. NOT modelled (DEFERRED): bricker, removeshared, avoidsmallangles, holes. UNVERIFIED vs Houdini (hython blocked): diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles). Example: examples/divide.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-knife"
@@ -1095,4 +1095,4 @@ evidence = [
   "crates/sop/src/builtins/knife_sop.rs::hostile_params",
   "crates/sop/src/builtins/knife_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: = clip core (clip_sop.rs, same plane params, keep default BOTH) + groups: seamgroup(cut, POINT: cut points + kept ON-plane points), abovegroup(above)/belowgroup(below) PRIM groups; empty name = skip. Box at y=0: 12 pts (4 seam), 10 prims (5+5), halves welded on shared cut points. NOT modelled (DEFERRED): cap/fill, remove-seam, keepedges, shatter, second-input cutter surface, group filter. UNVERIFIED vs Houdini (hython blocked): seam group semantics/naming, default keep. Example: examples/knife.json. Analytical oracle only."
+notes = "H29: = clip core (clip_sop.rs, same plane params, keep default BOTH) + groups: seamgroup(cut, POINT: cut points + kept ON-plane points), abovegroup(above)/belowgroup(below) PRIM groups; empty name = skip. Box at y=0: 12 pts (4 seam), 10 prims (5+5), halves welded on shared cut points. NOT modelled (DEFERRED): cap/fill, remove-seam, keepedges, shatter, second-input cutter surface, group filter. UNVERIFIED vs Houdini (hython blocked): seam group semantics/naming, default keep. Example: examples/knife.json. Analytical oracle only. Houdini-oracle (H31, real Houdini 20.5): ORDER-DIFF, see docs/HOUDINI-ORACLE.md."
