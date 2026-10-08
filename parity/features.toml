@@ -979,3 +979,53 @@ evidence = [
   "crates/sop/src/builtins/measure_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "H29: measure menu area|perimeter|volume, attribname (empty = measure name), total (detail attr <name>_sum). Prim F32 attr in f64 maths. Area = half Newell magnitude, perimeter incl. closing edge for closed, volume = signed origin-referenced divergence-theorem term 1/6 sum a.(b x c) over fan tris (a lone face has no volume of its own; closed outward mesh sums to volume, box 2x3x4 at +10 = 24). NOT modelled (DEFERRED): point/vertex entities, curvature/smooth/dihedral types, group filter. UNVERIFIED vs Houdini (hython blocked): volume per-prim definition (Houdini measures closed-surface volume), menu order, non-planar area. Examples: examples/measure.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-matchsize"
+title = "MatchSize SOP (fit bbox to explicit / input-1 target, justify)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["matchsize"]
+evidence = [
+  "crates/sop/src/builtins/matchsize_sop.rs::unit_box_to_2_4_6_is_exactly_the_scaled_box",
+  "crates/sop/src/builtins/matchsize_sop.rs::grid_fits_target_box_exactly_and_flat_axis_is_left_alone",
+  "crates/sop/src/builtins/matchsize_sop.rs::justify_min_and_max_pin_the_chosen_faces",
+  "crates/sop/src/builtins/matchsize_sop.rs::uniform_scale_fits_inside_and_scale_only_keeps_the_anchor",
+  "crates/sop/src/builtins/matchsize_sop.rs::input1_bbox_is_the_target",
+  "crates/sop/src/builtins/matchsize_sop.rs::hostile_params_and_inputs",
+  "crates/sop/src/builtins/matchsize_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H29: targettype explicit(0, default: targetsize(1,1,1) targetcenter(0)) | input1 (bbox of 2nd input; empty = Failed), doscale(on) uniformscale(off: min factor, fits inside) dotranslate(on) justifyx/y/z min|center|max (anchor on source and target box). Flat source axis (size<=1e-12) keeps factor 1. P only; N NOT rescaled. NOT modelled (DEFERRED): scale/offset post-modifiers, point group, rotate-to-match. UNVERIFIED vs Houdini (hython blocked): menu order/defaults, uniform = min vs max, flat-axis rule. Example: examples/matchsize.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-bend"
+title = "Bend SOP (circular-arc space bend along an axis)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["bend"]
+evidence = [
+  "crates/sop/src/builtins/bend_sop.rs::bend_line_of_five_by_90_degrees_lands_on_the_derived_arc",
+  "crates/sop/src/builtins/bend_sop.rs::bend_tail_cross_section_and_untouched_regions",
+  "crates/sop/src/builtins/bend_sop.rs::bend_dir_side_origin_move_the_frame",
+  "crates/sop/src/builtins/bend_sop.rs::zero_angle_shares_the_arc",
+  "crates/sop/src/builtins/bend_sop.rs::hostile_params",
+  "crates/sop/src/builtins/bend_sop.rs::example_scenes_cook_and_registry_has_slots",
+]
+notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0) side(1,0,0). Capture region 0<=h<=length along dir; arc radius R=length/angle(rad) bending toward side (orthogonalised); cross-section rotates with the spine; h<0 unmoved; h>length straight tangent tail. 5-pt line y=0..4, 90 deg: P_i=(R(1-cos(pi i/8)), R sin(pi i/8), 0), R=8/pi. Angle 0 = Arc shared. NOT modelled (DEFERRED): group, falloff/capture profile, pivot offset, N update, fixedpts. UNVERIFIED vs Houdini (hython blocked): Houdini's Bend parm set (capture origin/dir/length, bend angle, 'roll'/'twist') and sign convention are ours. Example: examples/bend.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-twist"
+title = "Twist SOP (linear angle ramp about an axis)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["twist"]
+evidence = [
+  "crates/sop/src/builtins/bend_sop.rs::twist_rotates_linearly_with_height_right_handed",
+  "crates/sop/src/builtins/bend_sop.rs::zero_angle_shares_the_arc",
+  "crates/sop/src/builtins/bend_sop.rs::hostile_params",
+  "crates/sop/src/builtins/bend_sop.rs::example_scenes_cook_and_registry_has_slots",
+]
+notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0). Rotation about dir by angle*clamp(h/length,0,1), right-handed (Rodrigues): (1,y,0) -> (cos a, y, -sin a) with a=90deg*y/4 (length 4). h<0 unmoved, past region full angle, axis points fixed. Shares bend_sop.rs. NOT modelled (DEFERRED): group, falloff, N update. UNVERIFIED vs Houdini (hython blocked): sign and parm set. Example: examples/twist.json (box, corner (.5,.5,.5) -> (.5,.5,-.5)). Analytical oracle only."

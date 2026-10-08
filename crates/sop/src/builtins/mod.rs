@@ -20,6 +20,8 @@ mod attribpromote_sop;
 //
 mod attribtransfer_sop;
 //
+mod bend_sop;
+//
 mod blast_sop;
 //
 mod block_sop;
@@ -54,6 +56,8 @@ mod groupdelete_sop;
 mod grouppromote_sop;
 //
 mod line_sop;
+//
+mod matchsize_sop;
 //
 mod measure_sop;
 //
@@ -117,6 +121,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("attribtransfer", attribtransfer_sop::spec, attribtransfer_sop::new);
     //
+    r.register("bend", bend_sop::bend_spec, bend_sop::bend_new);
+    //
     r.register("blast", blast_sop::spec, blast_sop::new);
     //
     r.register("block_begin", block_sop::begin_spec, block_sop::begin_new);
@@ -154,6 +160,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("line", line_sop::spec, line_sop::new);
     //
+    r.register("matchsize", matchsize_sop::spec, matchsize_sop::new);
+    //
     r.register("measure", measure_sop::spec, measure_sop::new);
     //
     r.register("merge", merge_sop::spec, merge_sop::new);
@@ -185,6 +193,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("subdivide", subdivide_sop::spec, subdivide_sop::new);
     //
     r.register("switch", switch_sop::spec, switch_sop::new);
+    //
+    r.register("twist", bend_sop::twist_spec, bend_sop::twist_new);
     //
     r.register("xform", transform_sop::spec, transform_sop::new);
     //

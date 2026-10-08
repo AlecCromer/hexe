@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "match1", "type": "matchsize", "params": { "targetsize": [2, 4, 6], "targetcenter": [0, 0, 0] } }
+  ],
+  "edges": [["box1", 0, "match1", 0]],
+  "display": "match1"
+}
