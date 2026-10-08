@@ -19,6 +19,10 @@ export interface GraphView { nodes: NodeView[]; edges: EdgeView[]; display: numb
 import type { Shape } from "./geom";
 export interface Cooked {
   positions: number[]; prims: number[][]; closed: boolean[];
+  /** rgb per prim corner (prim order, corner order); absent when the geometry has no Cd */
+  cd?: number[] | null;
+  /** rgb per point, only when a point Cd exists (colours the points layer) */
+  cd_point?: number[] | null;
   shapes: Shape[];
   counts: { points: number; prims: number; closed: number; open: number; unsupported: number; shapes: number };
   error: string | null;

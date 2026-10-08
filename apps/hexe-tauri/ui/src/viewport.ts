@@ -5,6 +5,7 @@ import { clip, type Cam, defaultCam, dolly, dragDolly, eye, fit as fitCam, FOV, 
 import type { Cooked } from "./api";
 import { describe } from "./pick";
 import { CLICK_SLOP, clampSel, combine, inBox, nearest, projectAll } from "./pick";
+import { cornerColors, cornerGeometry } from "./cd";
 import { bounds, capCheck, CAP_LABELS, CAP_LABEL_SCAN, edgeSegments, primCentroids, shapeWire, triangulate, triEstimate, viewState } from "./geom";
 
 /** Viewport tunables (egui `Style` parity). Colours are 0xRRGGBB; light = headlight ambient + diffuse*|N.V|. */
@@ -16,12 +17,13 @@ export const STYLE = {
    pick: [1, 0.95, 0.2] as [number, number, number], pickPx: 11,
  };
 
-const SURFACE_VS = "varying vec3 vP; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vP = mv.xyz; gl_Position = projectionMatrix * mv; }";
+// USE_CD (material define): per-corner colour attribute `cd` replaces the flat base colour
+const SURFACE_VS = "varying vec3 vP;\n#ifdef USE_CD\nattribute vec3 cd; varying vec3 vC;\n#endif\nvoid main(){\n#ifdef USE_CD\nvC = cd;\n#endif\nvec4 mv = modelViewMatrix * vec4(position, 1.0); vP = mv.xyz; gl_Position = projectionMatrix * mv; }";
 // flat per-face normal from screen derivatives (== the Newell normal), headlight: ambient + diffuse * |N.V|
-const SURFACE_FS = "varying vec3 vP; uniform vec3 base; uniform float amb; uniform float dif;\n" +
-  "void main(){ vec3 n = normalize(cross(dFdx(vP), dFdy(vP))); float d = abs(dot(n, normalize(-vP))); gl_FragColor = vec4(base * (amb + dif * d), 1.0); }";
-const POINT_VS = "uniform float size; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; gl_Position.z -= 2e-4 * gl_Position.w; gl_PointSize = size; }";
-const POINT_FS = "uniform vec3 col; void main(){ if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard; gl_FragColor = vec4(col, 1.0); }";
+const SURFACE_FS = "varying vec3 vP; uniform vec3 base; uniform float amb; uniform float dif;\n#ifdef USE_CD\nvarying vec3 vC;\n#endif\n" +
+  "void main(){ vec3 b = base;\n#ifdef USE_CD\nb = vC;\n#endif\nvec3 n = normalize(cross(dFdx(vP), dFdy(vP))); float d = abs(dot(n, normalize(-vP))); gl_FragColor = vec4(b * (amb + dif * d), 1.0); }";
+const POINT_VS = "uniform float size;\n#ifdef USE_CD\nattribute vec3 cd; varying vec3 vC;\n#endif\nvoid main(){\n#ifdef USE_CD\nvC = cd;\n#endif\nvec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; gl_Position.z -= 2e-4 * gl_Position.w; gl_PointSize = size; }";
+const POINT_FS = "uniform vec3 col;\n#ifdef USE_CD\nvarying vec3 vC;\n#endif\nvoid main(){ if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard; vec3 c = col;\n#ifdef USE_CD\nc = vC;\n#endif\ngl_FragColor = vec4(c, 1.0); }";
 
 export class Viewport {
   private renderer: THREE.WebGLRenderer;
@@ -213,11 +215,19 @@ export class Viewport {
       const caps = capCheck(triEstimate(c.prims, c.closed), segEst * 2, n);
       warnings.push(...caps.warnings);
       if (caps.mesh) {
-        const tris = triangulate(c.prims, c.closed, c.positions);
+        const cd = cornerColors(c);
+        // with colours the mesh is built per CORNER (a point can carry a different colour on each face)
+        const cg = cd ? cornerGeometry(c) : null;
+        const tris = cg ? triangulate(cg.prims, cg.closed, cg.positions) : triangulate(c.prims, c.closed, c.positions);
         if (tris.length) {
-          const g = geo();
+          const g = cg ? new THREE.BufferGeometry() : geo();
+          if (cg && cd) {
+            g.setAttribute("position", new THREE.BufferAttribute(cg.positions, 3));
+            g.setAttribute("cd", new THREE.BufferAttribute(cd, 3));
+          }
           g.setIndex(new THREE.BufferAttribute(tris, 1));
           const mat = new THREE.ShaderMaterial({
+            defines: cd ? { USE_CD: "" } : {},
             vertexShader: SURFACE_VS, fragmentShader: SURFACE_FS, side: THREE.DoubleSide,
             uniforms: { base: { value: new THREE.Vector3(...STYLE.surface) }, amb: { value: STYLE.ambient }, dif: { value: STYLE.diffuse } },
             polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
@@ -250,7 +260,12 @@ export class Viewport {
         this.content.add(new THREE.LineSegments(w, new THREE.LineBasicMaterial({ color: STYLE.shape })));
       }
       if (caps.points) {
-        this.points = new THREE.Points(geo(), this.pointMat);
+        const cdp = c.cd_point && c.cd_point.length === n * 3 ? Float32Array.from(c.cd_point) : null;
+          const pg = geo();
+          if (cdp) pg.setAttribute("cd", new THREE.BufferAttribute(cdp, 3));
+          // the coloured variant shares the size/col uniforms of pointMat
+          const pm = cdp ? new THREE.ShaderMaterial({ defines: { USE_CD: "" }, vertexShader: POINT_VS, fragmentShader: POINT_FS, uniforms: this.pointMat.uniforms }) : this.pointMat;
+          this.points = new THREE.Points(pg, pm);
         this.content.add(this.points);
       }
       if (this.showN) this.primC = primCentroids(c.prims, c.positions);

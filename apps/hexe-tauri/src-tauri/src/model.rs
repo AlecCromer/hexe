@@ -111,6 +111,11 @@ pub struct CookResult {
     pub prims: Vec<Vec<u32>>,
     pub closed: Vec<bool>,
     pub shapes: Vec<Shape>,
+    /// rgb per prim CORNER (flattened `prims` order): vertex `Cd`, else point `Cd` via the corner's point, else prim `Cd`.
+    /// `None` when the geometry has no V3 `Cd` at all.
+    pub cd: Option<Vec<f32>>,
+    /// rgb per point, only when a point `Cd` exists (colours the points layer).
+    pub cd_point: Option<Vec<f32>>,
     pub counts: Counts,
     pub error: Option<String>,
     /// The node whose cook failed (the UI borders it red); `None` when the failure is not tied to one node.
@@ -913,7 +918,35 @@ pub fn flatten(d: &Detail) -> CookResult {
         closed.push(is_closed);
     }
     counts.prims = d.prim_count();
-    CookResult { positions, prims, closed, shapes, counts, error: None, error_node: None }
+    let (cd, cd_point) = colors(d, &prims);
+    CookResult { positions, prims, closed, shapes, cd, cd_point, counts, error: None, error_node: None }
+}
+/// `Cd` (V3) for the viewport: per prim corner and per point, see `CookResult::cd`.
+fn colors(d: &Detail, prims: &[Vec<u32>]) -> (Option<Vec<f32>>, Option<Vec<f32>>) {
+    use hexe_geo::{AttrClass, AttrData};
+    let get = |c: AttrClass| match d.attr(c, "Cd").map(|a| &a.data) {
+        Some(AttrData::V3(v)) => Some(v),
+        _ => None,
+    };
+    let (vtx, pt, pr) = (get(AttrClass::Vertex), get(AttrClass::Point), get(AttrClass::Prim));
+    if vtx.is_none() && pt.is_none() && pr.is_none() {
+        return (None, None);
+    }
+    const WHITE: [f32; 3] = [1.0; 3];
+    let mut cd: Vec<f32> = Vec::with_capacity(prims.iter().map(Vec::len).sum::<usize>() * 3);
+    for (pi, (prim, corners)) in d.prims.iter().zip(prims).enumerate() {
+        for k in 0..corners.len() {
+            let vid = prim.verts.start as usize + k;
+            let c = vtx
+                .and_then(|v| v.get(vid))
+                .or_else(|| pt.and_then(|v| d.vertex_point.get(vid).and_then(|&p| v.get(p as usize))))
+                .or_else(|| pr.and_then(|v| v.get(pi)))
+                .unwrap_or(&WHITE);
+            cd.extend_from_slice(c);
+        }
+    }
+    let cd_point = pt.filter(|v| v.len() == d.point_count as usize).map(|v| v.iter().flatten().copied().collect());
+    (Some(cd), cd_point)
 }
 
 #[cfg(test)]
@@ -973,6 +1006,31 @@ mod tests {
         assert_eq!(c.shapes[0].xform, x);
         assert!(c.prims[0].is_empty() && c.prims[1].is_empty(), "shape prims carry no point list");
         assert_eq!(c.prims.len(), c.closed.len());
+    }
+
+    #[test]
+    fn cd_is_absent_without_color_and_expanded_per_corner_with_it() {
+        use hexe_geo::{AttrClass, AttrData, Attribute, TypeInfo};
+        let mut d = Detail::default();
+        d.add_points(4);
+        d.add_poly(&[0, 1, 2], true);
+        d.add_poly(&[1, 2, 3], true);
+        let none = flatten(&d);
+        assert!(none.cd.is_none() && none.cd_point.is_none());
+        let attr = |class, v: Vec<[f32; 3]>| Attribute { name: "Cd".into(), class, data: AttrData::V3(v), type_info: TypeInfo::Color };
+        // prim Cd: repeated over each prim's corners
+        d.attrs.push(attr(AttrClass::Prim, vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]));
+        let c = flatten(&d);
+        assert_eq!(c.cd.as_deref(), Some(&[1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0][..]));
+        assert!(c.cd_point.is_none());
+        // point Cd beats prim Cd and also fills cd_point
+        d.attrs.push(attr(AttrClass::Point, (0..4).map(|i| [i as f32, 0.5, 0.0]).collect()));
+        let c = flatten(&d);
+        assert_eq!(&c.cd.expect("cd")[..9], &[0.0, 0.5, 0.0, 1.0, 0.5, 0.0, 2.0, 0.5, 0.0]);
+        assert_eq!(c.cd_point.map(|p| p.len()), Some(12));
+        // vertex Cd wins over both
+        d.attrs.push(attr(AttrClass::Vertex, vec![[0.25; 3]; 6]));
+        assert!(flatten(&d).cd.expect("cd").iter().all(|&x| x == 0.25));
     }
 
     #[test]
