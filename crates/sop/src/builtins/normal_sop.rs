@@ -523,6 +523,22 @@ mod tests {
         assert!(v3(&out, AttrClass::Vertex).iter().flatten().all(|c| c.is_finite()));
     }
     #[test]
+    fn bare_scene_node_defaults_to_vertex_n_with_cusp_60_axis_aligned_on_a_box() {
+        // h27-3: no params at all (as `hexe-cli`/window create it) => vertex-class N, cusp 60 => every box corner N is a face axis.
+        let s = r#"{"nodes":[{"name":"b","type":"box"},{"name":"n","type":"normal"}],"edges":[["b",0,"n",0]],"display":"n"}"#;
+        let (mut g, id) = load_scene(s).expect("loads");
+        let out = g.cook(id, 0.0).expect("cooks");
+        assert!(out.attr(AttrClass::Point, "N").is_none() && out.attr(AttrClass::Prim, "N").is_none());
+        let vn = v3(&out, AttrClass::Vertex);
+        assert_eq!(vn.len(), 24);
+        for n in &vn {
+            assert!(AXES.contains(n), "vertex N {n:?} not axis-aligned");
+        }
+        // point mode stays available: corner diagonals, not axes
+        let pt = cook(cube(), params(TYPE_POINT, 60.0, W_AREA)).expect("cooks");
+        assert!(v3(&pt, AttrClass::Point).iter().all(|n| !AXES.contains(n)));
+    }
+    #[test]
     fn example_scene_cooks_and_registry_has_slot() {
         let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/normal.json"))
             .expect("example present");
