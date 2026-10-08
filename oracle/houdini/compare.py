@@ -3,7 +3,7 @@
   compare.py [--hexe-cli PATH] [--hython PATH] [--work DIR] [sop-id ...]
 steps: (1) hexe-cli cook fixtures/<sop>/scene.json -> DIR/<sop>.geo  (2) hython summarize_hexe.py DIR  (3) compare vs fixtures/<sop>/houdini.json
 -> oracle/houdini/results.json + docs/HOUDINI-ORACLE.md
-Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > ORDER-DIFF (same P multiset, other order) > P-DIFF > MATCH.
+Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF (same P order + prim cycles, direction reversed) > ORDER-DIFF (same P multiset, other order) > P-DIFF > MATCH.
 Strict: permutation is only CLASSIFIED (ORDER-DIFF), never passed as MATCH. P tolerance 1e-4."""
 import argparse, glob, json, os, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +16,7 @@ ap.add_argument("--work", default=os.path.expanduser("~/.gaia/cache/hexe/scratch
 ap.add_argument("--skip-cook", action="store_true")
 ap.add_argument("sops", nargs="*")
 a = ap.parse_args()
-sops = a.sops or sorted(os.path.basename(p) for p in glob.glob(os.path.join(ROOT, "fixtures", "sop-*")))
+sops = a.sops or sorted(os.path.basename(p) for p in glob.glob(os.path.join(ROOT, "fixtures", "sop-*")) + glob.glob(os.path.join(ROOT, "fixtures", "x-*")))
 os.makedirs(a.work, exist_ok=True)
 cook = {}
 if not a.skip_cook:
@@ -92,21 +92,24 @@ def cmp_one(s):
             res["p_unmatched_points"] = miss
             res["p_maxdev_nearest"] = round(worst, 6)
     res["p"] = pstate
-    if pstate == "MATCH" and not flags:
-        # topology: per prim, same point-id cycle up to rotation; also closedness
-        def norm(l):
-            return l
+    if pstate == "MATCH":
+        # topology: per prim, same point-id cycle; a cycle with the same first point run the OTHER way is WINDING-DIFF
+        # (hexe is counter-clockwise, Houdini clockwise, see docs/HOUDINI-ORACLE.md); anything else is TOPO-DIFF; also closedness.
         ht, xt = H["prim_pts"], X["prim_pts"]
-        bad = 0
+        bad = wind = 0
         for u, v in zip(ht, xt):
-            if u != v:
-                if sorted(u) == sorted(v):
-                    bad += 1
-                else:
-                    bad += 1
-        if bad or H.get("prim_closed") != X.get("prim_closed"):
+            if u == v:
+                continue
+            if len(u) == len(v) and u and v == [u[0]] + u[:0:-1]:
+                wind += 1
+            else:
+                bad += 1
+        if bad or H.get("prim_closed") != X.get("prim_closed") or len(ht) != len(xt):
             flags.append("TOPO-DIFF")
             res["topo_bad_prims"] = bad
+        elif wind:
+            flags.append("WINDING-DIFF")
+            res["winding_prims"] = wind
     if pstate in ("ORDER-DIFF", "P-DIFF"):
         flags.append(pstate)
     res["flags"] = flags

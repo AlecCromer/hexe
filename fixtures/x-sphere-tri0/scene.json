@@ -1,0 +1,16 @@
+{
+ "nodes": [
+  {
+   "name": "sph",
+   "type": "sphere",
+   "params": {
+    "type": 2,
+    "rows": 5,
+    "cols": 4,
+    "triangularpoles": false
+   }
+  }
+ ],
+ "edges": [],
+ "display": "sph"
+}

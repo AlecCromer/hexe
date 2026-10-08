@@ -1,0 +1,20 @@
+{
+ "nodes": [
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "size": [
+     6,
+     4,
+     0
+    ],
+    "rows": 4,
+    "cols": 3,
+    "orient": 1
+   }
+  }
+ ],
+ "edges": [],
+ "display": "grid1"
+}

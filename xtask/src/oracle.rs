@@ -6,6 +6,10 @@
 //! absolute input path is appended (legacy form). `geo` = both parsed with `hexe_geo::read_geo`: point/vertex/prim counts
 //! equal, `P` within 1e-5, same (class, name) attribute set; score 1.0 or 0.0. Fails on: a case of a `shipped` ledger row under its threshold; any score under its floor in
 //! xtask/baselines/oracle.json. `--raise` ratchets floors up (never down).
+//! `cargo xtask oracle --houdini [compare.py args]`: the REAL-Houdini comparison instead (AGENTS section 2 python exception):
+//! builds the debug `hexe-cli`, runs `oracle/houdini/compare.py --hexe-cli <it> [args]` (hexe cook of every
+//! `fixtures/sop-*/scene.json` vs the committed `houdini.json`; hython only loads hexe's `.geo` back) then
+//! `oracle/houdini/report.py` -> `docs/HOUDINI-ORACLE.md`. Re-record the Houdini side with `hython oracle/houdini/run_all.py`.
 use crate::{Res, baseline, parity, root};
 use serde::Deserialize;
 use std::collections::BTreeSet;
@@ -159,7 +163,43 @@ fn run_case(bin: &Path, dir: &Path, c: &Case) -> Result<f64, String> {
     };
     score(&c.compare, &actual, &expected)
 }
+/// `cargo xtask oracle --houdini [compare.py args...]`: compare.py then report.py (see module docs).
+fn run_houdini(args: &[String]) -> Res {
+    let root = root();
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let st = Command::new(cargo)
+        .args(["build", "-p", "hexe-cli"])
+        .current_dir(&root)
+        .status()
+        .map_err(|e| format!("cargo build: {e}"))?;
+    if !st.success() {
+        return Err("debug build of hexe-cli failed".into());
+    }
+    let bin = crate::target_dir().join("debug").join(format!("hexe-cli{}", std::env::consts::EXE_SUFFIX));
+    let dir = root.join("oracle").join("houdini");
+    let rest: Vec<&String> = args.iter().filter(|a| a.as_str() != "--houdini").collect();
+    let st = Command::new("python3")
+        .arg(dir.join("compare.py"))
+        .arg("--hexe-cli")
+        .arg(&bin)
+        .args(rest)
+        .current_dir(&root)
+        .status()
+        .map_err(|e| format!("spawn python3 compare.py: {e}"))?;
+    if !st.success() {
+        return Err(format!("compare.py failed ({st})"));
+    }
+    let st = Command::new("python3")
+        .arg(dir.join("report.py"))
+        .current_dir(&root)
+        .status()
+        .map_err(|e| format!("spawn python3 report.py: {e}"))?;
+    if st.success() { Ok(()) } else { Err(format!("report.py failed ({st})")) }
+}
 pub fn run(args: &[String]) -> Res {
+    if args.iter().any(|a| a == "--houdini") {
+        return run_houdini(args);
+    }
     let root = root();
     let ledger = parity::load(&root)?;
     let shipped: BTreeSet<&str> =

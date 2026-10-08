@@ -1,0 +1,20 @@
+{
+ "nodes": [
+  {
+   "name": "circle1",
+   "type": "circle",
+   "params": {
+    "orient": 2,
+    "divisions": 6,
+    "radius": [
+     2,
+     1,
+     0
+    ],
+    "reverse": false
+   }
+  }
+ ],
+ "edges": [],
+ "display": "circle1"
+}

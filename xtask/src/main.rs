@@ -29,7 +29,7 @@ const COMMANDS: &[(&str, &str, Command)] = &[
     ("parity", "Validate parity/features.toml; per-tier progress", parity::run),
     (
         "oracle",
-        "Run fixtures/<case>/case.toml against the release CLI; floors in xtask/baselines/oracle.json (--raise to ratchet up)",
+        "Run fixtures/<case>/case.toml against the release CLI; floors in xtask/baselines/oracle.json (--raise to ratchet up); --houdini = real-Houdini compare + report",
         oracle::run,
     ),
     ("perf", "Release CLI vs perf/budgets.toml + xtask/baselines/perf.json via /usr/bin/time (--tighten)", perf::run),

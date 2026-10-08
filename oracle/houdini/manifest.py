@@ -6,9 +6,9 @@ mp = os.path.join(ROOT, "fixtures", "MANIFEST.toml")
 text = open(mp).read()
 blocks = re.split(r"(?m)^(?=\[\[fixture\]\])", text)
 head, rows = blocks[0], blocks[1:]
-rows = [b for b in rows if not re.search(r'(?m)^case = "sop-', b)]
+rows = [b for b in rows if not re.search(r'(?m)^case = "(sop|x)-', b)]
 out = []
-for d in sorted(glob.glob(os.path.join(ROOT, "fixtures", "sop-*"))):
+for d in sorted(glob.glob(os.path.join(ROOT, "fixtures", "sop-*")) + glob.glob(os.path.join(ROOT, "fixtures", "x-*"))):
     case = os.path.basename(d)
     for f in ("houdini.geo", "houdini.json", "scene.json"):
         p = os.path.join(d, f)

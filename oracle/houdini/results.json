@@ -79,11 +79,12 @@
    4,
    16
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 4,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -151,11 +152,12 @@
    4,
    16
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 4,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -223,11 +225,12 @@
    4,
    16
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 4,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -299,11 +302,12 @@
    4,
    16
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 4,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -439,11 +443,12 @@
    5,
    20
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 5,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -590,11 +595,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -660,11 +666,9 @@
    1,
    6
   ],
-  "p": "ORDER-DIFF",
-  "flags": [
-   "ORDER-DIFF"
-  ],
-  "verdict": "ORDER-DIFF",
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [
@@ -800,11 +804,12 @@
    12,
    48
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 12,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -888,10 +893,11 @@
     ]
    }
   },
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 54,
   "flags": [
    "ATTRIB-DIFF",
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
   "verdict": "ATTRIB-DIFF",
   "bbox": {
@@ -1030,11 +1036,12 @@
    2,
    8
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 2,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -1100,11 +1107,12 @@
    12,
    36
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "topo_bad_prims": 12,
   "flags": [
-   "ORDER-DIFF"
+   "TOPO-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "TOPO-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -1452,11 +1460,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -1522,11 +1531,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -1592,11 +1602,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -1662,11 +1673,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -1870,11 +1882,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -1940,11 +1953,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2014,11 +2028,12 @@
    10,
    40
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 10,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2224,11 +2239,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2298,11 +2314,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2368,11 +2385,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2578,11 +2596,12 @@
    4,
    16
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 4,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2648,11 +2667,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2718,11 +2738,9 @@
    1,
    24
   ],
-  "p": "ORDER-DIFF",
-  "flags": [
-   "ORDER-DIFF"
-  ],
-  "verdict": "ORDER-DIFF",
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [
@@ -2788,11 +2806,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "topo_bad_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "TOPO-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "TOPO-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2868,7 +2887,7 @@
    }
   },
   "p_unmatched_points": 500,
-  "p_maxdev_nearest": 8.987924,
+  "p_maxdev_nearest": 9.898676,
   "p": "P-DIFF",
   "flags": [
    "ATTRIB-DIFF",
@@ -2890,14 +2909,14 @@
    ],
    "hexe": [
     [
-     -4.978752,
+     -4.994955,
      0.0,
-     -4.993153
+     -4.99944
     ],
     [
-     4.992688,
+     4.987734,
      0.0,
-     4.994955
+     4.98666
     ]
    ]
   },
@@ -3010,11 +3029,12 @@
    4,
    16
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 4,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -3080,11 +3100,12 @@
    288,
    1104
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 288,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -3220,11 +3241,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -3290,11 +3312,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -3439,10 +3462,11 @@
     "hexe_only": []
    }
   },
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
    "ATTRIB-DIFF",
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
   "verdict": "ATTRIB-DIFF",
   "bbox": {
@@ -3517,11 +3541,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -3591,11 +3616,12 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "winding_prims": 6,
   "flags": [
-   "ORDER-DIFF"
+   "WINDING-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "WINDING-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -3665,11 +3691,9 @@
    0,
    0
   ],
-  "p": "ORDER-DIFF",
-  "flags": [
-   "ORDER-DIFF"
-  ],
-  "verdict": "ORDER-DIFF",
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [
@@ -3699,6 +3723,355 @@
   "prim_types": {
    "houdini": [],
    "hexe": []
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "x-circle-yz",
+  "houdini": [
+   6,
+   1,
+   6
+  ],
+  "hexe": [
+   6,
+   1,
+   6
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     -0.866025,
+     -2.0
+    ],
+    [
+     0.0,
+     0.866025,
+     2.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     -0.866025,
+     -2.0
+    ],
+    [
+     0.0,
+     0.866025,
+     2.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "x-circle-zx",
+  "houdini": [
+   6,
+   1,
+   6
+  ],
+  "hexe": [
+   6,
+   1,
+   6
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.0,
+     0.0,
+     -0.866025
+    ],
+    [
+     2.0,
+     0.0,
+     0.866025
+    ]
+   ],
+   "hexe": [
+    [
+     -2.0,
+     0.0,
+     -0.866025
+    ],
+    [
+     2.0,
+     0.0,
+     0.866025
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "x-grid-xy",
+  "houdini": [
+   12,
+   6,
+   24
+  ],
+  "hexe": [
+   12,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "winding_prims": 6,
+  "flags": [
+   "WINDING-DIFF"
+  ],
+  "verdict": "WINDING-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -3.0,
+     -2.0,
+     0.0
+    ],
+    [
+     3.0,
+     2.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     -3.0,
+     -2.0,
+     0.0
+    ],
+    [
+     3.0,
+     2.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "x-grid-yz",
+  "houdini": [
+   12,
+   6,
+   24
+  ],
+  "hexe": [
+   12,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "winding_prims": 6,
+  "flags": [
+   "WINDING-DIFF"
+  ],
+  "verdict": "WINDING-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     -2.0,
+     -3.0
+    ],
+    [
+     0.0,
+     2.0,
+     3.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     -2.0,
+     -3.0
+    ],
+    [
+     0.0,
+     2.0,
+     3.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "x-sphere-tri0",
+  "houdini": [
+   14,
+   16,
+   64
+  ],
+  "hexe": [
+   14,
+   16,
+   64
+  ],
+  "p": "MATCH",
+  "winding_prims": 16,
+  "flags": [
+   "WINDING-DIFF"
+  ],
+  "verdict": "WINDING-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
   },
   "attribs": {
    "houdini": {
