@@ -8,6 +8,10 @@ mod null_sop;
 //
 mod add_sop;
 //
+mod attribs;
+//
+mod attribdelete_sop;
+//
 mod attribnoise_sop;
 //
 mod blast_sop;
@@ -77,6 +81,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("null", null_sop::spec, null_sop::new);
     //
     r.register("add", add_sop::spec, add_sop::new);
+    //
+    r.register("attribdelete", attribdelete_sop::spec, attribdelete_sop::new);
     //
     r.register("attribnoise", attribnoise_sop::spec, attribnoise_sop::new);
     //
