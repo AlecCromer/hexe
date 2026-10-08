@@ -218,6 +218,23 @@ evidence = [
 notes = "S1: numattr(1, 0..=4 static slots) group; per slot name{i} class{i}(point|vertex|prim|detail) type{i}(float|int|vector|string) size{i}(1..=4) value{i}v1..4 string{i} writevalues{i}(on). Empty name = skipped slot (default node no-op). Float size 2/3/4 -> V2/V3/V4 else FN, int -> I32/IN, vector = V3 (N -> Normal, Cd -> Color). Group = pattern over the slot's class; unselected elements keep the existing same-shape value else 0. NOT modelled: default{i} multiparm, index type, unbounded multiparm, per-slot groups. UNVERIFIED vs Houdini (hython not run): default name/size, int rounding. Example: examples/attribcreate.json."
 
 [[feature]]
+id = "sop-color"
+title = "Color SOP (Cd constant / random by class)"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["color"]
+evidence = [
+  "crates/sop/src/builtins/color_sop.rs::constant_color_per_class",
+  "crates/sop/src/builtins/color_sop.rs::random_is_deterministic_in_unit_range_and_seed_dependent",
+  "crates/sop/src/builtins/color_sop.rs::group_limits_and_unselected_keep_existing_or_white",
+  "crates/sop/src/builtins/color_sop.rs::other_class_cd_survives_and_wrong_shape_is_replaced",
+  "crates/sop/src/builtins/color_sop.rs::hostile_params_and_empty_input",
+  "crates/sop/src/builtins/color_sop.rs::scene_loader_and_registry_slot",
+]
+notes = "S1: group class(point|vertex|prim|detail, default point) colortype(constant|random) color(1,1,1) seed(0). Writes V3 Cd (TypeInfo Color) of the class; random = per-element independent uniform [0,1) channels via splitmix64(seed,element,channel). Unselected elements keep existing same-class Cd else white. NOT modelled: ramp/attribute-remap types, alpha, overridecd. UNVERIFIED vs Houdini (hython not run): random stream (ours deterministic but not Houdini's), menu order. Example: examples/color.json."
+
+[[feature]]
 id = "sop-merge"
 title = "Merge SOP"
 area = "A"

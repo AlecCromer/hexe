@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "pe1", "type": "polyextrude", "params": { "splittype": 1, "distance": 0.25, "divisions": 1 } },
+    { "name": "color1", "type": "color", "params": { "class": 2, "colortype": 1, "seed": 4 } }
+  ],
+  "edges": [["box1", 0, "pe1", 0], ["pe1", 0, "color1", 0]],
+  "display": "color1"
+}

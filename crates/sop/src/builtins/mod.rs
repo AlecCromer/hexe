@@ -35,6 +35,8 @@ mod circle_sop;
 //
 mod clip_sop;
 //
+mod color_sop;
+//
 mod connectivity_sop;
 //
 mod copytopoints_sop;
@@ -149,6 +151,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("circle", circle_sop::spec, circle_sop::new);
     //
     r.register("clip", clip_sop::spec, clip_sop::new);
+    //
+    r.register("color", color_sop::spec, color_sop::new);
     //
     r.register("connectivity", connectivity_sop::spec, connectivity_sop::new);
     //
