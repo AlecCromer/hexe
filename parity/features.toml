@@ -1172,3 +1172,20 @@ evidence = [
   "crates/sop/src/builtins/sweep_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "S2: 2 inputs (backbone, crosssection). scale(1) useptscale(on, backbone pscale) roll(0 deg) twist(0 deg, linear in arclength) up(0,1,0) startcap/endcap(off, closed section + open backbone only). Frames = mean-tangent T + double-reflection parallel transport N (up made orthogonal; parallel up -> least-aligned axis), B = T x N; section (x,y,z) -> P + s*(xN + yB + zT). Quads wound so the Houdini normal = ring dir x T: CCW section + both caps = closed solid, signed volume +2 pinned for unit square x length 2. Vertex uv V3 (u = section arclength, v = backbone arclength). NOT modelled (DEFERRED): third surface input, generated tube/ribbon/square shapes (use circle/line), up/N/orient point attributes, skinning modes, per-point scale/twist ramps, attribute carry; closed backbone has no holonomy correction. UNVERIFIED vs Houdini (hython blocked): parm set/defaults (Houdini sweep::2.0 differs: surfaceshape, cols, etc.), frame init and cap winding, uv layout. Example: examples/sweep.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-revolve"
+title = "Revolve SOP (curves about an axis: origin, dir, start/end angle, divs; axis points collapse to poles)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["revolve"]
+evidence = [
+  "crates/sop/src/builtins/revolve_sop.rs::full_revolve_of_a_wall_is_an_outward_cylinder_wall_with_a_wrapped_seam",
+  "crates/sop/src/builtins/revolve_sop.rs::half_circle_profile_makes_a_closed_sphere_with_shared_pole_points",
+  "crates/sop/src/builtins/revolve_sop.rs::partial_angle_origin_and_axis_params",
+  "crates/sop/src/builtins/revolve_sop.rs::uv_is_vertex_class_with_u_over_divs_and_v_arclength",
+  "crates/sop/src/builtins/revolve_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/revolve_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "S2: origin(0) dir(0,1,0) startangle(0) endangle(360) divs(12, >=3 full / >=1 partial) tris(off, extra). Right-hand rotation about dir (+X -> -Z about +Y). |span| >= 360 = full turn, seam wraps (divs columns, no duplicate points), else divs+1 columns. Profile points on the axis (<1e-6) become one shared point (half circle -> closed sphere, volume within 10% of 4/3 pi at 24 divs); segments on the axis emit nothing. Upward profile at +radius -> outward normals. Vertex uv V3 (u = col/divs, v = profile arclength). NOT modelled (DEFERRED): caps, NURBS/Bezier output, attribute inheritance, per-point axis. UNVERIFIED vs Houdini (hython blocked): parm names beyond origin/dir/angles/divs, winding vs Houdini on reversed profiles, uv. Example: examples/revolve.json (torus). Analytical oracle only."
