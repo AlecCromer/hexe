@@ -9,3 +9,4 @@
 .pctl input[type=number]:focus { cursor: text; }
 .pctl input[type=number]::-webkit-inner-spin-button, .pctl input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: none; }
+#nettoast { position: absolute; z-index: 7; right: 8px; top: 8px; max-width: 60%; padding: 4px 10px; background: #3a1e1e; border: 1px solid var(--bad); border-radius: 4px; color: var(--bad); pointer-events: none; }

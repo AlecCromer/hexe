@@ -1,0 +1,23 @@
+add box box1 @40,30
+add polyextrude pe1 @200,100
+ui rclick pe1
+shot ~/.gaia/cache/hexe/proof/t3-display-pe1.png
+ui rclick pe1
+shot ~/.gaia/cache/hexe/proof/t3-display-cleared.png
+ui hover box1
+ui key d
+shot ~/.gaia/cache/hexe/proof/t3-display-d-key.png
+ui addat grid 300 60
+save ~/.gaia/cache/hexe/proof/t3-misc-addat.json
+ui click pe1
+ui scrub distance 60
+ui click box1
+ui click pe1 shift
+ui key meta+c
+ui key meta+v
+ui key meta+v
+save ~/.gaia/cache/hexe/proof/t3-misc-paste.json
+shot ~/.gaia/cache/hexe/proof/t3-paste.png
+ui rename box1 pe1
+shot ~/.gaia/cache/hexe/proof/t3-rename-conflict.png
+quit

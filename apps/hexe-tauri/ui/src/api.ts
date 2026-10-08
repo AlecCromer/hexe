@@ -46,7 +46,7 @@ export const api = {
   copyNodes: (ids: number[]) => invoke<number>("copy_nodes", { ids }),
   pasteNodes: () => invoke<number[]>("paste_nodes"),
   scriptReady: () => invoke<void>("script_ready"),
-  scriptAck: () => invoke<void>("script_ack"),
+  scriptAck: (error: string | null = null) => invoke<void>("script_ack", { error }),
   cook: () => invoke<Cooked>("cook"),
   spreadsheet: (cls: SheetClass, offset: number, limit: number) => invoke<SheetData>("spreadsheet", { class: cls, offset, limit }),
   startupScene: () => invoke<string | null>("startup_scene"),

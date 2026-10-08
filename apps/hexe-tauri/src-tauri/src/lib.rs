@@ -124,8 +124,8 @@ fn script_ready(gate: State<Gate>) {
 }
 /// `--script` handshake: the UI re-synced after an op.
 #[tauri::command]
-fn script_ack(gate: State<Gate>) {
-    let _ = gate.ack.send(());
+fn script_ack(gate: State<Gate>, error: Option<String>) {
+    let _ = gate.ack.send(error);
 }
 #[tauri::command]
 fn cook(app: State<App>) -> CookResult {

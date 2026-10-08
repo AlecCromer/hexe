@@ -35,6 +35,9 @@ pub enum Op {
     Redo,
     Copy(Vec<String>),
     Paste,
+    /// `ui <verb> args...`: drive the REAL window handlers with synthetic DOM events (click / rclick / dblclick / rename / wire /
+    /// drag / key / scrub / addat; see `ui/src/uidrive.ts`), so proofs cover the pointer + keyboard paths, not just the session.
+    Ui(Vec<String>),
     Save(String),
     Shot(String),
     Quit,
@@ -45,6 +48,7 @@ pub enum Op {
 pub struct Effect {
     /// Node names the window should select afterwards (`None` = leave the selection alone).
     pub select: Option<Vec<String>>,
+    pub ui: Option<Vec<String>>,
     pub shot: Option<String>,
     pub quit: bool,
 }
@@ -99,6 +103,7 @@ fn op(line: &str) -> Result<Op, String> {
         ["redo"] => Op::Redo,
         ["copy", rest @ ..] => Op::Copy(names(rest)?),
         ["paste"] => Op::Paste,
+        ["ui", rest @ ..] if !rest.is_empty() => Op::Ui(rest.iter().map(|s| s.to_string()).collect()),
         ["save", p] => Op::Save(expand(p)),
         ["shot", p] => Op::Shot(expand(p)),
         ["quit"] => Op::Quit,
@@ -178,6 +183,7 @@ pub fn apply(s: &mut Session, op: &Op) -> Result<Effect, String> {
             s.graph_save(p)?;
             Effect::default()
         }
+        Op::Ui(a) => Effect { ui: Some(a.clone()), ..Effect::default() },
         Op::Shot(p) => Effect { shot: Some(p.clone()), ..Effect::default() },
         Op::Quit => Effect { quit: true, ..Effect::default() },
     })
@@ -210,7 +216,7 @@ mod tests {
 
     #[test]
     fn rejects_garbage() {
-        for bad in ["frobnicate", "connect a x b", "connect a 0", "add", "select", "add box @x", "rename a"] {
+        for bad in ["frobnicate", "connect a x b", "connect a 0", "add", "select", "add box @x", "rename a", "ui"] {
             assert!(parse(bad).is_err(), "{bad}");
         }
     }

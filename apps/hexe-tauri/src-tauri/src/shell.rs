@@ -8,20 +8,20 @@ use std::time::Duration;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Window -> runner handshake (the UI calls `script_ready` once booted, `script_ack` after each re-sync).
+/// Window -> runner handshake (the UI calls `script_ready` once booted, `script_ack(error?)` after each re-sync).
 pub struct Gate {
     pub ready: Sender<()>,
-    pub ack: Sender<()>,
+    pub ack: Sender<Option<String>>,
 }
 
-pub fn gate() -> (Gate, Receiver<()>, Receiver<()>) {
+pub fn gate() -> (Gate, Receiver<()>, Receiver<Option<String>>) {
     let (ready, ready_rx) = channel();
     let (ack, ack_rx) = channel();
     (Gate { ready, ack }, ready_rx, ack_rx)
 }
 
 /// Max wait for the UI to boot / to re-sync after an op.
-const WAIT: Duration = Duration::from_secs(30);
+const WAIT: Duration = Duration::from_secs(60);
 /// Paint settle time before a screenshot (three.js renders on the next animation frame).
 const SETTLE: Duration = Duration::from_millis(700);
 
@@ -56,7 +56,7 @@ pub fn shot(path: &str) -> Result<(), String> {
 }
 
 /// Run `ops` on a worker thread once the UI reports ready. Any failing op ends the app with exit code 2 (3 = UI timeout).
-pub fn spawn(app: AppHandle, ops: Vec<Op>, ready: Receiver<()>, ack: Receiver<()>) {
+pub fn spawn(app: AppHandle, ops: Vec<Op>, ready: Receiver<()>, ack: Receiver<Option<String>>) {
     std::thread::spawn(move || {
         let die = |code: i32, why: String| {
             eprintln!("hexe: {why}");
@@ -65,6 +65,9 @@ pub fn spawn(app: AppHandle, ops: Vec<Op>, ready: Receiver<()>, ack: Receiver<()
         if ready.recv_timeout(WAIT).is_err() {
             return die(3, "script: the window never became ready".into());
         }
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.set_focus(); // a backgrounded webview throttles timers: keep proofs deterministic
+        }
         for op in ops {
             let state = app.state::<App>();
             let eff = match script::apply(&mut state.lock(), &op) {
@@ -72,11 +75,13 @@ pub fn spawn(app: AppHandle, ops: Vec<Op>, ready: Receiver<()>, ack: Receiver<()
                 Err(e) => return die(2, format!("{e} (op {op:?})")),
             };
             while ack.try_recv().is_ok() {}
-            if let Err(e) = app.emit("hexe://script", serde_json::json!({ "select": eff.select })) {
+            if let Err(e) = app.emit("hexe://script", serde_json::json!({ "select": eff.select, "ui": eff.ui })) {
                 return die(3, format!("script: emit: {e}"));
             }
-            if ack.recv_timeout(WAIT).is_err() {
-                return die(3, format!("script: the window did not re-sync after {op:?}"));
+            match ack.recv_timeout(WAIT) {
+                Err(_) => return die(3, format!("script: the window did not re-sync after {op:?}")),
+                Ok(Some(e)) => return die(2, format!("script: {e} (op {op:?})")),
+                Ok(None) => {}
             }
             if let Some(p) = eff.shot {
                 std::thread::sleep(SETTLE);
@@ -102,7 +107,12 @@ pub fn install_menu(app: &tauri::App) -> tauri::Result<()> {
         h,
         "Hexe",
         true,
-        &[&PredefinedMenuItem::about(h, None, None)?, &sep1, &PredefinedMenuItem::hide(h, None)?, &PredefinedMenuItem::quit(h, None)?],
+        &[
+            &PredefinedMenuItem::about(h, None, None)?,
+            &sep1,
+            &PredefinedMenuItem::hide(h, None)?,
+            &PredefinedMenuItem::quit(h, None)?,
+        ],
     )?;
     let edit = Submenu::with_items(
         h,
@@ -118,7 +128,12 @@ pub fn install_menu(app: &tauri::App) -> tauri::Result<()> {
             &PredefinedMenuItem::select_all(h, None)?,
         ],
     )?;
-    let window = Submenu::with_items(h, "Window", true, &[&PredefinedMenuItem::minimize(h, None)?, &PredefinedMenuItem::close_window(h, None)?])?;
+    let window = Submenu::with_items(
+        h,
+        "Window",
+        true,
+        &[&PredefinedMenuItem::minimize(h, None)?, &PredefinedMenuItem::close_window(h, None)?],
+    )?;
     app.set_menu(Menu::with_items(h, &[&app_menu, &edit, &window])?)?;
     app.on_menu_event(|app, ev| {
         let id = ev.id().as_ref();

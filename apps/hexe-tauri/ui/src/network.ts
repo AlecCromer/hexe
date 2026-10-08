@@ -118,7 +118,24 @@ export class Network {
     return clientToGraph(cx, cy, this.svg.getBoundingClientRect(), this.view);
   }
   private node(id: number): NodeView | undefined { return this.graph.nodes.find((n) => n.id === id); }
-  private fail = (x: unknown): void => this.hooks.error(msg(x));
+  private fail = (x: unknown): void => this.report(msg(x));
+  /** status line + a toast in the pane (the status line is rewritten by every re-cook; the toast stays 5 s next to the action) */
+  private report(m: string): void {
+    this.hooks.error(m);
+    this.host.querySelector("#nettoast")?.remove();
+    const t = document.createElement("div");
+    t.id = "nettoast";
+    t.textContent = m;
+    this.host.append(t);
+    setTimeout(() => t.remove(), 5000);
+  }
+  /** run a command, re-sync the graph (which re-cooks and rewrites the status line), THEN show a rejection so it stays visible */
+  private async cmd(f: () => Promise<unknown>): Promise<void> {
+    let err: string | null = null;
+    try { await f(); } catch (x) { err = msg(x); }
+    await this.hooks.refresh().catch(this.fail);
+    if (err) this.report(err);
+  }
   render(): void {
     this.wires.replaceChildren();
     this.nodes.replaceChildren();
@@ -154,8 +171,7 @@ export class Network {
   }
   /** display flag TOGGLE: the display node's flag clears it, any other node takes it */
   private async toggleDisplay(id: number): Promise<void> {
-    try { await api.setDisplay(displayToggle(this.graph.display, id)); } catch (x) { this.fail(x); }
-    await this.hooks.refresh().catch(this.fail);
+    await this.cmd(() => api.setDisplay(displayToggle(this.graph.display, id)));
   }
   private down(e: MouseEvent): void {
     this.closeMenu();
@@ -267,7 +283,7 @@ export class Network {
       this.svg.querySelectorAll(".port.hot").forEach((p) => p.classList.remove("hot"));
       const p = this.toGraph(e.clientX, e.clientY);
       const hit = resolveDrop(this.graph.nodes, this.graph.edges, d.from, p, DROP_PX / this.view.k);
-      if (hit) this.hooks.connect(d.from, hit.to, hit.input).catch(this.fail);
+      if (hit) this.cmd(() => api.edgeConnect(d.from, hit.to, hit.input));
       else this.hooks.refresh().catch(this.fail); // dropped nowhere: re-sync (a grabbed wire stays cut)
     }
   }
@@ -316,7 +332,7 @@ export class Network {
       if (this.sel.size) {
         e.preventDefault();
         const ids = [...this.sel];
-        api.nodesRemove(ids).catch(this.fail).finally(() => this.hooks.refresh().catch(this.fail));
+        this.cmd(() => api.nodesRemove(ids));
       } else if (this.edgeSel) {
         e.preventDefault();
         this.hooks.disconnect(this.edgeSel.to, this.edgeSel.input).catch(this.fail);
@@ -370,7 +386,7 @@ export class Network {
       this.renaming = null;
       this.host.focus();
       if (commit && name && name !== n.name) {
-        api.nodeRename(id, name).catch(this.fail).finally(() => this.hooks.refresh().catch(this.fail));
+        this.cmd(() => api.nodeRename(id, name));
       }
     };
     input.addEventListener("keydown", (ev) => {
