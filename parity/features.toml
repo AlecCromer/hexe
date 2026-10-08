@@ -927,3 +927,22 @@ evidence = [
   "crates/sop/src/builtins/output_sop.rs::empty_when_unconnected_and_idx_validated",
 ]
 notes = "H29: outputidx I 0 (0..=9, validated, otherwise no effect: no subnet/HDA output routing in this graph). Input 0 Arc shared. `null` stays on row sop-registry. Example: examples/switch.json. Analytical oracle only."
+
+[[feature]]
+id = "sop-clip"
+title = "Clip SOP (plane cut, keep above/below/both)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["clip"]
+evidence = [
+  "crates/sop/src/builtins/clip_sop.rs::box_keep_above_at_y0_is_top_plus_four_half_sides",
+  "crates/sop/src/builtins/clip_sop.rs::box_keep_below_mirrors_and_both_shares_the_cut_points",
+  "crates/sop/src/builtins/clip_sop.rs::dir_and_dist_place_the_plane_and_on_plane_faces_are_kept",
+  "crates/sop/src/builtins/clip_sop.rs::open_polyline_is_split_into_runs",
+  "crates/sop/src/builtins/clip_sop.rs::cut_point_attrs_use_the_exact_weight_not_the_midpoint",
+  "crates/sop/src/builtins/clip_sop.rs::triangle_clipped_to_x_ge_half_has_exact_area",
+  "crates/sop/src/builtins/clip_sop.rs::hostile_params_and_inputs",
+  "crates/sop/src/builtins/clip_sop.rs::example_scene_cooks_and_registry_has_slot",
+]
+notes = "H29: origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. NOT modelled (DEFERRED): capclip, group filter, N recompute, Houdini 'keep all' vs 'both' naming, polysoup/NURBS. UNVERIFIED vs Houdini (hython blocked): menu order, point/prim order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only."

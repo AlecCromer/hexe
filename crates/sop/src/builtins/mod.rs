@@ -29,6 +29,8 @@ mod box_sop;
 //
 mod circle_sop;
 //
+mod clip_sop;
+//
 mod copytopoints_sop;
 //
 mod curve_sop;
@@ -121,6 +123,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("box", box_sop::spec, box_sop::new);
     //
     r.register("circle", circle_sop::spec, circle_sop::new);
+    //
+    r.register("clip", clip_sop::spec, clip_sop::new);
     //
     r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
     //
