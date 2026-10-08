@@ -139,10 +139,18 @@ struct Snap {
     display: Option<String>,
 }
 
+#[derive(Clone, Debug)]
+struct ClipNode {
+    ty: String,
+    name: String,
+    params: Vec<(String, ParamValue)>,
+    pos: [f32; 2],
+}
+
 /// Copied nodes: type, original name, param values, position; edges are index pairs `(from, to, input)` inside the set.
 #[derive(Clone, Debug)]
 struct Clip {
-    nodes: Vec<(String, String, Vec<(String, ParamValue)>, [f32; 2])>,
+    nodes: Vec<ClipNode>,
     edges: Vec<(usize, usize, usize)>,
 }
 
@@ -625,7 +633,7 @@ impl Session {
                 .collect();
             let pos = self.pos.get(&name).copied().unwrap_or([0.0, 0.0]);
             ord.insert(i, nodes.len());
-            nodes.push((self.graph.node_type(n).unwrap_or_default().to_string(), name, params, pos));
+            nodes.push(ClipNode { ty: self.graph.node_type(n).unwrap_or_default().to_string(), name, params, pos });
         }
         if nodes.is_empty() {
             return Err("nothing selected to copy".into());
@@ -653,7 +661,7 @@ impl Session {
         let off = PASTE_OFFSET * self.pastes as f32;
         self.mutate(None, |s| {
             let mut ids: Vec<NodeId> = Vec::new();
-            for (ty, name, params, pos) in &clip.nodes {
+            for ClipNode { ty, name, params, pos } in &clip.nodes {
                 let node = s.reg.create(ty).ok_or_else(|| format!("unknown node type `{ty}`"))?;
                 let id = s.graph.add_boxed(node, ParamSet::new()).map_err(|e| e.to_string())?;
                 for (k, v) in params {
