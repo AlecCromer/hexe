@@ -340,7 +340,7 @@ mod tests {
             n[2] += (a[0] - b[0]) * (a[1] + b[1]);
         }
         let l = -(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
- [(n[0] / l) as f32, (n[1] / l) as f32, (n[2] / l) as f32]
+        [(n[0] / l) as f32, (n[1] / l) as f32, (n[2] / l) as f32]
     }
     const AXES: [[f32; 3]; 6] =
         [[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0, 1.0]];
@@ -450,7 +450,7 @@ mod tests {
             [0.0, 1.0, 0.0],
         ];
         d.add_poly(&[0, 3, 2, 1], true); // +Z, area 100, corner angle 90
- d.add_poly(&[0, 5, 4], true); // -X, area .5, corner angle 90
+        d.add_poly(&[0, 5, 4], true); // -X, area .5, corner angle 90
         let a = v3(&cook(d.clone(), params(TYPE_POINT, 60.0, W_AREA)).expect("cooks"), AttrClass::Point)[0];
         let g = v3(&cook(d.clone(), params(TYPE_POINT, 60.0, W_ANGLE)).expect("cooks"), AttrClass::Point)[0];
         let u = v3(&cook(d, params(TYPE_POINT, 60.0, W_UNIFORM)).expect("cooks"), AttrClass::Point)[0];

@@ -613,7 +613,7 @@ mod tests {
             let mbc = mid(&mut u, b, c);
             let (a, b, c) = (a as u32, b as u32, c as u32);
             // the faces are counter-clockwise (construction); Houdini winding = each reversed after its first corner
- polys.extend([vec![a, mac, mab], vec![mab, mac, mbc], vec![mab, mbc, b], vec![mac, c, mbc]]);
+            polys.extend([vec![a, mac, mab], vec![mab, mac, mbc], vec![mab, mbc, b], vec![mac, c, mbc]]);
         }
         let (rad, t) = ([1.0, 2.0, 3.0], [0.5, 0.0, -1.0]);
         let pts: Vec<[f32; 3]> = u

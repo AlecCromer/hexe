@@ -15,8 +15,8 @@
 //! Split points copy the point attrs / groups of their source point; vertices, prims and detail data are unchanged.
 //! No option on -> the input `Arc` is shared. Output above `MAX_ELEMS` points -> `Failed`.
 use super::meshutil::{
-    MAX_ELEMS, Remap, V3, closed_poly_pts, dot, failed, float, point_normals, positions, rebuild, to_f32, toggle,
-    prim_normal,
+    MAX_ELEMS, Remap, V3, closed_poly_pts, dot, failed, float, point_normals, positions, prim_normal, rebuild, to_f32,
+    toggle,
 };
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};

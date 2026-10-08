@@ -369,12 +369,12 @@ mod tests {
         // 3x3 cells row0/col0 = a=0 (b=3, cc=4, dd=1).
         let tri = ok(r#"{"surftype":3,"rows":3,"cols":3}"#);
         assert_eq!((prim_pts(&tri, 0), prim_pts(&tri, 1)), (vec![0, 4, 3], vec![0, 1, 4]));
- let rev = ok(r#"{"surftype":6,"rows":3,"cols":3}"#);
+        let rev = ok(r#"{"surftype":6,"rows":3,"cols":3}"#);
         assert_eq!((prim_pts(&rev, 0), prim_pts(&rev, 1)), (vec![0, 1, 3], vec![3, 1, 4]));
         let alt = ok(r#"{"surftype":5,"rows":3,"cols":3}"#);
         // cell (0,0) even = triangles; cell (0,1) odd = reverse (a=1,b=4,cc=5,dd=2).
         assert_eq!((prim_pts(&alt, 0), prim_pts(&alt, 1)), (vec![0, 4, 3], vec![0, 1, 4]));
- assert_eq!((prim_pts(&alt, 2), prim_pts(&alt, 3)), (vec![1, 2, 4], vec![4, 2, 5]));
+        assert_eq!((prim_pts(&alt, 2), prim_pts(&alt, 3)), (vec![1, 2, 4], vec![4, 2, 5]));
         // every triangle of every flavour keeps the +Y normal on zx.
         for d in [&tri, &rev, &alt] {
             assert!((0..d.prims.len()).all(|i| normal(d, i)[1] > 0.0));

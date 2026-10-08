@@ -159,7 +159,7 @@ mod tests {
             let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
             let c: Vec<f32> = (0..3).map(|k| p.iter().map(|q| q[k]).sum::<f32>() / 4.0).collect();
             // right-handed cross points INWARD for Houdini's clockwise-from-outside faces
- assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] < 0.0, "face {f:?} winds inward");
+            assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] < 0.0, "face {f:?} winds inward");
         }
     }
     fn arc(d: Detail) -> Arc<Detail> {
@@ -472,7 +472,7 @@ mod tests {
         for k in 0..5u32 {
             let n = (k + 1) % 5;
             // counter-clockwise construction order, each emitted reversed after its first corner (Houdini winding)
- for tri in [[0, 1 + k, 1 + n], [1 + k, 6 + k, 1 + n], [6 + k, 1 + k, 6 + (k + 4) % 5], [6 + k, 11, 6 + n]] {
+            for tri in [[0, 1 + k, 1 + n], [1 + k, 6 + k, 1 + n], [6 + k, 1 + k, 6 + (k + 4) % 5], [6 + k, 11, 6 + n]] {
                 d.add_poly(&tri.map(|i| i + 8), true);
             }
         }

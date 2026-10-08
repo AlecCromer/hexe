@@ -663,7 +663,7 @@ mod tests {
             d.p_mut()[6 + i] = [q[0], q[1], 1.0];
         }
         d.add_poly(&[0, 1, 2, 3, 4, 5], true);
- d.add_poly(&[11, 10, 9, 8, 7, 6], true);
+        d.add_poly(&[11, 10, 9, 8, 7, 6], true);
         for i in 0..6u32 {
             let j = (i + 1) % 6;
             d.add_poly(&[i, 6 + i, 6 + j, j], true);

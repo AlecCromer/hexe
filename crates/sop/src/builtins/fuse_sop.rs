@@ -344,7 +344,7 @@ mod tests {
         let corner = |i: u32| [c(2, i), c(1, i), c(0, i)];
         let mut pos = Vec::new();
         for f in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
- pos.extend(f.iter().map(|&i| corner(i)));
+            pos.extend(f.iter().map(|&i| corner(i)));
         }
         d.add_points(24);
         *d.p_mut() = pos;
@@ -606,7 +606,7 @@ mod tests {
             .expect("example present");
         let (mut g, id) = load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
-                // box -> polyextrude 0.5 (connected components = Houdini default: a closed box has no boundary, 8 pts / 6 prims,
+        // box -> polyextrude 0.5 (connected components = Houdini default: a closed box has no boundary, 8 pts / 6 prims,
         // identical to Houdini) -> fuse 0.001: nothing left to weld
         assert_eq!((out.point_count, out.prim_count(), out.vertex_count()), (8, 6, 24));
         // splittype 1 (individual faces) = the old soup: 48 pts / 30 prims; fuse welds shared corners

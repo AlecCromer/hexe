@@ -118,7 +118,7 @@ impl Face {
             return None;
         }
         // Houdini normal vector (twice the vector area): the one central rule.
- let nw = newell_corners(&pos);
+        let nw = newell_corners(&pos);
 
         let area2 = dot(nw, nw).sqrt();
         if !area2.is_finite() || area2 <= MIN_NEWELL {
@@ -218,7 +218,6 @@ impl Topo {
 }
 /// One extrusion point of a connected component.
 struct Slot {
-    comp: usize,
     pt: usize,
     /// Mitre displacement per unit distance (see `Plan::of`).
     dir: V3,
@@ -249,9 +248,9 @@ fn find(parent: &mut [usize], mut x: usize) -> usize {
     x
 }
 impl Plan {
-    fn of(src: &Detail, faces: &[Option<Face>], inset: f64) -> Plan {
+    fn of(faces: &[Option<Face>], inset: f64) -> Plan {
         use std::collections::{BTreeMap, HashMap};
-        let _ = src;
+
         let key = |a: usize, b: usize| (a.min(b), a.max(b));
         let mut uses: HashMap<(usize, usize), u32> = HashMap::new();
         let mut first: HashMap<(usize, usize), usize> = HashMap::new();
@@ -288,10 +287,10 @@ impl Plan {
         struct Acc {
             nsum: V3,
             first_n: V3,
- count: u32,
- ins: Vec<V3>,
- boundary: bool,
- }
+            count: u32,
+            ins: Vec<V3>,
+            boundary: bool,
+        }
         let mut acc: BTreeMap<(usize, usize), Acc> = BTreeMap::new();
         for (qi, f) in faces.iter().enumerate() {
             let Some(f) = f else { continue };
@@ -302,24 +301,28 @@ impl Plan {
                 boundary[qi].push(is_b);
                 let e = acc.entry((comp[qi], a)).or_insert(Acc {
                     nsum: [0.0; 3],
- first_n: f.normal,
- count: 0,
- ins: Vec::new(),
- boundary: false,
- });
- e.count += 1;
- e.nsum = [e.nsum[0] + f.normal[0], e.nsum[1] + f.normal[1], e.nsum[2] + f.normal[2]];
+                    first_n: f.normal,
+                    count: 0,
+                    ins: Vec::new(),
+                    boundary: false,
+                });
+                e.count += 1;
+                e.nsum = [e.nsum[0] + f.normal[0], e.nsum[1] + f.normal[1], e.nsum[2] + f.normal[2]];
                 if is_b {
-                    let ind = f.pos.get(c).zip(f.pos.get((c + 1) % n)).and_then(|(pa, pb)| unit(cross(sub(*pb, *pa), f.normal)));
+                    let ind = f
+                        .pos
+                        .get(c)
+                        .zip(f.pos.get((c + 1) % n))
+                        .and_then(|(pa, pb)| unit(cross(sub(*pb, *pa), f.normal)));
                     for pt in [a, b] {
                         let e = acc.entry((comp[qi], pt)).or_insert(Acc {
                             nsum: [0.0; 3],
- first_n: f.normal,
- count: 0,
- ins: Vec::new(),
- boundary: false,
- });
- e.boundary = true;
+                            first_n: f.normal,
+                            count: 0,
+                            ins: Vec::new(),
+                            boundary: false,
+                        });
+                        e.boundary = true;
                         e.ins.extend(ind);
                     }
                 }
@@ -328,27 +331,27 @@ impl Plan {
         let mut slots = Vec::with_capacity(acc.len());
         let mut slot_of = HashMap::new();
         // Houdini numbers the rebuilt points by FIRST APPEARANCE walking the prims' vertex lists (hython: box -> [0,1,2,3, 4,5,1,0, ..])
- let mut seen: HashMap<(usize, usize), usize> = HashMap::new();
- for (qi, f) in faces.iter().enumerate() {
- if let Some(f) = f {
- for &pt in &f.pts {
- let n = seen.len();
- seen.entry((comp[qi], pt)).or_insert(n);
- }
- }
- }
- let mut items: Vec<_> = acc.into_iter().collect();
- items.sort_by_key(|(k, _)| seen.get(k).copied().unwrap_or(usize::MAX));
- for ((cm, pt), a) in items {
+        let mut seen: HashMap<(usize, usize), usize> = HashMap::new();
+        for (qi, f) in faces.iter().enumerate() {
+            if let Some(f) = f {
+                for &pt in &f.pts {
+                    let n = seen.len();
+                    seen.entry((comp[qi], pt)).or_insert(n);
+                }
+            }
+        }
+        let mut items: Vec<_> = acc.into_iter().collect();
+        items.sort_by_key(|(k, _)| seen.get(k).copied().unwrap_or(usize::MAX));
+        for ((cm, pt), a) in items {
             // mitre: the displacement v with v . n_i = 1 on average, so every incident face plane moves by exactly `distance`
- // (box corner -> (+-1,+-1,+-1) x distance, hython-verified: box +-0.5 -> +-1 at distance 0.5; coplanar faces -> n)
- let l = dot(a.nsum, a.nsum).sqrt();
- let dir = if l.is_finite() && l > 1e-9 {
- let mean = (l / f64::from(a.count.max(1))).max(MIN_MITRE);
- [a.nsum[0] / (l * mean), a.nsum[1] / (l * mean), a.nsum[2] / (l * mean)]
- } else {
- a.first_n
- };
+            // (box corner -> (+-1,+-1,+-1) x distance, hython-verified: box +-0.5 -> +-1 at distance 0.5; coplanar faces -> n)
+            let l = dot(a.nsum, a.nsum).sqrt();
+            let dir = if l.is_finite() && l > 1e-9 {
+                let mean = (l / f64::from(a.count.max(1))).max(MIN_MITRE);
+                [a.nsum[0] / (l * mean), a.nsum[1] / (l * mean), a.nsum[2] / (l * mean)]
+            } else {
+                a.first_n
+            };
             let off = match a.ins.as_slice() {
                 _ if inset == 0.0 => [0.0; 3],
                 [x, y] => {
@@ -360,7 +363,7 @@ impl Plan {
                 _ => [0.0; 3],
             };
             slot_of.insert((cm, pt), slots.len());
-            slots.push(Slot { comp: cm, pt, dir, inset: off, boundary: a.boundary });
+            slots.push(Slot { pt, dir, inset: off, boundary: a.boundary });
         }
         Plan { comp, boundary, slots, slot_of }
     }
@@ -369,13 +372,13 @@ impl Plan {
         let n = self.slots.iter().map(|s| s.pt + 1).max().unwrap_or(0);
         let mut v = vec![false; n];
         for s in &self.slots {
-            if back || (side && s.boundary) {
-                if let Some(x) = v.get_mut(s.pt) {
-                    *x = true;
-                }
+            if (back || (side && s.boundary))
+                && let Some(x) = v.get_mut(s.pt)
+            {
+                *x = true;
             }
         }
-        let _ = self.slots.iter().map(|s| s.comp).max();
+
         v
     }
 }
@@ -438,7 +441,7 @@ impl Node<Detail> for PolyExtrude {
             return Err(failed("output element count exceeds the allocation cap"));
         }
         // ---- connected components: slots (one per component point), boundary edges ----
-        let plan = if connected { Some(Plan::of(src, &faces, inset)) } else { None };
+        let plan = if connected { Some(Plan::of(&faces, inset)) } else { None };
         // ---- which input points survive ----
         let npts = src.point_count as usize;
         let (mut by_ext, mut by_pass) = (vec![false; npts], vec![false; npts]);
@@ -457,9 +460,9 @@ impl Node<Detail> for PolyExtrude {
         let mut out_p: Vec<[f32; 3]> = Vec::new();
         let needs0 = plan.as_ref().map(|pl| pl.needs_ring0(back, side)).unwrap_or_default();
         for i in 0..npts {
- if by_ext[i] && !by_pass[i] && !needs0.get(i).copied().unwrap_or(false) {
- continue;
- }
+            if by_ext[i] && !by_pass[i] && !needs0.get(i).copied().unwrap_or(false) {
+                continue;
+            }
             remap[i] = Some(u32::try_from(point_src.len()).map_err(|_| failed("point id overflow"))?);
             point_src.push(Some(i));
             out_p.push(sp.get(i).copied().unwrap_or([0.0; 3]));
@@ -503,42 +506,45 @@ impl Node<Detail> for PolyExtrude {
                 continue;
             };
             let n = f.pts.len();
- if let Some(pl) = &plan {
- let slot = |c: usize| pl.slot_of.get(&(pl.comp[qi], f.pts.get(c % n).copied().unwrap_or(0))).copied();
- let orig = |c: usize| {
- f.pts.get(c % n).and_then(|&pt| remap.get(pt).copied().flatten()).ok_or_else(|| failed("dangling point id"))
- };
- let ring = |k: usize, c: usize| -> Result<u32, CookError> {
- if k == 0 {
- return orig(c);
- }
- slot(c)
- .and_then(|s| ring_id.get(k - 1)?.get(s).copied().flatten())
- .ok_or_else(|| failed("missing ring point"))
- };
- let corner = |c: usize| Some(f.first_vert + c);
- if front {
- let ids: Vec<u32> = (0..n).map(|c| ring(divs, c)).collect::<Result<_, _>>()?;
- o.push(PrimKind::Poly { closed: true }, &ids, (0..n).map(corner).collect(), qi)?;
- }
- if side {
- for k in 1..=divs {
- for c in 0..n {
- if !pl.boundary.get(qi).and_then(|b| b.get(c)).copied().unwrap_or(false) {
- continue;
- }
- let ids = [ring(k - 1, c)?, ring(k - 1, c + 1)?, ring(k, c + 1)?, ring(k, c)?];
- o.push(PrimKind::Poly { closed: true }, &ids, vec![None; 4], qi)?;
- }
- }
- }
- if back {
- let ids: Vec<u32> = (0..n).rev().map(orig).collect::<Result<_, _>>()?;
- o.push(PrimKind::Poly { closed: true }, &ids, (0..n).rev().map(corner).collect(), qi)?;
- }
- continue;
- }
- let offs = f.inset_offsets(inset);
+            if let Some(pl) = &plan {
+                let slot = |c: usize| pl.slot_of.get(&(pl.comp[qi], f.pts.get(c % n).copied().unwrap_or(0))).copied();
+                let orig = |c: usize| {
+                    f.pts
+                        .get(c % n)
+                        .and_then(|&pt| remap.get(pt).copied().flatten())
+                        .ok_or_else(|| failed("dangling point id"))
+                };
+                let ring = |k: usize, c: usize| -> Result<u32, CookError> {
+                    if k == 0 {
+                        return orig(c);
+                    }
+                    slot(c)
+                        .and_then(|s| ring_id.get(k - 1)?.get(s).copied().flatten())
+                        .ok_or_else(|| failed("missing ring point"))
+                };
+                let corner = |c: usize| Some(f.first_vert + c);
+                if front {
+                    let ids: Vec<u32> = (0..n).map(|c| ring(divs, c)).collect::<Result<_, _>>()?;
+                    o.push(PrimKind::Poly { closed: true }, &ids, (0..n).map(corner).collect(), qi)?;
+                }
+                if side {
+                    for k in 1..=divs {
+                        for c in 0..n {
+                            if !pl.boundary.get(qi).and_then(|b| b.get(c)).copied().unwrap_or(false) {
+                                continue;
+                            }
+                            let ids = [ring(k - 1, c)?, ring(k - 1, c + 1)?, ring(k, c + 1)?, ring(k, c)?];
+                            o.push(PrimKind::Poly { closed: true }, &ids, vec![None; 4], qi)?;
+                        }
+                    }
+                }
+                if back {
+                    let ids: Vec<u32> = (0..n).rev().map(orig).collect::<Result<_, _>>()?;
+                    o.push(PrimKind::Poly { closed: true }, &ids, (0..n).rev().map(corner).collect(), qi)?;
+                }
+                continue;
+            }
+            let offs = f.inset_offsets(inset);
             let base = point_src.len();
             for k in 0..=divs {
                 let t = k as f64 / divs as f64;
@@ -622,7 +628,7 @@ mod tests {
         let mut d = Detail::default();
         d.add_points(4);
         *d.p_mut() = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
- d.add_poly(&[0, 3, 2, 1], true); // clockwise from +Z: Houdini normal +Z
+        d.add_poly(&[0, 3, 2, 1], true); // clockwise from +Z: Houdini normal +Z
         d
     }
     /// Unit box (corners +-0.5, 8 shared points), 6 quads in Houdini winding (clockwise from outside), closed form.
@@ -632,11 +638,11 @@ mod tests {
         let c = |b: u32, i: u32| if (i >> b) & 1 == 1 { 0.5 } else { -0.5 };
         *d.p_mut() = (0..8).map(|i| [c(2, i), c(1, i), c(0, i)]).collect();
         for f in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
- d.add_poly(&f, true);
- }
- d
- }
- fn f(v: f32) -> ParamValue {
+            d.add_poly(&f, true);
+        }
+        d
+    }
+    fn f(v: f32) -> ParamValue {
         ParamValue::F(v)
     }
     fn prim_pts(d: &Detail, i: usize) -> Vec<[f32; 3]> {
@@ -651,10 +657,10 @@ mod tests {
             n[0] += (a[1] - b[1]) * (a[2] + b[2]);
             n[1] += (a[2] - b[2]) * (a[0] + b[0]);
             n[2] += (a[0] - b[0]) * (a[1] + b[1]);
- }
- n.map(|c| -c)
- }
- fn centroid(p: &[[f32; 3]]) -> [f32; 3] {
+        }
+        n.map(|c| -c)
+    }
+    fn centroid(p: &[[f32; 3]]) -> [f32; 3] {
         let k = p.len() as f32;
         [0, 1, 2].map(|j| p.iter().map(|q| q[j]).sum::<f32>() / k)
     }
@@ -669,8 +675,8 @@ mod tests {
         assert_eq!(
             got,
             [
- ("splittype", ParamValue::Menu(0)),
- ("distance", f(0.0)),
+                ("splittype", ParamValue::Menu(0)),
+                ("distance", f(0.0)),
                 ("inset", f(0.0)),
                 ("divisions", ParamValue::I(1)),
                 ("output_front", ParamValue::B(true)),
@@ -695,12 +701,12 @@ mod tests {
         assert_eq!(
             top.iter().map(|p| [p[0], p[1]]).collect::<Vec<_>>(),
             [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]]
- );
- assert_eq!(newell(&top), [0.0, 0.0, 2.0]);
- // side 0 sits on the x=0 edge (corner 0 -> 1 of the clockwise base), outward normal -X
- let s0 = prim_pts(&out, 1);
- assert_eq!(s0, [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]]);
- assert_eq!(newell(&s0), [-2.0, 0.0, 0.0]);
+        );
+        assert_eq!(newell(&top), [0.0, 0.0, 2.0]);
+        // side 0 sits on the x=0 edge (corner 0 -> 1 of the clockwise base), outward normal -X
+        let s0 = prim_pts(&out, 1);
+        assert_eq!(s0, [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]]);
+        assert_eq!(newell(&s0), [-2.0, 0.0, 0.0]);
         // every side normal points away from the extrusion axis
         for i in 1..5 {
             let s = prim_pts(&out, i);
@@ -759,8 +765,9 @@ mod tests {
     }
     #[test]
     fn box_distance_half_is_48_points_30_prims_outward() {
-        let out = cook(cube(), with(with(defaults(), "splittype", ParamValue::Menu(1)), "distance", f(0.5))).expect("cooks");
- assert_eq!((out.point_count, out.prim_count()), (48, 30));
+        let out =
+            cook(cube(), with(with(defaults(), "splittype", ParamValue::Menu(1)), "distance", f(0.5))).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (48, 30));
         for face in 0..6 {
             let top = prim_pts(&out, face * 5);
             let (n, c) = (newell(&top), centroid(&top));
@@ -778,9 +785,15 @@ mod tests {
             mask: vec![true, false, false, false, false, true],
         });
         let before: Vec<Vec<[f32; 3]>> = (1..5).map(|i| prim_pts(&d, i)).collect();
-        let out =
-            cook(d, with(with(with(defaults(), "splittype", ParamValue::Menu(1)), "distance", f(0.5)), "group", ParamValue::S("g".into())))
- .expect("cooks");
+        let out = cook(
+            d,
+            with(
+                with(with(defaults(), "splittype", ParamValue::Menu(1)), "distance", f(0.5)),
+                "group",
+                ParamValue::S("g".into()),
+            ),
+        )
+        .expect("cooks");
         assert_eq!(out.prim_count(), 4 + 2 * 5);
         // faces 0 and 5 cover points {0,1,2,3} and {1,3,5,7}; the other four still need all 8, so 8 kept + 16 new
         assert_eq!(out.point_count, 8 + 2 * 8);
@@ -823,7 +836,7 @@ mod tests {
         for (k, v) in [
             ("divisions", ParamValue::I(0)),
             ("divisions", ParamValue::I(-3)),
- ("splittype", ParamValue::Menu(3)),
+            ("splittype", ParamValue::Menu(3)),
             ("distance", f(f32::NAN)),
             ("inset", f(f32::INFINITY)),
         ] {
@@ -852,7 +865,11 @@ mod tests {
         let out = cook(d, with(defaults(), "distance", f(1.0))).expect("cooks");
         let Some(AttrData::V3(cd)) = out.attr(AttrClass::Point, "Cd").map(|a| &a.data) else { panic!("Cd lost") };
         assert_eq!(cd.len(), 8);
-        assert_eq!(cd[4..], [cd[0], cd[3], cd[2], cd[1]], "front points follow the clockwise corner order (first appearance)");
+        assert_eq!(
+            cd[4..],
+            [cd[0], cd[3], cd[2], cd[1]],
+            "front points follow the clockwise corner order (first appearance)"
+        );
         assert_eq!(cd[2], [0.0, 0.0, 1.0]);
         let Some(AttrData::F32(w)) = out.attr(AttrClass::Prim, "w").map(|a| &a.data) else { panic!("w lost") };
         assert_eq!(w, &[7.0; 5]);
@@ -876,24 +893,25 @@ mod tests {
         let out = cook(cube(), defaults()).expect("cooks");
         assert_eq!((out.point_count, out.prim_count(), out.vertex_count()), (8, 6, 24));
         // Houdini numbers the rebuilt points by first appearance along the vertex lists ([1,5,4,0, 2,6,5,1, ..] -> [0,1,2,3, 4,5,1,0, ..])
- let mut first: Vec<u32> = Vec::new();
- for &v in &src.vertex_point {
- if !first.contains(&v) {
- first.push(v);
- }
- }
- let renum: Vec<u32> = src.vertex_point.iter().filter_map(|v| first.iter().position(|f| f == v)).map(|i| i as u32).collect();
- assert_eq!(out.vertex_point, renum);
- assert!(first.iter().enumerate().all(|(i, &old)| out.p()[i] == src.p()[old as usize]));
+        let mut first: Vec<u32> = Vec::new();
+        for &v in &src.vertex_point {
+            if !first.contains(&v) {
+                first.push(v);
+            }
+        }
+        let renum: Vec<u32> =
+            src.vertex_point.iter().filter_map(|v| first.iter().position(|f| f == v)).map(|i| i as u32).collect();
+        assert_eq!(out.vertex_point, renum);
+        assert!(first.iter().enumerate().all(|(i, &old)| out.p()[i] == src.p()[old as usize]));
         // distance moves every shared corner ONCE by the mitre of its three face normals: (+-1,+-1,+-1) x distance (Houdini:
- // box +-0.5 at distance 0.5 -> +-1)
+        // box +-0.5 at distance 0.5 -> +-1)
         let out = cook(cube(), with(defaults(), "distance", f(0.5))).expect("cooks");
         assert_eq!((out.point_count, out.prim_count()), (8, 6));
         let s = 0.5f32;
         for (i, &old) in first.iter().enumerate() {
- let (q, p) = (out.p()[i], src.p()[old as usize]);
- assert!(near(q, [p[0] + p[0].signum() * s, p[1] + p[1].signum() * s, p[2] + p[2].signum() * s]), "{q:?}");
- }
+            let (q, p) = (out.p()[i], src.p()[old as usize]);
+            assert!(near(q, [p[0] + p[0].signum() * s, p[1] + p[1].signum() * s, p[2] + p[2].signum() * s]), "{q:?}");
+        }
         for i in 0..6 {
             let (n, c) = (newell(&prim_pts(&out, i)), centroid(&prim_pts(&out, i)));
             assert!(n[0] * c[0] + n[1] * c[1] + n[2] * c[2] > 0.0, "face {i} inward");
@@ -904,7 +922,8 @@ mod tests {
     fn connected_two_quads_share_points_and_get_sides_on_the_boundary_only() {
         let mut d = Detail::default();
         d.add_points(6);
-        *d.p_mut() = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [2.0, 1.0, 0.0]];
+        *d.p_mut() =
+            vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [2.0, 1.0, 0.0]];
         d.add_poly(&[0, 3, 4, 1], true);
         d.add_poly(&[1, 4, 5, 2], true);
         let out = cook(d.clone(), with(defaults(), "distance", f(1.0))).expect("cooks");

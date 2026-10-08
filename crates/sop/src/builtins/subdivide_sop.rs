@@ -311,8 +311,8 @@ mod tests {
             assert!((0..3).all(|j| near(c[j], want[j])), "corner {i}: {c:?} vs {want:?}");
         }
         // edge point 14 = edge (0,2) (first edge of Houdini-wound face [0,2,3,1]) = (-h,-h,-h)-(-h,h,-h), faces x=-h (centre
- // (-h,0,0)) and z=-h (centre (0,0,-h)): (A + B + F1 + F2) / 4 = ((-1,0,-1) + (-1/2,0,0) + (0,0,-1/2)) / 4 = (-3/8, 0, -3/8)
- assert_eq!(out.p()[14], [-0.375, 0.0, -0.375]);
+        // (-h,0,0)) and z=-h (centre (0,0,-h)): (A + B + F1 + F2) / 4 = ((-1,0,-1) + (-1/2,0,0) + (0,0,-1/2)) / 4 = (-3/8, 0, -3/8)
+        assert_eq!(out.p()[14], [-0.375, 0.0, -0.375]);
         assert_eq!(out.p()[8], [-0.5, 0.0, 0.0]);
     }
     #[test]

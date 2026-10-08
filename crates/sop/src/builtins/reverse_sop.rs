@@ -88,11 +88,15 @@ impl Node<Detail> for Reverse {
             .zip(&sel)
             .filter(|(pr, s)| **s && matches!(pr.kind, PrimKind::Poly { .. } | PrimKind::Polyline))
             .filter_map(|(pr, _)| {
- let r = usize::try_from(pr.verts.start).ok()?..usize::try_from(pr.verts.end).ok()?;
- // closed polygons keep their first vertex (Houdini); open ones reverse fully
- Some(if matches!(pr.kind, PrimKind::Poly { closed: true }) { r.start.checked_add(1)?..r.end } else { r })
- })
- .filter(|r| r.len() >= 2 && r.end <= nverts)
+                let r = usize::try_from(pr.verts.start).ok()?..usize::try_from(pr.verts.end).ok()?;
+                // closed polygons keep their first vertex (Houdini); open ones reverse fully
+                Some(if matches!(pr.kind, PrimKind::Poly { closed: true }) {
+                    r.start.checked_add(1)?..r.end
+                } else {
+                    r
+                })
+            })
+            .filter(|r| r.len() >= 2 && r.end <= nverts)
             .collect();
         if ranges.is_empty() {
             return Ok(Arc::clone(src));
@@ -164,18 +168,18 @@ mod tests {
         assert_eq!(out.p(), src.p(), "points untouched");
     }
     #[test]
- fn closed_polygon_keeps_its_first_vertex_open_polyline_reverses_fully() {
- // Houdini (hython): box prim0 [1,5,4,0] -> [1,0,4,5]
- let mut d = Detail::default();
- d.add_points(6);
- d.add_poly(&[1, 5, 4, 0], true);
- d.add_poly(&[1, 5, 4, 0], false);
- let out = cook(Arc::new(d), none()).expect("cooks");
- assert_eq!(&out.vertex_point[..4], &[1, 0, 4, 5]);
- assert_eq!(&out.vertex_point[4..], &[0, 4, 5, 1]);
- }
- #[test]
- fn reversed_twice_is_byte_equal_to_input() {
+    fn closed_polygon_keeps_its_first_vertex_open_polyline_reverses_fully() {
+        // Houdini (hython): box prim0 [1,5,4,0] -> [1,0,4,5]
+        let mut d = Detail::default();
+        d.add_points(6);
+        d.add_poly(&[1, 5, 4, 0], true);
+        d.add_poly(&[1, 5, 4, 0], false);
+        let out = cook(Arc::new(d), none()).expect("cooks");
+        assert_eq!(&out.vertex_point[..4], &[1, 0, 4, 5]);
+        assert_eq!(&out.vertex_point[4..], &[0, 4, 5, 1]);
+    }
+    #[test]
+    fn reversed_twice_is_byte_equal_to_input() {
         let mut d = cube();
         d.add_attr(Attribute {
             name: "uv".into(),

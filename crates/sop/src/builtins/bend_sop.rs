@@ -112,7 +112,7 @@ impl Node<Detail> for Deform {
                     Some(s) => add(o, bend_point(r, h, a, s, len, theta)),
                     None => {
                         // twist direction = Houdini's (H32, hython-verified): +angle turns (-x,-z) to (+x,-z) = clockwise seen from +a
- let alpha = -theta * (h / len).min(1.0);
+                        let alpha = -theta * (h / len).min(1.0);
                         let axial = scale(a, h);
                         let v = sub(r, axial);
                         let rot = add(

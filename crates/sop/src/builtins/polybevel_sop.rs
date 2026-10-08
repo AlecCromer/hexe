@@ -34,8 +34,8 @@
 //! 1 solid; else `BadParam`). Element counts above `MAX_ELEMS` -> `Failed` BEFORE allocating.
 use super::meshutil::dot;
 use super::meshutil::{
-    MAX_ELEMS, Remap, V3, add, bad, closed_poly_pts, failed, float, int, point_normals, positions, rebuild, scale, sub,
-    to_f32, prim_normal,
+    MAX_ELEMS, Remap, V3, add, bad, closed_poly_pts, failed, float, int, point_normals, positions, prim_normal,
+    rebuild, scale, sub, to_f32,
 };
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Detail, Prim, PrimKind};
