@@ -1,15 +1,15 @@
 // three.js viewport: points (Points), open prims (LineSegments), closed polys (fan-triangulated flat-shaded Mesh) +
-// optional wireframe overlay. OrbitControls: left = orbit, right/middle = pan, wheel = zoom. Fit on every cook.
+// optional wireframe overlay. Houdini camera (camera.ts): LMB/alt+LMB orbit, shift+LMB/MMB pan, RMB dolly, wheel dolly. Fit on every cook.
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { clip, type Cam, defaultCam, dolly, dragDolly, eye, fit as fitCam, FOV, orbit, pan, wheelDolly } from "./camera";
 import type { Cooked } from "./api";
 import { bounds, edgeSegments, shapeWire, triangulate } from "./geom";
 
 export class Viewport {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
-  private controls: OrbitControls;
+  private camera = new THREE.PerspectiveCamera((FOV * 180) / Math.PI, 1, 0.01, 10000);
+  private cam: Cam = defaultCam();
   private content = new THREE.Group();
   private wire: THREE.LineSegments | null = null;
   private points: THREE.Points | null = null;
@@ -28,11 +28,9 @@ export class Viewport {
     this.scene.add(key);
     const grid = new THREE.GridHelper(20, 20, 0x666d78, 0x4d535c);
     this.scene.add(grid, this.content);
-    this.camera.position.set(3, 2.5, 4);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = false;
-    this.controls.addEventListener("change", () => this.draw());
-    new ResizeObserver(() => this.resize()).observe(host);
+    this.bindInput(this.renderer.domElement);
+this.applyCam();
+new ResizeObserver(() => this.resize()).observe(host);
     this.resize();
   }
 
@@ -108,27 +106,53 @@ this.points = new THREE.Points(geo(), new THREE.PointsMaterial({ color: 0xffa24a
     this.draw();
   }
 
-  /** Frame the point cloud's bounding sphere, keeping the current view direction. */
-  fit(positions: ArrayLike<number>): void {
-    const b = bounds(positions);
-    if (!b) return;
-    const r = Math.max(b.radius, 1e-3);
-    const dir = this.camera.position.clone().sub(this.controls.target);
-    if (dir.lengthSq() < 1e-12) dir.set(1, 0.8, 1.2);
-    dir.normalize();
-    const dist = r / Math.sin((this.camera.fov * Math.PI) / 360) * 1.15;
-    this.controls.target.set(...b.center);
-    this.camera.position.copy(this.controls.target).addScaledVector(dir, dist);
-    this.camera.near = Math.max(dist / 1000, 1e-4);
-    this.camera.far = dist * 100;
-    this.camera.updateProjectionMatrix();
-    this.controls.update();
-    this.draw();
-  }
-
-  /** Re-fit to the currently shown geometry (toolbar Fit button). */
-  fitCurrent(): void {
-    const p = this.points?.geometry.getAttribute("position");
-    if (p) this.fit(p.array as Float32Array);
-  }
+  /** Push the orbit state into the three.js camera. */
+private applyCam(): void {
+const e = eye(this.cam), k = clip(this.cam);
+this.camera.position.set(...e);
+this.camera.up.set(0, 1, 0);
+this.camera.lookAt(...this.cam.target);
+this.camera.near = k.near;
+this.camera.far = k.far;
+this.camera.updateProjectionMatrix();
+this.draw();
+}
+private bindInput(el: HTMLElement): void {
+let drag: { mode: "orbit" | "pan" | "dolly"; x: number; y: number } | null = null;
+el.addEventListener("contextmenu", (e) => e.preventDefault());
+el.addEventListener("pointerdown", (e) => {
+const mode = e.button === 2 ? "dolly" : e.button === 1 || (e.button === 0 && e.shiftKey) ? "pan" : e.button === 0 ? "orbit" : null;
+if (!mode) return;
+drag = { mode, x: e.clientX, y: e.clientY };
+el.setPointerCapture(e.pointerId);
+e.preventDefault();
+});
+el.addEventListener("pointermove", (e) => {
+if (!drag) return;
+const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+drag.x = e.clientX; drag.y = e.clientY;
+this.cam = drag.mode === "orbit" ? orbit(this.cam, dx, dy) : drag.mode === "pan" ? pan(this.cam, dx, dy, el.clientHeight) : dolly(this.cam, dragDolly(dx, dy));
+this.applyCam();
+});
+const end = (e: PointerEvent) => { drag = null; if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); };
+el.addEventListener("pointerup", end);
+el.addEventListener("pointercancel", end);
+el.addEventListener("wheel", (e) => {
+e.preventDefault();
+this.cam = dolly(this.cam, wheelDolly(e.deltaY, e.deltaMode));
+this.applyCam();
+}, { passive: false });
+}
+/** Frame the point cloud's bounding sphere, keeping the current view direction. */
+fit(positions: ArrayLike<number>): void {
+const b = bounds(positions);
+if (!b) return;
+this.cam = fitCam(this.cam, b);
+this.applyCam();
+}
+/** Re-fit to the currently shown geometry (toolbar Fit / H / F). */
+fitCurrent(): void {
+const p = this.points?.geometry.getAttribute("position");
+if (p) this.fit(p.array as Float32Array);
+}
 }
