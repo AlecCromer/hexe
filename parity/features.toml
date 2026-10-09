@@ -693,6 +693,24 @@ commands = []
 evidence = ["crates/geo/src/bgeo_legacy_tests.rs::binary_equals_text_twin", "crates/geo/src/bgeo_legacy_tests.rs::every_truncation_is_a_clean_error", "crates/geo/src/bgeo_legacy_tests.rs::lying_header_counts_never_panic_or_overallocate", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle"]
 notes = "all.bgeo (v2) == its text twin (points, vertex->point map, prim ranges+types, attr values, groups). v3/v5: 5 of 6 install files parse to the exact trailer (no twin, UNVERIFIED values); fabric.bgeo NURBMesh profile block fails. Non-float attrib types, vertex/prim/detail attribs, ordered-group lists, wide (>=65536 pts) indices are inferred (UNVERIFIED)."
 
+[[feature]]
+id = "geo-nurbs-prims"
+title = "First-class NURBS/Bezier curve + surface prim kinds (evaluate, tessellate, JSON/bjson IO, shipped GPD/bgeo decode)"
+area = "B"
+tier = "P1"
+status = "shipped"
+commands = []
+evidence = [
+  "crates/geo/src/nurbs_tests.rs::deboor_endpoints_equal_end_control_points",
+  "crates/geo/src/nurbs_tests.rs::rational_nurbs_circle_is_exact_and_arc_length_is_two_pi",
+  "crates/geo/src/nurbs_tests.rs::bezier_cubic_matches_de_casteljau_closed_form",
+  "crates/geo/src/nurbs_tests.rs::flat_surfaces_evaluate_bilinearly_and_tessellate_to_the_exact_area",
+  "crates/geo/src/nurbs_tests.rs::json_and_bjson_round_trip_equality",
+  "crates/geo/src/nurbs_tests.rs::shipped_houdini_fixtures_decode_to_first_class_kinds_and_evaluate",
+  "crates/geo/src/nurbs_tests.rs::hostile_curves_never_panic",
+]
+notes = "PrimKind::{BezierCurve,NurbsCurve,BezierSurf,NurbsSurf} {Basis{order,knots,end}, closed/uwrap/vwrap, cols x rows}; rational weights = point attr `Pw` (read from the point w of GPD/BgeoV when != 1). Detail::evaluate(prim,u) / evaluate_uv(prim,u,v) (unit params; NURBS de Boor, Bezier de Casteljau, both on identity coefficients -> sparse basis weights that also blend every point attr) + Detail::tessellate(lod_u,lod_v) (curves -> poly, surfaces -> quad grid, wrapped dirs closed w/o seam dup, prim attrs/groups inherited, orphan CVs dropped, unevaluable prim degrades to open poly through its CVs). Houdini GPD all.geo/all.bgeo (3 BezierCurve, 2 NURBMesh, 1 BezierMesh) now decode first-class and evaluate inside the bbox. UNVERIFIED: JSON/bjson NURBS body layout is ours (Houdini 20.5's own is not in the corpus: no .bgeo with NURBS curve/mesh among the shipped fixtures; foreign bodies stay Unknown passthrough); Houdini stored knots decoded only for open+end NURBS and Bezier `use` breaks (closed/noend stored layouts fall back to default knots = lossy); Houdini evaluation not diffed (analytical oracle only: circle arc length, endpoints, closed forms)."
+
 # --- H16: group family
 [[feature]]
 id = "sop-group"

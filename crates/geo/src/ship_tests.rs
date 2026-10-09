@@ -41,7 +41,8 @@ fn cls(c: AttrClass) -> &'static str {
     }
 }
 fn all_names(d: &Detail, c: AttrClass) -> Vec<String> {
-    let mut v = names(d, c);
+    // `Pw` (NURBS weights taken from the point w) is not one of the oracle's listed attributes
+    let mut v: Vec<String> = names(d, c).into_iter().filter(|n| n != "Pw").collect();
     v.extend(d.skipped_attribs.iter().filter(|s| s.0 == c).map(|s| s.1.clone()));
     v.sort();
     v
@@ -73,6 +74,10 @@ fn houdini_ship_gated_files_match_oracle() {
                     PrimKind::Sphere { .. } => "Sphere".to_string(),
                     PrimKind::Tube { .. } => "Tube".to_string(),
                     PrimKind::Unknown { ty, .. } => ty.clone(),
+                    PrimKind::BezierCurve { .. } => "BezierCurve".to_string(),
+                    PrimKind::NurbsCurve { .. } => "NURBCurve".to_string(),
+                    PrimKind::BezierSurf { .. } => "BezierMesh".to_string(),
+                    PrimKind::NurbsSurf { .. } => "NURBMesh".to_string(),
                     other => format!("{other:?}"),
                 })
                 .collect();

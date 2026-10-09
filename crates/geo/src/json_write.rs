@@ -1,6 +1,6 @@
 //! Houdini `.geo` JSON writer: alternating key/value arrays, size-4 `P`, `Polygon_run` runs, `boolRLE` groups.
 
-use crate::{AttrClass, AttrData, Attribute, Detail, Group, Prim, PrimKind, TypeInfo};
+use crate::{AttrClass, AttrData, Attribute, Basis, Detail, Group, Prim, PrimKind, TypeInfo};
 use serde_json::{Number, Value, json};
 
 fn f(x: f32) -> Value {
@@ -147,6 +147,10 @@ fn group_entry(g: &Group) -> Value {
     json!([["name", g.name], ["selection", ["unordered", ["boolRLE", rle(&g.mask)]]]])
 }
 
+fn basis_value(b: &Basis) -> Value {
+    json!(["order", b.order, "endinterpolation", b.end, "knots", b.knots.iter().map(|&k| f(k)).collect::<Vec<_>>()])
+}
+
 fn prim_entries(d: &Detail) -> Vec<Value> {
     let mut out = Vec::new();
     let mut i = 0;
@@ -207,6 +211,33 @@ fn prim_entries(d: &Detail) -> Vec<Value> {
                         f(*taper),
                         "closed",
                         closed
+                    ]
+                ]));
+            }
+            PrimKind::BezierCurve { basis, closed } | PrimKind::NurbsCurve { basis, closed } => {
+                let ty = if matches!(p.kind, PrimKind::BezierCurve { .. }) { "BezierCurve" } else { "NURBCurve" };
+                let vs: Vec<u32> = (p.verts.start..p.verts.end).collect();
+                out.push(json!([["type", ty], ["vertex", vs, "closed", closed, "basis", basis_value(basis)]]));
+            }
+            PrimKind::BezierSurf { cols, rows, ubasis, vbasis, uwrap, vwrap }
+            | PrimKind::NurbsSurf { cols, rows, ubasis, vbasis, uwrap, vwrap } => {
+                let ty = if matches!(p.kind, PrimKind::BezierSurf { .. }) { "BezierMesh" } else { "NURBMesh" };
+                let vs: Vec<u32> = (p.verts.start..p.verts.end).collect();
+                out.push(json!([
+                    ["type", ty],
+                    [
+                        "vertex",
+                        vs,
+                        "uv",
+                        [cols, rows],
+                        "uwrap",
+                        uwrap,
+                        "vwrap",
+                        vwrap,
+                        "ubasis",
+                        basis_value(ubasis),
+                        "vbasis",
+                        basis_value(vbasis)
                     ]
                 ]));
             }

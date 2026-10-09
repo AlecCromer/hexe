@@ -20,7 +20,8 @@ fn gpd_all_counts_match_header() {
     assert_eq!(d.groups.iter().filter(|g| g.class == AttrClass::Point).count(), 1);
     assert_eq!(d.groups.iter().filter(|g| g.class == AttrClass::Prim).count(), 1);
     let names: Vec<&str> = d.attrs.iter().map(|a| a.name.as_str()).collect();
-    assert_eq!(names, ["P", "Cd", "Alpha", "uv", "N"]);
+    // `Pw` = the file's per-point homogeneous w (real rational weights used by its NURBS prims), exposed as an attribute
+    assert_eq!(names, ["P", "Cd", "Alpha", "uv", "N", "Pw"]);
     assert!(d.attrs.iter().all(|a| a.data.len() == 367));
     let pg = d.group(AttrClass::Point, "pointGroup").unwrap();
     assert_eq!(pg.mask.len(), 367);
@@ -41,6 +42,10 @@ fn gpd_all_counts_match_header() {
             PrimKind::Sphere { .. } => "Sphere".into(),
             PrimKind::Tube { .. } => "Tube".into(),
             PrimKind::Unknown { ty, .. } => ty.clone(),
+            PrimKind::BezierCurve { .. } => "BezierCurve".into(),
+            PrimKind::NurbsCurve { .. } => "NURBCurve".into(),
+            PrimKind::BezierSurf { .. } => "BezierMesh".into(),
+            PrimKind::NurbsSurf { .. } => "NURBMesh".into(),
             other => format!("{other:?}"),
         })
         .collect();

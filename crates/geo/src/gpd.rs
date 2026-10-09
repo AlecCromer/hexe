@@ -3,7 +3,8 @@
 
 use crate::error::{check_len, count_of};
 use crate::json_read::pack;
-use crate::{AttrClass, AttrData, Attribute, Detail, GeoError, Group, Prim, PrimKind, TypeInfo};
+use crate::nurbs::basis_from_stored;
+use crate::{AttrClass, AttrData, Attribute, Basis, Detail, GeoError, Group, Prim, PrimKind, TypeInfo};
 use serde_json::json;
 
 struct Toks<'a> {
@@ -206,12 +207,13 @@ impl<'a> Ctx<'a> {
         }
         Ok(start..self.vert_point.len() as u32)
     }
-    fn basis(&mut self, verts: i64, closed: bool, bezier: bool) -> Result<(), GeoError> {
+    fn basis(&mut self, verts: i64, closed: bool, bezier: bool) -> Result<Basis, GeoError> {
         self.t.expect("Basis")?;
         let order = self.t.int()?;
         if !(2..=64).contains(&order) {
             return Err(GeoError::Count(format!("basis order {order}")));
         }
+        let mut end_flag = true;
         let k = if bezier {
             if self.t.peek() == Some("use") {
                 self.t.next()?;
@@ -221,6 +223,7 @@ impl<'a> Ctx<'a> {
             }
         } else {
             let end = self.t.next()?;
+            end_flag = end == "end";
             match (end, closed) {
                 ("noend", _) => verts + order - 2,
                 ("end", false) => verts - order + 2,
@@ -231,10 +234,11 @@ impl<'a> Ctx<'a> {
         if k < 0 || k as usize > self.t.left() {
             return Err(GeoError::Count(format!("basis knot count {k}")));
         }
+        let mut stored = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            self.t.num()?;
+            stored.push(self.t.num()? as f32);
         }
-        Ok(())
+        Ok(basis_from_stored(order as u32, end_flag, bezier, closed, verts.max(0) as usize, &stored))
     }
     fn profiles(&mut self) -> Result<(), GeoError> {
         self.t.expect("Profiles:")?;
@@ -284,8 +288,12 @@ impl<'a> Ctx<'a> {
                 let closed = flag == "<";
                 match key {
                     "Poly" => {}
-                    "NURBCurve" => self.basis(n as i64, closed, false)?,
-                    "BezierCurve" => self.basis(n as i64, closed, true)?,
+                    "NURBCurve" => {
+                        self.basis(n as i64, closed, false)?;
+                    }
+                    "BezierCurve" => {
+                        self.basis(n as i64, closed, true)?;
+                    }
                     other => return Err(GeoError::Unsupported(format!("profile primitive `{other}`"))),
                 }
                 if n > self.t.left() {
@@ -400,9 +408,14 @@ impl<'a> Ctx<'a> {
             "NURBCurve" | "BezierCurve" => {
                 let n = self.t.count("curve vertex count")?;
                 let closed = self.t.next()? == "<";
-                self.basis(n as i64, closed, key == "BezierCurve")?;
+                let basis = self.basis(n as i64, closed, key == "BezierCurve")?;
                 let r = self.vertices(n)?;
-                (self.unknown(key, tok_start, &r), r)
+                let kind = if key == "BezierCurve" {
+                    PrimKind::BezierCurve { basis, closed }
+                } else {
+                    PrimKind::NurbsCurve { basis, closed }
+                };
+                (kind, r)
             }
             "Mesh" | "NURBMesh" | "BezierMesh" => {
                 let cols = self.t.count("mesh cols")?;
@@ -410,16 +423,28 @@ impl<'a> Ctx<'a> {
                 let uw = self.t.next()? == "wrap";
                 let vw = self.t.next()? == "wrap";
                 self.t.next()?; // connectivity
-                if key != "Mesh" {
-                    self.basis(cols as i64, uw, key == "BezierMesh")?;
-                    self.basis(rows as i64, vw, key == "BezierMesh")?;
-                }
+                let bases = if key != "Mesh" {
+                    let ub = self.basis(cols as i64, uw, key == "BezierMesh")?;
+                    let vb = self.basis(rows as i64, vw, key == "BezierMesh")?;
+                    Some((ub, vb))
+                } else {
+                    None
+                };
                 let n = cols.checked_mul(rows).ok_or_else(|| GeoError::Count("mesh too large".into()))?;
                 let r = self.vertices(n)?;
                 if key != "Mesh" {
                     self.profiles()?;
                 }
-                (self.unknown(key, tok_start, &r), r)
+                let (c32, r32) = (cols as u32, rows as u32);
+                match bases {
+                    Some((ubasis, vbasis)) if key == "BezierMesh" => {
+                        (PrimKind::BezierSurf { cols: c32, rows: r32, ubasis, vbasis, uwrap: uw, vwrap: vw }, r)
+                    }
+                    Some((ubasis, vbasis)) => {
+                        (PrimKind::NurbsSurf { cols: c32, rows: r32, ubasis, vbasis, uwrap: uw, vwrap: vw }, r)
+                    }
+                    None => (self.unknown(key, tok_start, &r), r),
+                }
             }
             other => return Err(GeoError::Unsupported(format!("GPD primitive `{other}`"))),
         };
@@ -467,9 +492,10 @@ pub fn read_geo_gpd(bytes: &[u8]) -> Result<Detail, GeoError> {
 
     let mut pdefs = read_dict(&mut t, npa, "PointAttrib")?;
     let mut pos: Vec<[f32; 3]> = Vec::with_capacity(np);
+    let mut pw: Vec<f32> = Vec::with_capacity(np);
     for _ in 0..np {
         let (x, y, z) = (t.num()?, t.num()?, t.num()?);
-        t.num()?; // w (not homogeneous)
+        pw.push(t.num()? as f32); // w: kept as `Pw` only when a NURBS/Bezier prim exists and some w != 1
         pos.push([x as f32, y as f32, z as f32]);
         read_block(&mut t, &mut pdefs, "(", ")")?;
     }
@@ -512,6 +538,14 @@ pub fn read_geo_gpd(bytes: &[u8]) -> Result<Detail, GeoError> {
         type_info: TypeInfo::Point,
     });
     build(pdefs, AttrClass::Point, &mut d.attrs)?;
+    if d.has_spline_prims() && pw.iter().any(|&w| w != 1.0) && d.attr(AttrClass::Point, "Pw").is_none() {
+        d.attrs.push(Attribute {
+            name: "Pw".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(pw),
+            type_info: TypeInfo::None,
+        });
+    }
     build(c.vdefs, AttrClass::Vertex, &mut d.attrs)?;
     build(c.qdefs, AttrClass::Prim, &mut d.attrs)?;
     build(ddefs, AttrClass::Detail, &mut d.attrs)?;

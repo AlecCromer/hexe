@@ -877,6 +877,14 @@ pub fn ptnum_pattern(ids: &[u32]) -> String {
 
 /// `Detail` -> the viewport payload. Polys/polylines become point-index lists; other prim kinds are counted, not drawn.
 pub fn flatten(d: &Detail) -> CookResult {
+    // NURBS/Bezier prims are drawn through their tessellation (8 samples per span)
+    let tess;
+    let d = if d.has_spline_prims() {
+        tess = d.tessellate(8, 8);
+        &tess
+    } else {
+        d
+    };
     let positions: Vec<f32> = d.p().iter().flat_map(|p| p.iter().copied()).collect();
     let mut counts = Counts { points: d.point_count, ..Counts::default() };
     let (mut prims, mut closed, mut shapes) = (Vec::new(), Vec::new(), Vec::new());

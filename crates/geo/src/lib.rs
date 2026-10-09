@@ -29,6 +29,9 @@ mod io;
 mod io_tests;
 mod json_read;
 mod json_write;
+mod nurbs;
+#[cfg(test)]
+mod nurbs_tests;
 mod obj;
 mod ply;
 #[cfg(test)]

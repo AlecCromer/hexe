@@ -8,3 +8,4 @@
 - Precision: storage fpreal64/int64/uint8 narrowed to f32/i32; `P` w dropped (always 1).
 - DESIGN.md deviations: `PrimKind::{Sphere{xform},Tube{xform,taper,closed},Unknown{ty,json}}` carry data; `AttrData::{FN,IN}` for tuple sizes the contract's enum cannot hold; `PartialEq`+`Debug` derived; `Detail::canonicalize`.
 - Hostile input: all counts checked (`MAX_ELEMS`=2^28, scalar cap 2^27), bounded nesting, `Err` never panic.
+- NURBS/Bezier prims (`nurbs.rs`): `PrimKind::{BezierCurve,NurbsCurve,BezierSurf,NurbsSurf}` + `Basis`, weights = point attr `Pw`; `Detail::{evaluate,evaluate_uv,tessellate,remove_points}`. GPD/BgeoV readers decode them first-class; JSON/bjson layout is ours (UNVERIFIED vs Houdini).

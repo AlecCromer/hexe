@@ -2,7 +2,7 @@
 //! plain JSON objects are accepted too. Everything is bounds-checked; hostile input → `Err`, never panic.
 
 use crate::error::{MAX_ELEMS, check_len, count_of};
-use crate::{AttrClass, AttrData, Attribute, Detail, GeoError, Group, Prim, PrimKind, TypeInfo};
+use crate::{AttrClass, AttrData, Attribute, Basis, Detail, GeoError, Group, Prim, PrimKind, TypeInfo};
 use serde_json::Value;
 
 pub(crate) type Kv<'a> = Vec<(&'a str, &'a Value)>;
@@ -383,6 +383,56 @@ fn transform9(body: &Kv<'_>) -> [f32; 9] {
     x
 }
 
+fn read_basis(v: &Value) -> Option<Basis> {
+    let k = kv(v)?;
+    let order = find(&k, "order")?.as_u64()?;
+    if !(2..=64).contains(&order) {
+        return None;
+    }
+    let end = find(&k, "endinterpolation").and_then(Value::as_bool).unwrap_or(true);
+    let knots = match find(&k, "knots") {
+        Some(Value::Array(a)) => a.iter().map(|x| x.as_f64().map(|f| f as f32)).collect::<Option<Vec<_>>>()?,
+        _ => Vec::new(),
+    };
+    Some(Basis { order: order as u32, knots, end })
+}
+
+/// `Ok(None)` = body is not in our NURBS layout (caller keeps the entry as `Unknown`).
+fn read_spline(ty: &str, body: &Kv<'_>, nverts: u32) -> Result<Option<Prim>, GeoError> {
+    let Some(vs) = find(body, "vertex").map(ints).transpose()? else { return Ok(None) };
+    let Some(verts) = contiguous(&vs, nverts)? else { return Ok(None) };
+    let n = vs.len() as i64;
+    let kind = if ty.ends_with("Curve") {
+        let Some(basis) = find(body, "basis").and_then(read_basis) else { return Ok(None) };
+        let closed = find(body, "closed").and_then(Value::as_bool).unwrap_or(false);
+        if ty == "BezierCurve" {
+            PrimKind::BezierCurve { basis, closed }
+        } else {
+            PrimKind::NurbsCurve { basis, closed }
+        }
+    } else {
+        let Some(uv) = find(body, "uv").map(ints).transpose()? else { return Ok(None) };
+        let (Some(&c), Some(&r)) = (uv.first(), uv.get(1)) else { return Ok(None) };
+        if c < 0 || r < 0 || c.checked_mul(r) != Some(n) {
+            return Ok(None);
+        }
+        let (Some(ubasis), Some(vbasis)) =
+            (find(body, "ubasis").and_then(read_basis), find(body, "vbasis").and_then(read_basis))
+        else {
+            return Ok(None);
+        };
+        let uwrap = find(body, "uwrap").and_then(Value::as_bool).unwrap_or(false);
+        let vwrap = find(body, "vwrap").and_then(Value::as_bool).unwrap_or(false);
+        let (cols, rows) = (c as u32, r as u32);
+        if ty == "BezierMesh" {
+            PrimKind::BezierSurf { cols, rows, ubasis, vbasis, uwrap, vwrap }
+        } else {
+            PrimKind::NurbsSurf { cols, rows, ubasis, vbasis, uwrap, vwrap }
+        }
+    };
+    Ok(Some(Prim { kind, verts }))
+}
+
 fn contiguous(vs: &[i64], nverts: u32) -> Result<Option<std::ops::Range<u32>>, GeoError> {
     let mut prev: Option<i64> = None;
     for &v in vs {
@@ -546,6 +596,15 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
                 };
                 out.push(Prim { kind, verts: r });
             }
+            // NURBS/Bezier prims: OUR layout (UNVERIFIED vs Houdini's JSON). Bodies not in this layout stay `Unknown` passthrough.
+            "NURBCurve" | "BezierCurve" | "NURBMesh" | "BezierMesh" => match read_spline(ty, &body, nverts)? {
+                Some(p) => out.push(p),
+                None => {
+                    let vs = find(&body, "vertex").and_then(|v| ints(v).ok()).unwrap_or_default();
+                    let r = contiguous(&vs, nverts).ok().flatten().unwrap_or(0..0);
+                    out.push(unknown(r));
+                }
+            },
             _ => {
                 let vs = find(&body, "vertex").and_then(|v| ints(v).ok()).unwrap_or_default();
                 let r = contiguous(&vs, nverts).ok().flatten().unwrap_or(0..0);
