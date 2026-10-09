@@ -220,8 +220,9 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
     let want_below = keep != Keep::Above;
     // slot layout (Houdini): every source prim keeps its slot holding its BELOW piece (or, when it has none, its ABOVE
     // piece); the ABOVE halves of prims that were split are appended afterwards in source order.
-    let mut slots: Vec<(usize, Vec<(PrimKind, Vec<Corner>)>, bool)> = Vec::new();
-    let mut appended: Vec<(usize, Vec<(PrimKind, Vec<Corner>)>, bool)> = Vec::new();
+    type Slot = (usize, Vec<(PrimKind, Vec<Corner>)>, bool);
+    let mut slots: Vec<Slot> = Vec::new();
+    let mut appended: Vec<Slot> = Vec::new();
     for (qi, pr) in src.prims.iter().enumerate() {
         let Some(vp) = prim_vpts(src, pr, np) else { continue };
         let on_plane = vp.iter().all(|&(_, p)| side.get(p) == Some(&0));

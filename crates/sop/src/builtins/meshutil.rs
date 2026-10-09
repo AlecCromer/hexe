@@ -322,12 +322,16 @@ pub(super) mod testkit {
                 return Err(format!("P[{k}] hexe {a:?} vs houdini {b:?}"));
             }
         }
-        let ids = |x: &Detail, i: usize| x.vertex_point[x.prims[i].verts.start as usize..x.prims[i].verts.end as usize].to_vec();
+        let ids = |x: &Detail, i: usize| {
+            x.vertex_point[x.prims[i].verts.start as usize..x.prims[i].verts.end as usize].to_vec()
+        };
         for i in 0..d.prims.len() {
             if ids(&d, i) != ids(&h, i) {
                 return Err(format!("prim {i} hexe {:?} vs houdini {:?}", ids(&d, i), ids(&h, i)));
             }
-            if matches!(d.prims[i].kind, PrimKind::Poly { closed: true }) != matches!(h.prims[i].kind, PrimKind::Poly { closed: true }) {
+            if matches!(d.prims[i].kind, PrimKind::Poly { closed: true })
+                != matches!(h.prims[i].kind, PrimKind::Poly { closed: true })
+            {
                 return Err(format!("prim {i} closedness differs"));
             }
         }
