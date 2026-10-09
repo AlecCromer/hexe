@@ -17,3 +17,4 @@ Rules: numbers come from tools (`parity`, `oracle`, `size`, `perf`), never from 
 |---|---|---|---|---|---|
 | YYYY-MM-DD | scaffold (new-port.sh) | 0 | template | workspace compiles, `xtask ci` green on empty | green |
 | 2026-10-08 | nyari (h32) | 0.7 | h32 Houdini winding global + reverse/twist/polyextrude splittype | oracle N=52: MATCH 9->39 (H31 start 9 MATCH/26 WINDING-DIFF -> 39 MATCH, 0 WINDING-DIFF); 24 rows partial->shipped | green |
+| 2026-10-09 | ghoul-sonnet (nurbs) | 0.5 | geo-nurbs-prims + sop-curve/revolve/skin/convert/clip/boolean/polyfill NURBS | 4 first-class prim kinds (evaluate/tessellate/IO), 7 SOP rows lose the no-NURBS caveat, no row flipped (UNVERIFIED lists remain); Houdini NURBS JSON layout not in corpus (ours) | green |

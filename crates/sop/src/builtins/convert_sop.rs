@@ -727,6 +727,20 @@ mod tests {
         assert!(keep.has_spline_prims() && keep.prim_count() == 1);
     }
 
+    /// examples/nurbs.json: NURBS curve -> revolve (exact NurbsSurf) -> convert: closed vase shell of polys, rational points on the
+    /// surface of revolution (radius = profile x, height = profile y).
+    #[test]
+    fn nurbs_example_scene_curve_revolve_convert_cooks() {
+        let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/nurbs.json"))
+            .expect("example present");
+        let (mut g, id) = load_scene(&ex).expect("example loads");
+        let out = g.cook(id, 0.0).expect("example cooks");
+        assert!(!out.has_spline_prims() && out.prim_count() == 2304);
+        let (lo, hi) = out.bbox();
+        assert!(lo[1].abs() < 1e-5 && (hi[1] - 2.8).abs() < 1e-4, "height spans the profile: {lo:?} {hi:?}");
+        assert!(out.p().iter().all(|p| (p[0] * p[0] + p[2] * p[2]).sqrt() < 1.6));
+    }
+
     #[test]
     fn example_scene_cooks_and_registry_has_slot() {
         let ex = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/convert.json"))

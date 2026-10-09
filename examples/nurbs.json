@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    { "name": "curve1", "type": "curve", "params": { "coords": "1,0,0 1.7,0.6,0 0.5,1.3,0 1.1,2.1,0 0.8,2.8,0", "type": 2, "order": 4 } },
+    { "name": "revolve1", "type": "revolve", "params": { "dir": [0, 1, 0] } },
+    { "name": "convert1", "type": "convert", "params": { "fromtype": 5, "totype": 0, "rows": 24, "cols": 24 } }
+  ],
+  "edges": [
+    ["curve1", 0, "revolve1", 0],
+    ["revolve1", 0, "convert1", 0]
+  ],
+  "display": "convert1"
+}
