@@ -1,10 +1,10 @@
-//! Stanford PLY reader (ascii + binary_little_endian) and ascii writer (`geo-read-ply`, `geo-write-ply`).
+//! Stanford PLY reader (ascii + binary_little_endian + binary_big_endian) and writer (all formats) (`geo-read-ply`, `geo-write-ply`).
 //! Read: element `vertex` x y z -> `P`; nx ny nz -> point `N` (Normal); red green blue -> point `Cd` (integer types / 255, float
 //! types as-is); s t (or u v, texture_u texture_v) -> point `uv` (V3, z = 0); element `face` list `vertex_indices` (or
 //! `vertex_index`, any count/item type) -> closed polys. Everything else (extra properties / elements) is recorded in
-//! `skipped_attribs`, never silently dropped. `binary_big_endian` -> `Unsupported`. Faces with < 3 indices, indices past the
+//! `skipped_attribs`, never silently dropped. Faces with < 3 indices, indices past the
 //! vertex count, truncated bodies, and counts the body cannot possibly hold -> Err before any allocation.
-//! Write (ascii only): `P`, point `N`/`uv`/`Cd` (Cd quantised to uchar), closed polys with <= 255 corners.
+//! Write: `P`, point `N`/`uv`/`Cd` (Cd quantised to uchar), closed polys with <= 255 corners, ascii or binary (little/big endian).
 //! Vertex-class attributes are NOT written (PLY has no per-corner data); other prim kinds -> `Unsupported`.
 use crate::error::{MAX_ELEMS, check_len, count_of};
 use crate::*;
@@ -74,7 +74,7 @@ struct Element {
 }
 enum Src<'a> {
     Ascii(std::str::SplitAsciiWhitespace<'a>),
-    Bin { data: &'a [u8], pos: usize },
+    Bin { data: &'a [u8], pos: usize, big_endian: bool },
 }
 impl Src<'_> {
     fn read(&mut self, ty: Ty) -> Result<f64, GeoError> {
@@ -83,21 +83,24 @@ impl Src<'_> {
                 let tok = it.next().ok_or_else(|| GeoError::Syntax("truncated ascii body".into()))?;
                 tok.parse::<f64>().map_err(|_| GeoError::Syntax(format!("bad number `{tok}`")))?
             }
-            Src::Bin { data, pos } => {
+            Src::Bin { data, pos, big_endian } => {
                 let end = pos.checked_add(ty.size()).ok_or_else(|| GeoError::Syntax("offset overflow".into()))?;
                 let b = data.get(*pos..end).ok_or_else(|| GeoError::Syntax("truncated binary body".into()))?;
                 *pos = end;
                 let mut a = [0u8; 8];
                 a[..b.len()].copy_from_slice(b);
+                let from = |bytes: &[u8; 2]| if *big_endian { u16::from_be_bytes(*bytes) } else { u16::from_le_bytes(*bytes) };
+                let from4 = |bytes: &[u8; 4]| if *big_endian { u32::from_be_bytes(*bytes) } else { u32::from_le_bytes(*bytes) };
+                let from8 = |bytes: &[u8; 8]| if *big_endian { u64::from_be_bytes(*bytes) } else { u64::from_le_bytes(*bytes) };
                 match ty {
                     Ty::I8 => f64::from(i8::from_le_bytes([a[0]])),
                     Ty::U8 => f64::from(a[0]),
-                    Ty::I16 => f64::from(i16::from_le_bytes([a[0], a[1]])),
-                    Ty::U16 => f64::from(u16::from_le_bytes([a[0], a[1]])),
-                    Ty::I32 => f64::from(i32::from_le_bytes([a[0], a[1], a[2], a[3]])),
-                    Ty::U32 => f64::from(u32::from_le_bytes([a[0], a[1], a[2], a[3]])),
-                    Ty::F32 => f64::from(f32::from_le_bytes([a[0], a[1], a[2], a[3]])),
-                    Ty::F64 => f64::from_le_bytes(a),
+                    Ty::I16 => f64::from(from(&[a[0], a[1]]) as i16),
+                    Ty::U16 => f64::from(from(&[a[0], a[1]])),
+                    Ty::I32 => f64::from(from4(&[a[0], a[1], a[2], a[3]]) as i32),
+                    Ty::U32 => f64::from(from4(&[a[0], a[1], a[2], a[3]])),
+                    Ty::F32 => f64::from(f32::from_bits(from4(&[a[0], a[1], a[2], a[3]]))),
+                    Ty::F64 => f64::from_bits(from8(&a)),
                 }
             }
         };
@@ -111,7 +114,7 @@ impl Src<'_> {
     fn left(&self, body_len: usize) -> usize {
         match self {
             Src::Ascii(it) => it.clone().map(|t| t.len() + 1).sum::<usize>().min(body_len),
-            Src::Bin { data, pos } => data.len().saturating_sub(*pos),
+            Src::Bin { data, pos, .. } => data.len().saturating_sub(*pos),
         }
     }
     /// Read one property into `out` (cleared first): 1 value for scalars, the items for lists.
@@ -122,7 +125,7 @@ impl Src<'_> {
             return Ok(());
         };
         let n = self.read(cty)? as usize;
-        if let Src::Bin { data, pos } = self {
+        if let Src::Bin { data, pos, .. } = self {
             let need = n.checked_mul(p.ty.size()).ok_or_else(|| GeoError::Count("list size overflow".into()))?;
             if need > data.len().saturating_sub(*pos) {
                 return Err(GeoError::Count(format!("list of {n} items exceeds the remaining data")));
@@ -136,21 +139,27 @@ impl Src<'_> {
 }
 const MAX_HEADER_ELEMENTS: usize = 64;
 const MAX_HEADER_PROPS: usize = 256;
-fn parse_header(head: &str) -> Result<(bool, Vec<Element>), GeoError> {
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PlyFormat {
+    Ascii,
+    BinaryLE,
+    BinaryBE,
+}
+fn parse_header(head: &str) -> Result<(PlyFormat, Vec<Element>), GeoError> {
     let mut lines = head.lines().map(str::trim);
     if lines.next() != Some("ply") {
         return syn("missing `ply` magic");
     }
-    let (mut ascii, mut els): (Option<bool>, Vec<Element>) = (None, Vec::new());
+    let (mut fmt, mut els): (Option<PlyFormat>, Vec<Element>) = (None, Vec::new());
     for l in lines {
         let w: Vec<&str> = l.split_ascii_whitespace().collect();
         match w.as_slice() {
             [] | ["comment", ..] | ["obj_info", ..] => {}
             ["format", f, _version] => {
-                ascii = Some(match *f {
-                    "ascii" => true,
-                    "binary_little_endian" => false,
-                    "binary_big_endian" => return Err(GeoError::Unsupported("PLY binary_big_endian".into())),
+                fmt = Some(match *f {
+                    "ascii" => PlyFormat::Ascii,
+                    "binary_little_endian" => PlyFormat::BinaryLE,
+                    "binary_big_endian" => PlyFormat::BinaryBE,
                     other => return syn(format!("unknown PLY format `{other}`")),
                 });
             }
@@ -173,7 +182,7 @@ fn parse_header(head: &str) -> Result<(bool, Vec<Element>), GeoError> {
             _ => return syn(format!("bad header line `{l}`")),
         }
     }
-    Ok((ascii.ok_or_else(|| GeoError::Syntax("missing `format` line".into()))?, els))
+    Ok((fmt.ok_or_else(|| GeoError::Syntax("missing `format` line".into()))?, els))
 }
 fn push_prop(els: &mut [Element], p: Prop) -> Result<(), GeoError> {
     let total: usize = els.iter().map(|e| e.props.len()).sum();
@@ -196,16 +205,16 @@ pub fn read_ply(bytes: &[u8]) -> Result<Detail, GeoError> {
         .ok_or_else(|| GeoError::Syntax("missing `end_header`".into()))?;
     let nl = bytes[at..].iter().position(|&b| b == b'\n').ok_or_else(|| GeoError::Syntax("truncated header".into()))?;
     let head = String::from_utf8_lossy(&bytes[..at]);
-    let (ascii, els) = parse_header(&head)?;
+    let (fmt, els) = parse_header(&head)?;
     let body = &bytes[at + nl + 1..];
-    let mut src = if ascii {
-        Src::Ascii(
+    let mut src = match fmt {
+        PlyFormat::Ascii => Src::Ascii(
             std::str::from_utf8(body)
                 .map_err(|_| GeoError::Syntax("ascii body is not UTF-8".into()))?
                 .split_ascii_whitespace(),
-        )
-    } else {
-        Src::Bin { data: body, pos: 0 }
+        ),
+        PlyFormat::BinaryLE => Src::Bin { data: body, pos: 0, big_endian: false },
+        PlyFormat::BinaryBE => Src::Bin { data: body, pos: 0, big_endian: true },
     };
     let vcount = els.iter().find(|e| e.name == "vertex").map_or(0, |e| e.count);
     let mut d = Detail::default();
@@ -215,15 +224,16 @@ pub fn read_ply(bytes: &[u8]) -> Result<Detail, GeoError> {
     let mut have_vertex = false;
     for e in &els {
         // Every instance consumes >= 1 token / `min` bytes: a count the body cannot hold is rejected before allocating.
+        let is_ascii = fmt == PlyFormat::Ascii;
         let min: usize = e
             .props
             .iter()
-            .map(|q| q.list.map_or(if ascii { 1 } else { q.ty.size() }, |c| if ascii { 1 } else { c.size() }))
+            .map(|q| q.list.map_or(if is_ascii { 1 } else { q.ty.size() }, |c| if is_ascii { 1 } else { c.size() }))
             .sum();
         if min > 0 {
             let left = src.left(body.len());
-            let need = (e.count as usize).saturating_mul(min).saturating_mul(if ascii { 2 } else { 1 });
-            if need > left.saturating_add(if ascii { 1 } else { 0 }) {
+            let need = (e.count as usize).saturating_mul(min).saturating_mul(if is_ascii { 2 } else { 1 });
+            if need > left.saturating_add(if is_ascii { 1 } else { 0 }) {
                 return Err(GeoError::Count(format!(
                     "element `{}` claims {} instances, body too short",
                     e.name, e.count
@@ -346,15 +356,20 @@ pub fn read_ply(bytes: &[u8]) -> Result<Detail, GeoError> {
     d.canonicalize();
     Ok(d)
 }
-/// Serialise to ascii PLY.
-pub fn write_ply(d: &Detail) -> Result<Vec<u8>, GeoError> {
+/// Serialise to PLY with the specified format.
+pub fn write_ply_format(d: &Detail, fmt: PlyFormat) -> Result<Vec<u8>, GeoError> {
     let p = d.p();
     if p.len() != d.point_count as usize {
         return Err(GeoError::Count(format!("P has {} entries for {} points", p.len(), d.point_count)));
     }
     let extra = |name: &str| crate::obj::v3_of(d, AttrClass::Point, name).filter(|v| v.len() == p.len());
     let (n, cd, uv) = (extra("N"), extra("Cd"), extra("uv"));
-    let mut out = String::from("ply\nformat ascii 1.0\ncomment hexe\n");
+    let fmt_str = match fmt {
+        PlyFormat::Ascii => "ascii",
+        PlyFormat::BinaryLE => "binary_little_endian",
+        PlyFormat::BinaryBE => "binary_big_endian",
+    };
+    let mut out = format!("ply\nformat {} 1.0\ncomment hexe\n", fmt_str);
     let _ = writeln!(out, "element vertex {}\nproperty float x\nproperty float y\nproperty float z", p.len());
     if n.is_some() {
         out.push_str("property float nx\nproperty float ny\nproperty float nz\n");
@@ -366,39 +381,96 @@ pub fn write_ply(d: &Detail) -> Result<Vec<u8>, GeoError> {
         out.push_str("property float s\nproperty float t\n");
     }
     let _ = writeln!(out, "element face {}\nproperty list uchar int vertex_indices\nend_header", d.prims.len());
-    for (i, q) in p.iter().enumerate() {
-        let mut row = vec![q[0], q[1], q[2]];
-        if let Some(v) = &n {
-            row.extend(v[i]);
+    let mut bytes = out.into_bytes();
+    // Write body
+    if fmt == PlyFormat::Ascii {
+        // ASCII format
+        for (i, q) in p.iter().enumerate() {
+            let mut row = vec![q[0], q[1], q[2]];
+            if let Some(v) = &n {
+                row.extend(v[i]);
+            }
+            if row.iter().chain(uv.iter().flat_map(|v| &v[i][..2])).any(|c| !c.is_finite()) {
+                return syn(format!("point {i}: non-finite value cannot be written"));
+            }
+            let mut line = row.iter().map(|c| c.to_string()).collect::<Vec<_>>();
+            if let Some(v) = &cd {
+                line.extend(v[i].iter().map(|c| ((c.clamp(0.0, 1.0) * 255.0).round() as u8).to_string()));
+            }
+            if let Some(v) = &uv {
+                line.extend(v[i][..2].iter().map(|c| c.to_string()));
+            }
+            bytes.extend(line.join(" ").as_bytes());
+            bytes.push(b'\n');
         }
-        if row.iter().chain(uv.iter().flat_map(|v| &v[i][..2])).any(|c| !c.is_finite()) {
-            return syn(format!("point {i}: non-finite value cannot be written"));
+        for (pi, prim) in d.prims.iter().enumerate() {
+            if !matches!(prim.kind, PrimKind::Poly { closed: true }) {
+                return Err(GeoError::Unsupported(format!("prim {pi}: only closed polygons can be written to PLY")));
+            }
+            let n = prim.verts.len();
+            if n > 255 {
+                return Err(GeoError::Unsupported(format!("prim {pi}: {n} corners exceed the uchar list count")));
+            }
+            bytes.extend(format!("{n}").as_bytes());
+            for vid in prim.verts.clone() {
+                let pid = d.vertex_point.get(vid as usize).copied().filter(|&q| q < d.point_count);
+                let pid = pid.ok_or_else(|| GeoError::Index(format!("prim {pi}: vertex {vid} has no valid point")))?;
+                bytes.extend(format!(" {pid}").as_bytes());
+            }
+            bytes.push(b'\n');
         }
-        let mut line = row.iter().map(|c| c.to_string()).collect::<Vec<_>>();
-        if let Some(v) = &cd {
-            line.extend(v[i].iter().map(|c| ((c.clamp(0.0, 1.0) * 255.0).round() as u8).to_string()));
+    } else {
+        // Binary format
+        let big_endian = fmt == PlyFormat::BinaryBE;
+        let push_f32 = |bytes: &mut Vec<u8>, v: f32| -> Result<(), GeoError> {
+            if !v.is_finite() {
+                return syn("non-finite value cannot be written");
+            }
+            bytes.extend(if big_endian { v.to_be_bytes() } else { v.to_le_bytes() });
+            Ok(())
+        };
+        let push_i32 = |bytes: &mut Vec<u8>, v: i32| {
+            bytes.extend(if big_endian { v.to_be_bytes() } else { v.to_le_bytes() });
+        };
+        for (i, q) in p.iter().enumerate() {
+            for &v in q {
+                push_f32(&mut bytes, v)?;
+            }
+            if let Some(nv) = &n {
+                for &v in &nv[i] {
+                    push_f32(&mut bytes, v)?;
+                }
+            }
+            if let Some(cdv) = &cd {
+                for &v in &cdv[i] {
+                    bytes.push((v.clamp(0.0, 1.0) * 255.0).round() as u8);
+                }
+            }
+            if let Some(uvv) = &uv {
+                for &v in &uvv[i][..2] {
+                    push_f32(&mut bytes, v)?;
+                }
+            }
         }
-        if let Some(v) = &uv {
-            line.extend(v[i][..2].iter().map(|c| c.to_string()));
+        for (pi, prim) in d.prims.iter().enumerate() {
+            if !matches!(prim.kind, PrimKind::Poly { closed: true }) {
+                return Err(GeoError::Unsupported(format!("prim {pi}: only closed polygons can be written to PLY")));
+            }
+            let n = prim.verts.len();
+            if n > 255 {
+                return Err(GeoError::Unsupported(format!("prim {pi}: {n} corners exceed the uchar list count")));
+            }
+            bytes.push(n as u8);
+            for vid in prim.verts.clone() {
+                let pid = d.vertex_point.get(vid as usize).copied().filter(|&q| q < d.point_count);
+                let pid = pid.ok_or_else(|| GeoError::Index(format!("prim {pi}: vertex {vid} has no valid point")))?;
+                push_i32(&mut bytes, pid as i32);
+            }
         }
-        out.push_str(&line.join(" "));
-        out.push('\n');
     }
-    for (pi, prim) in d.prims.iter().enumerate() {
-        if !matches!(prim.kind, PrimKind::Poly { closed: true }) {
-            return Err(GeoError::Unsupported(format!("prim {pi}: only closed polygons can be written to PLY")));
-        }
-        let n = prim.verts.len();
-        if n > 255 {
-            return Err(GeoError::Unsupported(format!("prim {pi}: {n} corners exceed the uchar list count")));
-        }
-        let _ = write!(out, "{n}");
-        for vid in prim.verts.clone() {
-            let pid = d.vertex_point.get(vid as usize).copied().filter(|&q| q < d.point_count);
-            let pid = pid.ok_or_else(|| GeoError::Index(format!("prim {pi}: vertex {vid} has no valid point")))?;
-            let _ = write!(out, " {pid}");
-        }
-        out.push('\n');
-    }
-    Ok(out.into_bytes())
+    Ok(bytes)
+}
+/// Serialise to ascii PLY (default format).
+pub fn write_ply(d: &Detail) -> Result<Vec<u8>, GeoError> {
+    write_ply_format(d, PlyFormat::Ascii)
 }

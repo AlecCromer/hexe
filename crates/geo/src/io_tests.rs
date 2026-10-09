@@ -96,6 +96,17 @@ fn ply_binary_roundtrip_cube_and_every_truncation_is_err() {
     }
 }
 #[test]
+fn ply_binary_write_formats_roundtrip() {
+    use PlyFormat::*;
+    let c = cube();
+    for fmt in [BinaryLE, BinaryBE] {
+        let bytes = write_ply_format(&c, fmt).unwrap();
+        let back = read_ply(&bytes).unwrap();
+        assert_eq!(counts(&back), (8, 24, 6));
+        same_geometry(&c, &back);
+    }
+}
+#[test]
 fn obj_hand_fixture_quad_with_negative_indices() {
     let r = read_obj(b"v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf -4 -3 -2 -1\n").unwrap();
     assert_eq!(counts(&r), (4, 4, 1));
@@ -150,14 +161,14 @@ fn hostile_ply() {
             "ply\nformat {fmt} 1.0\nelement vertex {n}\nproperty float x\nproperty float y\nproperty float z\nend_header\n"
         )
     };
-    for fmt in ["ascii", "binary_little_endian"] {
+    for fmt in ["ascii", "binary_little_endian", "binary_big_endian"] {
         let huge = hdr(fmt, "1000000000");
         assert!(matches!(read_ply(huge.as_bytes()), Err(GeoError::Count(_))), "{fmt} 1e9");
         let lie = hdr(fmt, "200000000"); // under MAX_ELEMS, far beyond the body
         assert!(matches!(read_ply(lie.as_bytes()), Err(GeoError::Count(_))), "{fmt} lie");
         assert!(read_ply(hdr(fmt, "-1").as_bytes()).is_err());
     }
-    assert!(matches!(read_ply(hdr("binary_big_endian", "1").as_bytes()), Err(GeoError::Unsupported(_))));
+
     let face = |idx: &str| {
         format!(
             "ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nelement face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n{idx}\n"

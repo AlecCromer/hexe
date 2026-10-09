@@ -44,7 +44,7 @@ pub use io::{read_any, write_any};
 pub use json_read::read_geo_json;
 pub use json_write::write_geo_json;
 pub use obj::{read_obj, write_obj};
-pub use ply::{read_ply, write_ply};
+pub use ply::{read_ply, write_ply, write_ply_format, PlyFormat};
 pub use types::*;
 
 /// Sniff the container: legacy `PGEOMETRY` text (GPD) vs JSON. binary-JSON `0x7f NSJb` (bjson); `scf1` blosc-chunked `.bgeo.sc` (decompress, then re-sniff); legacy binary `BgeoV` -> `read_geo_bgeo_legacy` (v2 layout; other versions `Unsupported`).
