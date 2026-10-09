@@ -435,8 +435,15 @@ evidence = [
   "crates/sop/src/builtins/curve_sop.rs::three_coords_is_three_points_one_open_prim_close_closes",
   "crates/sop/src/builtins/curve_sop.rs::empty_and_whitespace_variants",
   "crates/sop/src/builtins/curve_sop.rs::hostile_coords_are_errors",
+  "crates/sop/src/builtins/curve_sop.rs::nurbs_order_n_equals_bezier_and_clamped_ends",
+  "crates/sop/src/builtins/curve_sop.rs::nurbs_order_2_traces_the_control_polygon_and_counts_are_spans_times_divisions",
+  "crates/sop/src/builtins/curve_sop.rs::nurbs_closed_is_periodic_n_times_divisions_inside_the_hull",
+  "crates/sop/src/builtins/curve_sop.rs::bezier_piecewise_hits_the_shared_joint_cv",
+  "crates/sop/src/builtins/curve_sop.rs::breakpoints_method_interpolates_all_points",
+  "crates/sop/src/builtins/curve_sop.rs::user_knots_are_validated_and_reproduce_clamped_default",
+  "crates/sop/src/builtins/curve_sop.rs::semicolon_makes_multiple_curves",
 ]
-notes = "H17: coords S = whitespace-separated x,y,z triples, close B -> one Poly (open/closed), point i = i-th triple (generator-defined). Missing: NURBS/Bezier curve types, interactive-draw/multi-curve, 'method' menu, order/knots. Analytical oracle only. Houdini-oracle (H31): MATCH but the twin is an Add SOP (curve::2.0 has no scriptable coords parm) so the Curve SOP itself is NOT verified; stays partial."
+notes = "H17: coords S = whitespace-separated x,y,z triples, close B -> one Poly (open/closed), point i = i-th triple (generator-defined). QA adds (TESSELLATED to polylines, no NURBS/Bezier prim kind in hexe-geo): type poly|bezier|nurbs; bezier piecewise degree order-1 (shared joint CVs) else whole-curve; nurbs = de Boor B-spline unit weights, clamped uniform knots or user `knots` (n+order, validated), periodic when close (n*div pts); divisions = samples/span; method cvs|breakpoints (breakpoints = uniform Catmull-Rom through every point); `;` in coords = multiple curves (one prim each). Oracles: nurbs order4/4CV == de Casteljau, order2 == polyline, counts spans*div+1, joint CV hit, breakpoints pass through all pts. REMAINING: interactive draw (UI-only), true NURBS/Bezier prim kinds (tessellated only), rational weights. Analytical oracle only. Houdini-oracle (H31): MATCH but the twin is an Add SOP (curve::2.0 has no scriptable coords parm) so the Curve SOP itself is NOT verified; stays partial."
 
 [[feature]]
 id = "sop-resample"
