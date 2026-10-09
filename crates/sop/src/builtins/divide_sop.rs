@@ -27,8 +27,8 @@
 //! NOT modelled (DEFERRED): `avoidsmallangles`, `usemaxsides` variants, polys with holes, `dupcut`, vertex-attr interpolation on cuts,
 //! removesharededges across different source prims.
 use super::meshutil::{
-    MAX_ELEMS, Remap, V3, bad, blend_weighted, closed_poly_pts, dot, failed, float, int, newell_corners, positions, rebuild,
-    toggle, v3,
+    MAX_ELEMS, Remap, V3, bad, blend_weighted, closed_poly_pts, dot, failed, float, int, newell_corners, positions,
+    rebuild, toggle, v3,
 };
 use crate::SopNode;
 use hexe_geo::{AttrClass, Detail, Prim, PrimKind};

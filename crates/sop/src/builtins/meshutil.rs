@@ -248,10 +248,8 @@ pub(super) fn blend_weighted(d: &AttrData, srcs: &[Vec<(usize, f64)>]) -> AttrDa
         AttrData::V4(v) => AttrData::V4(flat4(v).chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()),
         AttrData::FN { size, data } => AttrData::FN { size: *size, data: wavg(data, *size as usize, srcs) },
         AttrData::I32(_) | AttrData::IN { .. } | AttrData::Str { .. } => {
-            let heavy: Vec<Option<usize>> = srcs
-                .iter()
-                .map(|s| s.iter().max_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0))
-                .collect();
+            let heavy: Vec<Option<usize>> =
+                srcs.iter().map(|s| s.iter().max_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0)).collect();
             gather(d, &heavy)
         }
     }
