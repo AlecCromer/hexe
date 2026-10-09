@@ -1120,14 +1120,20 @@ notes = "H29: method normal(0, default)|dir(1), dir(0,-1,0), bidirectional(off),
 
 [[feature]]
 id = "sop-divide"
-title = "Divide SOP (polygon -> triangles / <= numsides pieces)"
+title = "Divide SOP (polygon -> triangles / <= numsides pieces + bricker/planar/removesharededges)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["divide"]
 evidence = [
+  "crates/sop/src/builtins/divide_sop.rs::box_six_quads_become_twelve_triangles",
+  "crates/sop/src/builtins/divide_sop.rs::attrs_follow_their_source_and_small_polys_pass",
+  "crates/sop/src/builtins/divide_sop.rs::concave_l_shape_is_ear_clipped_exactly",
+  "crates/sop/src/builtins/divide_sop.rs::bricker_on_grid_produces_sixteen_quads",
+  "crates/sop/src/builtins/divide_sop.rs::removesharededges_merges_convex_divided_hexagon",
+  "crates/sop/src/builtins/divide_sop.rs::planar_mode_skips_bent_quad",
 ]
-notes = "H29: convex(on) numsides(3, 3..=1024). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). Points unchanged, winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts. Nothing split = Arc shared. NOT modelled (DEFERRED): bricker (brick-wall offset pattern), removesharededges, planar mode (coplanar merging), avoidsmallangles, holes. UNVERIFIED-vs-Houdini: bricker/removesharededges/planar parms missing (no oracle), diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles). Example: examples/divide.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, triangulation order differs), see docs/HOUDINI-ORACLE.md."
+notes = "H29/P3: convex(on) numsides(3, 3..=1024) planar(off) planartol(0.0001) removesharededges(off) bricker(off) size(1,1,1) offset(0,0,0) dupcut(off, unused). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). planar on: skip prims whose corners deviate from best-fit plane > planartol. bricker on: clip each prim by axis-aligned brick grid (Sutherland-Hodgman against X/Y/Z min/max per cell), output all pieces. removesharededges on: after dividing, dissolve edges shared by two coplanar output prims (merge back into one polygon). Points unchanged (normal mode), winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts (convex on). Nothing split = Arc shared. NOT modelled (DEFERRED): avoidsmallangles, holes, dupcut semantics. UNVERIFIED-vs-Houdini: diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles), brick grid cell range (we use ceil/floor bbox overlap), removesharededges merge order. Example: examples/divide.json (sphere + bricker 0.4). Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, triangulation order differs), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-knife"

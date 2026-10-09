@@ -31,6 +31,12 @@ pub(super) fn int(p: &ParamSet, n: &str) -> Result<i32, CookError> {
 pub(super) fn menu(p: &ParamSet, n: &str) -> Result<u32, CookError> {
     p.menu(n).ok_or_else(|| bad(format!("`{n}`: missing or not a menu")))
 }
+pub(super) fn v3(p: &ParamSet, n: &str) -> Result<V3, CookError> {
+    match p.vec3(n) {
+        Some(v) if v.iter().all(|c| c.is_finite()) => Ok([f64::from(v[0]), f64::from(v[1]), f64::from(v[2])]),
+        _ => Err(bad(format!("`{n}`: missing or not a finite V3"))),
+    }
+}
 pub(super) fn sub(a: V3, b: V3) -> V3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
