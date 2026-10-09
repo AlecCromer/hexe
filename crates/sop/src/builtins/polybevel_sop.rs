@@ -60,6 +60,8 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("filletshape", ParamValue::Menu(SHAPE_ROUND))
             .label("Fillet Shape")
             .menu(&[("round", "Round"), ("solid", "Solid")]),
+ParamSpec::new("ignoreflat", ParamValue::B(false)).label("Ignore Flat Edges"),
+ParamSpec::new("flatangle", ParamValue::F(1.0)).label("Flat Angle").range(0.0, 180.0),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -215,7 +217,7 @@ fn dedup(poly: Vec<(usize, Option<usize>)>) -> Option<Vec<(usize, Option<usize>)
 }
 
 /// One bevel pass; `None` when no edge is bevelable.
-fn bevel(src: &Detail, names: &str, d: f64, div: usize, round: bool) -> Result<Option<Detail>, CookError> {
+fn bevel(src: &Detail, names: &str, d: f64, div: usize, round: bool, flat: Option<f64>) -> Result<Option<Detail>, CookError> {
     let pos = positions(src);
     let np = pos.len();
     let sel = EdgeSel::parse(src, names)?;
@@ -256,6 +258,13 @@ fn bevel(src: &Detail, names: &str, d: f64, div: usize, round: bool) -> Result<O
                 (dmap.get(&(a, b)).map(Vec::as_slice), dmap.get(&(b, a)).map(Vec::as_slice))
             {
                 // `f2` is the lone opposite use: its corner is at `b`
+if let Some(lim) = flat {
+let n2 = faces.get(f2.0).map_or(ZERO, |g| g.nrm);
+let ang = dot(f.nrm, n2).clamp(-1.0, 1.0).acos().to_degrees();
+if ang <= lim {
+continue;
+}
+}
                 bedges.push(BEdge { a, b, f1: (fi, i), f2 });
             }
         }
@@ -555,11 +564,20 @@ impl Node<Detail> for PolyBevel {
             None => return Err(bad("`filletshape`: missing or not a menu")),
         };
         let names = p.string("group").unwrap_or("");
+let flat = if p.toggle("ignoreflat").unwrap_or(false) {
+let a = float(p, "flatangle")?;
+if !a.is_finite() || !(0.0..=180.0).contains(&a) {
+return Err(bad(format!("`flatangle` must be in 0..=180, got {a}")));
+}
+Some(a)
+} else {
+None
+};
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         if offset == 0.0 {
             return Ok(Arc::clone(src));
         }
-        match bevel(src, names, offset, div as usize, round)? {
+        match bevel(src, names, offset, div as usize, round, flat)? {
             Some(d) => Ok(Arc::new(d)),
             None => Ok(Arc::clone(src)),
         }
@@ -636,6 +654,8 @@ mod tests {
                 ("offset", ParamValue::F(0.1)),
                 ("divisions", ParamValue::I(1)),
                 ("filletshape", ParamValue::Menu(0)),
+                ("ignoreflat", ParamValue::B(false)),
+                ("flatangle", ParamValue::F(1.0)),
             ]
         );
     }
@@ -850,6 +870,25 @@ mod tests {
             }
         }
         assert!(matches!(cook(&*new(), g, &with(0.01, 64, 0, "")), Err(CookError::Failed(_))));
+    }
+    /// Cube dihedral = 90 deg: `ignoreflat` with `flatangle` 89 keeps all 12 edges (24/26); 90 ignores them all (8/6 passthrough).
+    #[test]
+    fn ignoreflat_angle_limit_keeps_90_degree_edges_below_90_and_drops_them_at_90() {
+        let on = |a: f32| with(0.1, 1, 0, "").with("ignoreflat", ParamValue::B(true)).with("flatangle", ParamValue::F(a));
+        let kept = cook(&*new(), cube(), &on(89.0)).expect("cooks");
+        assert_eq!((kept.point_count, kept.prim_count()), (24, 26));
+        let dropped = cook(&*new(), cube(), &on(90.0)).expect("cooks");
+        assert_eq!((dropped.point_count, dropped.prim_count()), (8, 6));
+        // off (default): flatangle ignored
+        let off = with(0.1, 1, 0, "").with("flatangle", ParamValue::F(179.0));
+        assert_eq!(cook(&*new(), cube(), &off).expect("cooks").prim_count(), 26);
+    }
+    #[test]
+    fn ignoreflat_bad_angle_is_rejected_and_only_checked_when_on() {
+        let bad_a = with(0.1, 1, 0, "").with("ignoreflat", ParamValue::B(true)).with("flatangle", ParamValue::F(-1.0));
+        assert!(matches!(cook(&*new(), cube(), &bad_a), Err(CookError::BadParam(_))));
+        let off = with(0.1, 1, 0, "").with("flatangle", ParamValue::F(-1.0));
+        assert!(cook(&*new(), cube(), &off).is_ok());
     }
     #[test]
     fn scene_loader_cooks_example_and_registry_has_slot() {
