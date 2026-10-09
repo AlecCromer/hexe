@@ -48,8 +48,9 @@ fn de_casteljau(control_pts: &[[f32; 3]], t: f32) -> [f32; 3] {
     let n = pts.len();
     for r in 1..n {
         for i in 0..(n - r) {
-            for (dst, src) in pts[i].iter_mut().zip(&pts[i + 1]) {
-                *dst = (1.0 - t) * (*dst) + t * src;
+            #[allow(clippy::needless_range_loop)]
+            for k in 0..3 {
+                pts[i][k] = (1.0 - t) * pts[i][k] + t * pts[i + 1][k];
             }
         }
     }
