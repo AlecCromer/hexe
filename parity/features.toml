@@ -257,7 +257,7 @@ id = "sop-polybevel"
 title = "PolyBevel SOP (edge chamfer / round fillet)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["polybevel"]
 evidence = [
 "crates/sop/src/builtins/polybevel_sop.rs::cube_all_edges_chamfer_is_24_points_6_quads_12_edge_quads_8_corner_tris",
@@ -300,7 +300,7 @@ id = "sop-subdivide"
 title = "Subdivide SOP (Catmull-Clark / linear)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["subdivide"]
 evidence = [
   "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_iter1_is_26_points_24_closed_quads",
@@ -311,7 +311,7 @@ evidence = [
   "crates/sop/src/builtins/subdivide_sop.rs::open_grid_3x3_is_25_points_16_quads_boundary_corners_on_boundary",
   "crates/sop/src/builtins/subdivide_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
 ]
-notes = "H18: iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear; >=2 OpenSubdiv = Unsupported) / group. CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Output = quads only; face/edge pts appended after input pts. NOT modelled: creases, OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), crack protection vs unselected prims, subdivision of non-poly prims. UNVERIFIED vs Houdini (hython blocked). Example: examples/subdivide.json. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "H18: iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear; >=2 OpenSubdiv = Unsupported) / group. CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Output = quads only; face/edge pts appended after input pts. NOT modelled: creases (creaseweight attr), Loop subdivision for tri meshes, OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), boundary interp modes, crack protection vs unselected prims. UNVERIFIED-vs-Houdini: crease semantics, Loop tri subdivision, boundary modes (no oracle). Example: examples/subdivide.json. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, point order differs), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-smooth"
