@@ -5,8 +5,11 @@
 //! - `density_attrib` (prim attr wins over point attr, float): triangle weight = area · mean(corner weights); inside the
 //!   triangle, rejection against the max corner weight gives density ∝ interpolated weight. Negative weights clamp to 0.
 //! - PRNG: SplitMix64 seeded by `seed` (i32 param, sign-extended to u64). Same seed + input → byte-identical output.
+//! - QA params: `group` (prim group restricts the source), `generateby` Count|Density (Density: n = round(sum area*meanweight * `density`)),
+//!   `relaxpoints`/`relaxiterations` (repulsion radius 1.2*sqrt(area/n), points stay in their source triangle),
+//!   `attribs` (globs; point attrs barycentric-interpolated (ints/strings nearest corner), prim attrs copied), `primnumattrib` (name, empty = skip).
 //! - output: points only. `P`, `sourceprim` (int, input prim index), `N` (prim attr `N` if present, else geometric normal).
-use super::meshutil::{cross, newell_corners};
+use super::meshutil::{cross, gather, newell_corners, selection};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, PrimKind, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
@@ -15,6 +18,7 @@ use std::sync::Arc;
 const MAX_POINTS: i32 = 4_000_000;
 /// Cap on rejection retries per point (density variation inside one triangle) before accepting the last candidate.
 const MAX_REJECT: u32 = 64;
+const MAX_RELAX_ITERS: i32 = 50;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("npts", ParamValue::I(1000)).label("Force Total Count").range(0.0, 10000.0),
@@ -22,6 +26,11 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("density_attrib", ParamValue::S(String::new())).label("Density Attribute"),
         ParamSpec::new("relaxpoints", ParamValue::B(false)).label("Relax Points"),
         ParamSpec::new("relaxiterations", ParamValue::I(5)).label("Relax Iterations").range(0.0, 50.0),
+        ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
+        ParamSpec::new("generateby", ParamValue::Menu(0)).label("Generate By").menu(&[("count", "Count"), ("density", "Density")]),
+        ParamSpec::new("density", ParamValue::F(10.0)).label("Density").range(0.0, 100.0),
+        ParamSpec::new("attribs", ParamValue::S(String::new())).label("Attributes to Transfer"),
+        ParamSpec::new("primnumattrib", ParamValue::S("sourceprim".into())).label("Source Prim Attribute"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -45,10 +54,11 @@ impl Rng {
         (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
     }
 }
-/// One fan triangle: corner positions, corner weights, owning prim, area.
+/// One fan triangle: corner positions, corner weights, corner point ids, owning prim, area.
 struct Tri {
     p: [[f64; 3]; 3],
     w: [f64; 3],
+    ids: [u32; 3],
     prim: usize,
     area: f64,
 }
@@ -57,6 +67,9 @@ fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 }
 fn len(a: [f64; 3]) -> f64 {
     (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt()
+}
+fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 fn widen(v: [f32; 3]) -> [f64; 3] {
     v.map(f64::from)
@@ -78,17 +91,18 @@ fn density<'a>(d: &'a Detail, name: &str) -> Result<Density<'a>, CookError> {
     match (f32_of(AttrClass::Prim), f32_of(AttrClass::Point)) {
         (Some(v), _) => Ok(Density::Prim(v)),
         (None, Some(v)) => Ok(Density::Point(v)),
-        _ => {
-            Err(CookError::BadParam(format!("scatter: `density_attrib` `{name}` is not a float prim/point attribute")))
-        }
+        _ => Err(CookError::BadParam(format!("scatter: `density_attrib` `{name}` is not a float prim/point attribute"))),
     }
 }
-fn triangles(d: &Detail, dens: &Density) -> Vec<Tri> {
+fn triangles(d: &Detail, dens: &Density, sel: &Option<Vec<bool>>) -> Vec<Tri> {
     let pos = d.p();
     let at = |pt: u32| pos.get(pt as usize).copied().map(widen);
     let mut out = Vec::new();
     for (pi, prim) in d.prims.iter().enumerate() {
         if !matches!(prim.kind, PrimKind::Poly { .. }) {
+            continue;
+        }
+        if sel.as_ref().is_some_and(|s| !s.get(pi).copied().unwrap_or(false)) {
             continue;
         }
         let vs = d.vertex_point.get(prim.verts.start as usize..prim.verts.end as usize).unwrap_or(&[]);
@@ -105,7 +119,13 @@ fn triangles(d: &Detail, dens: &Density) -> Vec<Tri> {
             let (Some(a), Some(b), Some(c)) = (at(first), at(pair[0]), at(pair[1])) else { continue };
             let area = 0.5 * len(cross(sub(b, a), sub(c, a)));
             if area.is_finite() && area > 0.0 {
-                out.push(Tri { p: [a, b, c], w: [weight(first), weight(pair[0]), weight(pair[1])], prim: pi, area });
+                out.push(Tri {
+                    p: [a, b, c],
+                    w: [weight(first), weight(pair[0]), weight(pair[1])],
+                    ids: [first, pair[0], pair[1]],
+                    prim: pi,
+                    area,
+                });
             }
         }
     }
@@ -126,10 +146,126 @@ fn prim_normal(d: &Detail, prim: usize) -> [f32; 3] {
     let l = len(n);
     if l > 0.0 && l.is_finite() { [(n[0] / l) as f32, (n[1] / l) as f32, (n[2] / l) as f32] } else { [0.0; 3] }
 }
-/// Core: scatter `npts` points over `d`'s polygons. Pure function of (d, npts, seed, density).
-fn scatter(d: &Detail, npts: usize, seed: u64, density_name: &str) -> Result<Detail, CookError> {
-    let dens = density(d, density_name)?;
-    let tris = triangles(d, &dens);
+/// How many points to make and how to place them.
+#[derive(Clone, Debug)]
+struct Opts {
+    npts: usize,
+    seed: u64,
+    density_attrib: String,
+    /// prim group restricting the source (empty = all)
+    group: String,
+    /// 0 = Count (`npts`), 1 = Density (`density` points per unit weighted area)
+    generateby: u32,
+    density: f64,
+    relax: bool,
+    relax_iters: usize,
+    /// attribute-name globs (space separated) transferred from the source (point attrs interpolated, prim attrs copied)
+    attribs: String,
+    /// name of the source-prim int attr ("" = skip)
+    primnumattrib: String,
+}
+impl Opts {
+    fn basic(npts: usize, seed: u64, name: &str) -> Opts {
+        Opts {
+            npts,
+            seed,
+            density_attrib: name.to_string(),
+            group: String::new(),
+            generateby: 0,
+            density: 10.0,
+            relax: false,
+            relax_iters: 0,
+            attribs: String::new(),
+            primnumattrib: "sourceprim".into(),
+        }
+    }
+}
+/// `*`-glob match (only `*` is special).
+fn glob(pat: &str, s: &str) -> bool {
+    let parts: Vec<&str> = pat.split('*').collect();
+    if parts.len() == 1 {
+        return pat == s;
+    }
+    let (first, last) = (parts[0], parts[parts.len() - 1]);
+    if !s.starts_with(first) || s.len() < first.len() + last.len() || !s.ends_with(last) {
+        return false;
+    }
+    let mut at = first.len();
+    let end = s.len() - last.len();
+    for mid in &parts[1..parts.len() - 1] {
+        match s.get(at..end).and_then(|t| t.find(mid)) {
+            Some(i) => at += i + mid.len(),
+            None => return false,
+        }
+    }
+    true
+}
+/// Clamp barycentric (u, v) (weights of corners 1, 2) into the triangle.
+fn clamp_bary(u: f64, v: f64) -> (f64, f64) {
+    let (u, v) = (u.max(0.0), v.max(0.0));
+    let s = u + v;
+    if s > 1.0 { (u / s, v / s) } else { (u, v) }
+}
+/// Barycentric (u, v) of `q` projected onto triangle `t` (corner 0 = origin of the frame).
+fn bary_of(t: &Tri, q: [f64; 3]) -> (f64, f64) {
+    let (e1, e2, w) = (sub(t.p[1], t.p[0]), sub(t.p[2], t.p[0]), sub(q, t.p[0]));
+    let (d11, d12, d22, dw1, dw2) = (dot3(e1, e1), dot3(e1, e2), dot3(e2, e2), dot3(w, e1), dot3(w, e2));
+    let det = d11 * d22 - d12 * d12;
+    if det.abs() < 1e-30 {
+        return (0.0, 0.0);
+    }
+    clamp_bary((dw1 * d22 - dw2 * d12) / det, (dw2 * d11 - dw1 * d12) / det)
+}
+fn point_of(t: &Tri, u: f64, v: f64) -> [f64; 3] {
+    let b0 = 1.0 - u - v;
+    std::array::from_fn(|k| b0 * t.p[0][k] + u * t.p[1][k] + v * t.p[2][k])
+}
+/// Relaxation: neighbours closer than `rad` repel; every point is projected back into its own source triangle.
+fn relax(tris: &[Tri], tidx: &[usize], bary: &mut [(f64, f64)], rad: f64, iters: usize) {
+    use std::collections::HashMap;
+    if rad <= 0.0 || !rad.is_finite() {
+        return;
+    }
+    for _ in 0..iters {
+        let pts: Vec<[f64; 3]> = tidx.iter().zip(bary.iter()).map(|(&ti, &(u, v))| tris.get(ti).map_or([0.0; 3], |t| point_of(t, u, v))).collect();
+        let cell = |p: [f64; 3]| -> (i64, i64, i64) { (((p[0] / rad).floor()) as i64, ((p[1] / rad).floor()) as i64, ((p[2] / rad).floor()) as i64) };
+        let mut grid: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
+        for (i, p) in pts.iter().enumerate() {
+            grid.entry(cell(*p)).or_default().push(i);
+        }
+        for i in 0..pts.len() {
+            let c = cell(pts[i]);
+            let mut push = [0.0f64; 3];
+            for dx in -1..=1 {
+                for dy in -1..=1 {
+                    for dz in -1..=1 {
+                        let Some(list) = grid.get(&(c.0 + dx, c.1 + dy, c.2 + dz)) else { continue };
+                        for &j in list {
+                            if j == i {
+                                continue;
+                            }
+                            let d = sub(pts[i], pts[j]);
+                            let l = len(d);
+                            if l < rad && l > 1e-12 {
+                                let f = 0.5 * (rad - l) / l;
+                                push = [push[0] + d[0] * f, push[1] + d[1] * f, push[2] + d[2] * f];
+                            }
+                        }
+                    }
+                }
+            }
+            if let (Some(t), Some(b)) = (tris.get(tidx[i]), bary.get_mut(i)) {
+                let q = [pts[i][0] + push[0], pts[i][1] + push[1], pts[i][2] + push[2]];
+                *b = bary_of(t, q);
+            }
+        }
+    }
+}
+/// Core: scatter points over `d`'s polygons. Pure function of (d, opts).
+fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
+    let dens = density(d, &o.density_attrib)?;
+    let sel = selection("scatter", d, &o.group)?;
+    let tris = triangles(d, &dens, &sel);
     // cumulative weight table: area · mean corner weight
     let mut cdf = Vec::with_capacity(tris.len());
     let mut total = 0.0f64;
@@ -137,6 +273,15 @@ fn scatter(d: &Detail, npts: usize, seed: u64, density_name: &str) -> Result<Det
         total += t.area * (t.w[0] + t.w[1] + t.w[2]) / 3.0;
         cdf.push(total);
     }
+    let npts = if o.generateby == 1 {
+        let n = (total * o.density).round();
+        if !n.is_finite() || n < 0.0 || n > f64::from(MAX_POINTS) {
+            return Err(CookError::Failed(format!("scatter: density count {n} outside 0..={MAX_POINTS}")));
+        }
+        n as usize
+    } else {
+        o.npts
+    };
     let mut out = Detail::default();
     out.add_points(0);
     if tris.is_empty() || total.is_nan() || total <= 0.0 || !total.is_finite() || npts == 0 {
@@ -144,11 +289,9 @@ fn scatter(d: &Detail, npts: usize, seed: u64, density_name: &str) -> Result<Det
     }
     let n_u32 = u32::try_from(npts).map_err(|_| CookError::Failed("scatter: npts overflow".into()))?;
     out.add_points(n_u32);
-    let mut src = vec![0i32; npts];
-    let mut nrm = vec![[0.0f32; 3]; npts];
-    let mut rng = Rng(seed);
-    let mut pos = vec![[0.0f32; 3]; npts];
-    let mut normals: Vec<Option<[f32; 3]>> = vec![None; d.prims.len()];
+    let mut rng = Rng(o.seed);
+    let mut tidx = vec![0usize; npts];
+    let mut bary = vec![(0.0f64, 0.0f64); npts];
     for i in 0..npts {
         let pick = |target: f64| cdf.partition_point(|&c| c <= target).min(tris.len() - 1);
         let ti = pick(rng.unit() * total);
@@ -167,48 +310,136 @@ fn scatter(d: &Detail, npts: usize, seed: u64, density_name: &str) -> Result<Det
                 break;
             }
         }
-        let b0 = 1.0 - u - v;
-        let q: [f64; 3] = std::array::from_fn(|k| b0 * t.p[0][k] + u * t.p[1][k] + v * t.p[2][k]);
-        if let Some(slot) = pos.get_mut(i) {
-            *slot = [q[0] as f32, q[1] as f32, q[2] as f32];
-        }
-        if let Some(s) = src.get_mut(i) {
-            *s = i32::try_from(t.prim).unwrap_or(i32::MAX);
-        }
-        let n = match normals.get_mut(t.prim) {
+        tidx[i] = ti;
+        bary[i] = (u, v);
+    }
+    if o.relax && o.relax_iters > 0 {
+        let rad = 1.2 * (tris.iter().map(|t| t.area).sum::<f64>() / npts as f64).sqrt();
+        relax(&tris, &tidx, &mut bary, rad, o.relax_iters);
+    }
+    let mut src = vec![0i32; npts];
+    let mut nrm = vec![[0.0f32; 3]; npts];
+    let mut pos = vec![[0.0f32; 3]; npts];
+    let mut normals: Vec<Option<[f32; 3]>> = vec![None; d.prims.len()];
+    for i in 0..npts {
+        let (Some(t), Some(&(u, v))) = (tris.get(tidx[i]), bary.get(i)) else { continue };
+        let q = point_of(t, u, v);
+        pos[i] = [q[0] as f32, q[1] as f32, q[2] as f32];
+        src[i] = i32::try_from(t.prim).unwrap_or(i32::MAX);
+        nrm[i] = match normals.get_mut(t.prim) {
             Some(slot) => *slot.get_or_insert_with(|| prim_normal(d, t.prim)),
             None => [0.0; 3],
         };
-        if let Some(s) = nrm.get_mut(i) {
-            *s = n;
-        }
     }
     *out.p_mut() = pos;
-    out.add_attr(Attribute {
-        name: "sourceprim".into(),
-        class: AttrClass::Point,
-        data: AttrData::I32(src),
-        type_info: TypeInfo::None,
-    });
-    out.add_attr(Attribute {
-        name: "N".into(),
-        class: AttrClass::Point,
-        data: AttrData::V3(nrm),
-        type_info: TypeInfo::Normal,
-    });
+    if !o.primnumattrib.is_empty() {
+        out.add_attr(Attribute {
+            name: o.primnumattrib.clone(),
+            class: AttrClass::Point,
+            data: AttrData::I32(src.clone()),
+            type_info: TypeInfo::None,
+        });
+    }
+    out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(nrm), type_info: TypeInfo::Normal });
+    // ---- attribute transfer ----
+    let pats: Vec<&str> = o.attribs.split_whitespace().collect();
+    if !pats.is_empty() {
+        let prim_idx: Vec<Option<usize>> = src.iter().map(|&s| usize::try_from(s).ok()).collect();
+        let nearest: Vec<Option<usize>> = (0..npts)
+            .map(|i| {
+                let t = tris.get(tidx[i])?;
+                let (u, v) = bary[i];
+                let b = [1.0 - u - v, u, v];
+                let k = (0..3).max_by(|&a, &c| b[a].total_cmp(&b[c])).unwrap_or(0);
+                Some(t.ids[k] as usize)
+            })
+            .collect();
+        for a in &d.attrs {
+            if a.name == "P" || a.name == o.primnumattrib || !pats.iter().any(|p| glob(p, &a.name)) {
+                continue;
+            }
+            let data = match a.class {
+                AttrClass::Prim => gather(&a.data, &prim_idx),
+                AttrClass::Point => match &a.data {
+                    AttrData::F32(_) | AttrData::V2(_) | AttrData::V3(_) | AttrData::V4(_) | AttrData::FN { .. } => {
+                        interp(&a.data, &tris, &tidx, &bary)
+                    }
+                    other => gather(other, &nearest),
+                },
+                _ => continue,
+            };
+            out.add_attr(Attribute { name: a.name.clone(), class: AttrClass::Point, data, type_info: a.type_info });
+        }
+    }
     Ok(out)
+}
+/// Barycentric interpolation of a float point attribute onto the scattered points.
+fn interp(data: &AttrData, tris: &[Tri], tidx: &[usize], bary: &[(f64, f64)]) -> AttrData {
+    let (flat, w): (Vec<f32>, usize) = match data {
+        AttrData::F32(v) => (v.clone(), 1),
+        AttrData::V2(v) => (v.iter().flatten().copied().collect(), 2),
+        AttrData::V3(v) => (v.iter().flatten().copied().collect(), 3),
+        AttrData::V4(v) => (v.iter().flatten().copied().collect(), 4),
+        AttrData::FN { size, data } => (data.clone(), (*size as usize).max(1)),
+        other => return other.clone(),
+    };
+    let mut res = Vec::with_capacity(tidx.len() * w);
+    for (&ti, &(u, v)) in tidx.iter().zip(bary) {
+        let bw = [1.0 - u - v, u, v];
+        for c in 0..w {
+            let Some(t) = tris.get(ti) else {
+                res.push(0.0);
+                continue;
+            };
+            let s: f64 = (0..3).map(|k| bw[k] * f64::from(flat.get(t.ids[k] as usize * w + c).copied().unwrap_or(0.0))).sum();
+            res.push(s as f32);
+        }
+    }
+    match data {
+        AttrData::F32(_) => AttrData::F32(res),
+        AttrData::V2(_) => AttrData::V2(res.chunks_exact(2).map(|c| [c[0], c[1]]).collect()),
+        AttrData::V3(_) => AttrData::V3(res.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()),
+        AttrData::V4(_) => AttrData::V4(res.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()),
+        AttrData::FN { size, .. } => AttrData::FN { size: *size, data: res },
+        other => other.clone(),
+    }
+}
+/// Count scatter (tests + `generateby` = Count).
+fn scatter(d: &Detail, npts: usize, seed: u64, density_name: &str) -> Result<Detail, CookError> {
+    scatter_with(d, &Opts::basic(npts, seed, density_name))
 }
 fn bad(name: &str) -> CookError {
     CookError::BadParam(format!("scatter: missing or mistyped `{name}`"))
 }
-fn read(p: &ParamSet) -> Result<(usize, u64, String), CookError> {
+fn read(p: &ParamSet) -> Result<Opts, CookError> {
     let npts = p.int("npts").ok_or_else(|| bad("npts"))?;
     if !(0..=MAX_POINTS).contains(&npts) {
         return Err(CookError::BadParam(format!("scatter: `npts` {npts} outside 0..={MAX_POINTS}")));
     }
     let seed = p.int("seed").ok_or_else(|| bad("seed"))?;
     let name = p.string("density_attrib").ok_or_else(|| bad("density_attrib"))?;
-    Ok((usize::try_from(npts).unwrap_or(0), i64::from(seed) as u64, name.to_string()))
+    let mut o = Opts::basic(usize::try_from(npts).unwrap_or(0), i64::from(seed) as u64, name);
+    // QA params are optional: absent = default
+    o.group = p.string("group").unwrap_or("").to_string();
+    o.generateby = p.menu("generateby").unwrap_or(0);
+    if o.generateby > 1 {
+        return Err(CookError::BadParam(format!("scatter: `generateby` {} out of range", o.generateby)));
+    }
+    o.density = f64::from(p.float("density").unwrap_or(10.0));
+    if !o.density.is_finite() || o.density < 0.0 {
+        return Err(CookError::BadParam(format!("scatter: `density` {} must be finite >= 0", o.density)));
+    }
+    o.relax = p.toggle("relaxpoints").unwrap_or(false);
+    let it = p.int("relaxiterations").unwrap_or(5);
+    if !(0..=MAX_RELAX_ITERS).contains(&it) {
+        return Err(CookError::BadParam(format!("scatter: `relaxiterations` {it} outside 0..={MAX_RELAX_ITERS}")));
+    }
+    o.relax_iters = usize::try_from(it).unwrap_or(0);
+    o.attribs = p.string("attribs").unwrap_or("").to_string();
+    if let Some(n) = p.string("primnumattrib") {
+        o.primnumattrib = n.to_string();
+    }
+    Ok(o)
 }
 impl Node<Detail> for Scatter {
     fn type_name(&self) -> &'static str {
@@ -221,10 +452,10 @@ impl Node<Detail> for Scatter {
         &self.specs
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
-        let (npts, seed, name) = read(ctx.params)?;
+        let o = read(ctx.params)?;
         let empty = Detail::default();
         let d = inputs.first().map_or(&empty, |a| &**a);
-        scatter(d, npts, seed, &name).map(Arc::new)
+        scatter_with(d, &o).map(Arc::new)
     }
 }
 #[cfg(test)]
@@ -395,6 +626,92 @@ mod tests {
             .with("seed", ParamValue::I(0))
             .with("density_attrib", ParamValue::S(String::new()));
         assert!(read(&set).is_err());
+    }
+    fn nn_min(p: &[[f32; 3]]) -> f64 {
+        let mut m = f64::MAX;
+        for i in 0..p.len() {
+            for j in i + 1..p.len() {
+                let d: f64 = (0..3).map(|k| f64::from(p[i][k] - p[j][k]).powi(2)).sum::<f64>().sqrt();
+                m = m.min(d);
+            }
+        }
+        m
+    }
+    fn opts(n: usize) -> Opts {
+        Opts::basic(n, 11, "")
+    }
+    /// Group = {prim 1}: all 500 points land on quad B (x in [3,4]).
+    #[test]
+    fn group_restricts_source_prims() {
+        let mut d = a4_b1();
+        d.groups.push(hexe_geo::Group { name: "b".into(), class: AttrClass::Prim, mask: vec![false, true] });
+        let mut o = opts(500);
+        o.group = "b".into();
+        let out = scatter_with(&d, &o).expect("cooks");
+        assert_eq!(out.point_count, 500);
+        assert_eq!(counts(&out), [0, 500]);
+        assert!(out.p().iter().all(|q| q[0] >= 3.0 && q[0] <= 4.0));
+        o.group = "nope".into();
+        assert!(matches!(scatter_with(&d, &o), Err(CookError::Failed(_))));
+    }
+    /// Density mode: unit quad (area 1) x 10 = 10 pts; A4+B1 (area 5) x 10 = 50; 2.5x -> 125 (round).
+    #[test]
+    fn generateby_density_count_is_area_times_density() {
+        let mut o = opts(7);
+        o.generateby = 1;
+        assert_eq!(scatter_with(&unit_quad(), &o).expect("cooks").point_count, 10);
+        assert_eq!(scatter_with(&a4_b1(), &o).expect("cooks").point_count, 50);
+        o.density = 25.0;
+        assert_eq!(scatter_with(&a4_b1(), &o).expect("cooks").point_count, 125);
+        o.density = 0.0;
+        assert_eq!(scatter_with(&a4_b1(), &o).expect("cooks").point_count, 0);
+    }
+    /// Relax raises the minimum nearest-neighbour distance of 100 points on the unit quad and keeps every point inside it.
+    #[test]
+    fn relax_increases_min_neighbour_distance_and_stays_inside() {
+        let q = unit_quad();
+        let base = scatter_with(&q, &opts(100)).expect("cooks");
+        let mut o = opts(100);
+        o.relax = true;
+        o.relax_iters = 20;
+        let rel = scatter_with(&q, &o).expect("cooks");
+        assert_eq!(rel.point_count, 100);
+        let (b, r) = (nn_min(base.p()), nn_min(rel.p()));
+        assert!(r > b * 2.0, "min NN {b} -> {r}");
+        assert!(rel.p().iter().all(|p| (-1e-6..=1.0 + 1e-6).contains(&p[0]) && (-1e-6..=1.0 + 1e-6).contains(&p[1]) && p[2] == 0.0));
+    }
+    /// Point attr w = x interpolates exactly to P.x (linear field, barycentric = exact); prim attr id copied per sourceprim; ints nearest; unlisted attrs absent.
+    #[test]
+    fn attribute_transfer_interpolates_points_and_copies_prims() {
+        let mut d = a4_b1();
+        let xs: Vec<f32> = d.p().iter().map(|p| p[0]).collect();
+        d.add_attr(Attribute { name: "w".into(), class: AttrClass::Point, data: AttrData::F32(xs), type_info: TypeInfo::None });
+        d.add_attr(Attribute { name: "id".into(), class: AttrClass::Prim, data: AttrData::I32(vec![10, 20]), type_info: TypeInfo::None });
+        d.add_attr(Attribute { name: "skip".into(), class: AttrClass::Prim, data: AttrData::I32(vec![1, 2]), type_info: TypeInfo::None });
+        let mut o = opts(2000);
+        o.attribs = "w id".into();
+        let out = scatter_with(&d, &o).expect("cooks");
+        let Some(AttrData::F32(w)) = out.attr(AttrClass::Point, "w").map(|a| &a.data) else { panic!("w") };
+        for (p, &wv) in out.p().iter().zip(w) {
+            assert!((p[0] - wv).abs() < 1e-5, "w {wv} vs x {}", p[0]);
+        }
+        let (Some(AttrData::I32(id)), Some(AttrData::I32(sp))) =
+            (out.attr(AttrClass::Point, "id").map(|a| &a.data), out.attr(AttrClass::Point, "sourceprim").map(|a| &a.data))
+        else {
+            panic!("id/sourceprim")
+        };
+        assert!(id.iter().zip(sp).all(|(&i, &s)| i == 10 * (s + 1)));
+        assert!(out.attr(AttrClass::Point, "skip").is_none());
+        o.attribs = "*".into();
+        assert!(scatter_with(&d, &o).expect("cooks").attr(AttrClass::Point, "skip").is_some());
+        o.primnumattrib = String::new();
+        o.attribs = String::new();
+        assert!(scatter_with(&d, &o).expect("cooks").attr(AttrClass::Point, "sourceprim").is_none());
+    }
+    #[test]
+    fn glob_matches_star_patterns() {
+        assert!(glob("*", "abc") && glob("a*", "abc") && glob("*c", "abc") && glob("a*c", "abc") && glob("a*b*c", "aXbYc"));
+        assert!(!glob("a*d", "abc") && !glob("abc", "abd") && !glob("ab*bc", "abc"));
     }
     #[test]
     fn defaults_are_1000_seed0_no_density() {

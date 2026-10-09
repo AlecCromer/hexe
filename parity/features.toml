@@ -365,8 +365,12 @@ evidence = [
   "crates/sop/src/builtins/scatter_sop.rs::area_ratio_4_to_1_within_5_percent",
   "crates/sop/src/builtins/scatter_sop.rs::same_seed_is_byte_equal_other_seed_differs",
   "crates/sop/src/builtins/scatter_sop.rs::example_scene_cooks",
+  "crates/sop/src/builtins/scatter_sop.rs::group_restricts_source_prims",
+  "crates/sop/src/builtins/scatter_sop.rs::generateby_density_count_is_area_times_density",
+  "crates/sop/src/builtins/scatter_sop.rs::relax_increases_min_neighbour_distance_and_stays_inside",
+  "crates/sop/src/builtins/scatter_sop.rs::attribute_transfer_interpolates_points_and_copies_prims",
 ]
-notes = "H6: params npts(1000) seed(0, i32 sign-extended to u64) density_attrib(empty). Area-weighted CDF + sqrt-barycentric, fan n-gons, SplitMix64; density = area*mean corner weight + in-tri rejection; out = P + sourceprim + N. NOT modelled: the other ~30 doc params (relax, attribute transfer, group, vol modes). UNVERIFIED vs Houdini (hython blocked): RNG stream, N when no prim N (we compute geometric), density attr lookup order (prim wins). Statistical parity only. Houdini-oracle (H32, real Houdini 20.5): ATTRIB-DIFF (+P-DIFF), see docs/HOUDINI-ORACLE.md."
+notes = "H6: params npts(1000) seed(0, i32 sign-extended to u64) density_attrib(empty). Area-weighted CDF + sqrt-barycentric, fan n-gons, SplitMix64; density = area*mean corner weight + in-tri rejection; out = P + sourceprim + N. QA adds: group (prim group), generateby Count|Density (n=round(sum area*meanw*density), density F 10 = OUR name), relaxpoints+relaxiterations (repulsion r=1.2*sqrt(A/n), grid-hashed, projected back into own tri), attribs (globs; point F/V attrs barycentric-interpolated, int/str nearest corner, prim attrs copied), primnumattrib (name, ''=skip). Oracles: all pts in group prim, density 10*area counts, relax min-NN x2, w=x interpolates exactly. REMAINING: volume scatter modes, uvw/primuvw output attrs, emergency limit, overridedensity/area-attr variants, other doc params. UNVERIFIED vs Houdini (hython blocked): RNG stream, N when no prim N (we compute geometric), density attr lookup order (prim wins). Statistical parity only. Houdini-oracle (H32, real Houdini 20.5): ATTRIB-DIFF (+P-DIFF), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-copytopoints"
