@@ -542,7 +542,7 @@ id = "sop-boolean"
 title = "Boolean SOP (union / subtract / intersect of closed polygon meshes)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["boolean"]
 evidence = [
   "crates/sop/src/builtins/boolean_sop.rs::params_and_defaults",
@@ -832,7 +832,7 @@ id = "rop-geometry"
 title = "ROP Geometry Output (rop_geometry): write input to sopoutput by extension on cook"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["rop_geometry", "cook", "convert"]
 evidence = ["crates/sop/src/builtins/rop_geometry_sop.rs::box_rop_writes_each_format_and_reads_back", "crates/sop/src/builtins/rop_geometry_sop.rs::rop_rejects_bad_params_and_unwritable_paths", "apps/hexe-cli/src/main.rs::cook_with_rop_writes_the_file_and_file_sop_is_scene_relative", "apps/hexe-cli/src/main.rs::example_file_rop_scene_cooks_from_any_cwd", "apps/hexe-cli/src/main.rs::convert_roundtrips_formats_and_rejects_bad_args"]
 notes = "trange = off only (others Unsupported); relative sopoutput is cwd-relative; formats .geo(JSON) .obj .ply. No bgeo write, no frame ranges, no pre/post-render scripts. examples/file-rop.json."
@@ -935,7 +935,7 @@ id = "sop-uvlayout"
 title = "UVLayout-lite SOP (island bbox shelf packing, no rotation; padding, fit)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["uvlayout"]
 evidence = [
   "crates/sop/src/builtins/uvlayout_sop.rs::params_and_defaults",
@@ -1152,7 +1152,7 @@ id = "sop-knife"
 title = "Knife SOP (plane cut keeping both sides, seam marked)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["knife"]
 evidence = [
   "crates/sop/src/builtins/knife_sop.rs::box_cut_at_y0_keeps_both_halves_welded_with_marked_seam",
@@ -1168,7 +1168,7 @@ id = "sop-sweep"
 title = "Sweep SOP (cross-section curves along backbone curves, parallel-transport frames, caps, twist/roll/scale)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["sweep"]
 evidence = [
   "crates/sop/src/builtins/sweep_sop.rs::square_along_z_with_caps_is_a_closed_outward_solid_of_volume_two",
@@ -1186,7 +1186,7 @@ id = "sop-revolve"
 title = "Revolve SOP (curves about an axis: origin, dir, start/end angle, divs; axis points collapse to poles)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["revolve"]
 evidence = [
   "crates/sop/src/builtins/revolve_sop.rs::full_revolve_of_a_wall_is_an_outward_cylinder_wall_with_a_wrapped_seam",
@@ -1203,7 +1203,7 @@ id = "sop-skin"
 title = "Skin SOP (ruled loft through the curve prims of one input; resample, closev, quads/triangles)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["skin"]
 evidence = [
   "crates/sop/src/builtins/skin_sop.rs::two_squares_loft_into_four_outward_quads",
@@ -1220,7 +1220,7 @@ id = "sop-polyfill"
 title = "PolyFill SOP (close boundary-loop holes: single n-gon / centre fan / centre quads, filled prim group)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["polyfill"]
 evidence = [
   "crates/sop/src/builtins/polyfill_sop.rs::box_missing_its_top_is_closed_by_one_outward_quad",
@@ -1238,7 +1238,7 @@ id = "sop-convert"
 title = "Convert SOP (polygon <-> polyline, sphere / tube -> polygons; fromtype filter)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["convert"]
 evidence = [
   "crates/sop/src/builtins/convert_sop.rs::sphere_becomes_an_outward_closed_shell_at_its_centre_and_drops_the_centre_point",
