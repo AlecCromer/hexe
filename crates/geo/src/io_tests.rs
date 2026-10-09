@@ -114,14 +114,18 @@ fn obj_corner_forms_groups_materials_lines() {
     assert_eq!(d.group(AttrClass::Prim, "a").unwrap().mask, vec![true, false, false]);
     assert_eq!(d.group(AttrClass::Prim, "b").unwrap().mask, vec![true, false, false]);
     assert_eq!(d.group(AttrClass::Prim, "c").unwrap().mask, vec![false, true, true]);
-    let AttrData::Str { idx, table } = &d.attr(AttrClass::Prim, "material").unwrap().data else { panic!() };
+    let AttrData::Str { idx, table } = &d.attr(AttrClass::Prim, "shop_materialpath").unwrap().data else { panic!() };
     assert_eq!((idx.clone(), table.clone()), (vec![0, 1, 1], vec!["red".to_string(), "blue".to_string()]));
     // writer keeps normals, uvs, lines and materials
     let back = read_obj(&write_obj(&d).unwrap()).unwrap();
     assert_eq!(counts(&back), (3, 9, 3));
     assert_eq!(back.attr(AttrClass::Vertex, "N"), d.attr(AttrClass::Vertex, "N"));
     assert_eq!(back.attr(AttrClass::Vertex, "uv"), d.attr(AttrClass::Vertex, "uv"));
-    assert_eq!(back.attr(AttrClass::Prim, "material"), d.attr(AttrClass::Prim, "material"));
+    assert_eq!(back.attr(AttrClass::Prim, "shop_materialpath"), d.attr(AttrClass::Prim, "shop_materialpath"));
+    // groups are written and survive round-trip
+    assert_eq!(back.group(AttrClass::Prim, "a"), d.group(AttrClass::Prim, "a"));
+    assert_eq!(back.group(AttrClass::Prim, "b"), d.group(AttrClass::Prim, "b"));
+    assert_eq!(back.group(AttrClass::Prim, "c"), d.group(AttrClass::Prim, "c"));
     assert_eq!(back.prims[2].kind, PrimKind::Polyline);
 }
 #[test]

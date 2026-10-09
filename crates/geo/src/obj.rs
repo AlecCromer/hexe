@@ -1,10 +1,10 @@
 //! Wavefront OBJ reader/writer (`geo-read-obj`, `geo-write-obj`).
 //! Read: `v` -> points (`P`); `f` -> closed poly prims, `l` -> polyline prims; corner `v/vt/vn` (1-based, negative = relative to
 //! the counts so far) -> vertices; `vn` -> vertex `N` (V3, Normal), `vt` -> vertex `uv` (V3 with z = 0 / `w`; Houdini stores uv
-//! as 3 floats); `g a b` -> prim group per name; `usemtl` -> prim string attrib `material`. `o`, `s`, `mtllib`, `vp`, curves,
+//! as 3 floats); `g a b` -> prim group per name; `usemtl` -> prim string attrib `shop_materialpath`; `o` -> prim group. `s`, `mtllib`, `vp`, curves,
 //! surfaces and unknown keywords are ignored. Faces < 3 / lines < 2 corners, index 0, out-of-range index, non-finite numbers -> Err.
-//! Write: points `v`, vertex-or-point `N`/`uv` -> `vn`/`vt`, closed polys -> `f`, polylines / open polys -> `l`, `material` ->
-//! `usemtl`. Groups are NOT written. Any other prim kind -> `Unsupported` (never silently dropped).
+//! Write: points `v`, vertex-or-point `N`/`uv` -> `vn`/`vt`, closed polys -> `f`, polylines / open polys -> `l`, `shop_materialpath` ->
+//! `usemtl`, prim groups -> `g`. Any other prim kind -> `Unsupported` (never silently dropped).
 use crate::error::{MAX_ELEMS, check_len};
 use crate::*;
 use std::fmt::Write as _;
@@ -116,8 +116,10 @@ pub fn read_obj(bytes: &[u8]) -> Result<Detail, GeoError> {
                 prims.push((is_line, first as u32, corners.len() as u32));
                 mats.push(cur_mat);
             }
-            "g" => {
-                cur_groups.clear();
+            "g" | "o" => {
+                if key == "g" {
+                    cur_groups.clear();
+                }
                 for name in it {
                     let gi = match group_names.iter().position(|g| g == name) {
                         Some(i) => i,
@@ -192,7 +194,7 @@ pub fn read_obj(bytes: &[u8]) -> Result<Detail, GeoError> {
     }
     if !mat_table.is_empty() {
         let data = AttrData::Str { idx: mats, table: mat_table };
-        d.attrs.push(Attribute { name: "material".into(), class: AttrClass::Prim, data, type_info: TypeInfo::None });
+        d.attrs.push(Attribute { name: "shop_materialpath".into(), class: AttrClass::Prim, data, type_info: TypeInfo::None });
     }
     for (gi, name) in group_names.into_iter().enumerate() {
         let mut mask = vec![false; prims.len()];
@@ -255,11 +257,21 @@ pub fn write_obj(d: &Detail) -> Result<Vec<u8>, GeoError> {
                 if w { writeln!(out, "vt {} {} {}", q[0], q[1], q[2]) } else { writeln!(out, "vt {} {}", q[0], q[1]) };
         }
     }
-    let mat = match d.attr(AttrClass::Prim, "material").map(|a| &a.data) {
+    let mat = match d.attr(AttrClass::Prim, "shop_materialpath").map(|a| &a.data) {
         Some(AttrData::Str { idx, table }) => Some((idx, table)),
         _ => None,
     };
+    // Build prim -> groups map
+    let mut prim_groups: Vec<Vec<&str>> = vec![Vec::new(); d.prims.len()];
+    for g in d.groups.iter().filter(|g| g.class == AttrClass::Prim) {
+        for (pi, &m) in g.mask.iter().enumerate() {
+            if m && pi < prim_groups.len() {
+                prim_groups[pi].push(&g.name);
+            }
+        }
+    }
     let mut cur_mat: Option<i32> = None;
+    let mut cur_groups: Vec<&str> = Vec::new();
     for (pi, prim) in d.prims.iter().enumerate() {
         let key = match prim.kind {
             PrimKind::Poly { closed: true } => "f",
@@ -270,6 +282,20 @@ pub fn write_obj(d: &Detail) -> Result<Vec<u8>, GeoError> {
                 )));
             }
         };
+        // Emit `g` if groups changed
+        let pg = prim_groups.get(pi).map(|v| v.as_slice()).unwrap_or(&[]);
+        if pg != cur_groups.as_slice() {
+            if pg.is_empty() {
+                let _ = writeln!(out, "g");
+            } else {
+                let _ = write!(out, "g");
+                for name in pg {
+                    let _ = write!(out, " {name}");
+                }
+                out.push('\n');
+            }
+            cur_groups = pg.to_vec();
+        }
         if let Some((idx, table)) = mat {
             let m = idx.get(pi).copied().unwrap_or(-1);
             if m >= 0 && cur_mat != Some(m) {
