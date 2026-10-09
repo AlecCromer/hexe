@@ -503,8 +503,15 @@ evidence = [
   "crates/sop/src/builtins/attribnoise_sop.rs::white_noise_is_seed_deterministic_byte_equal",
   "crates/sop/src/builtins/attribnoise_sop.rs::missing_attrib_is_failed_and_bad_params_are_rejected",
   "crates/sop/src/builtins/attribnoise_sop.rs::example_scene_cooks",
+  "crates/sop/src/builtins/attribnoise_sop.rs::fractal_octaves_one_equals_plain_noise",
+  "crates/sop/src/builtins/attribnoise_sop.rs::ridged_is_non_negative",
+  "crates/sop/src/builtins/attribnoise_sop.rs::value_noise_equals_lattice_value_on_the_lattice_and_is_continuous",
+  "crates/sop/src/builtins/attribnoise_sop.rs::worley_is_minus_one_at_a_feature_point_and_bounded",
+  "crates/sop/src/builtins/attribnoise_sop.rs::group_limits_noise_to_members",
+  "crates/sop/src/builtins/attribnoise_sop.rs::rest_attribute_drives_the_sample_position",
+  "crates/sop/src/builtins/attribnoise_sop.rs::updatenormals_recomputes_point_and_existing_prim_normals",
 ]
-notes = "H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). NOT modelled: Houdini noise-pattern menu, turbulence/fractal, rest, normals, groups. UNVERIFIED vs Houdini (hython blocked): noise streams, remap/amp semantics, default ranges. Example: examples/attribnoise.json. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). QA: fractal (none|fbm|turbulence|ridged, octaves, rough) already present; ADDS noise value (lattice value at integer pts, bounded, continuous) + worley/cellular (F1, -1 at the feature point), group (members only), rest (V3 point attr as sample pos; missing = Failed), updatenormals (point N + existing prim N). REMAINING: Houdini's other pattern types (sparse convolution, alligator, curl, flow) + their params. UNVERIFIED vs Houdini (hython blocked): noise streams, remap/amp semantics, default ranges. Example: examples/attribnoise.json. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
 
 
 [[feature]]

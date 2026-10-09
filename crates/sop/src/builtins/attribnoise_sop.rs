@@ -10,9 +10,13 @@
 //! - remap: `remap` toggle (default off) + `remap_min`/`remap_max` floats: noise ∈ [-1,1] → [min,max] linearly.
 //!   DEVIATION: the brief's V2 `remap_range` has no ParamValue::V2 → two floats + toggle.
 //! - `seed` (i32, sign-extended) mixes into every hash: same seed + input → byte-identical output.
-//! - NOT modelled: Houdini's noise-pattern menu (alligator/curl/…), turbulence/fractal params, rest position, normals update.
+//! - QA: `noise` also `value` (hashed lattice values, fade-interpolated) and `worley`/`cellular` (F1 of jittered feature points, `2*min(F1,1)-1`);
+//!   `group` (element group of `class`, non-members untouched), `rest` (V3 point attr sampled instead of P), `updatenormals` (after P noise: point N
+//!   written, existing prim N refreshed). Fractal fbm/turbulence/ridged + octaves/rough already existed.
+//! - NOT modelled: Houdini's remaining patterns (sparse convolution, alligator, curl, flow...), `pattern`-specific params.
+use super::meshutil::{closed_poly_pts, point_normals, positions as mesh_positions, prim_normal};
 use crate::SopNode;
-use hexe_geo::{AttrClass, AttrData, Detail};
+use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -40,6 +44,9 @@ pub fn spec() -> Vec<ParamSpec> {
         ]),
         ParamSpec::new("octaves", ParamValue::I(4)).label("Octaves").range(1.0, 16.0),
         ParamSpec::new("rough", ParamValue::F(0.5)).label("Roughness").range(0.0, 1.0),
+        ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
+        ParamSpec::new("rest", ParamValue::S(String::new())).label("Rest Position Attribute"),
+        ParamSpec::new("updatenormals", ParamValue::B(false)).label("Update Normals"),
     ]
 }
 
@@ -56,6 +63,10 @@ enum Kind {
     Perlin,
     Simplex,
     White,
+    /// smooth value noise (hashed lattice values, fade interpolation)
+    Value,
+    /// cellular F1 distance (nearest hashed feature point of the 27 neighbouring cells)
+    Worley,
 }
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Fractal {
@@ -85,6 +96,9 @@ struct Config {
     fractal: Fractal,
     octaves: u32,
     rough: f64,
+    group: String,
+    rest: String,
+    update_normals: bool,
 }
 
 fn bad<T>(m: impl Into<String>) -> Result<T, CookError> {
@@ -122,7 +136,9 @@ impl Config {
             "perlin" => Kind::Perlin,
             "simplex" => Kind::Simplex,
             "white" => Kind::White,
-            other => return bad(format!("`noise` `{other}`: expected perlin|simplex|white")),
+            "value" => Kind::Value,
+            "worley" | "cellular" => Kind::Worley,
+            other => return bad(format!("`noise` `{other}`: expected perlin|simplex|white|value|worley")),
         };
         let op = match need_str(p, "operation")?.trim() {
             "add" => Op::Add,
@@ -159,6 +175,9 @@ impl Config {
             fractal,
             octaves,
             rough,
+            group: p.string("group").unwrap_or("").trim().to_string(),
+            rest: p.string("rest").unwrap_or("").trim().to_string(),
+            update_normals: p.toggle("updatenormals").unwrap_or(false),
         })
     }
 }
@@ -274,8 +293,45 @@ fn white(q: [f64; 3], seed: u64, chan: u64) -> f64 {
     ((h >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
 }
 
+/// Hashed lattice value in [-1, 1) of cell `(i, j, k)`.
+fn lattice_value(seed: u64, chan: u64, i: i64, j: i64, k: i64) -> f64 {
+    ((cell_hash(seed ^ 0x5851_F42D_4C95_7F2D, chan, i, j, k) >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+}
+/// Smooth value noise: trilinear blend of the 8 lattice values with the Perlin fade curve.
+fn value_noise(q: [f64; 3], seed: u64, chan: u64) -> f64 {
+    let (i, j, k) = (floor_i(q[0]), floor_i(q[1]), floor_i(q[2]));
+    let (fx, fy, fz) = (fade(q[0] - i as f64), fade(q[1] - j as f64), fade(q[2] - k as f64));
+    let v = |a: i64, b: i64, c: i64| lattice_value(seed, chan, i.wrapping_add(a), j.wrapping_add(b), k.wrapping_add(c));
+    let x00 = lerp(fx, v(0, 0, 0), v(1, 0, 0));
+    let x10 = lerp(fx, v(0, 1, 0), v(1, 1, 0));
+    let x01 = lerp(fx, v(0, 0, 1), v(1, 0, 1));
+    let x11 = lerp(fx, v(0, 1, 1), v(1, 1, 1));
+    lerp(fz, lerp(fy, x00, x10), lerp(fy, x01, x11))
+}
+/// Jittered feature point inside cell `(i, j, k)` (absolute coordinates).
+fn feature_point(seed: u64, chan: u64, i: i64, j: i64, k: i64) -> [f64; 3] {
+    let h = |s: u64| (cell_hash(seed ^ s, chan, i, j, k) >> 11) as f64 / (1u64 << 53) as f64;
+    [i as f64 + h(0x1111), j as f64 + h(0x2222), k as f64 + h(0x3333)]
+}
+/// Worley F1 mapped to [-1, 1]: `2 * min(F1, 1) - 1` (feature point itself = -1).
+fn worley(q: [f64; 3], seed: u64, chan: u64) -> f64 {
+    let (i, j, k) = (floor_i(q[0]), floor_i(q[1]), floor_i(q[2]));
+    let mut best = f64::MAX;
+    for a in -1..=1 {
+        for b in -1..=1 {
+            for c in -1..=1 {
+                let f = feature_point(seed, chan, i.wrapping_add(a), j.wrapping_add(b), k.wrapping_add(c));
+                let d = ((f[0] - q[0]).powi(2) + (f[1] - q[1]).powi(2) + (f[2] - q[2]).powi(2)).sqrt();
+                best = best.min(d);
+            }
+        }
+    }
+    2.0 * best.min(1.0) - 1.0
+}
 fn base_noise(kind: Kind, q: [f64; 3], seed: u64, chan: u64) -> f64 {
     match kind {
+        Kind::Value => value_noise(q, seed, chan),
+        Kind::Worley => worley(q, seed, chan),
         Kind::Perlin => perlin(q, seed, chan),
         Kind::Simplex => simplex(q, seed, chan),
         Kind::White => white(q, seed, chan),
@@ -347,8 +403,7 @@ fn sample(cfg: &Config, p: [f64; 3], chan: usize) -> f64 {
 // ----------------------------------------------------------------- cook ----
 
 /// Sample position of every element of `class`.
-fn positions(d: &Detail, class: AttrClass) -> Vec<[f64; 3]> {
-    let pos = d.p();
+fn positions(d: &Detail, class: AttrClass, pos: &[[f32; 3]]) -> Vec<[f64; 3]> {
     let at = |pt: u32| pos.get(pt as usize).map_or([0.0; 3], |v| v.map(f64::from));
     let mean = |pts: &mut dyn Iterator<Item = [f64; 3]>| {
         let (mut s, mut n) = ([0.0f64; 3], 0usize);
@@ -391,12 +446,37 @@ fn each_element(data: &mut AttrData, f: &mut dyn FnMut(usize, &mut [f32])) -> bo
 
 fn run(d: &Detail, cfg: &Config) -> Result<Detail, CookError> {
     let mut out = d.clone();
-    let pos = positions(d, cfg.class);
+    let rest_pos: Option<Vec<[f32; 3]>> = if cfg.rest.is_empty() {
+        None
+    } else {
+        match d.attr(AttrClass::Point, &cfg.rest).map(|a| &a.data) {
+            Some(AttrData::V3(v)) => Some(v.clone()),
+            _ => return Err(CookError::Failed(format!("attribnoise: no V3 point attribute `{}` for `rest`", cfg.rest))),
+        }
+    };
+    let pos = positions(d, cfg.class, rest_pos.as_deref().unwrap_or(d.p()));
+    let mask: Option<Vec<bool>> = if cfg.group.is_empty() || cfg.class == AttrClass::Detail {
+        None
+    } else {
+        let mut m = vec![false; d.class_len(cfg.class)];
+        for name in cfg.group.split_whitespace() {
+            let g = d
+                .group(cfg.class, name)
+                .ok_or_else(|| CookError::Failed(format!("attribnoise: unknown {:?} group `{name}`", cfg.class)))?;
+            for (s, b) in m.iter_mut().zip(&g.mask) {
+                *s |= *b;
+            }
+        }
+        Some(m)
+    };
     let Some(attr) = out.attr_mut(cfg.class, &cfg.attrib) else {
         return Err(CookError::Failed(format!("attribnoise: no {:?} attribute `{}`", cfg.class, cfg.attrib)));
     };
     let mut overflow = false;
     let ok = each_element(&mut attr.data, &mut |i, x| {
+        if mask.as_ref().is_some_and(|m| !m.get(i).copied().unwrap_or(false)) {
+            return;
+        }
         let p = pos.get(i).copied().unwrap_or([0.0; 3]);
         for (c, slot) in x.iter_mut().enumerate() {
             let v = cfg.amplitude * sample(cfg, p, c);
@@ -419,6 +499,20 @@ fn run(d: &Detail, cfg: &Config) -> Result<Detail, CookError> {
     }
     if overflow {
         return Err(CookError::Failed("attribnoise: result overflows f32".into()));
+    }
+    if cfg.update_normals && cfg.attrib == "P" {
+        let pp = mesh_positions(&out);
+        let n: Vec<[f32; 3]> = point_normals(&out, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
+        out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(n), type_info: TypeInfo::Normal });
+        if let Some(AttrData::V3(old)) = out.attr(AttrClass::Prim, "N").map(|a| a.data.clone()) {
+            let fresh: Vec<[f32; 3]> = (0..out.prims.len())
+                .map(|i| {
+                    let nrm = closed_poly_pts(&out, &out.prims[i]).and_then(|pts| prim_normal(&pp, &pts));
+                    nrm.map_or_else(|| old.get(i).copied().unwrap_or([0.0; 3]), |v| [v[0] as f32, v[1] as f32, v[2] as f32])
+                })
+                .collect();
+            out.add_attr(Attribute { name: "N".into(), class: AttrClass::Prim, data: AttrData::V3(fresh), type_info: TypeInfo::Normal });
+        }
     }
     Ok(out)
 }
@@ -504,7 +598,7 @@ mod tests {
             _ => panic!("no f32 `{name}`"),
         }
     }
-    const KINDS: [&str; 3] = ["perlin", "simplex", "white"];
+    const KINDS: [&str; 5] = ["perlin", "simplex", "white", "value", "worley"];
 
     #[test]
     fn perlin_is_zero_at_integer_lattice_points() {
@@ -691,7 +785,7 @@ mod tests {
         let d = cloud(5);
         assert!(matches!(cook(&d, &[("attrib", s("nope"))]), Err(CookError::Failed(_))));
         assert!(matches!(cook(&d, &[("attrib", s("P")), ("class", s("prim"))]), Err(CookError::Failed(_))));
-        for (k, v) in [("class", "blob"), ("noise", "worley"), ("operation", "xor"), ("attrib", "")] {
+        for (k, v) in [("class", "blob"), ("noise", "blob"), ("operation", "xor"), ("attrib", "")] {
             assert!(matches!(cook(&d, &[(k, s(v))]), Err(CookError::BadParam(_))), "{k}={v}");
         }
         let name = with_attr(d.clone(), "name", AttrClass::Point, AttrData::I32(vec![0; 5]));
@@ -712,6 +806,76 @@ mod tests {
         for kind in KINDS {
             let _ = cook(&huge, &[("noise", s(kind)), ("frequency", ParamValue::V3([1e30; 3]))]);
         }
+    }
+    fn w_attr(d: Detail) -> Detail {
+        let n = d.point_count as usize;
+        with_attr(d, "w", AttrClass::Point, AttrData::F32(vec![0.0; n]))
+    }
+    /// Value noise at an integer lattice point == the hashed lattice value; continuous (1e-4 step moves < 1e-2); bounded.
+    #[test]
+    fn value_noise_equals_lattice_value_on_the_lattice_and_is_continuous() {
+        let d = w_attr(points(&[[2.0, 3.0, -1.0], [0.0, 0.0, 0.0], [2.0001, 3.0, -1.0]]));
+        let o = cook(&d, &[("attrib", s("w")), ("noise", s("value")), ("operation", s("set"))]).expect("cooks");
+        let w = f32s(&o, "w");
+        assert!((f64::from(w[0]) - lattice_value(0, 0, 2, 3, -1)).abs() < 1e-6);
+        assert!((f64::from(w[1]) - lattice_value(0, 0, 0, 0, 0)).abs() < 1e-6);
+        assert!((w[2] - w[0]).abs() < 1e-2, "{} vs {}", w[0], w[2]);
+        let c = cook(&w_attr(cloud(500)), &[("attrib", s("w")), ("noise", s("value")), ("operation", s("set"))]).expect("cooks");
+        assert!(f32s(&c, "w").iter().all(|v| (-1.0..=1.0).contains(v)));
+    }
+    /// Worley at a feature point is exactly the minimum -1; every sample lies in [-1, 1] and not all equal.
+    #[test]
+    fn worley_is_minus_one_at_a_feature_point_and_bounded() {
+        let f = feature_point(0, 0, 0, 0, 0);
+        let d = w_attr(points(&[[f[0] as f32, f[1] as f32, f[2] as f32]]));
+        let o = cook(&d, &[("attrib", s("w")), ("noise", s("worley")), ("operation", s("set"))]).expect("cooks");
+        assert!((f32s(&o, "w")[0] + 1.0).abs() < 1e-4, "{}", f32s(&o, "w")[0]);
+        let c = cook(&w_attr(cloud(500)), &[("attrib", s("w")), ("noise", s("worley")), ("operation", s("set"))]).expect("cooks");
+        let w = f32s(&c, "w");
+        assert!(w.iter().all(|v| (-1.0..=1.0).contains(v)));
+        assert!(w.iter().any(|v| (v - w[0]).abs() > 0.05));
+    }
+    /// Group of the first 50 of 100 points: only those move; the rest are bit-identical.
+    #[test]
+    fn group_limits_noise_to_members() {
+        let mut src = cloud(100);
+        src.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Point, mask: (0..100).map(|i| i < 50).collect() });
+        let o = cook(&src, &[("group", s("g"))]).expect("cooks");
+        for i in 0..100 {
+            if i < 50 {
+                assert_ne!(o.p()[i], src.p()[i], "member {i} did not move");
+            } else {
+                assert_eq!(o.p()[i], src.p()[i], "non-member {i} moved");
+            }
+        }
+        assert!(matches!(cook(&src, &[("group", s("nope"))]), Err(CookError::Failed(_))));
+    }
+    /// `rest`: noise samples the rest attribute, not P -> identical rest positions give identical values; no rest attr = Failed.
+    #[test]
+    fn rest_attribute_drives_the_sample_position() {
+        let src = cloud(20);
+        let src = with_attr(src, "rest", AttrClass::Point, AttrData::V3(vec![[1.5, 2.5, 3.5]; 20]));
+        let src = w_attr(src);
+        let o = cook(&src, &[("attrib", s("w")), ("operation", s("set")), ("rest", s("rest"))]).expect("cooks");
+        let w = f32s(&o, "w");
+        assert!(w.iter().all(|v| *v == w[0]));
+        let plain = f32s(&cook(&src, &[("attrib", s("w")), ("operation", s("set"))]).expect("cooks"), "w");
+        assert!(plain.iter().any(|v| *v != plain[0]));
+        assert!(matches!(cook(&src, &[("rest", s("nope"))]), Err(CookError::Failed(_))));
+    }
+    /// updatenormals on a flat quad (amp 0): point N = (0,0,+-1), existing prim N refreshed; off = no N written.
+    #[test]
+    fn updatenormals_recomputes_point_and_existing_prim_normals() {
+        let mut q = points(&[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]]);
+        q.add_poly(&[0, 1, 2, 3], true);
+        let q = with_attr(q, "N", AttrClass::Prim, AttrData::V3(vec![[9.0, 9.0, 9.0]]));
+        let off = cook(&q, &[("amplitude", ParamValue::F(0.0))]).expect("cooks");
+        assert!(off.attr(AttrClass::Point, "N").is_none());
+        let on = cook(&q, &[("amplitude", ParamValue::F(0.0)), ("updatenormals", ParamValue::B(true))]).expect("cooks");
+        let Some(AttrData::V3(n)) = on.attr(AttrClass::Point, "N").map(|a| &a.data) else { panic!("N") };
+        assert!(n.iter().all(|v| v[0].abs() < 1e-6 && v[1].abs() < 1e-6 && (v[2].abs() - 1.0).abs() < 1e-6));
+        let Some(AttrData::V3(pn)) = on.attr(AttrClass::Prim, "N").map(|a| &a.data) else { panic!("prim N") };
+        assert!(pn[0][0].abs() < 1e-6 && (pn[0][2].abs() - 1.0).abs() < 1e-6, "{:?}", pn[0]);
     }
     #[test]
     fn defaults_match_the_brief() {
