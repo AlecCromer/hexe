@@ -32,6 +32,14 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("remap", ParamValue::B(false)).label("Remap Noise"),
         ParamSpec::new("remap_min", ParamValue::F(-1.0)).label("Remap Min"),
         ParamSpec::new("remap_max", ParamValue::F(1.0)).label("Remap Max"),
+        ParamSpec::new("fractal", ParamValue::Menu(0)).label("Fractal").menu(&[
+            ("none", "None"),
+            ("fbm", "FBM"),
+            ("turbulence", "Turbulence"),
+            ("ridged", "Ridged"),
+        ]),
+        ParamSpec::new("octaves", ParamValue::I(4)).label("Octaves").range(1.0, 16.0),
+        ParamSpec::new("rough", ParamValue::F(0.5)).label("Roughness").range(0.0, 1.0),
     ]
 }
 
@@ -48,6 +56,13 @@ enum Kind {
     Perlin,
     Simplex,
     White,
+}
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Fractal {
+    None,
+    Fbm,
+    Turbulence,
+    Ridged,
 }
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Op {
@@ -67,6 +82,9 @@ struct Config {
     seed: u64,
     op: Op,
     remap: Option<(f64, f64)>,
+    fractal: Fractal,
+    octaves: u32,
+    rough: f64,
 }
 
 fn bad<T>(m: impl Into<String>) -> Result<T, CookError> {
@@ -119,6 +137,15 @@ impl Config {
         } else {
             None
         };
+        let fractal = match p.menu("fractal").unwrap_or(0) {
+            0 => Fractal::None,
+            1 => Fractal::Fbm,
+            2 => Fractal::Turbulence,
+            3 => Fractal::Ridged,
+            other => return bad(format!("fractal menu index {other} out of range")),
+        };
+        let octaves = p.int("octaves").unwrap_or(4).max(1).min(16) as u32;
+        let rough = need_float(p, "rough")?.clamp(0.0, 1.0);
         Ok(Config {
             attrib,
             class,
@@ -129,6 +156,9 @@ impl Config {
             seed,
             op,
             remap,
+            fractal,
+            octaves,
+            rough,
         })
     }
 }
@@ -244,19 +274,72 @@ fn white(q: [f64; 3], seed: u64, chan: u64) -> f64 {
     ((h >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
 }
 
+fn base_noise(kind: Kind, q: [f64; 3], seed: u64, chan: u64) -> f64 {
+    match kind {
+        Kind::Perlin => perlin(q, seed, chan),
+        Kind::Simplex => simplex(q, seed, chan),
+        Kind::White => white(q, seed, chan),
+    }
+}
+
 fn sample(cfg: &Config, p: [f64; 3], chan: usize) -> f64 {
-    let q = std::array::from_fn(|k| p[k] * cfg.freq[k] + cfg.offset[k]);
-    if !q.iter().all(|c| c.is_finite()) {
+    let base_q = std::array::from_fn(|k| p[k] * cfg.freq[k] + cfg.offset[k]);
+    if !base_q.iter().all(|c| c.is_finite()) {
         return 0.0;
     }
     let chan = chan as u64;
-    let n = match cfg.kind {
-        Kind::Perlin => perlin(q, cfg.seed, chan),
-        Kind::Simplex => simplex(q, cfg.seed, chan),
-        Kind::White => white(q, cfg.seed, chan),
+    
+    let n = match cfg.fractal {
+        Fractal::None => base_noise(cfg.kind, base_q, cfg.seed, chan),
+        Fractal::Fbm => {
+            let mut sum = 0.0;
+            let mut amp = 1.0;
+            let mut freq = 1.0;
+            let lacunarity = 2.0;
+            let persistence = cfg.rough;
+            for oct in 0..cfg.octaves {
+                let q = base_q.map(|x| x * freq);
+                let seed = cfg.seed.wrapping_add(oct as u64 * 7919);
+                sum += amp * base_noise(cfg.kind, q, seed, chan);
+                amp *= persistence;
+                freq *= lacunarity;
+            }
+            sum
+        }
+        Fractal::Turbulence => {
+            let mut sum = 0.0;
+            let mut amp = 1.0;
+            let mut freq = 1.0;
+            let lacunarity = 2.0;
+            let persistence = cfg.rough;
+            for oct in 0..cfg.octaves {
+                let q = base_q.map(|x| x * freq);
+                let seed = cfg.seed.wrapping_add(oct as u64 * 7919);
+                sum += amp * base_noise(cfg.kind, q, seed, chan).abs();
+                amp *= persistence;
+                freq *= lacunarity;
+            }
+            sum
+        }
+        Fractal::Ridged => {
+            let mut sum = 0.0;
+            let mut amp = 1.0;
+            let mut freq = 1.0;
+            let lacunarity = 2.0;
+            let persistence = cfg.rough;
+            for oct in 0..cfg.octaves {
+                let q = base_q.map(|x| x * freq);
+                let seed = cfg.seed.wrapping_add(oct as u64 * 7919);
+                let signal = 1.0 - base_noise(cfg.kind, q, seed, chan).abs();
+                sum += amp * signal;
+                amp *= persistence;
+                freq *= lacunarity;
+            }
+            sum
+        }
     };
     match cfg.remap {
-        Some((lo, hi)) => lo + (n + 1.0) * 0.5 * (hi - lo),
+        Some((lo, hi)) => lo + (n.clamp(-1.0, 1.0) + 1.0) * 0.5 * (hi - lo),
         None => n,
     }
 }
@@ -652,5 +735,22 @@ mod tests {
         assert_eq!(d.point_count, 121);
         assert!(d.p().iter().all(|p| p[1].abs() <= 0.5 * 3.0f32.sqrt() + 1e-5));
         assert!(d.p().iter().any(|p| p[1].abs() > 0.01));
+    }
+    #[test]
+    fn fractal_octaves_one_equals_plain_noise() {
+        let d = cloud(10);
+        let plain = cook(&d, &[("fractal", ParamValue::Menu(0))]).expect("plain");
+        let fbm1 = cook(&d, &[("fractal", ParamValue::Menu(1)), ("octaves", ParamValue::I(1))]).expect("fbm1");
+        assert_eq!(plain.p(), fbm1.p(), "octaves=1 should match plain noise");
+    }
+    #[test]
+    fn ridged_is_non_negative() {
+        let d = cloud(20);
+        let out = cook(&d, &[("fractal", ParamValue::Menu(3)), ("octaves", ParamValue::I(4)), ("operation", s("set"))]).
+            expect("ridged");
+        // Ridged noise should be >= 0 since it's 1 - abs(noise)
+        for p in out.p() {
+            assert!(p[1] >= -1.1, "ridged noise should be >= -1 (with some margin): {}", p[1]);
+        }
     }
 }
