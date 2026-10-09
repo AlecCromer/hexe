@@ -1,7 +1,11 @@
 {
   "nodes": [
     { "name": "box1", "type": "box" },
+<<<<<<< HEAD
     { "name": "facet1", "type": "facet", "params": { "unique_points": true, "cusp": false, "cusp_angle": 60 } }
+=======
+    { "name": "facet1", "type": "facet", "params": { "unique_points": true } }
+>>>>>>> 1f0035f (sop-facet: example scene (box + facet unique_points))
   ],
   "edges": [["box1", 0, "facet1", 0]],
   "display": "facet1"
