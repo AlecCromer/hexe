@@ -124,6 +124,21 @@ impl Mesh {
         }
         g
     }
+    /// `finish_with`, but new points blend source points by explicit weights (`pt_w`, one list per new point; floats =
+    /// weighted mean, int / string = heaviest source); prim attrs still follow the `cur_prim` stamps.
+    pub fn finish_blended(self, src: &Detail, pt_w: &[Vec<(usize, f64)>]) -> Detail {
+        let qsrc = self.prim_src.clone();
+        let mut g = self.finish();
+        for a in &src.attrs {
+            let data = match a.class {
+                AttrClass::Point if a.name != "P" => super::meshutil::blend_weighted(&a.data, pt_w),
+                AttrClass::Prim => super::meshutil::gather(&a.data, &qsrc),
+                _ => continue,
+            };
+            g.add_attr(Attribute { name: a.name.clone(), class: a.class, data, type_info: a.type_info });
+        }
+        g
+    }
     /// Final `Detail`: points, closed polys, vertex `uv`.
     pub fn finish(self) -> Detail {
         let mut g = Detail::default();

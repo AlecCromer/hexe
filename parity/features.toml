@@ -1212,9 +1212,13 @@ evidence = [
   "crates/sop/src/builtins/skin_sop.rs::mismatched_counts_resample_to_the_largest_or_fail",
   "crates/sop/src/builtins/skin_sop.rs::open_curves_make_an_open_sheet_and_mixed_closure_is_open",
   "crates/sop/src/builtins/skin_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/skin_sop.rs::divs_insert_linear_stations_between_sections",
+  "crates/sop/src/builtins/skin_sop.rs::smooth_keepshape_off_is_catmull_rom_exact_for_quadratic_profiles",
+  "crates/sop/src/builtins/skin_sop.rs::order_menu_reorders_the_sections",
+  "crates/sop/src/builtins/skin_sop.rs::point_and_prim_attrs_are_inherited_with_the_loft_weights",
   "crates/sop/src/builtins/skin_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "S2: surftype(quads|triangles) closev(off, needs >=3 sections) resample(on). Sections = curve prims in prim order; closed in u iff ALL closed; differing point counts resample by arclength to the largest count (off -> Failed). Straight ruled loft, Houdini normal = u x v (CCW rings lofted along +axis -> outward). Vertex uv V3. NOT modelled (DEFERRED): keepshape/knot interpolation, uniform, order, extra divs between sections, NURBS output, attribute carry. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini skin has surftype/keepshape/closeu/closev/prim-order), section order, resample rule. Example: examples/skin.json. Analytical oracle only."
+notes = "S2: surftype(quads|triangles) closev(off, needs >=3 sections) resample(on). Sections = curve prims in prim order; closed in u iff ALL closed; differing point counts resample by arclength to the largest count (off -> Failed). Straight ruled loft, Houdini normal = u x v (CCW rings lofted along +axis -> outward). Vertex uv V3. QB: order menu (prim|reverse|x|y|z), divs (extra stations per section pair), keepshape (on = ruled; off = Catmull-Rom/Barry-Goldman through sections, exact for quadratic profiles) + uniform (uniform vs chord-length knots), carryattrs (point attrs via loft weights, prim attrs from section s). REMAINING: NURBS output (no such prim kind in hexe-geo). UNVERIFIED vs Houdini (hython blocked): parm set (Houdini skin has surftype/keepshape/closeu/closev/prim-order), section order, resample rule. Example: examples/skin.json. Analytical oracle only."
 
 [[feature]]
 id = "sop-polyfill"
