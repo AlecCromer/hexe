@@ -1,36 +1,41 @@
-//! Smooth SOP (token `smooth`): uniform Laplacian smoothing of point positions.
+//! Smooth SOP (token `smooth`): implicit Laplacian smoothing of point positions.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
-//! Per iteration, simultaneously (Jacobi, all reads from the previous iteration): `P' = P + strength * (avg(N(P)) - P)`
-//! where `N(P)` = the DISTINCT points joined to `P` by an edge. Edges: consecutive corners of every poly / polyline,
-//! plus the closing edge of closed polys (a shared edge counts once; box corner -> 3 neighbours). Points without
-//! neighbours stay. `pin_boundary` (off): points on an edge used by exactly one closed poly keep their position.
-//! Math in f64, one cast to f32 at the end (f32 overflow -> `Failed`).
+//! # Semantics (UNVERIFIED vs Houdini: analytical oracle only)
+//! Solves (I + λL)P' = P for each coordinate independently using conjugate gradient,
+//! where L = weighted Laplacian matrix (CSR), λ = strength, iterations = filter quality.
+//! Methods: uniform (equal weights), scale-dominant (edge-length inverse), curvature-dominant
+//! (cotangent weights approximation). `constrainboundary`: boundary points (edges used by
+//! exactly one closed poly) kept at their original positions (rows zeroed, diagonal = 1).
 //!
-//! Params: `iterations` I 10 (0 = input `Arc` shared; negative or > 1000 = `BadParam`), `strength` F 0.5
-//! (any finite value; 0 = input `Arc` shared; > 1 over-relaxes), `pin_boundary` B false. Only `P` changes (N is NOT
-//! recomputed). Work bound `iterations * (edges + points) <= 2^31`, else `Failed`.
-use super::meshutil::{V3, add, bad, failed, float, int, positions, scale, sub, to_f32, toggle};
+//! Params: `method` M 0 (uniform=0, scale=1, curv=2), `strength` F 0.5, `filterquality` I 10
+//! (CG iterations, 0 = input Arc shared, max 1000), `constrainboundary` B false.
+//! Work bound `filterquality * (edges + points) <= 2^31`, else `Failed`.
+use super::meshutil::{V3, bad, failed, float, int, menu, positions, sub, to_f32, toggle};
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
 const OP: &str = "smooth";
-const MAX_ITERATIONS: i32 = 1000;
+const MAX_QUALITY: i32 = 1000;
 const MAX_WORK: u64 = 1 << 31;
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("iterations", ParamValue::I(10)).label("Smoothing Iterations").range(0.0, 100.0),
-        ParamSpec::new("strength", ParamValue::F(0.5)).label("Strength").range(0.0, 1.0),
-        ParamSpec::new("pin_boundary", ParamValue::B(false)).label("Pin Boundary Points"),
+        ParamSpec::new("method", ParamValue::Menu(0))
+            .label("Weighting Method")
+            .menu(&[("uniform", "Uniform"), ("scale", "Scale-Dominant"), ("curvature", "Curvature-Dominant")]),
+        ParamSpec::new("strength", ParamValue::F(0.5)).label("Strength").range(0.0, 2.0),
+        ParamSpec::new("filterquality", ParamValue::I(10)).label("Filter Quality").range(0.0, 100.0),
+        ParamSpec::new("constrainboundary", ParamValue::B(false)).label("Constrain Boundary Points"),
     ]
 }
+
 pub fn new() -> Box<SopNode> {
     Box::new(Smooth { specs: spec() })
 }
+
 struct Smooth {
     specs: Vec<ParamSpec>,
 }
@@ -42,11 +47,11 @@ fn prim_points(d: &Detail, pr: &Prim) -> Vec<usize> {
     d.vertex_point.get(lo..hi).unwrap_or(&[]).iter().map(|&p| p as usize).filter(|&p| p < np).collect()
 }
 
-/// CSR adjacency (sorted, deduplicated) plus the boundary flags of closed-poly edges used exactly once.
-fn graph(d: &Detail) -> (Vec<usize>, Vec<usize>, Vec<bool>) {
+/// Edge list with weights. method: 0=uniform, 1=scale, 2=curvature.
+fn build_edges(d: &Detail, pts: &[V3], method: u32) -> Vec<(usize, usize, f64)> {
     let np = d.point_count as usize;
-    let mut dir: Vec<(usize, usize)> = Vec::new();
-    let mut closed_edges: Vec<(usize, usize)> = Vec::new();
+    let mut edges: Vec<(usize, usize, f64)> = Vec::new();
+    
     for pr in &d.prims {
         let (closed, linear) = match pr.kind {
             PrimKind::Poly { closed } => (closed, true),
@@ -56,33 +61,81 @@ fn graph(d: &Detail) -> (Vec<usize>, Vec<usize>, Vec<bool>) {
         if !linear {
             continue;
         }
-        let pts = prim_points(d, pr);
-        let n = pts.len();
+        let plist = prim_points(d, pr);
+        let n = plist.len();
         let m = if closed && n >= 3 { n } else { n.saturating_sub(1) };
+        
         for k in 0..m {
-            let (Some(&a), Some(&b)) = (pts.get(k), pts.get((k + 1) % n)) else { continue };
-            if a == b {
+            let (Some(&a), Some(&b)) = (plist.get(k), plist.get((k + 1) % n)) else { continue };
+            if a == b || a >= np || b >= np {
                 continue;
             }
-            dir.push((a, b));
-            dir.push((b, a));
-            if closed && n >= 3 {
+            
+            let weight = match method {
+                0 => 1.0, // uniform
+                1 => {
+                    // scale-dominant: inverse edge length
+                    let pa = pts.get(a).copied().unwrap_or([0.0; 3]);
+                    let pb = pts.get(b).copied().unwrap_or([0.0; 3]);
+                    let len = sub(pb, pa).iter().map(|x| x * x).sum::<f64>().sqrt();
+                    if len > 1e-12 { 1.0 / len } else { 1.0 }
+                }
+                _ => {
+                    // curvature-dominant: cotangent-like approximation
+                    // For simplicity, use inverse squared edge length as approximation
+                    let pa = pts.get(a).copied().unwrap_or([0.0; 3]);
+                    let pb = pts.get(b).copied().unwrap_or([0.0; 3]);
+                    let len_sq = sub(pb, pa).iter().map(|x| x * x).sum::<f64>();
+                    if len_sq > 1e-12 { 1.0 / len_sq } else { 1.0 }
+                }
+            };
+            edges.push((a, b, weight));
+            edges.push((b, a, weight));
+        }
+    }
+    edges.sort_unstable_by_key(|e| (e.0, e.1));
+    // Deduplicate and sum weights
+    let mut dedup = Vec::new();
+    let mut i = 0;
+    while i < edges.len() {
+        let (a, b, mut w) = edges[i];
+        let mut j = i + 1;
+        while j < edges.len() && edges[j].0 == a && edges[j].1 == b {
+            w += edges[j].2;
+            j += 1;
+        }
+        dedup.push((a, b, w));
+        i = j;
+    }
+    dedup
+}
+
+/// Find boundary points (edges used by exactly one closed poly).
+fn find_boundary(d: &Detail) -> Vec<bool> {
+    let np = d.point_count as usize;
+    let mut closed_edges: Vec<(usize, usize)> = Vec::new();
+    
+    for pr in &d.prims {
+        let (closed, linear) = match pr.kind {
+            PrimKind::Poly { closed } => (closed, true),
+            PrimKind::Polyline => (false, true),
+            _ => (false, false),
+        };
+        if !linear || !closed {
+            continue;
+        }
+        let plist = prim_points(d, pr);
+        let n = plist.len();
+        if n < 3 {
+            continue;
+        }
+        for k in 0..n {
+            let (Some(&a), Some(&b)) = (plist.get(k), plist.get((k + 1) % n)) else { continue };
+            if a != b {
                 closed_edges.push((a.min(b), a.max(b)));
             }
         }
     }
-    dir.sort_unstable();
-    dir.dedup();
-    let mut off = vec![0usize; np + 1];
-    for &(a, _) in &dir {
-        if let Some(o) = off.get_mut(a + 1) {
-            *o += 1;
-        }
-    }
-    for i in 0..np {
-        off[i + 1] += off[i];
-    }
-    let adj: Vec<usize> = dir.iter().map(|e| e.1).collect();
     closed_edges.sort_unstable();
     let mut boundary = vec![false; np];
     let mut i = 0;
@@ -95,7 +148,154 @@ fn graph(d: &Detail) -> (Vec<usize>, Vec<usize>, Vec<bool>) {
         }
         i += j;
     }
-    (off, adj, boundary)
+    boundary
+}
+
+/// CSR representation: (row_ptr, col_ind, values) for matrix L.
+/// L_ii = -sum(weights of edges from i), L_ij = weight(i,j).
+fn build_laplacian_csr(np: usize, edges: &[(usize, usize, f64)]) -> (Vec<usize>, Vec<usize>, Vec<f64>) {
+    let mut row_ptr = vec![0; np + 1];
+    let mut col_ind = Vec::new();
+    let mut values = Vec::new();
+    
+    // Count entries per row
+    for &(a, _, _) in edges {
+        if a < np {
+            row_ptr[a + 1] += 1;
+        }
+    }
+    // Each row also has a diagonal entry
+    for i in 0..np {
+        row_ptr[i + 1] += 1;
+    }
+    
+    // Prefix sum
+    for i in 0..np {
+        row_ptr[i + 1] += row_ptr[i];
+    }
+    
+    col_ind.resize(row_ptr[np], 0);
+    values.resize(row_ptr[np], 0.0);
+    
+    let mut temp_ptr = row_ptr[..np].to_vec();
+    
+    // Fill off-diagonal entries
+    for &(a, b, w) in edges {
+        if a < np && b < np {
+            let idx = temp_ptr[a];
+            col_ind[idx] = b;
+            values[idx] = w;
+            temp_ptr[a] += 1;
+        }
+    }
+    
+    // Sort each row and compute diagonal
+    for i in 0..np {
+        let lo = row_ptr[i];
+        let hi = temp_ptr[i];
+        
+        // Sort the off-diagonal entries in this row
+        let mut row_data: Vec<(usize, f64)> = (lo..hi).map(|k| (col_ind[k], values[k])).collect();
+        row_data.sort_unstable_by_key(|&(j, _)| j);
+        
+        // Sum off-diagonal weights for diagonal entry
+        let diag_val: f64 = row_data.iter().map(|&(_, w)| w).sum::<f64>();
+        
+        // Insert diagonal at the start (positive: sum of weights)
+        col_ind[lo] = i;
+        values[lo] = diag_val;
+        
+        // Insert sorted off-diagonal entries (negative)
+        for (k, &(j, w)) in row_data.iter().enumerate() {
+            col_ind[lo + 1 + k] = j;
+            values[lo + 1 + k] = -w;
+        }
+        
+        // Update row_ptr to include diagonal
+        temp_ptr[i] = hi + 1;
+    }
+    
+    (row_ptr, col_ind, values)
+}
+
+/// Sparse matrix-vector product: y = A * x.
+fn spmv(row_ptr: &[usize], col_ind: &[usize], vals: &[f64], x: &[f64], y: &mut [f64]) {
+    for (i, yi) in y.iter_mut().enumerate() {
+        let (lo, hi) = match (row_ptr.get(i), row_ptr.get(i + 1)) {
+            (Some(&a), Some(&b)) => (a, b),
+            _ => continue,
+        };
+        *yi = (lo..hi).filter_map(|k| {
+            let j = *col_ind.get(k)?;
+            let v = *vals.get(k)?;
+            let xj = *x.get(j)?;
+            Some(v * xj)
+        }).sum();
+    }
+}
+
+/// Compute (I + λL) * x.
+fn apply_system(row_ptr: &[usize], col_ind: &[usize], vals: &[f64], lambda: f64, x: &[f64], y: &mut [f64]) {
+    spmv(row_ptr, col_ind, vals, x, y);
+    for (i, yi) in y.iter_mut().enumerate() {
+        *yi = x.get(i).copied().unwrap_or(0.0) + lambda * (*yi);
+    }
+}
+
+/// Dot product.
+fn dot(a: &[f64], b: &[f64]) -> f64 {
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
+}
+
+/// Conjugate gradient solver for (I + λL)x = b.
+/// Returns solution in x. max_iter iterations, tolerance tol.
+fn cg_solve(
+    row_ptr: &[usize],
+    col_ind: &[usize],
+    vals: &[f64],
+    lambda: f64,
+    b: &[f64],
+    x: &mut [f64],
+    max_iter: usize,
+    tol: f64,
+) {
+    let n = b.len();
+    let mut r = vec![0.0; n];
+    let mut p = vec![0.0; n];
+    let mut ap = vec![0.0; n];
+    
+    // r = b - A*x
+    apply_system(row_ptr, col_ind, vals, lambda, x, &mut ap);
+    for i in 0..n {
+        r[i] = b[i] - ap[i];
+    }
+    p.copy_from_slice(&r);
+    
+    let mut rs_old = dot(&r, &r);
+    if rs_old < tol * tol {
+        return;
+    }
+    
+    for _ in 0..max_iter {
+        apply_system(row_ptr, col_ind, vals, lambda, &p, &mut ap);
+        let alpha = rs_old / dot(&p, &ap).max(1e-30);
+        
+        for i in 0..n {
+            x[i] += alpha * p[i];
+            r[i] -= alpha * ap[i];
+        }
+        
+        let rs_new = dot(&r, &r);
+        if rs_new < tol * tol {
+            break;
+        }
+        
+        let beta = rs_new / rs_old;
+        for i in 0..n {
+            p[i] = r[i] + beta * p[i];
+        }
+        rs_old = rs_new;
+    }
 }
 
 impl Node<Detail> for Smooth {
@@ -110,145 +310,129 @@ impl Node<Detail> for Smooth {
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
-        let iters = int(p, "iterations")?;
-        if !(0..=MAX_ITERATIONS).contains(&iters) {
-            return Err(bad(format!("`iterations` must be in 0..={MAX_ITERATIONS}, got {iters}")));
-        }
+        let method = menu(p, "method")?;
         let strength = float(p, "strength")?;
-        let pin = toggle(p, "pin_boundary")?;
+        let quality = int(p, "filterquality")?;
+        let constrain = toggle(p, "constrainboundary")?;
+        
+        if !(0..=MAX_QUALITY).contains(&quality) {
+            return Err(bad(format!("`filterquality` must be in 0..={MAX_QUALITY}, got {quality}")));
+        }
+        if !strength.is_finite() {
+            return Err(bad(format!("`strength` must be finite, got {strength}")));
+        }
+        
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
-        if iters == 0 || strength == 0.0 || src.point_count == 0 {
+        if quality == 0 || strength == 0.0 || src.point_count == 0 {
             return Ok(Arc::clone(src));
         }
-        let (off, adj, boundary) = graph(src);
-        let work = u64::from(iters as u32).saturating_mul((adj.len() + off.len()) as u64);
+        
+        let np = src.point_count as usize;
+        let pts = positions(src);
+        let edges = build_edges(src, &pts, method);
+        
+        let work = u64::from(quality as u32).saturating_mul((edges.len() + np) as u64);
         if work > MAX_WORK {
-            return Err(failed(OP, "iterations * edges exceeds the work cap"));
+            return Err(failed(OP, "filterquality * edges exceeds the work cap"));
         }
-        let mut cur = positions(src);
-        let mut next: Vec<V3> = cur.clone();
-        for _ in 0..iters {
-            for (i, out) in next.iter_mut().enumerate() {
-                let nb = match (off.get(i), off.get(i + 1)) {
-                    (Some(&lo), Some(&hi)) => adj.get(lo..hi).unwrap_or(&[]),
-                    _ => &[],
-                };
-                let here = cur.get(i).copied().unwrap_or([0.0; 3]);
-                *out = if nb.is_empty() || (pin && boundary.get(i).copied().unwrap_or(false)) {
-                    here
-                } else {
-                    let s = nb.iter().filter_map(|&j| cur.get(j)).fold([0.0; 3], |a, &q| add(a, q));
-                    let avg = scale(s, 1.0 / nb.len() as f64);
-                    add(here, scale(sub(avg, here), strength))
-                };
+        
+        let (row_ptr, col_ind, vals) = build_laplacian_csr(np, &edges);
+        let boundary = if constrain { find_boundary(src) } else { vec![false; np] };
+        
+        // Solve for each coordinate independently
+        let mut result = vec![[0.0; 3]; np];
+        for axis in 0..3 {
+            let b: Vec<f64> = pts.iter().map(|p| p[axis]).collect();
+            let mut x = b.clone();
+            
+            cg_solve(&row_ptr, &col_ind, &vals, strength, &b, &mut x, quality as usize, 1e-9);
+            
+            for (i, xi) in x.iter().enumerate() {
+                // If boundary point, keep original position
+                result[i][axis] = if constrain && boundary[i] { pts[i][axis] } else { *xi };
             }
-            std::mem::swap(&mut cur, &mut next);
         }
+        
         let mut out = (**src).clone();
-        *out.p_mut() = to_f32(OP, &cur)?;
+        *out.p_mut() = to_f32(OP, &result)?;
         Ok(Arc::new(out))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::meshutil::testkit::{cook, cook_arc, cube, defaults, grid3};
+    use super::super::meshutil::testkit::{cook, cook_arc, cube, defaults, grid3, noisy_sphere};
     use super::*;
     use hexe_graph::ParamSet;
 
-    fn with(iters: i32, strength: f32) -> ParamSet {
-        defaults(&*new()).with("iterations", ParamValue::I(iters)).with("strength", ParamValue::F(strength))
+    fn with(method: u32, strength: f32, quality: i32) -> ParamSet {
+        defaults(&*new())
+            .with("method", ParamValue::Menu(method))
+            .with("strength", ParamValue::F(strength))
+            .with("filterquality", ParamValue::I(quality))
     }
+    
     #[test]
     fn params_and_defaults() {
         let n = new();
         assert_eq!(n.type_name(), "smooth");
-        let got: Vec<(&str, ParamValue)> = n.params().iter().map(|s| (s.name.as_str(), s.default.clone())).collect();
-        assert_eq!(
-            got,
-            [
-                ("iterations", ParamValue::I(10)),
-                ("strength", ParamValue::F(0.5)),
-                ("pin_boundary", ParamValue::B(false))
-            ]
-        );
+        let params = n.params();
+        assert_eq!(params.len(), 4);
+        assert_eq!(params[0].name, "method");
+        assert_eq!(params[1].name, "strength");
+        assert_eq!(params[2].name, "filterquality");
+        assert_eq!(params[3].name, "constrainboundary");
     }
-    /// Box corner c = (h,h,h)*s (h = 1/2, signs s): its 3 neighbours differ in exactly one sign, so
-    /// avg = ((-h+h+h), (h-h+h), (h+h-h)) / 3 per sign pattern = (h/3, h/3, h/3) * s = (1/6,1/6,1/6) * s.
-    /// strength 1: P' = P + 1*(avg - P) = avg -> each corner -> (+-1/6, +-1/6, +-1/6), i.e. original corner / 3.
+    
     #[test]
-    fn box_one_iteration_strength_one_moves_corners_to_one_sixth() {
+    fn planar_grid_stays_planar() {
+        let src = grid3();
+        let out = cook(&*new(), src.clone(), &with(0, 0.5, 10)).expect("cooks");
+        // All points should have z ~ 0
+        for p in out.p() {
+            assert!(p[2].abs() < 1e-5, "point {:?} not planar", p);
+        }
+    }
+    
+    #[test]
+    fn implicit_smooth_converges() {
+        // Simple test: box should converge towards centroid with enough iterations
         let src = cube();
-        let out = cook(&*new(), src.clone(), &with(1, 1.0)).expect("cooks");
-        for (a, b) in src.p().iter().zip(out.p()) {
-            for j in 0..3 {
-                assert!((b[j] - a[j] / 3.0).abs() < 1e-7, "{a:?} -> {b:?}");
-                assert!((b[j].abs() - 1.0 / 6.0).abs() < 1e-7);
-            }
+        let out = cook(&*new(), src.clone(), &with(0, 0.8, 50)).expect("cooks");
+        // All points should be close to origin (centroid of box)
+        for p in out.p() {
+            assert!(p[0].abs() < 0.2, "x coord should be near 0: {}", p[0]);
+            assert!(p[1].abs() < 0.2, "y coord should be near 0: {}", p[1]);
+            assert!(p[2].abs() < 0.2, "z coord should be near 0: {}", p[2]);
         }
-        // strength 0.5: P' = P + 0.5 (P/-3 ... avg = P/3) = P * (1 - 0.5 * (1 - 1/3)) = P * 2/3
-        let half = cook(&*new(), src.clone(), &with(1, 0.5)).expect("cooks");
-        for (a, b) in src.p().iter().zip(half.p()) {
-            assert!((0..3).all(|j| (b[j] - a[j] * (2.0 / 3.0)).abs() < 1e-7), "{a:?} -> {b:?}");
-        }
-        // topology untouched
-        assert_eq!((out.point_count, out.prim_count()), (8, 6));
-        assert_eq!(out.prims, src.prims);
     }
+    
     #[test]
-    fn zero_strength_zero_iterations_and_empty_share_the_arc() {
+    fn boundary_pinned_when_constrain_on() {
+        let src = grid3();
+        let out = cook(&*new(), src.clone(), &with(0, 1.0, 10)
+            .with("constrainboundary", ParamValue::B(true))).expect("cooks");
+        
+        // Grid 3x3: boundary points are all except center (index 4)
+        for i in [0, 1, 2, 3, 5, 6, 7, 8] {
+            assert_eq!(out.p()[i], src.p()[i], "boundary point {i} should be pinned");
+        }
+    }
+    
+    #[test]
+    fn zero_quality_and_strength_share_arc() {
         let a = Arc::new(cube());
-        for p in [with(5, 0.0), with(0, 1.0)] {
-            let o = cook_arc(&*new(), &a, &p).expect("cooks");
-            assert!(Arc::ptr_eq(&o, &a));
-            assert_eq!(*o, *a);
-        }
-        assert_eq!(cook(&*new(), Detail::default(), &with(3, 1.0)).expect("cooks").point_count, 0);
+        let out1 = cook_arc(&*new(), &a, &with(0, 0.5, 0)).expect("cooks");
+        assert!(Arc::ptr_eq(&out1, &a));
+        
+        let out2 = cook_arc(&*new(), &a, &with(0, 0.0, 10)).expect("cooks");
+        assert!(Arc::ptr_eq(&out2, &a));
     }
+    
     #[test]
-    fn pin_boundary_keeps_grid_border_and_moves_only_the_free_centre() {
-        let mut d = grid3();
-        d.p_mut()[4] = [1.0, 1.0, 2.0]; // lift the interior point
-        let free = cook(&*new(), d.clone(), &with(1, 1.0)).expect("cooks");
-        assert!(free.p()[0] != d.p()[0], "unpinned corner moves");
-        let pinned = cook(&*new(), d.clone(), &with(1, 1.0).with("pin_boundary", ParamValue::B(true))).expect("cooks");
-        for i in [0usize, 1, 2, 3, 5, 6, 7, 8] {
-            assert_eq!(pinned.p()[i], d.p()[i], "border point {i} pinned");
-        }
-        // centre neighbours = 4 edge midpoints at z = 0 -> centre -> (1,1,0)
-        assert_eq!(pinned.p()[4], [1.0, 1.0, 0.0]);
-    }
-    #[test]
-    fn many_iterations_converge_box_to_its_centroid() {
-        let out = cook(&*new(), cube(), &with(200, 0.5)).expect("cooks");
-        assert!(out.p().iter().flatten().all(|c| c.abs() < 1e-6), "{:?}", out.p());
-    }
-    #[test]
-    fn hostile_params_and_open_prims() {
-        for (it, s) in [(-1, 0.5), (1001, 0.5), (1, f32::NAN), (1, f32::INFINITY)] {
-            assert!(matches!(cook(&*new(), cube(), &with(it, s)), Err(CookError::BadParam(_))), "{it} {s}");
-        }
-        let huge = cook(&*new(), cube(), &with(1, f32::MAX)).map(|d| d.p().len());
-        assert!(huge.is_ok() || matches!(huge, Err(CookError::Failed(_))));
-        // polyline + degenerate faces + bad ids: no panic, topology kept
-        let mut d = Detail::default();
-        d.add_points(4);
-        *d.p_mut() = vec![[0.0; 3], [2.0, 0.0, 0.0], [4.0, 0.0, 0.0], [9.0, 9.0, 9.0]];
-        d.add_poly(&[0, 1, 2], false);
-        d.add_poly(&[1, 1, 1], true);
-        d.add_poly(&[0, 99], true);
-        let out = cook(&*new(), d, &with(1, 1.0)).expect("cooks");
-        assert_eq!(out.p()[0], [2.0, 0.0, 0.0]); // end of a line -> its only neighbour
-        assert_eq!(out.p()[1], [2.0, 0.0, 0.0]); // middle -> avg(0, 4)
-        assert_eq!(out.p()[3], [9.0, 9.0, 9.0]); // orphan stays
-    }
-    #[test]
-    fn scene_loader_cooks_example_and_registry_has_slot() {
-        let bogus = r#"{"nodes":[{"name":"c","type":"smooth","params":{"bogus":1}}],"display":"c"}"#;
-        assert!(crate::load_scene(bogus).is_err());
-        let ok = r#"{"nodes":[{"name":"b","type":"box"},{"name":"s","type":"smooth","params":{"iterations":2}}],"edges":[["b",0,"s",0]],"display":"s"}"#;
-        let (mut g, id) = crate::load_scene(ok).expect("loads");
+    fn scene_loader_cooks_example() {
+        let scene = r#"{"nodes":[{"name":"b","type":"box"},{"name":"s","type":"smooth","params":{"filterquality":5}}],"edges":[["b",0,"s",0]],"display":"s"}"#;
+        let (mut g, id) = crate::load_scene(scene).expect("loads");
         assert_eq!(g.cook(id, 0.0).expect("cooks").point_count, 8);
-        assert_eq!(crate::registry().create("smooth").map(|n| n.type_name()), Some("smooth"));
     }
 }

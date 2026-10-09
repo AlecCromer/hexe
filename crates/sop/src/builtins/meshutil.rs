@@ -28,6 +28,9 @@ pub(super) fn float(p: &ParamSet, n: &str) -> Result<f64, CookError> {
 pub(super) fn int(p: &ParamSet, n: &str) -> Result<i32, CookError> {
     p.int(n).ok_or_else(|| bad(format!("`{n}`: missing or not an int")))
 }
+pub(super) fn menu(p: &ParamSet, n: &str) -> Result<u32, CookError> {
+    p.menu(n).ok_or_else(|| bad(format!("`{n}`: missing or not a menu")))
+}
 pub(super) fn sub(a: V3, b: V3) -> V3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
@@ -295,6 +298,34 @@ pub(super) mod testkit {
         for (r, c) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
             let a = r * 3 + c;
             d.add_poly(&[a, a + 3, a + 4, a + 1], true);
+        }
+        d
+    }
+    /// Noisy sphere for smoothing tests: UV sphere with noise added to radius.
+    pub fn noisy_sphere() -> Detail {
+        let mut d = Detail::default();
+        let rows = 8;
+        let cols = 12;
+        let np = rows * cols;
+        d.add_points(np as u32);
+        let noise = |i: usize| -> f32 { ((i * 7919) % 1000) as f32 / 1000.0 * 0.1 - 0.05 };
+        *d.p_mut() = (0..np).map(|i| {
+            let r = i / cols;
+            let c = i % cols;
+            let theta = std::f32::consts::PI * r as f32 / (rows - 1) as f32;
+            let phi = 2.0 * std::f32::consts::PI * c as f32 / cols as f32;
+            let rad = 1.0 + noise(i);
+            [rad * theta.sin() * phi.cos(), rad * theta.sin() * phi.sin(), rad * theta.cos()]
+        }).collect();
+        // Simple quad grid topology
+        for r in 0..(rows - 1) {
+            for c in 0..cols {
+                let p0 = r * cols + c;
+                let p1 = r * cols + (c + 1) % cols;
+                let p2 = (r + 1) * cols + (c + 1) % cols;
+                let p3 = (r + 1) * cols + c;
+                d.add_poly(&[p0 as u32, p1 as u32, p2 as u32, p3 as u32], true);
+            }
         }
         d
     }
