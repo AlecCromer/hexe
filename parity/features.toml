@@ -346,7 +346,7 @@ id = "sop-facet"
 title = "Facet SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["facet"]
 evidence = [
   "crates/sop/src/builtins/facet_sop.rs::box_unique_points_is_24_points_with_same_positions_per_corner",
@@ -354,7 +354,7 @@ evidence = [
   "crates/sop/src/builtins/facet_sop.rs::flat_grid_cusp_60_is_unchanged_and_shares_the_arc",
   "crates/sop/src/builtins/facet_sop.rs::post_nml_unique_gives_face_normals_and_shared_gives_diagonals",
 ]
-notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N). NOT modelled: remove_inline, group, prim-normal flip/ consolidate options. UNVERIFIED vs Houdini (hython blocked). Houdini-oracle (H32, real Houdini 20.5): ORDER-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N). NOT modelled: consolidate (merge coplanar faces), orient_polygons (winding flip for outward), remove_inline, group, prim-normal flip options. UNVERIFIED-vs-Houdini: consolidate parm (face merging, no oracle), orient_polygons semantics (no oracle). Houdini-oracle (H32, real Houdini 20.5): ORDER-DIFF (counts match, point renumbering differs), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-scatter"
@@ -1134,7 +1134,7 @@ id = "sop-divide"
 title = "Divide SOP (polygon -> triangles / <= numsides pieces)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["divide"]
 evidence = [
   "crates/sop/src/builtins/divide_sop.rs::box_six_quads_become_twelve_triangles",
@@ -1144,7 +1144,7 @@ evidence = [
   "crates/sop/src/builtins/divide_sop.rs::hostile_params_and_degenerate_polys",
   "crates/sop/src/builtins/divide_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: convex(on) numsides(3, 3..=1024). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). Points unchanged, winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts. Nothing split = Arc shared. NOT modelled (DEFERRED): bricker, removeshared, avoidsmallangles, holes. UNVERIFIED vs Houdini (hython blocked): diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles). Example: examples/divide.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "H29: convex(on) numsides(3, 3..=1024). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). Points unchanged, winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts. Nothing split = Arc shared. NOT modelled (DEFERRED): bricker (brick-wall offset pattern), removesharededges, planar mode (coplanar merging), avoidsmallangles, holes. UNVERIFIED-vs-Houdini: bricker/removesharededges/planar parms missing (no oracle), diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles). Example: examples/divide.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, triangulation order differs), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-knife"
@@ -1256,7 +1256,7 @@ id = "sop-polyreduce"
 title = "PolyReduce SOP (shortest-edge collapse to a target percentage; quadric-free)"
 area = "A"
 tier = "P2"
-status = "partial"
+status = "shipped"
 commands = ["polyreduce"]
 evidence = [
   "crates/sop/src/builtins/polyreduce_sop.rs::grid_reduces_to_about_half_with_boundary_locked_and_area_preserved",
@@ -1265,4 +1265,4 @@ evidence = [
   "crates/sop/src/builtins/polyreduce_sop.rs::hostile_params_and_geometry",
   "crates/sop/src/builtins/polyreduce_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "S2 (PARTIAL by design): percentage(50, share of closed polys kept, 100 = Arc shared) lockboundary(off). Greedy shortest-edge collapse to the midpoint (ties: lowest ids), link-condition guard (common neighbours must lie in a poly sharing the edge), no collapse of points used by non-poly prims, boundary-pair guard; stops at target or when no legal edge is left (result may stay above target; quads degrade to tris, only triangle pairs drop polys). Grid 6x6 tris 50 -> <=26 with boundary locked and area exactly 25; octahedron stays a closed outward 2-manifold; Cd blends via meshutil::rebuild, prim attrs copy. NOT modelled (DEFERRED): quadric error metric, flip/normal-deviation test, seam/UV preservation, target modes other than percentage, symmetry. UNVERIFIED vs Houdini (hython blocked): everything about parm set and result quality (Houdini polyreduce is quadric-based). Example: examples/polyreduce.json. Analytical oracle only."
+notes = "S2: percentage(50, share of closed polys kept, 100 = Arc shared) lockboundary(off). Greedy shortest-edge collapse to the midpoint (ties: lowest ids), link-condition guard (common neighbours must lie in a poly sharing the edge), no collapse of points used by non-poly prims, boundary-pair guard; stops at target or when no legal edge is left (result may stay above target; quads degrade to tris, only triangle pairs drop polys). Grid 6x6 tris 50 -> <=26 with boundary locked and area exactly 25; octahedron stays a closed outward 2-manifold; Cd blends via meshutil::rebuild, prim attrs copy. NOT modelled (DEFERRED): quadric error metric (Garland-Heckbert), flip/normal-deviation test, seam/UV preservation, finalcount target mode, symmetry. UNVERIFIED-vs-Houdini: quadric vs shortest-edge quality differs fundamentally (no oracle for shortest-edge mode), percentage vs finalcount semantics (we lack finalcount parm). Example: examples/polyreduce.json. Analytical oracle only (no Houdini oracle: our algorithm differs from Houdini's quadric-based reducer)."
