@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "grid1", "type": "grid", "params": { "rows": 3, "cols": 3 } },
+    { "name": "sort1", "type": "sort", "params": { "ptsort": 1 } }
+  ],
+  "edges": [["grid1", 0, "sort1", 0]],
+  "display": "sort1"
+}

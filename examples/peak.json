@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "grid1", "type": "grid", "params": { "rows": 5, "cols": 5 } },
+    { "name": "peak1", "type": "peak", "params": { "distance": 0.3 } }
+  ],
+  "edges": [["grid1", 0, "peak1", 0]],
+  "display": "peak1"
+}

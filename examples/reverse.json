@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "reverse1", "type": "reverse", "params": { "group": "" } }
+  ],
+  "edges": [["box1", 0, "reverse1", 0]],
+  "display": "reverse1"
+}

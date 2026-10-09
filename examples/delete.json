@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "delete1", "type": "delete", "params": { "entity": 0, "useexpr": true, "expr": "@P.y > 0" } }
+  ],
+  "edges": [["box1", 0, "delete1", 0]],
+  "display": "delete1"
+}

@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "grid1", "type": "grid", "params": { "rows": 11, "cols": 11 } },
+    { "name": "smooth1", "type": "smooth", "params": { "iterations": 5, "strength": 0.5, "pin_boundary": false } }
+  ],
+  "edges": [["grid1", 0, "smooth1", 0]],
+  "display": "smooth1"
+}

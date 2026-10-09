@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    { "name": "box1", "type": "box" },
+    { "name": "facet1", "type": "facet", "params": { "unique_points": true, "cusp": false, "cusp_angle": 60 } }
+  ],
+  "edges": [["box1", 0, "facet1", 0]],
+  "display": "facet1"
+}
