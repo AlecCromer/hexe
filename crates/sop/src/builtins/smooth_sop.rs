@@ -14,6 +14,7 @@ use super::meshutil::{V3, bad, failed, float, int, menu, point_normals, position
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, Prim, PrimKind, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 const OP: &str = "smooth";
@@ -27,6 +28,7 @@ pub fn spec() -> Vec<ParamSpec> {
             ("uniform", "Uniform"),
             ("scale", "Scale-Dominant"),
             ("curvature", "Curvature-Dominant"),
+            ("volume", "Volume-Preserving"),
         ]),
         ParamSpec::new("strength", ParamValue::F(0.5)).label("Strength").range(0.0, 2.0),
         ParamSpec::new("filterquality", ParamValue::I(10)).label("Filter Quality").range(0.0, 100.0),
@@ -35,6 +37,23 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("attribs", ParamValue::S(String::new())).label("Extra Attributes"),
         ParamSpec::new("updatenormals", ParamValue::B(false)).label("Update Normals"),
     ]
+}
+
+/// Signed enclosed volume of the closed polys (fan-triangulated divergence theorem).
+fn signed_volume(d: &Detail, pts: &[V3]) -> f64 {
+    let mut v = 0.0;
+    for pr in &d.prims {
+        if !matches!(pr.kind, PrimKind::Poly { closed: true }) {
+            continue;
+        }
+        let pl = prim_points(d, pr);
+        for k in 1..pl.len().saturating_sub(1) {
+            if let (Some(&a), Some(&b), Some(&c)) = (pts.get(pl[0]), pts.get(pl[k]), pts.get(pl[k + 1])) {
+                v += super::meshutil::tri_volume(a, b, c);
+            }
+        }
+    }
+    v
 }
 
 /// Point-group selection (union of space-separated names); `None` = every point.
@@ -68,10 +87,55 @@ fn prim_points(d: &Detail, pr: &Prim) -> Vec<usize> {
     d.vertex_point.get(lo..hi).unwrap_or(&[]).iter().map(|&p| p as usize).filter(|&p| p < np).collect()
 }
 
-/// Edge list with weights. method: 0=uniform, 1=scale, 2=curvature.
+/// Cotangent weights per undirected boundary edge of the closed polys: each poly is fan-triangulated from corner 0;
+/// every triangle adds `0.5 * cot(angle opposite the edge)` to its poly-boundary edges (fan diagonals get nothing).
+/// Negative sums are clamped to 0 (keeps `I + lambda L` positive definite).
+pub(crate) fn cotangent_weights(d: &Detail, pts: &[V3]) -> HashMap<(usize, usize), f64> {
+    let mut m: HashMap<(usize, usize), f64> = HashMap::new();
+    for pr in &d.prims {
+        if !matches!(pr.kind, PrimKind::Poly { closed: true }) {
+            continue;
+        }
+        let pl = prim_points(d, pr);
+        let n = pl.len();
+        if n < 3 {
+            continue;
+        }
+        for k in 1..n - 1 {
+            let tri = [pl[0], pl[k], pl[k + 1]];
+            let Some(p) = tri.iter().map(|&i| pts.get(i).copied()).collect::<Option<Vec<V3>>>() else { continue };
+            for o in 0..3 {
+                let (a, b) = ((o + 1) % 3, (o + 2) % 3);
+                let (u, v) = (sub(p[a], p[o]), sub(p[b], p[o]));
+                let cr = super::meshutil::cross(u, v);
+                let area2 = cr.iter().map(|x| x * x).sum::<f64>().sqrt();
+                if area2 < 1e-12 {
+                    continue;
+                }
+                let cot = u.iter().zip(&v).map(|(x, y)| x * y).sum::<f64>() / area2;
+                let (ia, ib) = (tri[a], tri[b]);
+                // edge (a,b) opposite corner o is a poly edge unless it is the fan diagonal (pl[0], pl[k])/(pl[0], pl[k+1]).
+                let diag_first = k > 1 && (a == 0 || b == 0) && (a == 1 || b == 1);
+                let diag_last = k + 2 < n && (a == 0 || b == 0) && (a == 2 || b == 2);
+                if ia == ib || diag_first || diag_last {
+                    continue;
+                }
+                *m.entry((ia.min(ib), ia.max(ib))).or_insert(0.0) += 0.5 * cot;
+            }
+        }
+    }
+    for w in m.values_mut() {
+        *w = w.max(0.0);
+    }
+    m
+}
+
+/// Edge list with weights. method: 0=uniform, 1=scale, 2=curvature (cotangent), 3=volume-preserving (uniform).
+
 fn build_edges(d: &Detail, pts: &[V3], method: u32) -> Vec<(usize, usize, f64)> {
     let np = d.point_count as usize;
     let mut edges: Vec<(usize, usize, f64)> = Vec::new();
+    let cot = if method == 2 { cotangent_weights(d, pts) } else { HashMap::new() };
 
     for pr in &d.prims {
         let (closed, linear) = match pr.kind {
@@ -101,28 +165,21 @@ fn build_edges(d: &Detail, pts: &[V3], method: u32) -> Vec<(usize, usize, f64)> 
                     let len = sub(pb, pa).iter().map(|x| x * x).sum::<f64>().sqrt();
                     if len > 1e-12 { 1.0 / len } else { 1.0 }
                 }
-                _ => {
-                    // curvature-dominant: cotangent-like approximation
-                    // For simplicity, use inverse squared edge length as approximation
-                    let pa = pts.get(a).copied().unwrap_or([0.0; 3]);
-                    let pb = pts.get(b).copied().unwrap_or([0.0; 3]);
-                    let len_sq = sub(pb, pa).iter().map(|x| x * x).sum::<f64>();
-                    if len_sq > 1e-12 { 1.0 / len_sq } else { 1.0 }
-                }
+                2 => cot.get(&(a.min(b), a.max(b))).copied().unwrap_or(0.0),
+                _ => 1.0, // volume-preserving: uniform operator, volume restored afterwards
             };
             edges.push((a, b, weight));
             edges.push((b, a, weight));
         }
     }
     edges.sort_unstable_by_key(|e| (e.0, e.1));
-    // Deduplicate and sum weights
+    // Deduplicate: one weight per distinct edge (shared edges are NOT double-counted)
     let mut dedup = Vec::new();
     let mut i = 0;
     while i < edges.len() {
-        let (a, b, mut w) = edges[i];
+        let (a, b, w) = edges[i];
         let mut j = i + 1;
         while j < edges.len() && edges[j].0 == a && edges[j].1 == b {
-            w += edges[j].2;
             j += 1;
         }
         dedup.push((a, b, w));
@@ -421,6 +478,19 @@ impl Node<Detail> for Smooth {
             }
         }
 
+        // Volume-preserving: uniform operator, then scale about the centroid so the signed enclosed volume is restored.
+        if method == 3 {
+            let before = signed_volume(src, &pts);
+            let after = signed_volume(&out, &positions(&out));
+            if before.abs() > 1e-12 && after.abs() > 1e-12 && before.signum() == after.signum() {
+                let s = (before / after).cbrt();
+                let np_f = np.max(1) as f64;
+                let c = result.iter().fold([0.0; 3], |a, p| [a[0] + p[0], a[1] + p[1], a[2] + p[2]]).map(|v| v / np_f);
+                let scaled: Vec<V3> = result.iter().enumerate().map(|(i, p)| if pinned(i) { *p } else { [c[0] + (p[0] - c[0]) * s, c[1] + (p[1] - c[1]) * s, c[2] + (p[2] - c[2]) * s] }).collect();
+                *out.p_mut() = to_f32(OP, &scaled)?;
+            }
+        }
+
         // Normal update: point N = uniform-averaged unit Newell normals of the smoothed surface.
         if toggle(p, "updatenormals")? {
             let pos = positions(&out);
@@ -539,6 +609,44 @@ mod tests {
         for v in n {
             assert!(v[0].abs() < 1e-5 && v[1].abs() < 1e-5 && (v[2].abs() - 1.0).abs() < 1e-5, "{v:?}");
         }
+    }
+
+    /// Right triangle (0,0,0),(1,0,0),(0,1,0): legs see a 45-degree opposite angle -> w = 0.5*cot45 = 0.5; hypotenuse sees 90 -> 0.
+    #[test]
+    fn cotangent_weights_of_a_right_triangle_are_half_half_zero() {
+        let mut d = Detail::default();
+        d.add_points(3);
+        *d.p_mut() = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        d.add_poly(&[0, 1, 2], true);
+        let w = cotangent_weights(&d, &positions(&d));
+        assert!((w[&(0, 1)] - 0.5).abs() < 1e-12 && (w[&(0, 2)] - 0.5).abs() < 1e-12);
+        assert!(w[&(1, 2)].abs() < 1e-12);
+    }
+
+    /// grid3 = 4 unit quads: every quad edge sees two 45-degree fan angles... interior (shared) edges get 2 quads' worth = 1.0, border edges 0.5.
+    #[test]
+    fn cotangent_weights_on_grid3_interior_edges_double_border_edges() {
+        let g = grid3();
+        let w = cotangent_weights(&g, &positions(&g));
+        // 12 edges: 4 interior spokes (touch point 4) + 8 border
+        assert_eq!(w.len(), 12);
+        for (&(a, b), &x) in &w {
+            let interior = a == 4 || b == 4;
+            assert!((x - if interior { 1.0 } else { 0.5 }).abs() < 1e-9, "edge {a}-{b}: {x}");
+        }
+    }
+
+    /// Volume-preserving (method 3) keeps the cube's enclosed volume; uniform (method 0) shrinks it.
+    #[test]
+    fn volume_preserving_keeps_cube_volume_uniform_shrinks_it() {
+        let c = cube();
+        let v0 = signed_volume(&c, &positions(&c));
+        assert!(v0.abs() > 0.99, "{v0}");
+        let shrunk = cook(&*new(), c.clone(), &with(0, 0.5, 20)).expect("cooks");
+        assert!(signed_volume(&shrunk, &positions(&shrunk)).abs() < v0.abs() * 0.9);
+        let kept = cook(&*new(), c, &with(3, 0.5, 20)).expect("cooks");
+        let v1 = signed_volume(&kept, &positions(&kept));
+        assert!((v1 - v0).abs() < 1e-4, "{v0} -> {v1}");
     }
 
     #[test]
