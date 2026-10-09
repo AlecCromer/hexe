@@ -542,7 +542,7 @@ id = "sop-boolean"
 title = "Boolean SOP (union / subtract / intersect of closed polygon meshes)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["boolean"]
 evidence = [
   "crates/sop/src/builtins/boolean_sop.rs::params_and_defaults",
@@ -779,43 +779,43 @@ notes = "H16: point|prim mode, negate, removeunused (default on; only points orp
 # --- H20: IO (obj/ply, file SOP, rop_geometry, convert)
 [[feature]]
 id = "geo-read-obj"
-title = "Read Wavefront OBJ (v/vn/vt/f incl. a/b/c forms + negative indices, g -> prim groups, usemtl -> material, l -> polylines)"
+title = "Read Wavefront OBJ (v/vn/vt/f incl. a/b/c forms + negative indices, g -> prim groups, o -> prim groups, usemtl -> shop_materialpath, l -> polylines)"
 area = "B"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["convert", "info"]
 evidence = ["crates/geo/src/io_tests.rs::obj_hand_fixture_quad_with_negative_indices", "crates/geo/src/io_tests.rs::obj_corner_forms_groups_materials_lines", "crates/geo/src/io_tests.rs::hostile_obj"]
-notes = "vn -> vertex N, vt -> vertex uv stored V3 with z=0 (Houdini uv is 3-float). `o`, `s`, mtllib, curves/surfaces ignored; faces <3 / lines <2 corners are errors. Authored from the format spec, no Houdini OBJ importer diff (UNVERIFIED: material attrib name, group-per-g semantics, winding on import)."
+notes = "vn -> vertex N, vt -> vertex uv V3 (z=0 or w from vt). `g` -> prim groups (cumulative), `o` -> prim groups (additive to current g). `usemtl` -> prim string attr `shop_materialpath`. `s`, `mtllib`, `vp`, curves/surfaces ignored; faces <3 / lines <2 corners = errors. Negative indices resolved. Round-trip tested. Format-spec authored (UNVERIFIED vs Houdini: winding convention)."
 
 [[feature]]
 id = "geo-write-obj"
-title = "Write Wavefront OBJ (v/vn/vt, f for closed polys, l for polylines/open polys, usemtl from `material`)"
+title = "Write Wavefront OBJ (v/vn/vt, f for closed polys, l for polylines/open polys, g groups, usemtl from shop_materialpath)"
 area = "B"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["convert"]
-evidence = ["crates/geo/src/io_tests.rs::obj_roundtrip_cube", "crates/geo/src/io_tests.rs::write_refuses_non_poly_and_nonfinite", "crates/sop/src/builtins/rop_geometry_sop.rs::tests::box_rop_writes_each_format_and_reads_back"]
-notes = "Box -> obj -> read back = 8/24/6, P byte-equal (f32 shortest round-trip), prim normals equal <1e-6 (Newell, no `normal` SOP on main yet). Groups NOT written; non-poly prims -> Unsupported."
+evidence = ["crates/geo/src/io_tests.rs::obj_roundtrip_cube", "crates/geo/src/io_tests.rs::obj_corner_forms_groups_materials_lines", "crates/geo/src/io_tests.rs::write_refuses_non_poly_and_nonfinite", "crates/sop/src/builtins/rop_geometry_sop.rs::box_rop_writes_each_format_and_reads_back"]
+notes = "Prim groups -> `g` commands, shop_materialpath -> `usemtl`. Vertex-or-point N/uv (vertex class preferred). Non-poly prims -> Unsupported. Round-trip P byte-equal, groups preserved, materials preserved. Format-spec authored (UNVERIFIED vs Houdini)."
 
 [[feature]]
 id = "geo-read-ply"
-title = "Read PLY (ascii + binary_little_endian): x y z, nx ny nz -> N, red green blue -> Cd, s t -> uv, face vertex_indices lists"
+title = "Read PLY (ascii + binary_little_endian + binary_big_endian): x y z, nx ny nz -> N, red green blue -> Cd, s t -> uv, face vertex_indices lists"
 area = "B"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["convert", "info"]
-evidence = ["crates/geo/src/io_tests.rs::ply_binary_roundtrip_cube_and_every_truncation_is_err", "crates/geo/src/io_tests.rs::ply_attributes_and_skips", "crates/geo/src/io_tests.rs::hostile_ply"]
-notes = "binary_big_endian -> Unsupported. N/Cd/uv are POINT attributes; Cd /255 for integer types only; unknown vertex/face properties and extra elements are listed in skipped_attribs. Counts the body cannot hold are rejected before allocating (1e9 header -> Err). Spec from the format description (UNVERIFIED vs Houdini importer)."
+evidence = ["crates/geo/src/io_tests.rs::ply_binary_roundtrip_cube_and_every_truncation_is_err", "crates/geo/src/io_tests.rs::ply_attributes_and_skips", "crates/geo/src/io_tests.rs::hostile_ply", "crates/geo/src/io_tests.rs::ply_binary_write_formats_roundtrip"]
+notes = "Binary LE + BE both supported. N/Cd/uv -> point attrs; Cd /255 for integer props. Unknown props/elements -> skipped_attribs. Hostile counts rejected before alloc. Round-trip tested. Format-spec authored (UNVERIFIED vs Houdini importer)."
 
 [[feature]]
 id = "geo-write-ply"
-title = "Write ascii PLY (P, point N/uv/Cd, closed polys <=255 corners)"
+title = "Write PLY (ascii, binary_little_endian, binary_big_endian): P, point N/uv/Cd, closed polys <=255 corners"
 area = "B"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["convert"]
-evidence = ["crates/geo/src/io_tests.rs::ply_ascii_roundtrip_cube", "crates/geo/src/io_tests.rs::ply_attributes_and_skips"]
-notes = "ascii only; Cd quantised to uchar; vertex-class attributes not written; non-poly prims -> Unsupported."
+evidence = ["crates/geo/src/io_tests.rs::ply_ascii_roundtrip_cube", "crates/geo/src/io_tests.rs::ply_attributes_and_skips", "crates/geo/src/io_tests.rs::ply_binary_write_formats_roundtrip"]
+notes = "All three formats (ascii, binary LE, binary BE). write_ply defaults ascii; write_ply_format(d, PlyFormat::{Ascii|BinaryLE|BinaryBE}). Cd quantised uchar. Vertex attrs NOT written. Non-poly -> Unsupported. Round-trip tested. Format-spec authored (UNVERIFIED vs Houdini)."
 
 [[feature]]
 id = "sop-file"
@@ -832,9 +832,9 @@ id = "rop-geometry"
 title = "ROP Geometry Output (rop_geometry): write input to sopoutput by extension on cook"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["rop_geometry", "cook", "convert"]
-evidence = ["crates/sop/src/builtins/rop_geometry_sop.rs::tests::box_rop_writes_each_format_and_reads_back", "crates/sop/src/builtins/rop_geometry_sop.rs::tests::rop_rejects_bad_params_and_unwritable_paths", "apps/hexe-cli/src/main.rs::tests::cook_with_rop_writes_the_file_and_file_sop_is_scene_relative", "apps/hexe-cli/src/main.rs::tests::example_file_rop_scene_cooks_from_any_cwd", "apps/hexe-cli/src/main.rs::tests::convert_roundtrips_formats_and_rejects_bad_args"]
+evidence = ["crates/sop/src/builtins/rop_geometry_sop.rs::box_rop_writes_each_format_and_reads_back", "crates/sop/src/builtins/rop_geometry_sop.rs::rop_rejects_bad_params_and_unwritable_paths", "apps/hexe-cli/src/main.rs::cook_with_rop_writes_the_file_and_file_sop_is_scene_relative", "apps/hexe-cli/src/main.rs::example_file_rop_scene_cooks_from_any_cwd", "apps/hexe-cli/src/main.rs::convert_roundtrips_formats_and_rejects_bad_args"]
 notes = "trange = off only (others Unsupported); relative sopoutput is cwd-relative; formats .geo(JSON) .obj .ply. No bgeo write, no frame ranges, no pre/post-render scripts. examples/file-rop.json."
 [[feature]]
 id = "ui-edit-network"
@@ -935,17 +935,17 @@ id = "sop-uvlayout"
 title = "UVLayout-lite SOP (island bbox shelf packing, no rotation; padding, fit)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["uvlayout"]
 evidence = [
-  "crates/sop/src/builtins/uvlayout_sop::params_and_defaults",
-  "crates/sop/src/builtins/uvlayout_sop::four_unit_islands_pack_to_exact_quadrants",
-  "crates/sop/src/builtins/uvlayout_sop::padding_and_fit_off_keep_input_units",
-  "crates/sop/src/builtins/uvlayout_sop::mixed_sizes_no_overlap_no_rotation_all_inside_unit_square_shapes_preserved",
-  "crates/sop/src/builtins/uvlayout_sop::shared_points_with_equal_uv_form_one_island_and_cuts_split",
-  "crates/sop/src/builtins/uvlayout_sop::accepts_v2_uv_and_requires_uv",
-  "crates/sop/src/builtins/uvlayout_sop::hostile_params_and_geometry",
-  "crates/sop/src/builtins/uvlayout_sop::example_scene_cooks_and_registry_has_slot",
+  "crates/sop/src/builtins/uvlayout_sop.rs::params_and_defaults",
+  "crates/sop/src/builtins/uvlayout_sop.rs::four_unit_islands_pack_to_exact_quadrants",
+  "crates/sop/src/builtins/uvlayout_sop.rs::padding_and_fit_off_keep_input_units",
+  "crates/sop/src/builtins/uvlayout_sop.rs::mixed_sizes_no_overlap_no_rotation_all_inside_unit_square_shapes_preserved",
+  "crates/sop/src/builtins/uvlayout_sop.rs::shared_points_with_equal_uv_form_one_island_and_cuts_split",
+  "crates/sop/src/builtins/uvlayout_sop.rs::accepts_v2_uv_and_requires_uv",
+  "crates/sop/src/builtins/uvlayout_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/uvlayout_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "H23: padding(0.01) fit(true). Island = prims connected through a shared point carrying bit-identical uv. Shelf pack sorted by height desc, row width max(widest, sqrt(sum (w+pad)(h+pad))); fit = uniform scale to the unit square. Closed-form oracle: 4 unit islands -> exact quadrants, padding .5 no-fit slots, mixed sizes disjoint + uniform scale + inside [0,1]^2 + corner order untouched, cut vs joined edge. NOT modelled: rotation, rect-packing optimality (shelf only), texel density / target resolution, per-island scale, groups, margin. UNVERIFIED vs Houdini (hython blocked): everything about the real UV Layout (this is bbox lite). Example: examples/uv.json. Houdini-oracle (H32, real Houdini 20.5): ATTRIB-DIFF, see docs/HOUDINI-ORACLE.md."
 [[feature]]
@@ -1152,7 +1152,7 @@ id = "sop-knife"
 title = "Knife SOP (plane cut keeping both sides, seam marked)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["knife"]
 evidence = [
   "crates/sop/src/builtins/knife_sop.rs::box_cut_at_y0_keeps_both_halves_welded_with_marked_seam",
@@ -1168,7 +1168,7 @@ id = "sop-sweep"
 title = "Sweep SOP (cross-section curves along backbone curves, parallel-transport frames, caps, twist/roll/scale)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["sweep"]
 evidence = [
   "crates/sop/src/builtins/sweep_sop.rs::square_along_z_with_caps_is_a_closed_outward_solid_of_volume_two",
@@ -1186,7 +1186,7 @@ id = "sop-revolve"
 title = "Revolve SOP (curves about an axis: origin, dir, start/end angle, divs; axis points collapse to poles)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["revolve"]
 evidence = [
   "crates/sop/src/builtins/revolve_sop.rs::full_revolve_of_a_wall_is_an_outward_cylinder_wall_with_a_wrapped_seam",
@@ -1203,7 +1203,7 @@ id = "sop-skin"
 title = "Skin SOP (ruled loft through the curve prims of one input; resample, closev, quads/triangles)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["skin"]
 evidence = [
   "crates/sop/src/builtins/skin_sop.rs::two_squares_loft_into_four_outward_quads",
@@ -1220,7 +1220,7 @@ id = "sop-polyfill"
 title = "PolyFill SOP (close boundary-loop holes: single n-gon / centre fan / centre quads, filled prim group)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["polyfill"]
 evidence = [
   "crates/sop/src/builtins/polyfill_sop.rs::box_missing_its_top_is_closed_by_one_outward_quad",
@@ -1238,7 +1238,7 @@ id = "sop-convert"
 title = "Convert SOP (polygon <-> polyline, sphere / tube -> polygons; fromtype filter)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["convert"]
 evidence = [
   "crates/sop/src/builtins/convert_sop.rs::sphere_becomes_an_outward_closed_shell_at_its_centre_and_drops_the_centre_point",
