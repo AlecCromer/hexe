@@ -14,9 +14,18 @@
 //!   fills `[0, 1]^2` along its longer side (aspect kept; `padding` scales with it). Off: slots stay in input units.
 //! * Vertices outside every island (or with non-finite uv) keep their input value.
 //!
+//! * QB additions: `margin` F 0 (< 0.5): border kept free around the whole layout (fit: the layout fills
+//!   `[margin, 1-margin]`; off: slots are offset by `margin`). `rotate` B off: an island taller than wide is turned 90
+//!   degrees `(x, y) -> (-y, x)` (shapes preserved, orientation proper) before packing. `packmode` `shelf`(0, next fit) |
+//!   `ffdh`(1: first-fit decreasing height, later small islands refill earlier rows). `density` `none`(0) |
+//!   `uniform`(1): each island is scaled uniformly by `sqrt(3D area / uv area)` so every island has the same texel density
+//!   (before packing; `fit` then normalises). `useprimscale` B on: prim float attr `uvscale` of the island's FIRST prim
+//!   multiplies the island scale (per-island scale). `group` S: prim group of participating prims (others keep their uv).
+//!   NOT modelled: target texture resolution / texel-snapped gutters, optimal rect packing beyond first-fit shelves.
+//!
 //! Output = the input with vertex `uv` replaced; everything else untouched. Hostile: negative / non-finite `padding`,
 //! non-toggle `fit` -> `BadParam`; island count above `MAX_ISLANDS` -> `Failed`.
-use super::meshutil::{bad, failed, float, toggle};
+use super::meshutil::{bad, failed, float, positions, toggle};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
@@ -31,6 +40,16 @@ pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("padding", ParamValue::F(0.01)).label("Padding").range(0.0, 1.0),
         ParamSpec::new("fit", ParamValue::B(true)).label("Fit To Unit Square"),
+        ParamSpec::new("margin", ParamValue::F(0.0)).label("Margin").range(0.0, 0.5),
+        ParamSpec::new("rotate", ParamValue::B(false)).label("Rotate Islands 90 Degrees (landscape)"),
+        ParamSpec::new("packmode", ParamValue::Menu(PACK_SHELF))
+            .label("Packing")
+            .menu(&[("shelf", "Shelf (next fit)"), ("ffdh", "Shelf (first fit)")]),
+        ParamSpec::new("density", ParamValue::Menu(DENSITY_NONE))
+            .label("Texel Density")
+            .menu(&[("none", "Keep Island Scale"), ("uniform", "Uniform Texel Density")]),
+        ParamSpec::new("useprimscale", ParamValue::B(true)).label("Use Prim uvscale"),
+        ParamSpec::new("group", ParamValue::S(String::new())).label("Primitive Group"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -72,11 +91,26 @@ fn input_uv(src: &Detail) -> Option<Vec<[f32; 3]>> {
 struct Island {
     /// vertex slots
     verts: Vec<usize>,
+    prims: Vec<usize>,
+    /// min corner / size of the island AFTER `xf` (scale + optional quarter turn)
     min: [f64; 2],
     w: f64,
     h: f64,
     first_prim: usize,
+    scale: f64,
+    rot: bool,
 }
+impl Island {
+    /// Island-local transform of a uv: uniform scale, then (when `rot`) the quarter turn `(x, y) -> (-y, x)`.
+    fn xf(&self, c: &[f32; 3]) -> [f64; 2] {
+        let (x, y) = (f64::from(c[0]) * self.scale, f64::from(c[1]) * self.scale);
+        if self.rot { [-y, x] } else { [x, y] }
+    }
+}
+const DENSITY_NONE: u32 = 0;
+const DENSITY_UNIFORM: u32 = 1;
+const PACK_SHELF: u32 = 0;
+const PACK_FFDH: u32 = 1;
 
 impl Node<Detail> for UvLayout {
     fn type_name(&self) -> &'static str {
@@ -94,16 +128,35 @@ impl Node<Detail> for UvLayout {
             return Err(bad(format!("{OP}: `padding` must be >= 0")));
         }
         let fit = toggle(ctx.params, "fit")?;
+        let margin = float(ctx.params, "margin")?;
+        if !(0.0..0.5).contains(&margin) {
+            return Err(bad(format!("{OP}: `margin` must be in [0, 0.5)")));
+        }
+        let (rotate, use_prim_scale) = (toggle(ctx.params, "rotate")?, toggle(ctx.params, "useprimscale")?);
+        let packmode = match ctx.params.menu("packmode") {
+            Some(v @ (PACK_SHELF | PACK_FFDH)) => v,
+            _ => return Err(bad(format!("{OP}: `packmode`: missing or menu index out of range 0..=1"))),
+        };
+        let density = match ctx.params.menu("density") {
+            Some(v @ (DENSITY_NONE | DENSITY_UNIFORM)) => v,
+            _ => return Err(bad(format!("{OP}: `density`: missing or menu index out of range 0..=1"))),
+        };
+        let group = ctx.params.string("group").ok_or_else(|| bad(format!("{OP}: `group`: missing or not a string")))?;
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let uv = input_uv(src).ok_or_else(|| failed(OP, "input has no vertex `uv` (V2 or V3)"))?;
         if uv.len() != src.vertex_point.len() {
             return Err(failed(OP, "vertex `uv` length does not match the vertex count"));
         }
-        // prim -> vertex slot range (valid only)
+        // prim -> vertex slot range (valid only; prims outside `group` take no part and keep their uv)
+        let sel = super::meshutil::selection(OP, src, group)?;
         let ranges: Vec<Option<(usize, usize)>> = src
             .prims
             .iter()
-            .map(|pr| {
+            .enumerate()
+            .map(|(qi, pr)| {
+                if sel.as_ref().is_some_and(|s| !s.get(qi).copied().unwrap_or(false)) {
+                    return None;
+                }
                 let (lo, hi) = (usize::try_from(pr.verts.start).ok()?, usize::try_from(pr.verts.end).ok()?);
                 (lo < hi && hi <= uv.len()).then_some((lo, hi))
             })
@@ -140,7 +193,16 @@ impl Node<Detail> for UvLayout {
                     if islands.len() >= MAX_ISLANDS {
                         return Err(failed(OP, "too many islands"));
                     }
-                    islands.push(Island { verts: Vec::new(), min: [f64::INFINITY; 2], w: 0.0, h: 0.0, first_prim: i });
+                    islands.push(Island {
+                        verts: Vec::new(),
+                        prims: Vec::new(),
+                        min: [f64::INFINITY; 2],
+                        w: 0.0,
+                        h: 0.0,
+                        first_prim: i,
+                        scale: 1.0,
+                        rot: false,
+                    });
                     if let Some(s) = slot_of_root.get_mut(root) {
                         *s = Some(islands.len() - 1);
                     }
@@ -149,17 +211,70 @@ impl Node<Detail> for UvLayout {
             };
             if let Some(isl) = islands.get_mut(idx) {
                 isl.verts.extend(lo..hi);
+                isl.prims.push(i);
             }
         }
+        let pos3 = positions(src);
+        let prim_scale: Option<&Vec<f32>> = if use_prim_scale {
+            match src.attr(AttrClass::Prim, "uvscale").map(|a| &a.data) {
+                Some(AttrData::F32(v)) => Some(v),
+                _ => None,
+            }
+        } else {
+            None
+        };
         for isl in &mut islands {
             isl.verts.sort_unstable();
             isl.verts.dedup();
+            // per-island uniform scale: texel density (3D area / uv area) x the first prim's `uvscale`
+            if density == DENSITY_UNIFORM {
+                let (mut a3, mut a2) = (0.0f64, 0.0f64);
+                for &pi in &isl.prims {
+                    let Some((lo, hi)) = ranges.get(pi).copied().flatten() else { continue };
+                    let (mut n3, mut s2) = ([0.0f64; 3], 0.0f64);
+                    for k in lo..hi {
+                        let k2 = if k + 1 < hi { k + 1 } else { lo };
+                        let (Some(&pa), Some(&pb)) = (src.vertex_point.get(k), src.vertex_point.get(k2)) else {
+                            continue;
+                        };
+                        let (Some(a), Some(b)) = (pos3.get(pa as usize), pos3.get(pb as usize)) else { continue };
+                        n3 = [
+                            n3[0] + a[1] * b[2] - a[2] * b[1],
+                            n3[1] + a[2] * b[0] - a[0] * b[2],
+                            n3[2] + a[0] * b[1] - a[1] * b[0],
+                        ];
+                        if let (Some(ua), Some(ub)) = (uv.get(k), uv.get(k2)) {
+                            s2 += f64::from(ua[0]) * f64::from(ub[1]) - f64::from(ub[0]) * f64::from(ua[1]);
+                        }
+                    }
+                    a3 += 0.5 * (n3[0] * n3[0] + n3[1] * n3[1] + n3[2] * n3[2]).sqrt();
+                    a2 += 0.5 * s2.abs();
+                }
+                if a3.is_finite() && a2.is_finite() && a3 > 0.0 && a2 > 0.0 {
+                    isl.scale = (a3 / a2).sqrt();
+                }
+            }
+            if let Some(v) = prim_scale.and_then(|v| v.get(isl.first_prim)) {
+                if v.is_finite() && *v > 0.0 {
+                    isl.scale *= f64::from(*v);
+                }
+            }
+            // raw scaled bbox decides the 90 degree turn (landscape islands pack in shorter rows)
+            let (mut mn, mut mx) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+            for c in isl.verts.iter().filter_map(|&v| uv.get(v)).filter(|c| c[0].is_finite() && c[1].is_finite()) {
+                for j in 0..2 {
+                    mn[j] = mn[j].min(f64::from(c[j]));
+                    mx[j] = mx[j].max(f64::from(c[j]));
+                }
+            }
+            isl.rot = rotate && mn[0].is_finite() && (mx[1] - mn[1]) > (mx[0] - mn[0]) * (1.0 + 1e-9);
             let (mut mn, mut mx) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
             for c in isl.verts.iter().filter_map(|&v| uv.get(v)) {
                 if c[0].is_finite() && c[1].is_finite() {
+                    let t = isl.xf(c);
                     for j in 0..2 {
-                        mn[j] = mn[j].min(f64::from(c[j]));
-                        mx[j] = mx[j].max(f64::from(c[j]));
+                        mn[j] = mn[j].min(t[j]);
+                        mx[j] = mx[j].max(t[j]);
                     }
                 }
             }
@@ -179,25 +294,47 @@ impl Node<Detail> for UvLayout {
         let widest = islands.iter().map(|i| i.w).fold(0.0, f64::max);
         let row_w = widest.max(area.sqrt());
         let mut slots: Vec<[f64; 2]> = vec![[0.0; 2]; islands.len()];
-        let (mut x, mut y, mut row_h) = (0.0f64, 0.0f64, 0.0f64);
         let (mut used_w, mut used_h) = (0.0f64, 0.0f64);
-        for &k in &order {
-            let isl = &islands[k];
-            if x > 0.0 && x + isl.w > row_w + 1e-12 {
-                y += row_h + padding;
-                x = 0.0;
-                row_h = 0.0;
+        if packmode == PACK_FFDH {
+            // first-fit decreasing height: every island goes into the FIRST row it still fits, else opens a new row
+            let mut rows: Vec<(f64, f64, f64)> = Vec::new(); // (y, row height, x cursor)
+            for &k in &order {
+                let isl = &islands[k];
+                let at = rows.iter().position(|r| r.2 <= 0.0 || r.2 + isl.w <= row_w + 1e-12);
+                let ri = match at {
+                    Some(i) => i,
+                    None => {
+                        let y = rows.last().map_or(0.0, |r| r.0 + r.1 + padding);
+                        rows.push((y, isl.h, 0.0));
+                        rows.len() - 1
+                    }
+                };
+                let r = &mut rows[ri];
+                slots[k] = [r.2, r.0];
+                used_w = used_w.max(r.2 + isl.w);
+                used_h = used_h.max(r.0 + isl.h);
+                r.2 += isl.w + padding;
             }
-            if x == 0.0 {
-                row_h = isl.h;
+        } else {
+            let (mut x, mut y, mut row_h) = (0.0f64, 0.0f64, 0.0f64);
+            for &k in &order {
+                let isl = &islands[k];
+                if x > 0.0 && x + isl.w > row_w + 1e-12 {
+                    y += row_h + padding;
+                    x = 0.0;
+                    row_h = 0.0;
+                }
+                if x == 0.0 {
+                    row_h = isl.h;
+                }
+                slots[k] = [x, y];
+                used_w = used_w.max(x + isl.w);
+                used_h = used_h.max(y + isl.h);
+                x += isl.w + padding;
             }
-            slots[k] = [x, y];
-            used_w = used_w.max(x + isl.w);
-            used_h = used_h.max(y + isl.h);
-            x += isl.w + padding;
         }
         let span = used_w.max(used_h);
-        let s = if fit && span > 0.0 { 1.0 / span } else { 1.0 };
+        let s = if fit && span > 0.0 { (1.0 - 2.0 * margin) / span } else { 1.0 };
         let mut out_uv = uv.clone();
         for (isl, slot) in islands.iter().zip(&slots) {
             if !isl.min[0].is_finite() {
@@ -206,8 +343,9 @@ impl Node<Detail> for UvLayout {
             for &v in &isl.verts {
                 let (Some(c), Some(o)) = (uv.get(v), out_uv.get_mut(v)) else { continue };
                 if c[0].is_finite() && c[1].is_finite() {
-                    let nx = (f64::from(c[0]) - isl.min[0] + slot[0]) * s;
-                    let ny = (f64::from(c[1]) - isl.min[1] + slot[1]) * s;
+                    let t = isl.xf(c);
+                    let nx = (t[0] - isl.min[0] + slot[0]) * s + margin;
+                    let ny = (t[1] - isl.min[1] + slot[1]) * s + margin;
                     let (nx, ny) = (nx as f32, ny as f32);
                     if nx.is_finite() && ny.is_finite() {
                         *o = [nx, ny, c[2]];
@@ -281,11 +419,120 @@ mod tests {
         }
         b
     }
+    fn boxes(out: &Detail, n: usize) -> Vec<([f32; 2], [f32; 2])> {
+        let uv = uvs(out);
+        (0..n).map(|i| bbox(&uv[i * 4..i * 4 + 4])).collect()
+    }
+    fn overlap(a: ([f32; 2], [f32; 2]), b: ([f32; 2], [f32; 2])) -> bool {
+        a.0[0] < b.1[0] - 1e-6 && b.0[0] < a.1[0] - 1e-6 && a.0[1] < b.1[1] - 1e-6 && b.0[1] < a.1[1] - 1e-6
+    }
+
+    #[test]
+    fn margin_keeps_a_border_free_around_the_layout() {
+        let p = params(0.0, true).with("margin", ParamValue::F(0.1));
+        let b = boxes(&cook(islands(&[(1.0, 1.0); 4]), p).expect("cooks"), 4);
+        // layout 2x2 -> scale (1 - 0.2) / 2 = 0.4, offset 0.1
+        for (got, want) in b.iter().zip([[0.1, 0.1], [0.5, 0.1], [0.1, 0.5], [0.5, 0.5]]) {
+            assert!((got.0[0] - want[0]).abs() < 1e-6 && (got.0[1] - want[1]).abs() < 1e-6, "{got:?}");
+            assert!((got.1[0] - got.0[0] - 0.4).abs() < 1e-6);
+        }
+        // fit off: slots are simply offset by the margin in input units
+        let q = params(0.0, false).with("margin", ParamValue::F(0.25));
+        assert_eq!(boxes(&cook(islands(&[(1.0, 1.0)]), q).expect("cooks"), 1)[0], ([0.25, 0.25], [1.25, 1.25]));
+    }
+
+    #[test]
+    fn rotate_turns_tall_islands_a_proper_quarter_turn() {
+        let p = params(0.0, false);
+        let plain = cook(islands(&[(1.0, 3.0)]), p.clone()).expect("cooks");
+        assert_eq!(boxes(&plain, 1)[0], ([0.0, 0.0], [1.0, 3.0]));
+        let rot = cook(islands(&[(1.0, 3.0)]), p.clone().with("rotate", ParamValue::B(true))).expect("cooks");
+        // (x, y) -> (-y, x), shifted to the origin: (0,0),(1,0),(1,3),(0,3) -> (3,0),(3,1),(0,1),(0,0)
+        assert_eq!(uvs(&rot), vec![[3.0, 0.0, 0.0], [3.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]]);
+        // wide islands are left alone
+        let wide = cook(islands(&[(3.0, 1.0)]), p.with("rotate", ParamValue::B(true))).expect("cooks");
+        assert_eq!(boxes(&wide, 1)[0], ([0.0, 0.0], [3.0, 1.0]));
+    }
+
+    #[test]
+    fn first_fit_refills_earlier_rows_that_next_fit_leaves_empty() {
+        // heights 4,3,1,1,1 -> W = max(4, sqrt(30)) = 5.477
+        let sizes = [(4.0, 4.0), (3.0, 3.0), (3.0, 1.0), (1.0, 1.0), (1.0, 1.0)];
+        let nf = boxes(&cook(islands(&sizes), params(0.0, false)).expect("cooks"), 5);
+        assert_eq!((nf[3].0, nf[4].0), ([3.0, 7.0], [4.0, 7.0]));
+        let ff_p = params(0.0, false).with("packmode", ParamValue::Menu(PACK_FFDH));
+        let ff = boxes(&cook(islands(&sizes), ff_p).expect("cooks"), 5);
+        assert_eq!((ff[3].0, ff[4].0), ([4.0, 0.0], [3.0, 4.0]));
+        for i in 0..5 {
+            for j in i + 1..5 {
+                assert!(!overlap(ff[i], ff[j]), "{i} {j} {:?} {:?}", ff[i], ff[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn uniform_density_equalises_uv_size_per_3d_area_and_uvscale_scales_islands() {
+        // both islands are unit 3D squares; uv boxes 1x1 and 0.5x0.5 -> uniform density makes both 1x1
+        let d = cook(
+            islands(&[(1.0, 1.0), (0.5, 0.5)]),
+            params(0.0, false).with("density", ParamValue::Menu(DENSITY_UNIFORM)),
+        )
+        .expect("cooks");
+        for b in boxes(&d, 2) {
+            assert!((b.1[0] - b.0[0] - 1.0).abs() < 1e-6 && (b.1[1] - b.0[1] - 1.0).abs() < 1e-6, "{b:?}");
+        }
+        let none = cook(islands(&[(1.0, 1.0), (0.5, 0.5)]), params(0.0, false)).expect("cooks");
+        assert!((boxes(&none, 2)[1].1[0] - boxes(&none, 2)[1].0[0] - 0.5).abs() < 1e-6);
+        // prim `uvscale` = [2, 1]: island 0 doubles
+        let mut s = islands(&[(1.0, 1.0), (1.0, 1.0)]);
+        s.add_attr(Attribute {
+            name: "uvscale".into(),
+            class: AttrClass::Prim,
+            data: AttrData::F32(vec![2.0, 1.0]),
+            type_info: TypeInfo::None,
+        });
+        let b = boxes(&cook(s.clone(), params(0.0, false)).expect("cooks"), 2);
+        let sizes: Vec<f32> = b.iter().map(|x| x.1[0] - x.0[0]).collect();
+        assert_eq!(sizes, vec![2.0, 1.0]);
+        let off = boxes(&cook(s, params(0.0, false).with("useprimscale", ParamValue::B(false))).expect("cooks"), 2);
+        assert_eq!((off[0].1[0] - off[0].0[0], off[1].1[0] - off[1].0[0]), (1.0, 1.0));
+    }
+
+    #[test]
+    fn group_restricts_the_layout_to_the_selected_prims() {
+        let mut d = islands(&[(1.0, 1.0), (2.0, 2.0)]);
+        d.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Prim, mask: vec![false, true] });
+        let p = params(0.0, false).with("margin", ParamValue::F(0.25)).with("group", ParamValue::S("g".into()));
+        let b = boxes(&cook(d.clone(), p).expect("cooks"), 2);
+        assert_eq!(b[0], ([0.0, 0.0], [1.0, 1.0])); // untouched
+        assert_eq!(b[1], ([0.25, 0.25], [2.25, 2.25])); // packed alone, margin offset
+        let bad = params(0.0, false).with("group", ParamValue::S("nope".into()));
+        assert!(matches!(cook(d, bad), Err(CookError::Failed(_))));
+    }
+
+    #[test]
+    fn new_params_reject_bad_values() {
+        for (k, v) in [
+            ("margin", ParamValue::F(0.5)),
+            ("margin", ParamValue::F(-0.1)),
+            ("margin", ParamValue::F(f32::NAN)),
+            ("packmode", ParamValue::Menu(2)),
+            ("density", ParamValue::Menu(2)),
+            ("rotate", ParamValue::I(1)),
+            ("group", ParamValue::I(1)),
+        ] {
+            assert!(matches!(cook(islands(&[(1.0, 1.0)]), defaults().with(k, v)), Err(CookError::BadParam(_))), "{k}");
+        }
+    }
+
     #[test]
     fn params_and_defaults() {
         let n = new();
         assert_eq!(n.type_name(), "uvlayout");
-        assert_eq!(n.params().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["padding", "fit"]);
+        assert_eq!(
+            n.params().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            ["padding", "fit", "margin", "rotate", "packmode", "density", "useprimscale", "group"]
+        );
     }
     #[test]
     fn four_unit_islands_pack_to_exact_quadrants() {
