@@ -253,6 +253,7 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
 
 /// Conjugate gradient solver for (I + λL)x = b.
 /// Returns solution in x. max_iter iterations, tolerance tol.
+#[allow(clippy::too_many_arguments)]
 fn cg_solve(
     row_ptr: &[usize],
     col_ind: &[usize],
@@ -365,7 +366,7 @@ impl Node<Detail> for Smooth {
 
 #[cfg(test)]
 mod tests {
-    use super::super::meshutil::testkit::{cook, cook_arc, cube, defaults, grid3, noisy_sphere};
+    use super::super::meshutil::testkit::{cook, cook_arc, cube, defaults, grid3};
     use super::*;
     use hexe_graph::ParamSet;
 

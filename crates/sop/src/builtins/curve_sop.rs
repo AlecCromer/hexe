@@ -48,8 +48,8 @@ fn de_casteljau(control_pts: &[[f32; 3]], t: f32) -> [f32; 3] {
     let n = pts.len();
     for r in 1..n {
         for i in 0..(n - r) {
-            for k in 0..3 {
-                pts[i][k] = (1.0 - t) * pts[i][k] + t * pts[i + 1][k];
+            for (dst, src) in pts[i].iter_mut().zip(&pts[i + 1]) {
+                *dst = (1.0 - t) * (*dst) + t * src;
             }
         }
     }
@@ -112,7 +112,7 @@ impl Node<Detail> for Curve {
         let close =
             p.toggle("close").ok_or_else(|| CookError::BadParam("curve.close: missing or not a toggle".into()))?;
         let curve_type = p.menu("type").unwrap_or(0);
-        let divisions = p.int("divisions").unwrap_or(10).max(1).min(1000) as usize;
+        let divisions = p.int("divisions").unwrap_or(10).clamp(1, 1000) as usize;
 
         let control_pts = parse_coords("curve.coords", coords)?;
         let mut g = Detail::default();
