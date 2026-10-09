@@ -24,7 +24,7 @@
 //!   Other attributes / groups of the inputs are NOT carried.
 //! * Empty / no-closed-poly operand: union -> the other input (shared `Arc`), subtract -> A, intersect -> empty.
 //! * Hostile: `operation` > 4 -> `BadParam`; > 16384 polys per side or > 2^20 fragments -> `Failed`.
-use super::meshutil::{cross, gather, newell_corners};
+use super::meshutil::{blend_weighted, cross, gather, newell_corners};
 use crate::SopNode;
 use hexe_geo::{AttrClass, Attribute, Detail, Group, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
@@ -597,6 +597,8 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
     let (mut ga, mut gb, mut gs) = (Vec::new(), Vec::new(), Vec::new());
     let (mut gin, mut gout) = (Vec::new(), Vec::new());
     let mut psrc: Vec<(u8, Option<usize>)> = Vec::new();
+    // first output prim of each operand using each point (interpolation source)
+    let mut users: Vec<[Option<usize>; 2]> = vec![[None; 2]; used.len()];
     // per output point: which (side, inside?) classes of prims use it (bit = side * 2 + inside)
     let mut pclass = vec![0u8; used.len()];
     for (l, m) in &fused {
@@ -612,6 +614,9 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
         gout.push(!inside);
         psrc.push((side, Some(src as usize)));
         for &p in &pts {
+            if let Some(u) = users.get_mut(p as usize) {
+                u[side as usize].get_or_insert(psrc.len() - 1);
+            }
             if let Some(c) = pclass.get_mut(p as usize) {
                 *c |= 1 << (side * 2 + u8::from(inside));
             }
@@ -628,26 +633,147 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
     // intersection points: used by prims of at least two different (operand, inside/outside) classes
     let seam_pts: Vec<bool> = pclass.iter().map(|c| c.count_ones() >= 2).collect();
     d.groups.push(Group { name: "seampts".into(), class: AttrClass::Point, mask: seam_pts });
-    // attribute transfer: prim attrs follow the source prim; point attrs follow the operand point at the same position
+    // attribute transfer: prim attrs follow the source prim; vertex attrs the source vertex at the same position; point attrs the
+    // coincident operand point or, for fresh intersection points, a linear interpolation across the source polygon
     transfer(&mut d, a, b, AttrClass::Prim, &psrc);
-    let mut at: HashMap<[u32; 3], (u8, usize)> = HashMap::new();
-    for (side, det) in [(0u8, a), (1u8, b)] {
-        for (i, q) in det.p().iter().enumerate() {
-            at.entry(q.map(|c| (c + 0.0).to_bits())).or_insert((side, i));
+    let mut vsrc: Vec<(u8, Option<usize>)> = Vec::new();
+    for (j, pr) in d.prims.iter().enumerate() {
+        let (side, src) = psrc[j];
+        let det = if side == 0 { a } else { b };
+        let sp = src.and_then(|s| det.prims.get(s));
+        for vi in pr.verts.start..pr.verts.end {
+            let q = d.vertex_point.get(vi as usize).and_then(|&pt| d.p().get(pt as usize)).copied();
+            let found = sp.and_then(|sp| {
+                (sp.verts.start..sp.verts.end).find(|&sv| {
+                    det.vertex_point.get(sv as usize).and_then(|&pt| det.p().get(pt as usize)).copied() == q
+                })
+            });
+            vsrc.push((side, found.map(|v| v as usize)));
         }
     }
-    let osrc: Vec<(u8, Option<usize>)> = d
-        .p()
-        .iter()
-        .map(|q| match at.get(&q.map(|c| (c + 0.0).to_bits())) {
-            Some(&(s, i)) => (s, Some(i)),
-            None => (0, None),
+    transfer(&mut d, a, b, AttrClass::Vertex, &vsrc);
+    let key = |q: &[f32; 3]| q.map(|c| (c + 0.0).to_bits());
+    let at: [HashMap<[u32; 3], usize>; 2] = [a, b].map(|det| {
+        let mut m = HashMap::new();
+        for (i, q) in det.p().iter().enumerate() {
+            m.entry(key(q)).or_insert(i);
+        }
+        m
+    });
+    let cand: Vec<[Option<Cand>; 2]> = (0..d.p().len())
+        .map(|o| {
+            let q = d.p()[o];
+            let one = |side: usize| -> Option<Cand> {
+                let det = if side == 0 { a } else { b };
+                if let Some(&i) = at[side].get(&key(&q)) {
+                    return Some(Cand { w: vec![(i, 1.0)], exact: true });
+                }
+                let src = psrc.get(users[o][side]?)?.1?;
+                let w = poly_weights(det, src, q.map(f64::from))?;
+                Some(Cand { w, exact: false })
+            };
+            [one(0), one(1)]
         })
         .collect();
-    transfer(&mut d, a, b, AttrClass::Point, &osrc);
+    transfer_points(&mut d, a, b, &cand);
+    transfer_groups(&mut d, a, b, &psrc, &cand);
     Ok(d)
 }
 
+/// Source of one output point on one operand: weighted source points (exact coincident = one point, weight 1).
+struct Cand {
+    w: Vec<(usize, f64)>,
+    exact: bool,
+}
+/// Linear weights of `q` over the corners of closed poly `src` of `det` (fan triangle containing `q`; the least-violating one
+/// with clamped, renormalised weights otherwise).
+fn poly_weights(det: &Detail, src: usize, q: V3) -> Option<Vec<(usize, f64)>> {
+    let ids = super::meshutil::closed_poly_pts(det, det.prims.get(src)?)?;
+    let p: Vec<V3> = ids.iter().map(|&i| det.p().get(i).map(|v| v.map(f64::from))).collect::<Option<_>>()?;
+    let mut best: Option<(f64, [f64; 3], [usize; 3])> = None;
+    for k in 1..p.len().saturating_sub(1) {
+        let (u, v, w) = (sub(p[k], p[0]), sub(p[k + 1], p[0]), sub(q, p[0]));
+        let (d00, d01, d11, d20, d21) = (dot(u, u), dot(u, v), dot(v, v), dot(w, u), dot(w, v));
+        let den = d00 * d11 - d01 * d01;
+        if den.abs() < 1e-18 {
+            continue;
+        }
+        let (l1, l2) = ((d11 * d20 - d01 * d21) / den, (d00 * d21 - d01 * d20) / den);
+        let l = [1.0 - l1 - l2, l1, l2];
+        let worst = l.iter().copied().fold(f64::MAX, f64::min);
+        if best.as_ref().is_none_or(|b| worst > b.0) {
+            best = Some((worst, l, [0, k, k + 1]));
+        }
+    }
+    let (_, l, ix) = best?;
+    let l = l.map(|c| c.max(0.0));
+    let s: f64 = l.iter().sum();
+    (s > 0.0).then(|| ix.iter().zip(l).map(|(&k, c)| (ids[k], c / s)).collect())
+}
+/// Point attributes: per element the first operand (A, then B) that has the attribute and a source for the point.
+fn transfer_points(d: &mut Detail, a: &Detail, b: &Detail, cand: &[[Option<Cand>; 2]]) {
+    let n = cand.len();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for at in a.attrs.iter().chain(b.attrs.iter()).filter(|x| x.class == AttrClass::Point && x.name != "P") {
+        if !seen.insert(at.name.as_str()) {
+            continue;
+        }
+        let das = [a.attr(AttrClass::Point, &at.name), b.attr(AttrClass::Point, &at.name)];
+        let pick: Vec<Option<usize>> =
+            (0..n).map(|o| (0..2).find(|&s| das[s].is_some() && cand[o][s].is_some())).collect();
+        let srcs = |s: usize| -> Vec<Vec<(usize, f64)>> {
+            (0..n)
+                .map(|o| {
+                    if pick[o] == Some(s) {
+                        cand[o][s].as_ref().map_or(Vec::new(), |c| c.w.clone())
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .collect()
+        };
+        let data = match (das[0], das[1]) {
+            (Some(x), Some(y)) => {
+                let mut c = blend_weighted(&x.data, &srcs(0));
+                if !c.extend_from(&blend_weighted(&y.data, &srcs(1))) {
+                    continue;
+                }
+                let idx: Vec<Option<usize>> = pick.iter().enumerate().map(|(o, s)| s.map(|s| o + s * n)).collect();
+                gather(&c, &idx)
+            }
+            (Some(x), None) => blend_weighted(&x.data, &srcs(0)),
+            (None, Some(y)) => blend_weighted(&y.data, &srcs(1)),
+            (None, None) => continue,
+        };
+        d.add_attr(Attribute { name: at.name.clone(), class: AttrClass::Point, data, type_info: at.type_info });
+    }
+}
+/// Prim groups follow the source prim; point groups the exactly coincident operand point (never interpolated points).
+/// Operand groups named like one of ours (`a_only`, `b_only`, `seam`, `seampts`, `inside`, `outside`) are dropped.
+fn transfer_groups(d: &mut Detail, a: &Detail, b: &Detail, psrc: &[(u8, Option<usize>)], cand: &[[Option<Cand>; 2]]) {
+    let mut done: HashSet<(AttrClass, String)> = d.groups.iter().map(|g| (g.class, g.name.clone())).collect();
+    for g in a.groups.iter().chain(b.groups.iter()) {
+        if !matches!(g.class, AttrClass::Prim | AttrClass::Point) || !done.insert((g.class, g.name.clone())) {
+            continue;
+        }
+        let dets = [a, b];
+        let member = |side: usize, i: usize| {
+            dets[side].group(g.class, &g.name).and_then(|x| x.mask.get(i).copied()).unwrap_or(false)
+        };
+        let mask: Vec<bool> = if g.class == AttrClass::Prim {
+            psrc.iter().map(|&(side, src)| src.is_some_and(|s| member(side as usize, s))).collect()
+        } else {
+            cand.iter()
+                .map(|c| {
+                    (0..2).any(|s| {
+                        c[s].as_ref().is_some_and(|c| c.exact && c.w.first().is_some_and(|&(i, _)| member(s, i)))
+                    })
+                })
+                .collect()
+        };
+        d.groups.push(Group { name: g.name.clone(), class: g.class, mask });
+    }
+}
 /// Copy every `class` attribute of A / B (except P) onto `d`; `src[i]` = (operand, element) feeding output element `i`
 /// (`None` / missing side = default value). Names on both sides need the same type, else skipped.
 fn transfer(d: &mut Detail, a: &Detail, b: &Detail, class: AttrClass, src: &[(u8, Option<usize>)]) {
@@ -1010,6 +1136,84 @@ mod tests {
                 .iter()
                 .all(|q| q.iter().all(|c| c.abs() <= 0.5 + 1e-6) && q.iter().any(|c| (c.abs() - 0.5).abs() < 1e-6))
         );
+    }
+    /// Point attr w = x on A only, union with B offset (.5,.5,.5): every output point on A's surface (incl. the 6 FRESH intersection
+    /// points, interpolated across A's faces) has w == x exactly (linear field); B-only points default to 0.
+    #[test]
+    fn point_attributes_are_interpolated_at_intersection_points() {
+        let (mut a, b) = (unit([0.0; 3]), unit([0.5; 3]));
+        let xs: Vec<f32> = a.p().iter().map(|p| p[0]).collect();
+        a.add_attr(Attribute {
+            name: "w".into(),
+            class: AttrClass::Point,
+            data: hexe_geo::AttrData::F32(xs),
+            type_info: hexe_geo::TypeInfo::None,
+        });
+        let out = bool_(&a, &b, OP_UNION);
+        let Some(hexe_geo::AttrData::F32(w)) = out.attr(AttrClass::Point, "w").map(|x| &x.data) else { panic!("w") };
+        assert_eq!(w.len(), 20);
+        let (mut on_a, mut fresh) = (0, 0);
+        let seam = out.group(AttrClass::Point, "seampts").expect("seampts");
+        for (i, q) in out.p().iter().enumerate() {
+            let inside_a = q.iter().all(|c| c.abs() <= 0.5 + 1e-6);
+            if inside_a {
+                on_a += 1;
+                assert!((w[i] - q[0]).abs() < 1e-5, "point {i} {q:?}: w {}", w[i]);
+                fresh += usize::from(seam.mask[i] && !a.p().contains(q));
+            } else {
+                assert_eq!(w[i], 0.0, "B-only point {i} {q:?}");
+            }
+        }
+        assert_eq!((on_a, fresh), (13, 6), "7 A corners + 6 intersection points, all 6 interpolated");
+    }
+    /// Vertex attr: every output vertex of an A prim carries the attr of the source vertex at the same position; B's default to 0.
+    #[test]
+    fn vertex_attributes_follow_the_source_vertex_at_the_same_position() {
+        let (mut a, b) = (unit([0.0; 3]), unit([5.0, 0.0, 0.0]));
+        int_attr(&mut a, AttrClass::Vertex, "vw", (100..124).collect());
+        let out = bool_(&a, &b, OP_UNION);
+        let vw = i32s(&out, AttrClass::Vertex, "vw");
+        assert_eq!(vw.len(), 48);
+        for (vi, &v) in vw.iter().enumerate() {
+            let q = out.p()[out.vertex_point[vi] as usize];
+            if q[0] < 2.0 {
+                let sv = (v - 100) as usize;
+                assert!((0..24).contains(&sv), "{v}");
+                assert_eq!(a.p()[a.vertex_point[sv] as usize], q, "vertex {vi}");
+            } else {
+                assert_eq!(v, 0, "B vertex {vi}");
+            }
+        }
+    }
+    /// Prim group `top` (prim 1 of A) and point group `pg` (A points 0,1) survive: 1 prim, 2 points; unrelated B points are not members.
+    #[test]
+    fn operand_groups_are_transferred_by_source_prim_and_coincident_point() {
+        let (mut a, b) = (unit([0.0; 3]), unit([5.0, 0.0, 0.0]));
+        a.groups.push(Group {
+            name: "top".into(),
+            class: AttrClass::Prim,
+            mask: vec![false, true, false, false, false, false],
+        });
+        let mut pm = vec![false; 8];
+        pm[0] = true;
+        pm[1] = true;
+        a.groups.push(Group { name: "pg".into(), class: AttrClass::Point, mask: pm });
+        let out = bool_(&a, &b, OP_UNION);
+        assert_eq!(group_count(&out, "top"), 1);
+        let t = out.group(AttrClass::Prim, "top").expect("top");
+        let i = t.mask.iter().position(|m| *m).expect("member");
+        let ids = &out.vertex_point[out.prims[i].verts.start as usize..out.prims[i].verts.end as usize];
+        let src = &a.vertex_point[a.prims[1].verts.start as usize..a.prims[1].verts.end as usize];
+        let mut got: Vec<[f32; 3]> = ids.iter().map(|&p| out.p()[p as usize]).collect();
+        let mut want: Vec<[f32; 3]> = src.iter().map(|&p| a.p()[p as usize]).collect();
+        got.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        want.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        assert_eq!(got, want);
+        let pg = out.group(AttrClass::Point, "pg").expect("pg");
+        assert_eq!(pg.mask.iter().filter(|m| **m).count(), 2);
+        for (k, _) in pg.mask.iter().enumerate().filter(|(_, m)| **m) {
+            assert!(out.p()[k] == a.p()[0] || out.p()[k] == a.p()[1]);
+        }
     }
     #[test]
     fn intersect_cube_cube_diagonal_is_the_half_cube() {
