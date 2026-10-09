@@ -194,7 +194,12 @@ pub fn read_obj(bytes: &[u8]) -> Result<Detail, GeoError> {
     }
     if !mat_table.is_empty() {
         let data = AttrData::Str { idx: mats, table: mat_table };
-        d.attrs.push(Attribute { name: "shop_materialpath".into(), class: AttrClass::Prim, data, type_info: TypeInfo::None });
+        d.attrs.push(Attribute {
+            name: "shop_materialpath".into(),
+            class: AttrClass::Prim,
+            data,
+            type_info: TypeInfo::None,
+        });
     }
     for (gi, name) in group_names.into_iter().enumerate() {
         let mut mask = vec![false; prims.len()];

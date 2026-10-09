@@ -89,9 +89,12 @@ impl Src<'_> {
                 *pos = end;
                 let mut a = [0u8; 8];
                 a[..b.len()].copy_from_slice(b);
-                let from = |bytes: &[u8; 2]| if *big_endian { u16::from_be_bytes(*bytes) } else { u16::from_le_bytes(*bytes) };
-                let from4 = |bytes: &[u8; 4]| if *big_endian { u32::from_be_bytes(*bytes) } else { u32::from_le_bytes(*bytes) };
-                let from8 = |bytes: &[u8; 8]| if *big_endian { u64::from_be_bytes(*bytes) } else { u64::from_le_bytes(*bytes) };
+                let from =
+                    |bytes: &[u8; 2]| if *big_endian { u16::from_be_bytes(*bytes) } else { u16::from_le_bytes(*bytes) };
+                let from4 =
+                    |bytes: &[u8; 4]| if *big_endian { u32::from_be_bytes(*bytes) } else { u32::from_le_bytes(*bytes) };
+                let from8 =
+                    |bytes: &[u8; 8]| if *big_endian { u64::from_be_bytes(*bytes) } else { u64::from_le_bytes(*bytes) };
                 match ty {
                     Ty::I8 => f64::from(i8::from_le_bytes([a[0]])),
                     Ty::U8 => f64::from(a[0]),
