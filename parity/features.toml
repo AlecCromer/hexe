@@ -1234,9 +1234,12 @@ evidence = [
   "crates/sop/src/builtins/polyfill_sop.rs::closed_meshes_open_polys_and_non_manifold_edges_pass_through_shared",
   "crates/sop/src/builtins/polyfill_sop.rs::attributes_and_existing_groups_survive_and_the_group_is_replaceable",
   "crates/sop/src/builtins/polyfill_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/polyfill_sop.rs::ears_fill_concave_l_holes_with_exact_area_and_a_watertight_outward_solid",
+  "crates/sop/src/builtins/polyfill_sop.rs::ptgroup_restricts_filling_to_holes_whose_points_are_all_grouped",
+  "crates/sop/src/builtins/polyfill_sop.rs::smooth_centre_extrapolates_the_surrounding_surface",
   "crates/sop/src/builtins/polyfill_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "S2: fillmode single(0)|fan(1, centre = corner mean, tris)|quads(2, centre + quads, odd tail tri; 3-hole = tri, 4-hole = quad in single/quads) maxedges(0 = unlimited) filledgroup(\"filled\", prim group of new polys, empty = none). Holes = reversed directed boundary edges (no opposite edge, non-manifold ignored) chained into simple loops; winding consistent with neighbours (open box top -> signed volume 1 exactly; hex prism -> 1.5*sqrt3). Nothing to fill = input Arc shared. NOT modelled (DEFERRED): inner-ring holes of one prim, concave planar ear clipping (single = the loop as one n-gon), smooth fill, point-group restriction. UNVERIFIED vs Houdini (hython blocked): parm set (Houdini polyfill menus differ), centre-point rule, quad pairing. Example: examples/polyfill.json. Analytical oracle only."
+notes = "S2: fillmode single(0)|fan(1, centre = corner mean, tris)|quads(2, centre + quads, odd tail tri; 3-hole = tri, 4-hole = quad in single/quads) maxedges(0 = unlimited) filledgroup(\"filled\", prim group of new polys, empty = none). Holes = reversed directed boundary edges (no opposite edge, non-manifold ignored) chained into simple loops; winding consistent with neighbours (open box top -> signed volume 1 exactly; hex prism -> 1.5*sqrt3). Nothing to fill = input Arc shared. QB: fillmode 3 ears (concave-safe ear clipping, exact L-hole area + watertight volume pinned), ptgroup (point-group restriction, all loop pts must be in group), smooth+smoothscale (centre = rim mean + k*(rim mean - ring mean)). REMAINING: inner rings of one prim (hexe-geo has no polygon-with-holes model). UNVERIFIED vs Houdini (hython blocked): parm set (Houdini polyfill menus differ), centre-point rule, quad pairing. Example: examples/polyfill.json. Analytical oracle only."
 
 [[feature]]
 id = "sop-convert"
