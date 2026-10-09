@@ -14,8 +14,13 @@
 //!   volume, a mirroring `xform` is compensated). Poles are shared points, so polar bands are triangles; a tube with a zero
 //!   radius end collapses to a cone apex. `Tube.closed` adds the two cap n-gons. The centre point is dropped when no other
 //!   prim uses it; the new points copy the centre point's attributes, the new polys the prim's attributes.
+//! * QB additions: `totype` 2 = `polyedges`: every `Poly` / `Polyline` prim (per `fromtype`) is replaced by one 2-point
+//!   `Polyline` per UNIQUE undirected edge (first occurrence wins, closed polys include the closing edge; prim attrs copy
+//!   the first prim holding the edge); `lodu` / `lodv` F 1 (0.1..=8) scale `cols` / `rows` (rounded, clamped to the
+//!   `cols` >= 3 / `rows` >= 1 minimums) for the tessellation; `capfan` B off: tube caps become triangle fans around one
+//!   new centre point per cap (pole fan) instead of one n-gon (an apex-collapsed end has no cap either way).
 //! * Nothing to convert = the input `Arc` is shared. NOT modelled (DEFERRED): NURBS / Bezier / metaball / volume / packed
-//!   sources, polysoup, `polyedges`, `lodu/lodv` style level of detail, caps shared as one pole fan.
+//!   sources, polysoup (hexe-geo has no such prim kinds: they stay `Unknown` passthrough).
 use super::meshutil::{MAX_ELEMS, Remap, V3, bad, failed, positions, rebuild};
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
@@ -42,11 +47,16 @@ pub fn spec() -> Vec<ParamSpec> {
             ("sphere", "Sphere"),
             ("tube", "Tube"),
         ]),
-        ParamSpec::new("totype", ParamValue::Menu(0))
-            .label("Convert To")
-            .menu(&[("polygon", "Polygon"), ("polyline", "Polyline")]),
+        ParamSpec::new("totype", ParamValue::Menu(0)).label("Convert To").menu(&[
+            ("polygon", "Polygon"),
+            ("polyline", "Polyline"),
+            ("polyedges", "Polygon Edges"),
+        ]),
         ParamSpec::new("rows", ParamValue::I(8)).label("Rows").range(1.0, 64.0),
         ParamSpec::new("cols", ParamValue::I(16)).label("Columns").range(3.0, 64.0),
+        ParamSpec::new("lodu", ParamValue::F(1.0)).label("LOD U (Columns x)").range(0.1, 8.0),
+        ParamSpec::new("lodv", ParamValue::F(1.0)).label("LOD V (Rows x)").range(0.1, 8.0),
+        ParamSpec::new("capfan", ParamValue::B(false)).label("Tube Caps As Pole Fans"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -71,7 +81,14 @@ fn dim(p: &hexe_graph::ParamSet, n: &str, min: i32) -> Result<usize, CookError> 
 }
 
 /// Faces (local point ids, outward winding) + positions of a sphere / tube, before `xform`/offset.
-fn unit_shape(sphere: bool, taper: f64, closed: bool, rows: usize, cols: usize) -> (Vec<V3>, Vec<Vec<usize>>) {
+fn unit_shape(
+    sphere: bool,
+    taper: f64,
+    closed: bool,
+    capfan: bool,
+    rows: usize,
+    cols: usize,
+) -> (Vec<V3>, Vec<Vec<usize>>) {
     let mut pts: Vec<V3> = Vec::new();
     let mut rings: Vec<Vec<usize>> = Vec::new();
     let ring_pts = |pts: &mut Vec<V3>, y: f64, r: f64| -> Vec<usize> {
@@ -115,8 +132,23 @@ fn unit_shape(sphere: bool, taper: f64, closed: bool, rows: usize, cols: usize) 
         }
     }
     if !sphere && closed {
-        faces.push(rings[0].clone());
-        faces.push(rings[rows].iter().rev().copied().collect());
+        if capfan {
+            for (ring, top) in [(0usize, true), (rows, false)] {
+                let r = &rings[ring];
+                if r[0] == r[1] {
+                    continue; // collapsed apex
+                }
+                pts.push([0.0, 0.5 - ring as f64 / rows as f64, 0.0]);
+                let c = pts.len() - 1;
+                for j in 0..cols {
+                    let j2 = (j + 1) % cols;
+                    faces.push(if top { vec![c, r[j], r[j2]] } else { vec![c, r[j2], r[j]] });
+                }
+            }
+        } else {
+            faces.push(rings[0].clone());
+            faces.push(rings[rows].iter().rev().copied().collect());
+        }
     }
     // collapse repeated corners (poles / apex) and drop what is left with < 3 corners
     let faces = faces
@@ -150,8 +182,19 @@ impl Node<Detail> for Convert {
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
         let from = menu(p, "fromtype", FROM_TUBE)?;
-        let to_line = menu(p, "totype", 1)? == 1;
+        let to = menu(p, "totype", 2)?;
+        let (to_line, to_edges) = (to == 1, to == 2);
         let (rows, cols) = (dim(p, "rows", 1)?, dim(p, "cols", 3)?);
+        let lod = |n: &str| -> Result<f64, CookError> {
+            match p.float(n) {
+                Some(v) if v.is_finite() && (0.1..=8.0).contains(&v) => Ok(f64::from(v)),
+                _ => Err(bad(format!("convert: `{n}` must be a float in 0.1..=8"))),
+            }
+        };
+        let (lodu, lodv) = (lod("lodu")?, lod("lodv")?);
+        let rows = ((rows as f64 * lodv).round() as usize).clamp(1, MAX_DIM as usize);
+        let cols = ((cols as f64 * lodu).round() as usize).clamp(3, MAX_DIM as usize);
+        let capfan = p.toggle("capfan").ok_or_else(|| bad("convert: `capfan`: missing or not a toggle"))?;
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let want = |k: u32| from == FROM_ALL || from == k;
         let corners = |pr: &Prim| -> Option<&[u32]> {
@@ -166,6 +209,7 @@ impl Node<Detail> for Convert {
             ToLine,
             ToPoly,
             Tess,
+            Edges,
         }
         let acts: Vec<Act> = src
             .prims
@@ -176,6 +220,8 @@ impl Node<Detail> for Convert {
                     return Act::Keep;
                 }
                 match (&pr.kind, to_line) {
+                    (PrimKind::Poly { .. }, _) if to_edges && want(FROM_POLY) && c.len() >= 2 => Act::Edges,
+                    (PrimKind::Polyline, _) if to_edges && want(FROM_POLYLINE) && c.len() >= 2 => Act::Edges,
                     (PrimKind::Poly { .. }, true) if want(FROM_POLY) && c.len() >= 2 => Act::ToLine,
                     (PrimKind::Polyline, false) if want(FROM_POLYLINE) && c.len() >= 2 => Act::ToPoly,
                     (PrimKind::Sphere { .. }, false) if want(FROM_SPHERE) && c.len() == 1 => Act::Tess,
@@ -229,6 +275,7 @@ impl Node<Detail> for Convert {
             ps.push(Prim { kind, verts: start..vp.len() as u32 });
             rm.prim_src.push(Some(psrc));
         };
+        let mut seen_edges: std::collections::BTreeSet<(u32, u32)> = std::collections::BTreeSet::new();
         for (pi, (pr, &a)) in src.prims.iter().zip(&acts).enumerate() {
             let vstart = pr.verts.start as usize;
             let c = corners(pr).unwrap_or(&[]);
@@ -249,6 +296,20 @@ impl Node<Detail> for Convert {
                     }
                     push(&mut vertex_point, &mut prims, &mut rm, PrimKind::Polyline, &ids, &vs, pi);
                 }
+                Act::Edges => {
+                    let closed = matches!(pr.kind, PrimKind::Poly { closed: true });
+                    let m = c.len();
+                    let segs = if closed && m > 2 { m } else { m - 1 };
+                    for k in 0..segs {
+                        let (a, b) = (c[k], c[(k + 1) % m]);
+                        if a == b || !seen_edges.insert((a.min(b), a.max(b))) {
+                            continue;
+                        }
+                        let ids = mapped(&[a, b]);
+                        let vs = [Some(vstart + k), Some(vstart + (k + 1) % m)];
+                        push(&mut vertex_point, &mut prims, &mut rm, PrimKind::Polyline, &ids, &vs, pi);
+                    }
+                }
                 Act::ToPoly => {
                     let closed = c.len() >= 4 && c.first() == c.last();
                     let n = if closed { c.len() - 1 } else { c.len() };
@@ -266,7 +327,7 @@ impl Node<Detail> for Convert {
                     let m = xf.map(f64::from);
                     let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
                         + m[2] * (m[3] * m[7] - m[4] * m[6]);
-                    let (upts, faces) = unit_shape(sphere, taper, closed, rows, cols);
+                    let (upts, faces) = unit_shape(sphere, taper, closed, capfan, rows, cols);
                     if (rm.point_src.len() + upts.len()) as u64 > MAX_ELEMS
                         || (prims.len() + faces.len()) as u64 > MAX_ELEMS
                     {
@@ -375,6 +436,67 @@ mod tests {
     }
 
     #[test]
+    fn polyedges_emit_each_unique_edge_once_as_a_two_point_polyline() {
+        let to_edges = defaults().with("totype", ParamValue::Menu(2));
+        // cube: 6 quads share edges -> 12 unique edges, points untouched
+        let c = run(testkit::cube(), to_edges.clone()).expect("cooks");
+        assert_eq!((c.point_count, c.prim_count()), (8, 12));
+        let mut seen = std::collections::BTreeSet::new();
+        for pr in &c.prims {
+            assert_eq!(pr.kind, PrimKind::Polyline);
+            assert_eq!(pr.verts.len(), 2);
+            let v = &c.vertex_point[pr.verts.start as usize..pr.verts.end as usize];
+            assert!(v[0] != v[1] && seen.insert((v[0].min(v[1]), v[0].max(v[1]))));
+        }
+        // closed triangle = 3 edges, open 3-point poly = 2 edges
+        let mut d = Detail::default();
+        d.add_points(5);
+        *d.p_mut() = (0..5).map(|i| [i as f32, 0.0, 0.0]).collect();
+        d.add_poly(&[0, 1, 2], true);
+        d.add_poly(&[2, 3, 4], false);
+        let e = run(d.clone(), to_edges.clone()).expect("cooks");
+        assert_eq!(e.prim_count(), 3 + 2);
+        // edge attrs follow the first prim holding the edge
+        d.add_attr(Attribute {
+            name: "cls".into(),
+            class: hexe_geo::AttrClass::Prim,
+            data: AttrData::F32(vec![1.0, 2.0]),
+            type_info: TypeInfo::None,
+        });
+        let a = run(d.clone(), to_edges.clone()).expect("cooks");
+        assert_eq!(
+            a.attr(hexe_geo::AttrClass::Prim, "cls").map(|x| x.data.clone()),
+            Some(AttrData::F32(vec![1.0, 1.0, 1.0, 2.0, 2.0]))
+        );
+        // fromtype filter: polylines only -> the polys pass through (shared)
+        let f = run(d, to_edges.with("fromtype", ParamValue::Menu(FROM_POLYLINE))).expect("cooks");
+        assert_eq!(f.prim_count(), 2);
+    }
+
+    #[test]
+    fn lod_scales_the_tessellation_and_capfan_replaces_cap_ngons_by_pole_fans() {
+        let sph = shape(PrimKind::Sphere { xform: I3 }, [0.0; 3]);
+        let base = run(sph.clone(), defaults()).expect("cooks");
+        assert_eq!((base.point_count, base.prim_count()), (2 + 7 * 16, 16 + 6 * 16 + 16));
+        // cols x2 (32), rows x0.5 (4)
+        let l = run(sph, defaults().with("lodu", ParamValue::F(2.0)).with("lodv", ParamValue::F(0.5))).expect("cooks");
+        assert_eq!((l.point_count, l.prim_count()), (2 + 3 * 32, 4 * 32));
+        // closed cylinder rows=1 cols=16: n-gon caps vs fans: same volume, +2 centre points, 2*16 triangles instead of 2 n-gons
+        let tube = shape(PrimKind::Tube { xform: scaled([1.0, 2.0, 1.0]), taper: 1.0, closed: true }, [0.0; 3]);
+        let p = defaults().with("rows", ParamValue::I(1)).with("cols", ParamValue::I(16));
+        let ngon = run(tube.clone(), p.clone()).expect("cooks");
+        let fan = run(tube.clone(), p.clone().with("capfan", ParamValue::B(true))).expect("cooks");
+        assert_eq!((ngon.point_count, ngon.prim_count()), (32, 16 + 2));
+        assert_eq!((fan.point_count, fan.prim_count()), (34, 16 + 32));
+        let area = 0.5 * 16.0 * (std::f64::consts::TAU / 16.0).sin();
+        assert!((signed_volume(&fan) - area * 2.0).abs() < 1e-5 && (signed_volume(&ngon) - area * 2.0).abs() < 1e-5);
+        // a cone's apex end gets no fan: only the base cap
+        let cone = shape(PrimKind::Tube { xform: scaled([1.0, 2.0, 1.0]), taper: 0.0, closed: true }, [0.0; 3]);
+        let c = run(cone, p.with("capfan", ParamValue::B(true))).expect("cooks");
+        assert_eq!((c.point_count, c.prim_count()), (1 + 16 + 1, 16 + 16));
+    }
+
+    #[test]
     fn poly_polyline_round_trip_is_exact() {
         let mut d = testkit::grid3();
         let n0 = d.prim_count();
@@ -453,7 +575,11 @@ mod tests {
     fn hostile_params_and_geometry() {
         for (k, v) in [
             ("fromtype", ParamValue::Menu(5)),
-            ("totype", ParamValue::Menu(2)),
+            ("totype", ParamValue::Menu(3)),
+            ("lodu", ParamValue::F(0.0)),
+            ("lodv", ParamValue::F(f32::NAN)),
+            ("lodu", ParamValue::F(9.0)),
+            ("capfan", ParamValue::I(1)),
             ("rows", ParamValue::I(0)),
             ("cols", ParamValue::I(2)),
             ("cols", ParamValue::I(1 << 20)),
