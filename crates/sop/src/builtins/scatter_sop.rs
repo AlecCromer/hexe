@@ -8,6 +8,8 @@
 //! - QA params: `group` (prim group restricts the source), `generateby` Count|Density (Density: n = round(sum area*meanweight * `density`)),
 //!   `relaxpoints`/`relaxiterations` (repulsion radius 1.2*sqrt(area/n), points stay in their source triangle),
 //!   `attribs` (globs; point attrs barycentric-interpolated (ints/strings nearest corner), prim attrs copied), `primnumattrib` (name, empty = skip).
+//! - Depth: `emergencylimit` (0 = off) caps the point count; `overridedensity`+`overridedensityattrib`+`densityscale` (attr = points
+//!   per unit area, replaces `density_attrib`/`density`); `outputprimuv` adds point attrs `primnum` + `uv` (see `prim_uv`).
 //! - output: points only. `P`, `sourceprim` (int, input prim index), `N` (prim attr `N` if present, else geometric normal).
 use super::meshutil::{cross, gather, newell_corners, selection};
 use crate::SopNode;
@@ -33,6 +35,11 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("density", ParamValue::F(10.0)).label("Density").range(0.0, 100.0),
         ParamSpec::new("attribs", ParamValue::S(String::new())).label("Attributes to Transfer"),
         ParamSpec::new("primnumattrib", ParamValue::S("sourceprim".into())).label("Source Prim Attribute"),
+        ParamSpec::new("emergencylimit", ParamValue::I(0)).label("Emergency Limit").range(0.0, 1_000_000.0),
+        ParamSpec::new("overridedensity", ParamValue::B(false)).label("Override Density"),
+        ParamSpec::new("overridedensityattrib", ParamValue::S("density".into())).label("Override Density Attribute"),
+        ParamSpec::new("densityscale", ParamValue::F(1.0)).label("Density Scale").range(0.0, 10.0),
+        ParamSpec::new("outputprimuv", ParamValue::B(false)).label("Output Prim Num and UV"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -63,6 +70,9 @@ struct Tri {
     ids: [u32; 3],
     prim: usize,
     area: f64,
+    /// index of this triangle in its prim's fan, and the prim's corner count (parametric uv)
+    fan: usize,
+    nv: usize,
 }
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -119,7 +129,7 @@ fn triangles(d: &Detail, dens: &Density, sel: &Option<Vec<bool>>) -> Vec<Tri> {
             };
             if raw.is_finite() { raw.max(0.0) } else { 0.0 }
         };
-        for pair in rest.windows(2) {
+        for (fan, pair) in rest.windows(2).enumerate() {
             let (Some(a), Some(b), Some(c)) = (at(first), at(pair[0]), at(pair[1])) else { continue };
             let area = 0.5 * len(cross(sub(b, a), sub(c, a)));
             if area.is_finite() && area > 0.0 {
@@ -129,6 +139,8 @@ fn triangles(d: &Detail, dens: &Density, sel: &Option<Vec<bool>>) -> Vec<Tri> {
                     ids: [first, pair[0], pair[1]],
                     prim: pi,
                     area,
+                    fan,
+                    nv: vs.len(),
                 });
             }
         }
@@ -167,6 +179,15 @@ struct Opts {
     attribs: String,
     /// name of the source-prim int attr ("" = skip)
     primnumattrib: String,
+    /// hard maximum point count (0 = off)
+    emergency: usize,
+    /// per-prim / per-point float attr `override_attrib` replaces `density_attrib` AND (Density mode) the global density
+    override_on: bool,
+    override_attrib: String,
+    /// scales the Density-mode count
+    density_scale: f64,
+    /// add point attrs `primnum` (I32) + `uv` (V3, z = 0): the point's parametric position in its source prim
+    output_primuv: bool,
 }
 impl Opts {
     fn basic(npts: usize, seed: u64, name: &str) -> Opts {
@@ -181,7 +202,22 @@ impl Opts {
             relax_iters: 0,
             attribs: String::new(),
             primnumattrib: "sourceprim".into(),
+            emergency: 0,
+            override_on: false,
+            override_attrib: "density".into(),
+            density_scale: 1.0,
+            output_primuv: false,
         }
+    }
+}
+/// Parametric prim (u, v) of a point with fan-triangle barycentrics `(u, v)` (weights of corners 1, 2): triangle = the
+/// barycentrics; quad = bilinear `P = (1-u)(1-v)p0 + u(1-v)p1 + uv p2 + (1-u)v p3` (exact for parallelograms: fan tri 0
+/// `(u+v, v)`, fan tri 1 `(u, u+v)`); n-gon (> 4) = fan-triangle barycentrics.
+fn prim_uv(t: &Tri, u: f64, v: f64) -> (f64, f64) {
+    match (t.nv, t.fan) {
+        (4, 0) => (u + v, v),
+        (4, _) => (u, u + v),
+        _ => (u, v),
     }
 }
 /// `*`-glob match (only `*` is special).
@@ -273,7 +309,11 @@ fn relax(tris: &[Tri], tidx: &[usize], bary: &mut [(f64, f64)], rad: f64, iters:
 }
 /// Core: scatter points over `d`'s polygons. Pure function of (d, opts).
 fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
-    let dens = density(d, &o.density_attrib)?;
+    let wname = if o.override_on { &o.override_attrib } else { &o.density_attrib };
+    if o.override_on && wname.is_empty() {
+        return Err(CookError::BadParam("scatter: `overridedensity` needs a non-empty attribute name".into()));
+    }
+    let dens = density(d, wname)?;
     let sel = selection("scatter", d, &o.group)?;
     let tris = triangles(d, &dens, &sel);
     // cumulative weight table: area · mean corner weight
@@ -283,8 +323,13 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
         total += t.area * (t.w[0] + t.w[1] + t.w[2]) / 3.0;
         cdf.push(total);
     }
-    let npts = if o.generateby == 1 {
-        let n = (total * o.density).round();
+    let mut npts = if o.generateby == 1 {
+        // override attr = points per unit area itself; otherwise the weight is relative and `density` is the global rate
+        let rate = if o.override_on { 1.0 } else { o.density };
+        let mut n = (total * rate * o.density_scale).round();
+        if o.emergency > 0 && n.is_finite() {
+            n = n.min(o.emergency as f64);
+        }
         if !n.is_finite() || n < 0.0 || n > f64::from(MAX_POINTS) {
             return Err(CookError::Failed(format!("scatter: density count {n} outside 0..={MAX_POINTS}")));
         }
@@ -292,6 +337,9 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
     } else {
         o.npts
     };
+    if o.emergency > 0 {
+        npts = npts.min(o.emergency);
+    }
     let mut out = Detail::default();
     out.add_points(0);
     if tris.is_empty() || total.is_nan() || total <= 0.0 || !total.is_finite() || npts == 0 {
@@ -357,6 +405,18 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
         type_info: TypeInfo::Normal,
     });
     // ---- attribute transfer ----
+    let primuv = o.output_primuv.then(|| {
+        let uv: Vec<[f32; 3]> = (0..npts)
+            .map(|i| match (tris.get(tidx[i]), bary.get(i)) {
+                (Some(t), Some(&(u, v))) => {
+                    let (pu, pv) = prim_uv(t, u, v);
+                    [pu as f32, pv as f32, 0.0]
+                }
+                _ => [0.0; 3],
+            })
+            .collect();
+        uv
+    });
     let pats: Vec<&str> = o.attribs.split_whitespace().collect();
     if !pats.is_empty() {
         let prim_idx: Vec<Option<usize>> = src.iter().map(|&s| usize::try_from(s).ok()).collect();
@@ -385,6 +445,20 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
             };
             out.add_attr(Attribute { name: a.name.clone(), class: AttrClass::Point, data, type_info: a.type_info });
         }
+    }
+    if let Some(uv) = primuv {
+        out.add_attr(Attribute {
+            name: "primnum".into(),
+            class: AttrClass::Point,
+            data: AttrData::I32(src.clone()),
+            type_info: TypeInfo::None,
+        });
+        out.add_attr(Attribute {
+            name: "uv".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(uv),
+            type_info: TypeInfo::None,
+        });
     }
     Ok(out)
 }
@@ -456,6 +530,20 @@ fn read(p: &ParamSet) -> Result<Opts, CookError> {
     if let Some(n) = p.string("primnumattrib") {
         o.primnumattrib = n.to_string();
     }
+    let lim = p.int("emergencylimit").unwrap_or(0);
+    if !(0..=MAX_POINTS).contains(&lim) {
+        return Err(CookError::BadParam(format!("scatter: `emergencylimit` {lim} outside 0..={MAX_POINTS}")));
+    }
+    o.emergency = usize::try_from(lim).unwrap_or(0);
+    o.override_on = p.toggle("overridedensity").unwrap_or(false);
+    if let Some(n) = p.string("overridedensityattrib") {
+        o.override_attrib = n.to_string();
+    }
+    o.density_scale = f64::from(p.float("densityscale").unwrap_or(1.0));
+    if !o.density_scale.is_finite() || o.density_scale < 0.0 {
+        return Err(CookError::BadParam(format!("scatter: `densityscale` {} must be finite >= 0", o.density_scale)));
+    }
+    o.output_primuv = p.toggle("outputprimuv").unwrap_or(false);
     Ok(o)
 }
 impl Node<Detail> for Scatter {
@@ -744,6 +832,105 @@ mod tests {
         o.primnumattrib = String::new();
         o.attribs = String::new();
         assert!(scatter_with(&d, &o).expect("cooks").attr(AttrClass::Point, "sourceprim").is_none());
+    }
+    /// Emergency limit caps both modes and rescues a density count that would otherwise exceed the hard cap.
+    #[test]
+    fn emergency_limit_caps_count_and_density_modes() {
+        let mut o = opts(500);
+        o.emergency = 100;
+        assert_eq!(scatter_with(&unit_quad(), &o).expect("cooks").point_count, 100);
+        o.emergency = 900;
+        assert_eq!(scatter_with(&unit_quad(), &o).expect("cooks").point_count, 500, "limit above count = no-op");
+        // 100 x 100 quad (area 1e4) x density 1000 = 1e7 > MAX_POINTS
+        let big = quads(&[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0], [100.0, 100.0, 0.0], [0.0, 100.0, 0.0]], &[[0, 1, 2, 3]]);
+        let mut o = opts(7);
+        o.generateby = 1;
+        o.density = 1000.0;
+        assert!(matches!(scatter_with(&big, &o), Err(CookError::Failed(_))));
+        o.emergency = 1234;
+        assert_eq!(scatter_with(&big, &o).expect("cooks").point_count, 1234);
+        // unit quad x 25 = 25 < limit 40 -> untouched; limit 10 -> 10
+        o.density = 25.0;
+        o.emergency = 40;
+        assert_eq!(scatter_with(&unit_quad(), &o).expect("cooks").point_count, 25);
+        o.emergency = 10;
+        assert_eq!(scatter_with(&unit_quad(), &o).expect("cooks").point_count, 10);
+    }
+    /// overridedensity: the attr is points-per-unit-area per prim; n = round(sum(area * attr) * densityscale) and the
+    /// split follows area * attr (A: 4 * 10 = 40, B: 1 * 40 = 40 -> 1:1 although the areas are 4:1).
+    #[test]
+    fn override_density_attr_and_scale_drive_count_and_split() {
+        let mut d = a4_b1();
+        d.add_attr(Attribute {
+            name: "dens".into(),
+            class: AttrClass::Prim,
+            data: AttrData::F32(vec![10.0, 40.0]),
+            type_info: TypeInfo::None,
+        });
+        let mut o = opts(7);
+        o.generateby = 1;
+        o.override_on = true;
+        o.override_attrib = "dens".into();
+        o.density_scale = 100.0;
+        let out = scatter_with(&d, &o).expect("cooks");
+        assert_eq!(out.point_count, 8000);
+        let [a, b] = counts(&out);
+        assert!(((a as f64 / b as f64) - 1.0).abs() < 0.05, "a={a} b={b}");
+        o.density_scale = 0.5;
+        assert_eq!(scatter_with(&d, &o).expect("cooks").point_count, 40);
+        // global `density` is ignored while overriding; off = the old behaviour (area-weighted, density 10 x 5 = 50)
+        o.density = 999.0;
+        assert_eq!(scatter_with(&d, &o).expect("cooks").point_count, 40);
+        o.override_on = false;
+        o.density = 10.0;
+        o.density_scale = 1.0;
+        assert_eq!(scatter_with(&d, &o).expect("cooks").point_count, 50);
+        // missing / empty override attribute is a BadParam
+        o.override_on = true;
+        o.override_attrib = "nope".into();
+        assert!(matches!(scatter_with(&d, &o), Err(CookError::BadParam(_))));
+        o.override_attrib = String::new();
+        assert!(matches!(scatter_with(&d, &o), Err(CookError::BadParam(_))));
+    }
+    /// outputprimuv: `primnum` == source prim, `uv` = parametric position. Quads A (x 0..2, y 0..2) and B (x 3..4, y 0..1)
+    /// are bilinear = (x/2, y/2) and (x-3, y); a triangle (0,0),(4,0),(0,4) has (u,v) = (x/4, y/4).
+    #[test]
+    fn output_primuv_is_the_parametric_position_in_the_source_prim() {
+        let mut o = opts(3000);
+        o.output_primuv = true;
+        let out = scatter_with(&a4_b1(), &o).expect("cooks");
+        let (Some(AttrData::I32(pn)), Some(AttrData::V3(uv))) =
+            (out.attr(AttrClass::Point, "primnum").map(|a| &a.data), out.attr(AttrClass::Point, "uv").map(|a| &a.data))
+        else {
+            panic!("primnum / uv")
+        };
+        assert_eq!(
+            Some(pn),
+            match out.attr(AttrClass::Point, "sourceprim").map(|a| &a.data) {
+                Some(AttrData::I32(s)) => Some(s),
+                _ => None,
+            }
+        );
+        for ((q, &p), t) in out.p().iter().zip(pn).zip(uv) {
+            let want = if p == 0 { [q[0] / 2.0, q[1] / 2.0] } else { [q[0] - 3.0, q[1]] };
+            assert!(
+                (t[0] - want[0]).abs() < 1e-5 && (t[1] - want[1]).abs() < 1e-5 && t[2] == 0.0,
+                "{q:?} p={p} uv={t:?}"
+            );
+        }
+        // default off: no primnum / uv attrs
+        o.output_primuv = false;
+        assert!(scatter_with(&a4_b1(), &o).expect("cooks").attr(AttrClass::Point, "uv").is_none());
+        let mut tri = Detail::default();
+        tri.add_points(3);
+        tri.p_mut().copy_from_slice(&[[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [0.0, 4.0, 0.0]]);
+        tri.add_poly(&[0, 1, 2], true);
+        o.output_primuv = true;
+        let out = scatter_with(&tri, &o).expect("cooks");
+        let Some(AttrData::V3(uv)) = out.attr(AttrClass::Point, "uv").map(|a| &a.data) else { panic!("uv") };
+        for (q, t) in out.p().iter().zip(uv) {
+            assert!((t[0] - q[0] / 4.0).abs() < 1e-5 && (t[1] - q[1] / 4.0).abs() < 1e-5, "{q:?} uv={t:?}");
+        }
     }
     #[test]
     fn glob_matches_star_patterns() {
