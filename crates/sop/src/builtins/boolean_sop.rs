@@ -15,14 +15,18 @@
 //!   face and tag are re-fused when their union is ONE simple loop (so an L-shaped remainder is one hexagon, not 3 quads), then
 //!   vertices collinear in every polygon that uses them are removed. A face with a hole stays as its un-fused fragments.
 //!   Fragments with different tags (e.g. the coplanar overlap and the rest of the same face) are NOT fused.
+//! * QA: `operation` also 3 = B - A (swapped operands, group names swapped back) and 4 = Shatter (A cut by B, all pieces kept, B dropped;
+//!   prim groups `inside` = A.In|CoSame, `outside`). Attribute transfer: prim attrs follow the source prim (other operand = default),
+//!   point attrs follow the operand point at the same position (fresh intersection points = default; no interpolation); a point group
+//!   `seampts` = points used by prims of >= 2 (operand, inside/outside) classes. NOT done: vertex attrs, group transfer, resolve modes.
 //! * Output: `P` only; fresh points (only those used). Prim groups: `a_only` (from A, away from the cut), `b_only` (from B),
 //!   `seam` (from a source face that crosses or lies on the other operand's surface). Disjoint, cover every prim.
 //!   Other attributes / groups of the inputs are NOT carried.
 //! * Empty / no-closed-poly operand: union -> the other input (shared `Arc`), subtract -> A, intersect -> empty.
-//! * Hostile: `operation` > 2 -> `BadParam`; > 16384 polys per side or > 2^20 fragments -> `Failed`.
-use super::meshutil::{cross, newell_corners};
+//! * Hostile: `operation` > 4 -> `BadParam`; > 16384 polys per side or > 2^20 fragments -> `Failed`.
+use super::meshutil::{cross, gather, newell_corners};
 use crate::SopNode;
-use hexe_geo::{AttrClass, Detail, Group, PrimKind};
+use hexe_geo::{AttrClass, Attribute, Detail, Group, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -32,6 +36,10 @@ const INPUTS: [InputSpec; 2] = [InputSpec { name: "input0" }, InputSpec { name: 
 const OP_UNION: u32 = 0;
 const OP_SUBTRACT: u32 = 1;
 const OP_INTERSECT: u32 = 2;
+/// B - A (our menu order: appended after the task order).
+const OP_SUBTRACT_BA: u32 = 3;
+/// Cut A by B's surface and keep every piece of A (B discarded); prim groups `inside` / `outside`.
+const OP_SHATTER: u32 = 4;
 /// Plane-distance tolerance.
 const EPS: f64 = 1e-6;
 const MAX_PRIMS: usize = 1 << 14;
@@ -47,6 +55,8 @@ pub fn spec() -> Vec<ParamSpec> {
             ("union", "Union"),
             ("subtract", "Subtract"),
             ("intersect", "Intersect"),
+            ("subtract_ba", "B Subtract A"),
+            ("shatter", "Shatter"),
         ]),
         ParamSpec::new("treat_as_solid", ParamValue::B(true)).label("Treat As Solid"),
     ]
@@ -503,6 +513,7 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
                 | (OP_UNION, false, _)
                 | (OP_SUBTRACT, _, Tag::Out | Tag::CoOpp)
                 | (OP_INTERSECT, _, Tag::In | Tag::CoSame)
+                | (OP_SHATTER, _, _)
         );
         if take {
             kept.push((p, 0, t, false));
@@ -584,21 +595,92 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
         })
         .collect();
     let (mut ga, mut gb, mut gs) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut gin, mut gout) = (Vec::new(), Vec::new());
+    let mut psrc: Vec<(u8, Option<usize>)> = Vec::new();
+    // per output point: which (side, inside?) classes of prims use it (bit = side * 2 + inside)
+    let mut pclass = vec![0u8; used.len()];
     for (l, m) in &fused {
         let pts: Vec<u32> = l.iter().filter_map(|v| remap.get(v).copied()).collect();
         d.add_poly(&pts, true);
-        let (side, src, _, _) = meta[*m];
+        let (side, src, tag, _) = meta[*m];
         let seam = if side == 0 { seam_a.contains(&src) } else { seam_b.contains(&src) };
         ga.push(side == 0 && !seam);
         gb.push(side == 1 && !seam);
         gs.push(seam);
+        let inside = matches!(tag, Tag::In | Tag::CoSame);
+        gin.push(inside);
+        gout.push(!inside);
+        psrc.push((side, Some(src as usize)));
+        for &p in &pts {
+            if let Some(c) = pclass.get_mut(p as usize) {
+                *c |= 1 << (side * 2 + u8::from(inside));
+            }
+        }
     }
-    for (name, mask) in [("a_only", ga), ("b_only", gb), ("seam", gs)] {
+    let mut named = vec![("a_only", ga), ("b_only", gb), ("seam", gs)];
+    if op == OP_SHATTER {
+        named.push(("inside", gin));
+        named.push(("outside", gout));
+    }
+    for (name, mask) in named {
         d.groups.push(Group { name: name.into(), class: AttrClass::Prim, mask });
     }
+    // intersection points: used by prims of at least two different (operand, inside/outside) classes
+    let seam_pts: Vec<bool> = pclass.iter().map(|c| c.count_ones() >= 2).collect();
+    d.groups.push(Group { name: "seampts".into(), class: AttrClass::Point, mask: seam_pts });
+    // attribute transfer: prim attrs follow the source prim; point attrs follow the operand point at the same position
+    transfer(&mut d, a, b, AttrClass::Prim, &psrc);
+    let mut at: HashMap<[u32; 3], (u8, usize)> = HashMap::new();
+    for (side, det) in [(0u8, a), (1u8, b)] {
+        for (i, q) in det.p().iter().enumerate() {
+            at.entry(q.map(|c| (c + 0.0).to_bits())).or_insert((side, i));
+        }
+    }
+    let osrc: Vec<(u8, Option<usize>)> = d
+        .p()
+        .iter()
+        .map(|q| match at.get(&q.map(|c| (c + 0.0).to_bits())) {
+            Some(&(s, i)) => (s, Some(i)),
+            None => (0, None),
+        })
+        .collect();
+    transfer(&mut d, a, b, AttrClass::Point, &osrc);
     Ok(d)
 }
 
+/// Copy every `class` attribute of A / B (except P) onto `d`; `src[i]` = (operand, element) feeding output element `i`
+/// (`None` / missing side = default value). Names on both sides need the same type, else skipped.
+fn transfer(d: &mut Detail, a: &Detail, b: &Detail, class: AttrClass, src: &[(u8, Option<usize>)]) {
+    let (na, _nb) = (a.class_len(class), b.class_len(class));
+    let mut seen: HashSet<&str> = HashSet::new();
+    for at in a.attrs.iter().chain(b.attrs.iter()).filter(|x| x.class == class && x.name != "P") {
+        if !seen.insert(at.name.as_str()) {
+            continue;
+        }
+        let (da, db) = (a.attr(class, &at.name), b.attr(class, &at.name));
+        let data = match (da, db) {
+            (Some(x), Some(y)) => {
+                let mut c = x.data.clone();
+                if c.len() != na || !c.extend_from(&y.data) {
+                    continue;
+                }
+                c
+            }
+            (Some(x), None) => x.data.clone(),
+            (None, Some(y)) => y.data.clone(),
+            (None, None) => continue,
+        };
+        let idx: Vec<Option<usize>> = src
+            .iter()
+            .map(|&(side, i)| match (side, da.is_some(), db.is_some()) {
+                (0, true, _) | (1, false, true) => i,
+                (1, true, true) => i.map(|k| k + na),
+                _ => None,
+            })
+            .collect();
+        d.add_attr(Attribute { name: at.name.clone(), class, data: gather(&data, &idx), type_info: at.type_info });
+    }
+}
 fn has_solid(d: &Detail) -> bool {
     d.prims.iter().any(|p| matches!(p.kind, PrimKind::Poly { closed: true }) && p.verts.len() >= 3)
 }
@@ -616,20 +698,37 @@ impl Node<Detail> for Boolean {
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
         let op = match p.menu("operation") {
-            Some(v) if v <= OP_INTERSECT => v,
-            _ => return Err(bad("`operation`: missing or menu index out of range 0..=2")),
+            Some(v) if v <= OP_SHATTER => v,
+            _ => return Err(bad("`operation`: missing or menu index out of range 0..=4")),
         };
         let solid = p.toggle("treat_as_solid").ok_or_else(|| bad("`treat_as_solid`: missing or not a toggle"))?;
         let empty = Arc::new(Detail::default());
-        let a = inputs.first().unwrap_or(&empty);
-        let b = inputs.get(1).unwrap_or(&empty);
+        let (mut a, mut b) = (inputs.first().unwrap_or(&empty), inputs.get(1).unwrap_or(&empty));
+        // B - A = A' - B' with the operands swapped (the a_only / b_only group names are swapped back below)
+        let swapped = op == OP_SUBTRACT_BA;
+        let op = if swapped { OP_SUBTRACT } else { op };
+        if swapped {
+            std::mem::swap(&mut a, &mut b);
+        }
+        let fix = |mut d: Detail| {
+            if swapped {
+                for g in d.groups.iter_mut().filter(|g| g.class == AttrClass::Prim) {
+                    match g.name.as_str() {
+                        "a_only" => g.name = "b_only".into(),
+                        "b_only" => g.name = "a_only".into(),
+                        _ => {}
+                    }
+                }
+            }
+            d
+        };
         match (has_solid(a), has_solid(b), op) {
             (false, false, _) => Ok(empty),
             (false, true, OP_UNION) => Ok(Arc::clone(b)),
             (false, _, _) => Ok(empty),
             (true, false, OP_INTERSECT) => Ok(empty),
             (true, false, _) => Ok(Arc::clone(a)),
-            (true, true, _) => Ok(Arc::new(run(a, b, op, solid)?)),
+            (true, true, _) => Ok(Arc::new(fix(run(a, b, op, solid)?))),
         }
     }
 }
@@ -797,6 +896,105 @@ mod tests {
         assert!(pts(&out).contains(&[0, 0, 0]), "inner corner of the notch");
     }
 
+    fn int_attr(d: &mut Detail, class: AttrClass, name: &str, v: Vec<i32>) {
+        d.add_attr(Attribute { name: name.into(), class, data: hexe_geo::AttrData::I32(v), type_info: hexe_geo::TypeInfo::None });
+    }
+    fn i32s(d: &Detail, class: AttrClass, name: &str) -> Vec<i32> {
+        match d.attr(class, name).map(|a| &a.data) {
+            Some(hexe_geo::AttrData::I32(v)) => v.clone(),
+            _ => panic!("no i32 `{name}`"),
+        }
+    }
+    /// Prim attr on A only: disjoint union keeps A's 6 ids (10..16), B's 6 prims default to 0; attr on both: ids 1 / 2 follow the operand.
+    #[test]
+    fn prim_attributes_follow_the_source_prim_and_default_on_the_other_operand() {
+        let (mut a, mut b) = (unit([0.0; 3]), unit([5.0, 0.0, 0.0]));
+        int_attr(&mut a, AttrClass::Prim, "id", (10..16).collect());
+        let out = bool_(&a, &b, OP_UNION);
+        assert_eq!(out.prim_count(), 12);
+        let mut ids = i32s(&out, AttrClass::Prim, "id");
+        ids.sort_unstable();
+        assert_eq!(ids, [0, 0, 0, 0, 0, 0, 10, 11, 12, 13, 14, 15]);
+        int_attr(&mut a, AttrClass::Prim, "side", vec![1; 6]);
+        int_attr(&mut b, AttrClass::Prim, "side", vec![2; 6]);
+        let out = bool_(&a, &b, OP_UNION);
+        let mut s = i32s(&out, AttrClass::Prim, "side");
+        s.sort_unstable();
+        assert_eq!(s, [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2]);
+        // the ids line up with the geometry: prims with side 2 sit at x >= 4.5
+        for (i, &sd) in i32s(&out, AttrClass::Prim, "side").iter().enumerate() {
+            let p = &out.vertex_point[out.prims[i].verts.start as usize..out.prims[i].verts.end as usize];
+            assert!(p.iter().all(|&q| (out.p()[q as usize][0] >= 4.5) == (sd == 2)));
+        }
+    }
+    /// Point attr w = index on A: points that coincide with an A point keep w, B points / new points default 0.
+    #[test]
+    fn point_attributes_follow_coincident_operand_points() {
+        let (mut a, b) = (unit([0.0; 3]), unit([5.0, 0.0, 0.0]));
+        a.add_attr(Attribute { name: "w".into(), class: AttrClass::Point, data: hexe_geo::AttrData::F32((0..8).map(|i| 1.0 + i as f32).collect()), type_info: hexe_geo::TypeInfo::None });
+        let out = bool_(&a, &b, OP_UNION);
+        let Some(hexe_geo::AttrData::F32(w)) = out.attr(AttrClass::Point, "w").map(|x| &x.data) else { panic!("w") };
+        assert_eq!(w.len(), 16);
+        for (i, q) in out.p().iter().enumerate() {
+            let src = a.p().iter().position(|p| p == q);
+            assert_eq!(w[i], src.map_or(0.0, |k| 1.0 + k as f32), "point {i} {q:?}");
+        }
+        assert_eq!(w.iter().filter(|v| **v > 0.0).count(), 8);
+    }
+    /// seampts = the intersection points: union of cubes offset (.5,.5,.5) has exactly the 6 hexagon corners on both surfaces.
+    #[test]
+    fn seampts_group_is_the_intersection_points() {
+        let out = bool_(&unit([0.0; 3]), &unit([0.5; 3]), OP_UNION);
+        assert_eq!(out.point_count, 20);
+        let g = out.group(AttrClass::Point, "seampts").expect("seampts");
+        assert_eq!(g.mask.iter().filter(|b| **b).count(), 6);
+        // each seam point lies on a face of A (a coordinate = .5 with the others in [0,.5]) and on a face of B (a coordinate = 0)
+        for (i, _) in g.mask.iter().enumerate().filter(|(_, b)| **b) {
+            let q = out.p()[i].map(f64::from);
+            assert!(q.iter().any(|c| close(*c, 0.5)) && q.iter().any(|c| close(*c, 0.0)), "{q:?}");
+        }
+    }
+    /// B - A: same shape as A - B with the roles swapped (volume 1 - 1/8, 9 prims, 14 points); groups name B's own faces `b_only`.
+    #[test]
+    fn subtract_ba_is_b_minus_a_with_swapped_group_names() {
+        let (a, b) = (unit([0.0; 3]), unit([0.5; 3]));
+        let out = bool_(&a, &b, OP_SUBTRACT_BA);
+        assert_eq!((out.point_count, out.prim_count()), (14, 9));
+        assert!(close(volume(&out), 0.875), "{}", volume(&out));
+        assert_watertight(&out);
+        // B's far corner (1,1,1) survives, A's far corner (-.5,-.5,-.5) does not
+        assert!(pts(&out).iter().any(|p| p[0] > 0 && p[1] > 0 && p[2] > 0 && out.p().iter().any(|q| q == &[1.0, 1.0, 1.0])));
+        assert!(!out.p().iter().any(|q| q == &[-0.5, -0.5, -0.5]));
+        // the 3 whole faces + 3 hexagons from B are `b_only`, the 3 flipped squares of A inside B are `a_only`... named by operand
+        assert_eq!(group_count(&out, "b_only") + group_count(&out, "a_only") + group_count(&out, "seam"), 9);
+        let ab = bool_(&a, &b, OP_SUBTRACT);
+        assert_eq!(ab.prim_count(), out.prim_count());
+    }
+    /// Shatter: A cut by B's surface, every piece kept (B dropped): 9 prims (3 inside quarter-squares 0.25, 3 whole + 3 L-hexagons outside),
+    /// total area 6 (the cube surface is unchanged), inside area 0.75.
+    #[test]
+    fn shatter_keeps_all_pieces_of_a_split_into_inside_and_outside_groups() {
+        let out = bool_(&unit([0.0; 3]), &unit([0.5; 3]), OP_SHATTER);
+        assert_eq!(out.prim_count(), 9);
+        assert_eq!((group_count(&out, "inside"), group_count(&out, "outside")), (3, 6));
+        let area = |i: usize| -> f64 {
+            let ids = &out.vertex_point[out.prims[i].verts.start as usize..out.prims[i].verts.end as usize];
+            let p: Vec<[f64; 3]> = ids.iter().map(|&q| out.p()[q as usize].map(f64::from)).collect();
+            let n = newell_corners(&p);
+            0.5 * len(n)
+        };
+        let inside = out.group(AttrClass::Prim, "inside").expect("inside");
+        let (mut tot, mut ins) = (0.0, 0.0);
+        for i in 0..out.prims.len() {
+            tot += area(i);
+            if inside.mask[i] {
+                ins += area(i);
+            }
+        }
+        assert!(close(tot, 6.0) && close(ins, 0.75), "total {tot} inside {ins}");
+        // B contributes nothing: all points lie on the surface of A's cube [-.5,.5]^3
+        assert!(out.p().iter().all(|q| q.iter().all(|c| c.abs() <= 0.5 + 1e-6) && q.iter().any(|c| (c.abs() - 0.5).abs() < 1e-6)));
+    }
     #[test]
     fn intersect_cube_cube_diagonal_is_the_half_cube() {
         let out = bool_(&unit([0.0; 3]), &unit([0.5; 3]), OP_INTERSECT);
@@ -949,7 +1147,7 @@ mod tests {
     #[test]
     fn hostile_params_nan_and_reversed_winding() {
         let a = unit([0.0; 3]);
-        for op in [3u32, 99] {
+        for op in [5u32, 99] {
             assert!(matches!(run_with(&a, &a, op, true), Err(CookError::BadParam(_))));
         }
         let missing = ParamSet::new();
