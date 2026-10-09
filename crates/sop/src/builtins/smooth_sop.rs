@@ -10,9 +10,9 @@
 //! Params: `method` M 0 (uniform=0, scale=1, curv=2), `strength` F 0.5, `filterquality` I 10
 //! (CG iterations, 0 = input Arc shared, max 1000), `constrainboundary` B false.
 //! Work bound `filterquality * (edges + points) <= 2^31`, else `Failed`.
-use super::meshutil::{V3, bad, failed, float, int, menu, positions, sub, to_f32, toggle};
+use super::meshutil::{V3, bad, failed, float, int, menu, point_normals, positions, sub, to_f32, toggle};
 use crate::SopNode;
-use hexe_geo::{Detail, Prim, PrimKind};
+use hexe_geo::{AttrClass, AttrData, Attribute, Detail, Prim, PrimKind, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -31,7 +31,26 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("strength", ParamValue::F(0.5)).label("Strength").range(0.0, 2.0),
         ParamSpec::new("filterquality", ParamValue::I(10)).label("Filter Quality").range(0.0, 100.0),
         ParamSpec::new("constrainboundary", ParamValue::B(false)).label("Constrain Boundary Points"),
+        ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
+        ParamSpec::new("attribs", ParamValue::S(String::new())).label("Extra Attributes"),
+        ParamSpec::new("updatenormals", ParamValue::B(false)).label("Update Normals"),
     ]
+}
+
+/// Point-group selection (union of space-separated names); `None` = every point.
+fn point_selection(src: &Detail, names: &str) -> Result<Option<Vec<bool>>, CookError> {
+    let names: Vec<&str> = names.split_whitespace().collect();
+    if names.is_empty() {
+        return Ok(None);
+    }
+    let mut sel = vec![false; src.point_count as usize];
+    for n in names {
+        let g = src.group(AttrClass::Point, n).ok_or_else(|| failed(OP, &format!("unknown point group `{n}`")))?;
+        for (s, m) in sel.iter_mut().zip(&g.mask) {
+            *s |= *m;
+        }
+    }
+    Ok(Some(sel))
 }
 
 pub fn new() -> Box<SopNode> {
@@ -344,22 +363,70 @@ impl Node<Detail> for Smooth {
         let (row_ptr, col_ind, vals) = build_laplacian_csr(np, &edges);
         let boundary = if constrain { find_boundary(src) } else { vec![false; np] };
 
+        // Point-group selection: unselected points are left untouched (they still take part in the Laplacian).
+        let sel = point_selection(src, p.string("group").unwrap_or(""))?;
+        let pinned = |i: usize| (constrain && boundary.get(i).copied().unwrap_or(false)) || sel.as_ref().is_some_and(|s| !s.get(i).copied().unwrap_or(false));
+        let solve = |b: &[f64]| -> Vec<f64> {
+            let mut x = b.to_vec();
+            cg_solve(&row_ptr, &col_ind, &vals, strength, b, &mut x, quality as usize, 1e-9);
+            for (i, xi) in x.iter_mut().enumerate() {
+                if pinned(i) {
+                    *xi = b.get(i).copied().unwrap_or(0.0);
+                }
+            }
+            x
+        };
+
         // Solve for each coordinate independently
         let mut result = vec![[0.0; 3]; np];
         for axis in 0..3 {
             let b: Vec<f64> = pts.iter().map(|p| p[axis]).collect();
-            let mut x = b.clone();
-
-            cg_solve(&row_ptr, &col_ind, &vals, strength, &b, &mut x, quality as usize, 1e-9);
-
-            for (i, xi) in x.iter().enumerate() {
-                // If boundary point, keep original position
-                result[i][axis] = if constrain && boundary[i] { pts[i][axis] } else { *xi };
+            for (i, xi) in solve(&b).into_iter().enumerate() {
+                result[i][axis] = xi;
             }
         }
 
         let mut out = (**src).clone();
         *out.p_mut() = to_f32(OP, &result)?;
+
+        // Attribute smoothing: every listed point attribute (F32 / V2 / V3 / V4 / FN) gets the same filter per channel.
+        for name in p.string("attribs").unwrap_or("").split_whitespace().filter(|n| *n != "P") {
+            let Some(a) = out.attr_mut(AttrClass::Point, name) else {
+                return Err(failed(OP, &format!("unknown point attribute `{name}`")));
+            };
+            let (flat, w): (Vec<f32>, usize) = match &a.data {
+                AttrData::F32(v) => (v.clone(), 1),
+                AttrData::V2(v) => (v.iter().flatten().copied().collect(), 2),
+                AttrData::V3(v) => (v.iter().flatten().copied().collect(), 3),
+                AttrData::V4(v) => (v.iter().flatten().copied().collect(), 4),
+                AttrData::FN { size, data } => (data.clone(), (*size as usize).max(1)),
+                _ => return Err(failed(OP, &format!("attribute `{name}` is not a float attribute"))),
+            };
+            let mut res = flat.clone();
+            for c in 0..w {
+                let b: Vec<f64> = (0..np).map(|i| f64::from(flat.get(i * w + c).copied().unwrap_or(0.0))).collect();
+                for (i, xi) in solve(&b).into_iter().enumerate() {
+                    if let Some(s) = res.get_mut(i * w + c) {
+                        *s = xi as f32;
+                    }
+                }
+            }
+            match &mut a.data {
+                AttrData::F32(v) => *v = res,
+                AttrData::V2(v) => *v = res.chunks_exact(2).map(|c| [c[0], c[1]]).collect(),
+                AttrData::V3(v) => *v = res.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect(),
+                AttrData::V4(v) => *v = res.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect(),
+                AttrData::FN { data, .. } => *data = res,
+                _ => {}
+            }
+        }
+
+        // Normal update: point N = uniform-averaged unit Newell normals of the smoothed surface.
+        if toggle(p, "updatenormals")? {
+            let pos = positions(&out);
+            let n: Vec<[f32; 3]> = point_normals(&out, &pos).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
+            out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(n), type_info: TypeInfo::Normal });
+        }
         Ok(Arc::new(out))
     }
 }
@@ -382,7 +449,7 @@ mod tests {
         let n = new();
         assert_eq!(n.type_name(), "smooth");
         let params = n.params();
-        assert_eq!(params.len(), 4);
+        assert_eq!(params.len(), 7);
         assert_eq!(params[0].name, "method");
         assert_eq!(params[1].name, "strength");
         assert_eq!(params[2].name, "filterquality");
@@ -421,6 +488,56 @@ mod tests {
         // Grid 3x3: boundary points are all except center (index 4)
         for i in [0, 1, 2, 3, 5, 6, 7, 8] {
             assert_eq!(out.p()[i], src.p()[i], "boundary point {i} should be pinned");
+        }
+    }
+
+    /// Group {4 = centre}: only the centre of grid3 moves; the other 8 points are bit-identical.
+    #[test]
+    fn point_group_limits_smoothing_to_selected_points() {
+        let mut src = grid3();
+        let mut mask = vec![false; 9];
+        mask[4] = true;
+        src.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Point, mask });
+        // lift the centre so uniform smoothing has something to do
+        src.p_mut()[4][2] = 1.0;
+        let out = cook(&*new(), src.clone(), &with(0, 1.0, 50).with("group", ParamValue::S("g".into()))).expect("cooks");
+        for i in [0, 1, 2, 3, 5, 6, 7, 8] {
+            assert_eq!(out.p()[i], src.p()[i], "point {i} not in group");
+        }
+        assert!(out.p()[4][2] < 1.0, "centre must move toward its (z=0) neighbours: {}", out.p()[4][2]);
+        let bad = cook(&*new(), src, &with(0, 1.0, 5).with("group", ParamValue::S("nope".into())));
+        assert!(matches!(bad, Err(CookError::Failed(_))));
+    }
+
+    /// Attribute `w` (F32, 0 everywhere but one spike) smooths: spike drops, total stays ~conserved (Laplacian rows sum 0 -> mean preserved).
+    #[test]
+    fn extra_attribute_is_smoothed_and_mean_preserved_unlisted_untouched() {
+        let mut src = grid3();
+        let mut w = vec![0.0f32; 9];
+        w[4] = 9.0;
+        src.add_attr(Attribute { name: "w".into(), class: AttrClass::Point, data: AttrData::F32(w), type_info: TypeInfo::None });
+        src.add_attr(Attribute { name: "u".into(), class: AttrClass::Point, data: AttrData::F32(vec![5.0; 9].into_iter().enumerate().map(|(i, v)| v + i as f32).collect()), type_info: TypeInfo::None });
+        let out = cook(&*new(), src.clone(), &with(0, 1.0, 100).with("attribs", ParamValue::S("w".into()))).expect("cooks");
+        let Some(AttrData::F32(ow)) = out.attr(AttrClass::Point, "w").map(|a| &a.data) else { panic!("w lost") };
+        assert!(ow[4] < 9.0 && ow[4] > 0.0, "spike must drop: {}", ow[4]);
+        let sum: f32 = ow.iter().sum();
+        assert!((sum - 9.0).abs() < 1e-3, "mean preserved, sum {sum}");
+        assert_eq!(out.attr(AttrClass::Point, "u"), src.attr(AttrClass::Point, "u"));
+        let missing = cook(&*new(), src, &with(0, 1.0, 5).with("attribs", ParamValue::S("zz".into())));
+        assert!(matches!(missing, Err(CookError::Failed(_))));
+    }
+
+    /// Smoothing a z-lifted grid centre then updatenormals: flat grid -> N = (0,0,+-1) exactly; centre N of the lifted grid is +-z (symmetric).
+    #[test]
+    fn updatenormals_writes_unit_point_normals() {
+        let src = grid3();
+        let off = cook(&*new(), src.clone(), &with(0, 0.5, 10)).expect("cooks");
+        assert!(off.attr(AttrClass::Point, "N").is_none());
+        let on = cook(&*new(), src, &with(0, 0.5, 10).with("updatenormals", ParamValue::B(true))).expect("cooks");
+        let Some(AttrData::V3(n)) = on.attr(AttrClass::Point, "N").map(|a| &a.data) else { panic!("N missing") };
+        assert_eq!(n.len(), 9);
+        for v in n {
+            assert!(v[0].abs() < 1e-5 && v[1].abs() < 1e-5 && (v[2].abs() - 1.0).abs() < 1e-5, "{v:?}");
         }
     }
 

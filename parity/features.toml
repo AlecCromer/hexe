@@ -309,11 +309,15 @@ tier = "P1"
 status = "partial"
 commands = ["smooth"]
 evidence = [
-  "crates/sop/src/builtins/smooth_sop.rs::box_one_iteration_strength_one_moves_corners_to_one_sixth",
-  "crates/sop/src/builtins/smooth_sop.rs::zero_strength_zero_iterations_and_empty_share_the_arc",
-  "crates/sop/src/builtins/smooth_sop.rs::pin_boundary_keeps_grid_border_and_moves_only_the_free_centre",
+  "crates/sop/src/builtins/smooth_sop.rs::planar_grid_stays_planar",
+  "crates/sop/src/builtins/smooth_sop.rs::implicit_smooth_converges",
+  "crates/sop/src/builtins/smooth_sop.rs::boundary_pinned_when_constrain_on",
+  "crates/sop/src/builtins/smooth_sop.rs::zero_quality_and_strength_share_arc",
+  "crates/sop/src/builtins/smooth_sop.rs::point_group_limits_smoothing_to_selected_points",
+  "crates/sop/src/builtins/smooth_sop.rs::extra_attribute_is_smoothed_and_mean_preserved_unlisted_untouched",
+  "crates/sop/src/builtins/smooth_sop.rs::updatenormals_writes_unit_point_normals",
 ]
-notes = "H18: iterations I (0..=1000) / strength F / pin_boundary B. P += strength*(avg(distinct edge neighbours)-P), Jacobi. NOT modelled: Houdini's other smoothing modes (cotangent/volume-preserving), groups, attribute smoothing, N update. UNVERIFIED vs Houdini (hython blocked). Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "c2b+QA: implicit (I+lambda L)P'=P via CG; method uniform|scale(1/len)|curvature(1/len^2 = APPROX, not true cotangent); strength, filterquality(0..=1000), constrainboundary; QA adds group (point groups; unselected pinned, still feed Laplacian), attribs (space-sep point F32/V2/V3/V4/FN attrs smoothed per channel, same operator; unknown/non-float = Failed), updatenormals B (point N = uniform Newell, written/replaced). Oracles: group=only centre moves, attr sum conserved (symmetric L), flat grid N=(0,0,+-1). REMAINING: true cotangent weights, volume-preserving mode. UNVERIFIED vs Houdini (hython blocked). Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-peak"
