@@ -113,24 +113,24 @@ impl Node<Detail> for Curve {
             p.toggle("close").ok_or_else(|| CookError::BadParam("curve.close: missing or not a toggle".into()))?;
         let curve_type = p.menu("type").unwrap_or(0);
         let divisions = p.int("divisions").unwrap_or(10).max(1).min(1000) as usize;
-        
+
         let control_pts = parse_coords("curve.coords", coords)?;
         let mut g = Detail::default();
         if control_pts.is_empty() {
             return Ok(Arc::new(g));
         }
-        
+
         let pts = match curve_type {
-            0 => control_pts, // poly: use control points directly
+            0 => control_pts,                                      // poly: use control points directly
             1 => subdivide_bezier(&control_pts, divisions, close), // bezier
-            2 => control_pts, // nurbs: TODO, use control points for now
+            2 => control_pts,                                      // nurbs: TODO, use control points for now
             _ => return Err(CookError::BadParam("curve.type: invalid type".into())),
         };
-        
+
         if pts.is_empty() {
             return Ok(Arc::new(g));
         }
-        
+
         let n = u32::try_from(pts.len()).map_err(|_| CookError::Failed("curve: too many points".into()))?;
         let ids = g.add_points(n);
         *g.p_mut() = pts;
@@ -179,7 +179,7 @@ mod tests {
         assert!(matches!(parse_coords("t", &many), Err(CookError::Failed(_))));
         assert_eq!(parse_coords("t", &many[..many.len() - 6]).map(|v| v.len()).ok(), Some(MAX_POINTS));
     }
-    
+
     #[test]
     fn bezier_endpoints_hit_control_points() {
         // Bezier curve with 4 control points

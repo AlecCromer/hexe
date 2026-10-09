@@ -23,9 +23,11 @@ const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("method", ParamValue::Menu(0))
-            .label("Weighting Method")
-            .menu(&[("uniform", "Uniform"), ("scale", "Scale-Dominant"), ("curvature", "Curvature-Dominant")]),
+        ParamSpec::new("method", ParamValue::Menu(0)).label("Weighting Method").menu(&[
+            ("uniform", "Uniform"),
+            ("scale", "Scale-Dominant"),
+            ("curvature", "Curvature-Dominant"),
+        ]),
         ParamSpec::new("strength", ParamValue::F(0.5)).label("Strength").range(0.0, 2.0),
         ParamSpec::new("filterquality", ParamValue::I(10)).label("Filter Quality").range(0.0, 100.0),
         ParamSpec::new("constrainboundary", ParamValue::B(false)).label("Constrain Boundary Points"),
@@ -51,7 +53,7 @@ fn prim_points(d: &Detail, pr: &Prim) -> Vec<usize> {
 fn build_edges(d: &Detail, pts: &[V3], method: u32) -> Vec<(usize, usize, f64)> {
     let np = d.point_count as usize;
     let mut edges: Vec<(usize, usize, f64)> = Vec::new();
-    
+
     for pr in &d.prims {
         let (closed, linear) = match pr.kind {
             PrimKind::Poly { closed } => (closed, true),
@@ -64,13 +66,13 @@ fn build_edges(d: &Detail, pts: &[V3], method: u32) -> Vec<(usize, usize, f64)> 
         let plist = prim_points(d, pr);
         let n = plist.len();
         let m = if closed && n >= 3 { n } else { n.saturating_sub(1) };
-        
+
         for k in 0..m {
             let (Some(&a), Some(&b)) = (plist.get(k), plist.get((k + 1) % n)) else { continue };
             if a == b || a >= np || b >= np {
                 continue;
             }
-            
+
             let weight = match method {
                 0 => 1.0, // uniform
                 1 => {
@@ -114,7 +116,7 @@ fn build_edges(d: &Detail, pts: &[V3], method: u32) -> Vec<(usize, usize, f64)> 
 fn find_boundary(d: &Detail) -> Vec<bool> {
     let np = d.point_count as usize;
     let mut closed_edges: Vec<(usize, usize)> = Vec::new();
-    
+
     for pr in &d.prims {
         let (closed, linear) = match pr.kind {
             PrimKind::Poly { closed } => (closed, true),
@@ -157,7 +159,7 @@ fn build_laplacian_csr(np: usize, edges: &[(usize, usize, f64)]) -> (Vec<usize>,
     let mut row_ptr = vec![0; np + 1];
     let mut col_ind = Vec::new();
     let mut values = Vec::new();
-    
+
     // Count entries per row
     for &(a, _, _) in edges {
         if a < np {
@@ -168,17 +170,17 @@ fn build_laplacian_csr(np: usize, edges: &[(usize, usize, f64)]) -> (Vec<usize>,
     for i in 0..np {
         row_ptr[i + 1] += 1;
     }
-    
+
     // Prefix sum
     for i in 0..np {
         row_ptr[i + 1] += row_ptr[i];
     }
-    
+
     col_ind.resize(row_ptr[np], 0);
     values.resize(row_ptr[np], 0.0);
-    
+
     let mut temp_ptr = row_ptr[..np].to_vec();
-    
+
     // Fill off-diagonal entries
     for &(a, b, w) in edges {
         if a < np && b < np {
@@ -188,33 +190,33 @@ fn build_laplacian_csr(np: usize, edges: &[(usize, usize, f64)]) -> (Vec<usize>,
             temp_ptr[a] += 1;
         }
     }
-    
+
     // Sort each row and compute diagonal
     for i in 0..np {
         let lo = row_ptr[i];
         let hi = temp_ptr[i];
-        
+
         // Sort the off-diagonal entries in this row
         let mut row_data: Vec<(usize, f64)> = (lo..hi).map(|k| (col_ind[k], values[k])).collect();
         row_data.sort_unstable_by_key(|&(j, _)| j);
-        
+
         // Sum off-diagonal weights for diagonal entry
         let diag_val: f64 = row_data.iter().map(|&(_, w)| w).sum::<f64>();
-        
+
         // Insert diagonal at the start (positive: sum of weights)
         col_ind[lo] = i;
         values[lo] = diag_val;
-        
+
         // Insert sorted off-diagonal entries (negative)
         for (k, &(j, w)) in row_data.iter().enumerate() {
             col_ind[lo + 1 + k] = j;
             values[lo + 1 + k] = -w;
         }
-        
+
         // Update row_ptr to include diagonal
         temp_ptr[i] = hi + 1;
     }
-    
+
     (row_ptr, col_ind, values)
 }
 
@@ -225,12 +227,14 @@ fn spmv(row_ptr: &[usize], col_ind: &[usize], vals: &[f64], x: &[f64], y: &mut [
             (Some(&a), Some(&b)) => (a, b),
             _ => continue,
         };
-        *yi = (lo..hi).filter_map(|k| {
-            let j = *col_ind.get(k)?;
-            let v = *vals.get(k)?;
-            let xj = *x.get(j)?;
-            Some(v * xj)
-        }).sum();
+        *yi = (lo..hi)
+            .filter_map(|k| {
+                let j = *col_ind.get(k)?;
+                let v = *vals.get(k)?;
+                let xj = *x.get(j)?;
+                Some(v * xj)
+            })
+            .sum();
     }
 }
 
@@ -263,33 +267,33 @@ fn cg_solve(
     let mut r = vec![0.0; n];
     let mut p = vec![0.0; n];
     let mut ap = vec![0.0; n];
-    
+
     // r = b - A*x
     apply_system(row_ptr, col_ind, vals, lambda, x, &mut ap);
     for i in 0..n {
         r[i] = b[i] - ap[i];
     }
     p.copy_from_slice(&r);
-    
+
     let mut rs_old = dot(&r, &r);
     if rs_old < tol * tol {
         return;
     }
-    
+
     for _ in 0..max_iter {
         apply_system(row_ptr, col_ind, vals, lambda, &p, &mut ap);
         let alpha = rs_old / dot(&p, &ap).max(1e-30);
-        
+
         for i in 0..n {
             x[i] += alpha * p[i];
             r[i] -= alpha * ap[i];
         }
-        
+
         let rs_new = dot(&r, &r);
         if rs_new < tol * tol {
             break;
         }
-        
+
         let beta = rs_new / rs_old;
         for i in 0..n {
             p[i] = r[i] + beta * p[i];
@@ -314,45 +318,45 @@ impl Node<Detail> for Smooth {
         let strength = float(p, "strength")?;
         let quality = int(p, "filterquality")?;
         let constrain = toggle(p, "constrainboundary")?;
-        
+
         if !(0..=MAX_QUALITY).contains(&quality) {
             return Err(bad(format!("`filterquality` must be in 0..={MAX_QUALITY}, got {quality}")));
         }
         if !strength.is_finite() {
             return Err(bad(format!("`strength` must be finite, got {strength}")));
         }
-        
+
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         if quality == 0 || strength == 0.0 || src.point_count == 0 {
             return Ok(Arc::clone(src));
         }
-        
+
         let np = src.point_count as usize;
         let pts = positions(src);
         let edges = build_edges(src, &pts, method);
-        
+
         let work = u64::from(quality as u32).saturating_mul((edges.len() + np) as u64);
         if work > MAX_WORK {
             return Err(failed(OP, "filterquality * edges exceeds the work cap"));
         }
-        
+
         let (row_ptr, col_ind, vals) = build_laplacian_csr(np, &edges);
         let boundary = if constrain { find_boundary(src) } else { vec![false; np] };
-        
+
         // Solve for each coordinate independently
         let mut result = vec![[0.0; 3]; np];
         for axis in 0..3 {
             let b: Vec<f64> = pts.iter().map(|p| p[axis]).collect();
             let mut x = b.clone();
-            
+
             cg_solve(&row_ptr, &col_ind, &vals, strength, &b, &mut x, quality as usize, 1e-9);
-            
+
             for (i, xi) in x.iter().enumerate() {
                 // If boundary point, keep original position
                 result[i][axis] = if constrain && boundary[i] { pts[i][axis] } else { *xi };
             }
         }
-        
+
         let mut out = (**src).clone();
         *out.p_mut() = to_f32(OP, &result)?;
         Ok(Arc::new(out))
@@ -371,7 +375,7 @@ mod tests {
             .with("strength", ParamValue::F(strength))
             .with("filterquality", ParamValue::I(quality))
     }
-    
+
     #[test]
     fn params_and_defaults() {
         let n = new();
@@ -383,7 +387,7 @@ mod tests {
         assert_eq!(params[2].name, "filterquality");
         assert_eq!(params[3].name, "constrainboundary");
     }
-    
+
     #[test]
     fn planar_grid_stays_planar() {
         let src = grid3();
@@ -393,7 +397,7 @@ mod tests {
             assert!(p[2].abs() < 1e-5, "point {:?} not planar", p);
         }
     }
-    
+
     #[test]
     fn implicit_smooth_converges() {
         // Simple test: box should converge towards centroid with enough iterations
@@ -406,29 +410,29 @@ mod tests {
             assert!(p[2].abs() < 0.2, "z coord should be near 0: {}", p[2]);
         }
     }
-    
+
     #[test]
     fn boundary_pinned_when_constrain_on() {
         let src = grid3();
-        let out = cook(&*new(), src.clone(), &with(0, 1.0, 10)
-            .with("constrainboundary", ParamValue::B(true))).expect("cooks");
-        
+        let out = cook(&*new(), src.clone(), &with(0, 1.0, 10).with("constrainboundary", ParamValue::B(true)))
+            .expect("cooks");
+
         // Grid 3x3: boundary points are all except center (index 4)
         for i in [0, 1, 2, 3, 5, 6, 7, 8] {
             assert_eq!(out.p()[i], src.p()[i], "boundary point {i} should be pinned");
         }
     }
-    
+
     #[test]
     fn zero_quality_and_strength_share_arc() {
         let a = Arc::new(cube());
         let out1 = cook_arc(&*new(), &a, &with(0, 0.5, 0)).expect("cooks");
         assert!(Arc::ptr_eq(&out1, &a));
-        
+
         let out2 = cook_arc(&*new(), &a, &with(0, 0.0, 10)).expect("cooks");
         assert!(Arc::ptr_eq(&out2, &a));
     }
-    
+
     #[test]
     fn scene_loader_cooks_example() {
         let scene = r#"{"nodes":[{"name":"b","type":"box"},{"name":"s","type":"smooth","params":{"filterquality":5}}],"edges":[["b",0,"s",0]],"display":"s"}"#;

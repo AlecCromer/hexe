@@ -309,14 +309,16 @@ pub(super) mod testkit {
         let np = rows * cols;
         d.add_points(np as u32);
         let noise = |i: usize| -> f32 { ((i * 7919) % 1000) as f32 / 1000.0 * 0.1 - 0.05 };
-        *d.p_mut() = (0..np).map(|i| {
-            let r = i / cols;
-            let c = i % cols;
-            let theta = std::f32::consts::PI * r as f32 / (rows - 1) as f32;
-            let phi = 2.0 * std::f32::consts::PI * c as f32 / cols as f32;
-            let rad = 1.0 + noise(i);
-            [rad * theta.sin() * phi.cos(), rad * theta.sin() * phi.sin(), rad * theta.cos()]
-        }).collect();
+        *d.p_mut() = (0..np)
+            .map(|i| {
+                let r = i / cols;
+                let c = i % cols;
+                let theta = std::f32::consts::PI * r as f32 / (rows - 1) as f32;
+                let phi = 2.0 * std::f32::consts::PI * c as f32 / cols as f32;
+                let rad = 1.0 + noise(i);
+                [rad * theta.sin() * phi.cos(), rad * theta.sin() * phi.sin(), rad * theta.cos()]
+            })
+            .collect();
         // Simple quad grid topology
         for r in 0..(rows - 1) {
             for c in 0..cols {

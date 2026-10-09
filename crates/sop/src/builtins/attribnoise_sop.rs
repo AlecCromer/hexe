@@ -288,7 +288,7 @@ fn sample(cfg: &Config, p: [f64; 3], chan: usize) -> f64 {
         return 0.0;
     }
     let chan = chan as u64;
-    
+
     let n = match cfg.fractal {
         Fractal::None => base_noise(cfg.kind, base_q, cfg.seed, chan),
         Fractal::Fbm => {
@@ -746,8 +746,8 @@ mod tests {
     #[test]
     fn ridged_is_non_negative() {
         let d = cloud(20);
-        let out = cook(&d, &[("fractal", ParamValue::Menu(3)), ("octaves", ParamValue::I(4)), ("operation", s("set"))]).
-            expect("ridged");
+        let out = cook(&d, &[("fractal", ParamValue::Menu(3)), ("octaves", ParamValue::I(4)), ("operation", s("set"))])
+            .expect("ridged");
         // Ridged noise should be >= 0 since it's 1 - abs(noise)
         for p in out.p() {
             assert!(p[1] >= -1.1, "ridged noise should be >= -1 (with some margin): {}", p[1]);
