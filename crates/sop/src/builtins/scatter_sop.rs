@@ -20,6 +20,8 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("npts", ParamValue::I(1000)).label("Force Total Count").range(0.0, 10000.0),
         ParamSpec::new("seed", ParamValue::I(0)).label("Global Seed").range(0.0, 10.0),
         ParamSpec::new("density_attrib", ParamValue::S(String::new())).label("Density Attribute"),
+        ParamSpec::new("relaxpoints", ParamValue::B(false)).label("Relax Points"),
+        ParamSpec::new("relaxiterations", ParamValue::I(5)).label("Relax Iterations").range(0.0, 50.0),
     ]
 }
 pub fn new() -> Box<SopNode> {
