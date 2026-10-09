@@ -328,11 +328,17 @@ id = "sop-facet"
 title = "Facet SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["facet"]
 evidence = [
+  "crates/sop/src/builtins/facet_sop.rs::box_unique_points_is_24_points_with_same_positions_per_corner",
+  "crates/sop/src/builtins/facet_sop.rs::box_cusp_60_is_24_points_and_cusp_100_keeps_8",
+  "crates/sop/src/builtins/facet_sop.rs::flat_grid_cusp_60_is_unchanged_and_shares_the_arc",
+  "crates/sop/src/builtins/facet_sop.rs::post_nml_unique_gives_face_normals_and_shared_gives_diagonals",
+  "crates/sop/src/builtins/facet_sop.rs::orient_polygons_makes_adjacent_polys_opposite_winding",
+  "crates/sop/src/builtins/facet_sop.rs::consolidate_fuses_nearby_points",
 ]
-notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N). NOT modelled: consolidate (merge coplanar faces), orient_polygons (winding flip for outward), remove_inline, group, prim-normal flip options. UNVERIFIED-vs-Houdini: consolidate parm (face merging, no oracle), orient_polygons semantics (no oracle). Houdini-oracle (H32, real Houdini 20.5): ORDER-DIFF (counts match, point renumbering differs), see docs/HOUDINI-ORACLE.md."
+notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N) / consolidate (distance-based point fusion) / orient_polygons (BFS winding consistency). NOT modelled: remove_inline, group, prim-normal flip options. UNVERIFIED-vs-Houdini: consolidate distance semantics (ours is Euclidean), orient_polygons BFS seed choice (no oracle). Houdini-oracle (H32, real Houdini 20.5): ORDER-DIFF (counts match, point renumbering differs), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-scatter"

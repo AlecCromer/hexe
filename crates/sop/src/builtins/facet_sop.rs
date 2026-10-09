@@ -33,6 +33,8 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("cusp", ParamValue::B(false)).label("Cusp Polygons"),
         ParamSpec::new("cusp_angle", ParamValue::F(60.0)).label("Cusp Angle").range(0.0, 180.0),
         ParamSpec::new("post_nml", ParamValue::B(false)).label("Post-Compute Normals"),
+        ParamSpec::new("consolidate", ParamValue::F(0.0)).label("Consolidate Distance").range(0.0, 1.0),
+        ParamSpec::new("orient_polygons", ParamValue::B(false)).label("Orient Polygons"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -56,6 +58,98 @@ fn vertex_normals(d: &Detail, pos: &[V3]) -> Vec<Option<V3>> {
     out
 }
 
+/// Orient polygons consistently via BFS: ensure adjacent polys have opposite winding on shared edges.
+fn orient_polygons(d: &mut Detail) {
+    use std::collections::{HashMap, VecDeque};
+
+    // Build edge -> prim map for closed polys
+    let mut edge_prims: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
+    let mut poly_indices = Vec::new();
+
+    for (pi, pr) in d.prims.iter().enumerate() {
+        if let Some(pts) = closed_poly_pts(d, pr) {
+            poly_indices.push(pi);
+            let n = pts.len();
+            for k in 0..n {
+                let (a, b) = (pts[k] as u32, pts[(k + 1) % n] as u32);
+                let key = (a.min(b), a.max(b));
+                edge_prims.entry(key).or_default().push(pi);
+            }
+        }
+    }
+
+    if poly_indices.is_empty() {
+        return;
+    }
+
+    let mut oriented = vec![false; d.prims.len()];
+    let mut flipped = vec![false; d.prims.len()];
+
+    for seed_idx in poly_indices.iter().copied() {
+        if oriented[seed_idx] {
+            continue;
+        }
+
+        let mut queue = VecDeque::new();
+        queue.push_back(seed_idx);
+        oriented[seed_idx] = true;
+
+        while let Some(pi) = queue.pop_front() {
+            let Some(pts) = closed_poly_pts(d, &d.prims[pi]) else { continue };
+            let n = pts.len();
+
+            for k in 0..n {
+                let (a, b) = (pts[k] as u32, pts[(k + 1) % n] as u32);
+                let key = (a.min(b), a.max(b));
+
+                if let Some(neighbors) = edge_prims.get(&key) {
+                    for &ni in neighbors {
+                        if ni == pi || oriented[ni] {
+                            continue;
+                        }
+
+                        // Check if neighbor has opposite winding on shared edge
+                        let Some(npts) = closed_poly_pts(d, &d.prims[ni]) else { continue };
+                        let nn = npts.len();
+
+                        let mut has_same_winding = false;
+                        for nk in 0..nn {
+                            let (na, nb) = (npts[nk] as u32, npts[(nk + 1) % nn] as u32);
+                            if (a == na && b == nb) || (a == nb && b == na) {
+                                // Found shared edge: if (a,b) in same order, windings are SAME (bad)
+                                // We want OPPOSITE winding, so flip if same
+                                if a == na && b == nb {
+                                    has_same_winding = true;
+                                }
+                                break;
+                            }
+                        }
+
+                        oriented[ni] = true;
+                        // If this poly has same winding as current, we need to flip it
+                        if has_same_winding {
+                            flipped[ni] = !flipped[pi];
+                        } else {
+                            flipped[ni] = flipped[pi];
+                        }
+                        queue.push_back(ni);
+                    }
+                }
+            }
+        }
+    }
+
+    // Apply flips
+    for (pi, pr) in d.prims.iter_mut().enumerate() {
+        if flipped[pi] {
+            let (lo, hi) = (pr.verts.start as usize, pr.verts.end as usize);
+            if let Some(verts) = d.vertex_point.get_mut(lo..hi) {
+                verts.reverse();
+            }
+        }
+    }
+}
+
 impl Node<Detail> for Facet {
     fn type_name(&self) -> &'static str {
         "facet"
@@ -69,9 +163,12 @@ impl Node<Detail> for Facet {
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
         let (unique, cusp, post) = (toggle(p, "unique_points")?, toggle(p, "cusp")?, toggle(p, "post_nml")?);
+        let orient = toggle(p, "orient_polygons")?;
+        let consol_dist = float(p, "consolidate")?;
+        let consolidate = consol_dist > 0.0;
         let angle = float(p, "cusp_angle")?.clamp(0.0, 180.0);
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
-        if !(unique || cusp || post) {
+        if !(unique || cusp || post || orient || consolidate) {
             return Ok(Arc::clone(src));
         }
         let np = src.point_count as usize;
@@ -161,6 +258,36 @@ impl Node<Detail> for Facet {
             let p: Vec<V3> = origin.iter().map(|&i| pos.get(i).copied().unwrap_or([0.0; 3])).collect();
             rebuild(OP, src, ids, src.prims.clone(), &rm, to_f32(OP, &p)?)?
         };
+        if orient {
+            orient_polygons(&mut out);
+        }
+        if consolidate {
+            // Fuse nearby points within consol_dist
+            let out_pos = positions(&out);
+            let mut remap = vec![u32::MAX; out_pos.len()];
+            for i in 0..out_pos.len() {
+                if remap[i] != u32::MAX {
+                    continue;
+                }
+                remap[i] = i as u32;
+                for j in (i + 1)..out_pos.len() {
+                    if remap[j] == u32::MAX {
+                        let d2 = (0..3).map(|k| (out_pos[i][k] - out_pos[j][k]).powi(2)).sum::<f64>().sqrt();
+                        if d2 <= consol_dist {
+                            remap[j] = i as u32;
+                        }
+                    }
+                }
+            }
+            // Remap vertex_point
+            for vp in &mut out.vertex_point {
+                if let Some(&new_id) = remap.get(*vp as usize)
+                    && new_id != u32::MAX
+                {
+                    *vp = new_id;
+                }
+            }
+        }
         if post {
             let n = point_normals(&out, &positions(&out));
             let n: Vec<[f32; 3]> = n.iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
@@ -170,7 +297,7 @@ impl Node<Detail> for Facet {
                 data: AttrData::V3(n),
                 type_info: TypeInfo::Normal,
             });
-        } else if unchanged {
+        } else if unchanged && !orient && !consolidate {
             return Ok(Arc::clone(src));
         }
         Ok(Arc::new(out))
@@ -191,6 +318,15 @@ mod tests {
             .with("cusp_angle", ParamValue::F(angle))
             .with("post_nml", ParamValue::B(post))
     }
+    fn opts_full(unique: bool, cusp: bool, angle: f32, post: bool, orient: bool, consol: f32) -> ParamSet {
+        defaults(&*new())
+            .with("unique_points", ParamValue::B(unique))
+            .with("cusp", ParamValue::B(cusp))
+            .with("cusp_angle", ParamValue::F(angle))
+            .with("post_nml", ParamValue::B(post))
+            .with("orient_polygons", ParamValue::B(orient))
+            .with("consolidate", ParamValue::F(consol))
+    }
     #[test]
     fn params_and_defaults() {
         let n = new();
@@ -202,7 +338,9 @@ mod tests {
                 ("unique_points", ParamValue::B(false)),
                 ("cusp", ParamValue::B(false)),
                 ("cusp_angle", ParamValue::F(60.0)),
-                ("post_nml", ParamValue::B(false))
+                ("post_nml", ParamValue::B(false)),
+                ("consolidate", ParamValue::F(0.0)),
+                ("orient_polygons", ParamValue::B(false)),
             ]
         );
     }
@@ -285,5 +423,54 @@ mod tests {
         let (mut g, id) = crate::load_scene(ok).expect("loads");
         assert_eq!(g.cook(id, 0.0).expect("cooks").point_count, 24);
         assert_eq!(crate::registry().create("facet").map(|n| n.type_name()), Some("facet"));
+    }
+    #[test]
+    fn orient_polygons_makes_adjacent_polys_opposite_winding() {
+        // Two quads sharing an edge: one with correct winding, one with SAME winding (bad)
+        let mut d = Detail::default();
+        d.add_points(6);
+        *d.p_mut() =
+            vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [2.0, 1.0, 0.0]];
+        d.add_poly(&[0, 1, 2, 3], true); // quad 1: counter-clockwise, edge 1->2
+        d.add_poly(&[2, 1, 4, 5], true); // quad 2: edge 2->1 (opposite), edge 1->4, should NOT flip
+        d.add_poly(&[1, 2, 5, 4], true); // quad 3: edge 1->2 (same as quad 1), SHOULD flip to [4,5,2,1]
+
+        let out = cook(&*new(), d, &opts_full(false, false, 60.0, false, true, 0.0)).expect("cooks");
+        assert_eq!(out.prim_count(), 3);
+
+        let p0 = &out.vertex_point[0..4];
+        let p1 = &out.vertex_point[4..8];
+        let p2 = &out.vertex_point[8..12];
+
+        // First poly should be unchanged: [0,1,2,3]
+        assert_eq!(p0, &[0, 1, 2, 3]);
+
+        // Second poly already has opposite winding, should be unchanged: [2,1,4,5]
+        assert_eq!(p1, &[2, 1, 4, 5]);
+
+        // Third poly has same winding as first on shared edge, should be flipped: [4,5,2,1]
+        assert_eq!(p2, &[4, 5, 2, 1]);
+    }
+    #[test]
+    fn consolidate_fuses_nearby_points() {
+        let mut d = Detail::default();
+        d.add_points(4);
+        *d.p_mut() = vec![
+            [0.0, 0.0, 0.0],
+            [0.0005, 0.0, 0.0], // within 0.001 of point 0
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0005, 0.0], // within 0.001 of point 2
+        ];
+        d.add_poly(&[0, 2, 3, 1], true);
+
+        let out = cook(&*new(), d, &opts_full(false, false, 60.0, false, false, 0.001)).expect("cooks");
+
+        // Points should be fused: 0+1 -> 0, 2+3 -> 2
+        let vp = &out.vertex_point;
+        assert_eq!(vp.len(), 4);
+        // Check that nearby points were remapped
+        assert_eq!(vp[0], vp[3]); // points 0 and 1 should map to same id
+        assert_eq!(vp[1], vp[2]); // points 2 and 3 should map to same id
+        assert_ne!(vp[0], vp[1]); // but the two groups should differ
     }
 }
