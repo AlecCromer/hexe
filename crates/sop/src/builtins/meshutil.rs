@@ -302,6 +302,7 @@ pub(super) mod testkit {
         d
     }
     /// Noisy sphere for smoothing tests: UV sphere with noise added to radius.
+    #[allow(dead_code)]
     pub fn noisy_sphere() -> Detail {
         let mut d = Detail::default();
         let rows = 8;
