@@ -19,12 +19,19 @@
 //! * `carryattrs` B on: every input point attr (not `P`) is inherited by the output points through the same linear weights
 //!   as the position (resampled points blend their two neighbours, intermediate stations blend the two sections; floats =
 //!   weighted mean, int/str = heaviest source); prim attrs: quads between sections `s` and `s+1` copy section `s`'s prim.
-//! * Output = new points + vertex `uv` V3 (`u` = column / columns, `v` = station / stations). NOT modelled (DEFERRED):
-//!   NURBS output.
+//! * `surftype` 2 = `nurbs`: ONE `NurbsSurf` / `BezierSurf` instead of a mesh: CV rows = the loft stations (sections + `divs` stations, so
+//!   the v direction is a ruled order-2 basis through them, wrapped with `closev`), u = the sections' own basis. Spline curve sections
+//!   (`NurbsCurve` / `BezierCurve`) keep their basis (all sections must then be splines of equal order / knots / closedness / CV
+//!   count, else `Failed`; their weights `Pw` blend with the station weights); Poly/Polyline sections use linear order 2 (wrapped when
+//!   closed). With `surftype` quads (0) and any spline section in the input the result is ALSO a NURBS surface (auto); triangles (1)
+//!   tessellates the splines (8 samples per span) and lofts the polygons. NURBS output carries no `uv` / attributes / `tris`.
+//!   UNVERIFIED vs Houdini (analytical oracle only).
+//! * Output (mesh) = new points + vertex `uv` V3 (`u` = column / columns, `v` = station / stations).
 use super::meshutil::{V3, add, bad, failed, positions, scale, sub, toggle};
+use super::splinesurf::{TESS_LOD, point_weight, spline_curves, spline_detail};
 use super::surfutil::{Curve, Mesh, curves, dist};
 use crate::SopNode;
-use hexe_geo::Detail;
+use hexe_geo::{Detail, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -33,9 +40,11 @@ const OP: &str = "skin";
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("surftype", ParamValue::Menu(0))
-            .label("Surface Type")
-            .menu(&[("quads", "Quadrilaterals"), ("triangles", "Triangles")]),
+        ParamSpec::new("surftype", ParamValue::Menu(0)).label("Surface Type").menu(&[
+            ("quads", "Quadrilaterals"),
+            ("triangles", "Triangles"),
+            ("nurbs", "NURBS"),
+        ]),
         ParamSpec::new("closev", ParamValue::B(false)).label("Close V"),
         ParamSpec::new("resample", ParamValue::B(true)).label("Resample Mismatched Sections"),
         ParamSpec::new("order", ParamValue::Menu(0)).label("Section Order").menu(&[
@@ -189,11 +198,12 @@ impl Node<Detail> for Skin {
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
-        let tris = match p.menu("surftype") {
-            Some(v @ 0..=1) => v == 1,
-            Some(v) => return Err(bad(format!("skin: `surftype`: menu index {v} out of range 0..=1"))),
+        let surftype = match p.menu("surftype") {
+            Some(v @ 0..=2) => v,
+            Some(v) => return Err(bad(format!("skin: `surftype`: menu index {v} out of range 0..=2"))),
             None => return Err(bad("skin: `surftype`: missing or not a menu")),
         };
+        let tris = surftype == 1;
         let order = match p.menu("order") {
             Some(v @ 0..=4) => v,
             Some(v) => return Err(bad(format!("skin: `order`: menu index {v} out of range 0..=4"))),
@@ -205,9 +215,21 @@ impl Node<Detail> for Skin {
         };
         let (closev, rs) = (toggle(p, "closev")?, toggle(p, "resample")?);
         let (keepshape, uniform, carry) = (toggle(p, "keepshape")?, toggle(p, "uniform")?, toggle(p, "carryattrs")?);
-        let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
+        let Some(src0) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
+        let nurbs_mode = surftype == 2 || (surftype == 0 && src0.has_spline_prims());
+        let tessed = if !nurbs_mode && src0.has_spline_prims() {
+            Some(Arc::new(src0.tessellate(TESS_LOD, TESS_LOD)))
+        } else {
+            None
+        };
+        let src: &Arc<Detail> = tessed.as_ref().unwrap_or(src0);
         let pos = positions(src);
+        let sc = if nurbs_mode { spline_curves(src0) } else { Vec::new() };
         let mut secs = curves(src);
+        if nurbs_mode {
+            secs.extend(sc.iter().map(|s| Curve { pts: s.pts.clone(), closed: s.closed, prim: s.prim }));
+            secs.sort_by_key(|c| c.prim);
+        }
         if secs.len() < 2 {
             return Ok(Arc::new(Detail::default()));
         }
@@ -254,6 +276,52 @@ impl Node<Detail> for Skin {
         }
         if !wrap_v {
             stations.push(rows[s_count - 1].clone());
+        }
+        if nurbs_mode {
+            let no = |m: &str| failed(OP, m);
+            let spline_of = |c: &Curve| sc.iter().find(|s| s.prim == c.prim);
+            let any_spline = secs.iter().any(|c| spline_of(c).is_some());
+            let (ubasis, bezier, uwrap) = if any_spline {
+                let first = spline_of(&secs[0]).ok_or_else(|| {
+                    no("NURBS sections cannot be mixed with polygon sections (use surftype triangles)")
+                })?;
+                for c in &secs {
+                    match spline_of(c) {
+                        Some(s)
+                            if s.basis == first.basis
+                                && s.bezier == first.bezier
+                                && s.closed == first.closed
+                                && s.pts.len() == first.pts.len() => {}
+                        _ => return Err(no("NURBS sections must share order, knots, closedness and CV count")),
+                    }
+                }
+                (first.basis.clone(), first.bezier, first.closed)
+            } else {
+                (hexe_geo::Basis::new(2), false, closed_u)
+            };
+            if (stations.len() as u64).saturating_mul(n as u64) > super::meshutil::MAX_ELEMS {
+                return Err(no("output exceeds the point cap"));
+            }
+            let mut cv: Vec<[f32; 3]> = Vec::with_capacity(stations.len() * n);
+            let mut pw: Vec<f32> = Vec::with_capacity(stations.len() * n);
+            for st in &stations {
+                for (pt, w) in st.p.iter().zip(&st.w) {
+                    let r = [pt[0] as f32, pt[1] as f32, pt[2] as f32];
+                    if !r.iter().all(|x| x.is_finite()) {
+                        return Err(no("non-finite or f32-overflowing position"));
+                    }
+                    cv.push(r);
+                    pw.push(w.iter().map(|&(i, f)| f as f32 * point_weight(src0, i as u32)).sum());
+                }
+            }
+            let (cols, rows) = (n as u32, stations.len() as u32);
+            let vb = hexe_geo::Basis::new(2);
+            let kind = if bezier {
+                PrimKind::BezierSurf { cols, rows, ubasis, vbasis: vb, uwrap, vwrap: wrap_v }
+            } else {
+                PrimKind::NurbsSurf { cols, rows, ubasis, vbasis: vb, uwrap, vwrap: wrap_v }
+            };
+            return Ok(Arc::new(spline_detail(cv, pw, kind)));
         }
         let mut m = Mesh::default();
         let mut ids: Vec<Vec<u32>> = Vec::with_capacity(stations.len());
@@ -483,7 +551,7 @@ mod tests {
     #[test]
     fn hostile_params_and_geometry() {
         for (k, v) in
-            [("surftype", ParamValue::Menu(2)), ("closev", ParamValue::I(1)), ("resample", ParamValue::F(1.0))]
+            [("surftype", ParamValue::Menu(3)), ("closev", ParamValue::I(1)), ("resample", ParamValue::F(1.0))]
         {
             assert!(matches!(run(sq(0.0, 1.0), defaults().with(k, v)), Err(CookError::BadParam(_))), "{k}");
         }
@@ -495,6 +563,65 @@ mod tests {
         let mut z = sq(0.0, 0.0);
         z.merge(&curve(&[[0.0; 3], [0.0; 3]], false));
         assert!(run(z, defaults()).is_ok());
+    }
+
+    use super::super::splinesurf::testkit::{area, nurbs, spline_curve};
+    use hexe_geo::{Basis, PrimKind};
+
+    /// Polygon sections + surftype nurbs: ONE ruled NurbsSurf (4 wrapped columns x 2 rows) with the exact box-wall area (4 sides of
+    /// 1 x 1) and the v midpoint at z = 1/2.
+    #[test]
+    fn nurbs_surftype_lofts_polygon_sections_into_one_ruled_surface() {
+        let d = run(stack(&[(0.0, 0.5), (1.0, 0.5)]), defaults().with("surftype", ParamValue::Menu(2))).expect("cooks");
+        assert_eq!((d.prim_count(), d.point_count), (1, 8));
+        assert!(matches!(&d.prims[0].kind, PrimKind::NurbsSurf { cols: 4, rows: 2, uwrap: true, vwrap: false, .. }));
+        let t = d.tessellate(1, 1);
+        assert!((area(&t) - 4.0).abs() < 1e-5, "area {}", area(&t));
+        let m = d.evaluate_uv(0, 0.0, 0.5).expect("evaluates");
+        assert!((m[2] - 0.5).abs() < 1e-6 && (m[0].abs() - 0.5).abs() < 1e-6, "{m:?}");
+        // divs adds ruled stations: 3 divs over 1 pair = 4 rows
+        let e = run(
+            stack(&[(0.0, 0.5), (1.0, 0.5)]),
+            defaults().with("surftype", ParamValue::Menu(2)).with("divs", ParamValue::I(3)),
+        )
+        .expect("cooks");
+        assert!(matches!(&e.prims[0].kind, PrimKind::NurbsSurf { rows: 4, .. }));
+    }
+
+    /// NURBS sections keep their basis (auto with surftype quads): CV-row lerp = curve-wise lerp, so the surface at (u, 1/2) is the
+    /// midpoint of the two section curves at u; mismatched bases are refused; triangles tessellates instead.
+    #[test]
+    fn nurbs_curve_sections_loft_into_a_nurbs_surface_sharing_their_basis() {
+        let a = [[0.0, 0.0, 0.0], [1.0, 2.0, 0.0], [3.0, 2.0, 0.0], [4.0, 0.0, 0.0]];
+        let b = a.map(|p| [p[0], p[1] * 2.0, 2.0]);
+        let (ca, cb) = (spline_curve(&a, nurbs(3)), spline_curve(&b, nurbs(3)));
+        let mut both = ca.clone();
+        both.merge(&cb);
+        let d = run(both.clone(), defaults()).expect("cooks");
+        assert!(matches!(&d.prims[0].kind, PrimKind::NurbsSurf { cols: 4, rows: 2, ubasis, .. } if ubasis.order == 3));
+        for u in [0.0f32, 0.3, 0.77, 1.0] {
+            let (p, q) = (ca.evaluate(0, u).expect("a"), cb.evaluate(0, u).expect("b"));
+            let s = d.evaluate_uv(0, u, 0.5).expect("surf");
+            for k in 0..3 {
+                assert!((s[k] - 0.5 * (p[k] + q[k])).abs() < 1e-5, "u {u} axis {k}: {s:?} vs {p:?} {q:?}");
+            }
+            // rows are the sections themselves
+            assert!(d.evaluate_uv(0, u, 0.0).expect("v0").iter().zip(p).all(|(x, y)| (x - y).abs() < 1e-5));
+            assert!(d.evaluate_uv(0, u, 1.0).expect("v1").iter().zip(q).all(|(x, y)| (x - y).abs() < 1e-5));
+        }
+        // mismatched orders are refused, never panic
+        let mut mixed = ca.clone();
+        mixed.merge(&spline_curve(&b, nurbs(4)));
+        assert!(run(mixed, defaults()).is_err());
+        // triangles = tessellate the splines, loft the polygons (open sections, 2 spans x 8 + 1 = 17 points each, 16 quads split in 2)
+        let t = run(both, defaults().with("surftype", ParamValue::Menu(1))).expect("cooks");
+        assert!(!t.has_spline_prims() && t.prim_count() == 16 * 2, "{}", t.prim_count());
+        // Bezier sections give a BezierSurf
+        let bz = |p: &[[f32; 3]; 4]| spline_curve(p, PrimKind::BezierCurve { basis: Basis::new(4), closed: false });
+        let mut two = bz(&a);
+        two.merge(&bz(&b));
+        let r = run(two, defaults()).expect("cooks");
+        assert!(matches!(&r.prims[0].kind, PrimKind::BezierSurf { cols: 4, rows: 2, .. }));
     }
 
     #[test]

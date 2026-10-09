@@ -160,6 +160,10 @@ impl Node<Detail> for PolyFill {
         &self.specs
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
+        // NURBS/Bezier prims are tessellated (8 samples per span): a closed spline curve fills as its polygon, a wrapped surface's open
+        // boundary loops are holes like any mesh
+        let tess = super::splinesurf::tess_inputs(inputs);
+        let inputs = &tess[..];
         let p = ctx.params;
         let mode = match p.menu("fillmode") {
             Some(v @ 0..=3) => v,
@@ -515,6 +519,45 @@ mod tests {
         deg.add_points(3);
         deg.add_poly(&[0, 0, 0], true);
         assert!(run(deg, defaults()).is_ok());
+    }
+
+    /// Spline prims never fail the node: a closed periodic NURBS ring tessellates to a closed poly (one hole = its own loop, filled);
+    /// an open NURBS curve has no closed poly -> nothing to fill; a wrapped NURBS surface keeps its (open) boundary loops as holes.
+    #[test]
+    fn spline_prims_are_tessellated_and_never_fail() {
+        use super::super::splinesurf::testkit::{nurbs, spline_curve};
+        use hexe_geo::{Basis, PrimKind};
+        let ring = spline_curve(
+            &[[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 4.0, 0.0], [0.0, 4.0, 0.0]],
+            PrimKind::NurbsCurve { basis: Basis { order: 3, knots: Vec::new(), end: false }, closed: true },
+        );
+        let d = run(ring, defaults()).expect("cooks");
+        assert!(!d.has_spline_prims());
+        assert_eq!(d.prim_count(), 2, "ring + its fill");
+        assert!(d.group(AttrClass::Prim, "filled").is_some_and(|g| g.mask.iter().filter(|&&b| b).count() == 1));
+        let open =
+            run(spline_curve(&[[0.0; 3], [1.0, 1.0, 0.0], [2.0, 0.0, 0.0]], nurbs(3)), defaults()).expect("cooks");
+        assert!(!open.has_spline_prims() && open.prim_count() == 1);
+        // surface patch: tessellated into quads whose boundary is one hole loop
+        let mut cv = Vec::new();
+        for r in 0..3 {
+            for c in 0..3 {
+                cv.push([c as f32, r as f32, 0.0]);
+            }
+        }
+        let patch = spline_curve(
+            &cv,
+            PrimKind::NurbsSurf {
+                cols: 3,
+                rows: 3,
+                ubasis: Basis::new(3),
+                vbasis: Basis::new(3),
+                uwrap: false,
+                vwrap: false,
+            },
+        );
+        let f = run(patch, defaults()).expect("cooks");
+        assert!(!f.has_spline_prims() && f.prim_count() > 64);
     }
 
     #[test]

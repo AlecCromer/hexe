@@ -6,13 +6,17 @@
 //! # Point order (generator defines it; UNVERIFIED vs Houdini, hython blocked)
 //! Point `i` = the `i`-th triple, ids ascending in text order; one `Poly{closed:close}` prim over ids `0..n` in order
 //! (no repeated closing point). Bad triple / non-finite / more than `MAX_POINTS` points → `BadParam` / `Failed`.
-//! # Curve types (QA, tessellated to polylines: no NURBS / Bezier prim kind in `hexe-geo`; UNVERIFIED vs Houdini)
-//! `type` 0 poly = the CVs; 1 bezier = piecewise degree `order-1` (shared end CVs) when `(n-1) % (order-1) == 0`, else one whole-curve
+//! # Curve types (UNVERIFIED vs Houdini)
+//! `type` 0 poly = the CVs (one `Poly` over them). `type` 1/2 with `method` cvs EMIT REAL PRIMS: ONE `BezierCurve` / `NurbsCurve` per curve over the CV
+//! points (points = CVs, no sampling; `divisions` is only the tessellation density of consumers), unit weights, no `Pw`.
+//! `method` breakpoints stays the TESSELLATED interpolating (Catmull-Rom) polyline. Curves that cannot be a prim (1 CV, > 64 CVs on
+//! the whole-curve Bezier fallback) degrade to a poly over the CVs.
+//! Semantics: 1 bezier = piecewise degree `order-1` (shared end CVs) when `(n-1) % (order-1) == 0`, else one whole-curve
 //! Bezier; 2 nurbs = B-spline (unit weights), clamped uniform knots (or `knots` S, n + order values) open / periodic when `close`.
 //! `divisions` = samples per span. `method` 1 breakpoints = the curve interpolates every point (uniform Catmull-Rom, `divisions` per
 //! span). `coords` may hold several curves separated by `;` (one prim each). Not done: interactive drawing (UI-only).
 use crate::SopNode;
-use hexe_geo::Detail;
+use hexe_geo::{Basis, Detail, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -46,6 +50,7 @@ struct Curve {
 }
 
 /// De Casteljau algorithm: evaluate Bezier curve at parameter t ∈ [0,1].
+#[cfg(test)]
 fn de_casteljau(control_pts: &[[f32; 3]], t: f32) -> [f32; 3] {
     if control_pts.is_empty() {
         return [0.0; 3];
@@ -67,6 +72,7 @@ fn de_casteljau(control_pts: &[[f32; 3]], t: f32) -> [f32; 3] {
 }
 
 /// Subdivide a Bezier curve into line segments.
+#[cfg(test)]
 fn subdivide_bezier(control_pts: &[[f32; 3]], divisions: usize, closed: bool) -> Vec<[f32; 3]> {
     if control_pts.is_empty() || divisions == 0 {
         return vec![];
@@ -82,6 +88,7 @@ fn subdivide_bezier(control_pts: &[[f32; 3]], divisions: usize, closed: bool) ->
 
 /// Piecewise Bezier of degree `order - 1` (segments share end CVs) when `(n-1) % (order-1) == 0` and `n > order - 1`;
 /// otherwise ONE whole-curve Bezier over all CVs. `divisions` samples per segment, end CV included.
+#[cfg(test)]
 fn bezier_open(ctrl: &[[f32; 3]], order: usize, divisions: usize) -> Vec<[f32; 3]> {
     let n = ctrl.len();
     let deg = order.max(2) - 1;
@@ -101,6 +108,7 @@ fn bezier_open(ctrl: &[[f32; 3]], order: usize, divisions: usize) -> Vec<[f32; 3
     }
 }
 /// de Boor evaluation of the degree `p` B-spline (NURBS with unit weights) with control points `c` and `knots` at `t`.
+#[cfg(test)]
 fn de_boor(c: &[[f64; 3]], p: usize, knots: &[f64], t: f64) -> [f64; 3] {
     let n = c.len();
     let mut s = p;
@@ -124,6 +132,7 @@ fn de_boor(c: &[[f64; 3]], p: usize, knots: &[f64], t: f64) -> [f64; 3] {
 /// NURBS (unit weights = B-spline) tessellated to `divisions` samples per knot span. Open: clamped uniform knots (or the
 /// user `knots`, length n + order), ends hit the first / last CV, `spans * divisions + 1` points. Closed: periodic uniform
 /// knots over the CVs wrapped by `order - 1`, `n * divisions` points (no duplicate end point).
+#[cfg(test)]
 fn nurbs_points(
     ctrl: &[[f32; 3]],
     order: usize,
@@ -218,6 +227,54 @@ fn through_points(pts: &[[f32; 3]], divisions: usize, closed: bool) -> Vec<[f32;
     }
     out
 }
+/// Prim kind for one curve of `n` CVs (`curve_type` 1 bezier / 2 nurbs). `Ok(None)` = cannot be a prim (poly over the CVs).
+/// Bezier: piecewise degree `order-1` when the CV count fits (open `(n-1) % (order-1) == 0`, closed `n % (order-1) == 0`), else ONE
+/// whole-curve Bezier (open order n, closed order n+1). NURBS: order `min(order, n)`, clamped uniform open / periodic closed;
+/// user `knots` (n + order values, open only) are validated.
+fn spline_kind(
+    curve_type: u32,
+    n: usize,
+    order: usize,
+    close: bool,
+    user_knots: &[f64],
+) -> Result<Option<PrimKind>, CookError> {
+    if n < 2 {
+        return Ok(None);
+    }
+    if curve_type == 1 {
+        let deg = order - 1;
+        let fits = if close { n.is_multiple_of(deg) && n + 1 > deg } else { (n - 1).is_multiple_of(deg) && n > deg };
+        let k = if fits {
+            order
+        } else if close {
+            n + 1
+        } else {
+            n
+        };
+        if k > 64 {
+            return Ok(None);
+        }
+        return Ok(Some(PrimKind::BezierCurve { basis: Basis::new(k as u32), closed: close }));
+    }
+    let k = order.min(n);
+    let p = k - 1;
+    let mut knots: Vec<f32> = Vec::new();
+    if !user_knots.is_empty() && !close {
+        if user_knots.len() != n + k {
+            return Err(CookError::BadParam(format!(
+                "curve.knots: need n + order = {} values, got {}",
+                n + k,
+                user_knots.len()
+            )));
+        }
+        if user_knots.windows(2).any(|w| w[1] < w[0]) || user_knots[p] >= user_knots[n] {
+            return Err(CookError::BadParam("curve.knots: must be non-decreasing with a non-empty domain".into()));
+        }
+        knots = user_knots.iter().map(|&v| v as f32).collect();
+    }
+    Ok(Some(PrimKind::NurbsCurve { basis: Basis { order: k as u32, knots, end: true }, closed: close }))
+}
+
 /// Parse `"x,y,z x,y,z ..."` (shared with the Add SOP). `who` prefixes errors (`curve.coords`).
 pub(super) fn parse_coords(who: &str, s: &str) -> Result<Vec<[f32; 3]>, CookError> {
     let mut out = Vec::new();
@@ -289,17 +346,12 @@ impl Node<Detail> for Curve {
             if control_pts.is_empty() {
                 continue;
             }
+            let mut kind = None;
+            if curve_type != 0 && method == 0 {
+                kind = spline_kind(curve_type, control_pts.len(), order, close, &user_knots)?;
+            }
             let pts = match (curve_type, method) {
-                (0, _) => control_pts,
-                (1, 0) if close => {
-                    let mut c = control_pts.clone();
-                    c.push(control_pts[0]);
-                    let mut v = bezier_open(&c, order, divisions);
-                    v.pop();
-                    v
-                }
-                (1, 0) => bezier_open(&control_pts, order, divisions),
-                (2, 0) => nurbs_points(&control_pts, order, divisions, close, &user_knots)?,
+                (0, _) | (_, 0) => control_pts,
                 _ => through_points(&control_pts, divisions, close),
             };
             total += pts.len();
@@ -314,7 +366,10 @@ impl Node<Detail> for Curve {
             let ids = g.add_points(n);
             g.p_mut()[start..start + pts.len()].copy_from_slice(&pts);
             let line: Vec<u32> = ids.collect();
-            g.add_poly(&line, close);
+            let q = g.add_poly(&line, close);
+            if let Some(k) = kind {
+                g.prims[q as usize].kind = k;
+            }
         }
         Ok(Arc::new(g))
     }
@@ -334,6 +389,7 @@ mod tests {
 
     #[test]
     fn three_coords_is_three_points_one_open_prim_close_closes() {
+        // (type 0 keeps the poly path)
         let d = cook(r#"{"coords":"0,0,0 1,0,0 1,1,0"}"#).expect("cooks");
         assert_eq!((d.point_count, d.prim_count(), d.vertex_count()), (3, 1, 3));
         assert_eq!(d.p(), &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]]);
@@ -360,6 +416,70 @@ mod tests {
         assert_eq!(parse_coords("t", &many[..many.len() - 6]).map(|v| v.len()).ok(), Some(MAX_POINTS));
     }
 
+    /// Cook then tessellate at `div` samples per span (what a consumer sees).
+    fn tcook(params: &str, div: u32) -> Result<Detail, String> {
+        cook(params).map(|d| d.tessellate(div, 1))
+    }
+    fn ctrl_of(s: &str) -> Vec<[f32; 3]> {
+        parse_coords("t", s).expect("coords")
+    }
+    /// REAL PRIMS: type 1/2 emit one Bezier/Nurbs prim over the CVs themselves (points = CVs, no sampling), and the tessellation
+    /// equals the independent legacy reference implementations (`bezier_open` / `nurbs_points`, kept test-only as oracles).
+    #[test]
+    fn type_1_2_emit_real_prims_over_the_cvs_matching_the_reference_samplers() {
+        let cs = "0,0,0 1,2,0 3,2,0 4,0,0 5,-2,1 7,-2,0 8,0,0";
+        let ctrl = ctrl_of(cs);
+        let b = cook(&format!(r#"{{"coords":"{cs}","type":1,"order":4}}"#)).expect("bezier");
+        assert_eq!((b.point_count, b.prim_count()), (7, 1));
+        assert_eq!(b.p(), ctrl.as_slice());
+        assert!(matches!(&b.prims[0].kind, PrimKind::BezierCurve { basis, closed: false } if basis.order == 4));
+        for div in [1usize, 5, 12] {
+            let t = b.tessellate(div as u32, 1);
+            for (x, y) in t.p().iter().zip(bezier_open(&ctrl, 4, div)) {
+                assert!(close3(*x, y), "bezier div {div}");
+            }
+            assert_eq!(t.point_count as usize, bezier_open(&ctrl, 4, div).len());
+        }
+        for (order, close) in [(4usize, false), (3, false), (3, true), (2, false)] {
+            let n = cook(&format!(r#"{{"coords":"{cs}","type":2,"order":{order},"close":{close}}}"#)).expect("nurbs");
+            assert_eq!((n.point_count, n.prim_count()), (7, 1));
+            assert!(
+                matches!(&n.prims[0].kind, PrimKind::NurbsCurve { basis, closed } if basis.order as usize == order && *closed == close)
+            );
+            let t = n.tessellate(6, 1);
+            let want = nurbs_points(&ctrl, order, 6, close, &[]).expect("ref");
+            assert_eq!(t.point_count as usize, want.len(), "order {order} close {close}");
+            for (x, y) in t.p().iter().zip(want) {
+                assert!(close3(*x, y), "nurbs order {order} close {close}");
+            }
+        }
+    }
+    /// Bezier CV counts that do not tile into degree-(order-1) segments fall back to ONE whole-curve Bezier (open: order n; closed: n+1).
+    #[test]
+    fn bezier_whole_curve_fallback_is_one_prim_matching_the_reference() {
+        let cs = "0,0,0 1,2,0 3,2,0 4,0,0 5,1,0"; // 5 CVs, order 4: (5-1)%3 != 0
+        let ctrl = ctrl_of(cs);
+        let d = cook(&format!(r#"{{"coords":"{cs}","type":1,"order":4}}"#)).expect("bezier");
+        assert!(matches!(&d.prims[0].kind, PrimKind::BezierCurve { basis, .. } if basis.order == 5));
+        let t = d.tessellate(9, 1);
+        for (x, y) in t.p().iter().zip(bezier_open(&ctrl, 4, 9)) {
+            assert!(close3(*x, y));
+        }
+        // closed fallback = whole-curve Bezier through CV0 .. CV4, CV0 (n+1 CVs, degree n), last sample dropped
+        let c = cook(&format!(r#"{{"coords":"{cs}","type":1,"order":4,"close":true}}"#)).expect("bezier closed");
+        assert!(matches!(&c.prims[0].kind, PrimKind::BezierCurve { basis, closed: true } if basis.order == 6));
+        let mut closed_ctrl = ctrl.clone();
+        closed_ctrl.push(ctrl[0]);
+        let want = bezier_open(&closed_ctrl, 4, 9);
+        let t = c.tessellate(9, 1);
+        assert_eq!(t.point_count as usize, want.len() - 1);
+        for (x, y) in t.p().iter().zip(want) {
+            assert!(close3(*x, y));
+        }
+        // 1 CV: poly (cannot be a prim)
+        let one = cook(r#"{"coords":"1,1,1","type":2}"#).expect("one");
+        assert!(matches!(one.prims[0].kind, PrimKind::Poly { .. }));
+    }
     fn pts(d: &Detail) -> Vec<[f32; 3]> {
         d.p().to_vec()
     }
@@ -370,8 +490,8 @@ mod tests {
     #[test]
     fn nurbs_order_n_equals_bezier_and_clamped_ends() {
         let c = r#""coords":"0,0,0 1,2,0 3,2,0 4,0,0","divisions":10"#;
-        let b = cook(&format!(r#"{{{c},"type":1,"order":4}}"#)).expect("bezier");
-        let n = cook(&format!(r#"{{{c},"type":2,"order":4}}"#)).expect("nurbs");
+        let b = tcook(&format!(r#"{{{c},"type":1,"order":4}}"#), 10).expect("bezier");
+        let n = tcook(&format!(r#"{{{c},"type":2,"order":4}}"#), 10).expect("nurbs");
         assert_eq!((b.point_count, n.point_count), (11, 11));
         for (x, y) in pts(&b).into_iter().zip(pts(&n)) {
             assert!(close3(x, y), "{x:?} vs {y:?}");
@@ -381,7 +501,7 @@ mod tests {
     /// NURBS order 2 = the control polyline; 4 CVs -> 3 spans x 5 divisions + 1 = 16 points, all on the polyline y = 0 segments here.
     #[test]
     fn nurbs_order_2_traces_the_control_polygon_and_counts_are_spans_times_divisions() {
-        let n = cook(r#"{"coords":"0,0,0 1,0,0 2,0,0 3,3,0","type":2,"order":2,"divisions":5}"#).expect("nurbs");
+        let n = tcook(r#"{"coords":"0,0,0 1,0,0 2,0,0 3,3,0","type":2,"order":2}"#, 5).expect("nurbs");
         assert_eq!(n.point_count, 16);
         let p = pts(&n);
         for (i, q) in p.iter().enumerate() {
@@ -390,15 +510,13 @@ mod tests {
             assert!(close3(*q, want), "i {i}: {q:?} vs {want:?}");
         }
         // cubic over 6 CVs: 3 spans -> 3*4+1 = 13
-        let c = cook(r#"{"coords":"0,0,0 1,1,0 2,0,0 3,1,0 4,0,0 5,1,0","type":2,"order":4,"divisions":4}"#)
-            .expect("nurbs");
+        let c = tcook(r#"{"coords":"0,0,0 1,1,0 2,0,0 3,1,0 4,0,0 5,1,0","type":2,"order":4}"#, 4).expect("nurbs");
         assert_eq!(c.point_count, 13);
     }
     /// Closed periodic NURBS: n*divisions points, no duplicate end point, stays in the CV hull, one closed prim.
     #[test]
     fn nurbs_closed_is_periodic_n_times_divisions_inside_the_hull() {
-        let d = cook(r#"{"coords":"0,0,0 4,0,0 4,4,0 0,4,0","type":2,"order":3,"divisions":8,"close":true}"#)
-            .expect("nurbs");
+        let d = tcook(r#"{"coords":"0,0,0 4,0,0 4,4,0 0,4,0","type":2,"order":3,"close":true}"#, 8).expect("nurbs");
         assert_eq!((d.point_count, d.prim_count()), (32, 1));
         assert!(matches!(d.prims[0].kind, PrimKind::Poly { closed: true }));
         assert!(d.p().iter().all(|p| (0.0..=4.0).contains(&p[0]) && (0.0..=4.0).contains(&p[1]) && p[2] == 0.0));
@@ -408,8 +526,8 @@ mod tests {
     /// Piecewise Bezier: 7 CVs order 4 = 2 cubic segments -> 2*5+1 = 11 points, the joint CV (index 3) is hit exactly at sample 5.
     #[test]
     fn bezier_piecewise_hits_the_shared_joint_cv() {
-        let d = cook(r#"{"coords":"0,0,0 1,1,0 2,1,0 3,0,0 4,-1,0 5,-1,0 6,0,0","type":1,"order":4,"divisions":5}"#)
-            .expect("bezier");
+        let d =
+            tcook(r#"{"coords":"0,0,0 1,1,0 2,1,0 3,0,0 4,-1,0 5,-1,0 6,0,0","type":1,"order":4}"#, 5).expect("bezier");
         assert_eq!(d.point_count, 11);
         assert!(close3(d.p()[5], [3.0, 0.0, 0.0]) && close3(d.p()[10], [6.0, 0.0, 0.0]));
     }
@@ -430,8 +548,8 @@ mod tests {
     #[test]
     fn user_knots_are_validated_and_reproduce_clamped_default() {
         let base = r#""coords":"0,0,0 1,2,0 3,2,0 4,0,0","type":2,"order":3,"divisions":4"#;
-        let a = cook(&format!("{{{base}}}")).expect("default");
-        let b = cook(&format!(r#"{{{base},"knots":"0 0 0 1 2 2 2"}}"#)).expect("knots");
+        let a = tcook(&format!("{{{base}}}"), 4).expect("default");
+        let b = tcook(&format!(r#"{{{base},"knots":"0 0 0 1 2 2 2"}}"#), 4).expect("knots");
         for (x, y) in pts(&a).into_iter().zip(pts(&b)) {
             assert!(close3(x, y));
         }
@@ -452,7 +570,7 @@ mod tests {
     #[test]
     fn bezier_endpoints_hit_control_points() {
         // Bezier curve with 4 control points
-        let d = cook(r#"{"coords":"0,0,0 1,2,0 3,2,0 4,0,0","type":1,"divisions":10}"#).expect("bezier");
+        let d = tcook(r#"{"coords":"0,0,0 1,2,0 3,2,0 4,0,0","type":1}"#, 10).expect("bezier");
         assert!(d.point_count > 4, "bezier should subdivide");
         // First and last points should match first and last control points
         let pts = d.p();

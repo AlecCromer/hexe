@@ -20,7 +20,8 @@
 //!   (winding closes the body outward: above-side cap faces -n, below-side cap +n; `keep` all caps both sides);
 //!   `recomputen` B off = write point `N` = uniform-averaged unit face normals of the output (with caps when `capclip`).
 //!   The keep menu's third entry is labelled `Keep All` (index 2, unchanged).
-//! * NOT modelled (DEFERRED): polysoup / NURBS surface clipping (no such prim kinds in hexe-geo).
+//! * NURBS / Bezier prims are tessellated first (8 samples per span, `Detail::tessellate`) and clipped as polygons / polylines; the
+//!   output holds polys only (no spline prim survives a clip). NOT modelled (DEFERRED): polysoup, trimmed exact NURBS clipping.
 use super::meshutil::{MAX_ELEMS, Remap, V3, add, bad, dot, failed, positions, rebuild, scale, sub, to_f32};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Detail, Prim, PrimKind};
@@ -403,6 +404,9 @@ impl Node<Detail> for Clip {
         &self.specs
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
+        // NURBS/Bezier prims are tessellated (8 samples per span) and clipped as polygons
+        let tess = super::splinesurf::tess_inputs(inputs);
+        let inputs = &tess[..];
         let p = ctx.params;
         let (o, n, keep) = plane_params("clip", p)?;
         let capclip = p.toggle("capclip").ok_or_else(|| bad("clip: `capclip`: missing or not a toggle"))?;
@@ -730,6 +734,29 @@ mod tests {
             include_bytes!("../../../../fixtures/sop-clip/houdini.geo"),
         );
         assert_eq!(r, Ok(()));
+    }
+
+    /// Spline curves clip as their tessellation: the upper half of the exact NURBS circle has arc length pi, nothing below the
+    /// plane survives, no spline prim is left; a NURBS surface (revolved wall) clips to polys with area = half of 2 pi.
+    #[test]
+    fn nurbs_curves_and_surfaces_clip_through_their_tessellation() {
+        use super::super::splinesurf::testkit::{area, length, nurbs, nurbs_circle, spline_curve};
+        let up = run_clip(nurbs_circle(), with(0, 0.0)).expect("clips");
+        assert!(!up.has_spline_prims() && up.prim_count() >= 1);
+        assert!(up.p().iter().all(|p| p[1] >= -1e-5), "nothing below the plane");
+        assert!((length(&up) - std::f64::consts::PI).abs() / std::f64::consts::PI < 5e-3, "arc {}", length(&up));
+        let both = run_clip(nurbs_circle(), with(2, 0.0)).expect("clips");
+        assert!((length(&both) - std::f64::consts::TAU).abs() / std::f64::consts::TAU < 5e-3);
+        // surface: unit cylinder wall y in 0..1 cut at y = 0.5 keeps the upper half of the wall
+        let wall = spline_curve(&[[1.0, 0.0, 0.0], [1.0, 1.0, 0.0]], nurbs(2));
+        let n = super::super::revolve_sop::new();
+        let surf = super::super::meshutil::testkit::cook(&*n, wall, &super::super::meshutil::testkit::defaults(&*n))
+            .expect("revolves");
+        assert!(surf.has_spline_prims());
+        let c = run_clip(Detail::clone(&surf), with(0, 0.5)).expect("clips");
+        assert!(!c.has_spline_prims());
+        let want = std::f64::consts::PI; // half of 2 pi
+        assert!((area(&c) - want).abs() / want < 5e-3, "area {}", area(&c));
     }
 
     #[test]

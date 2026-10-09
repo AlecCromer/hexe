@@ -23,6 +23,8 @@
 //!   `seam` (from a source face that crosses or lies on the other operand's surface). Disjoint, cover every prim.
 //!   Other attributes / groups of the inputs are NOT carried.
 //! * Empty / no-closed-poly operand: union -> the other input (shared `Arc`), subtract -> A, intersect -> empty.
+//! * NURBS / Bezier prims: tessellated first (8 samples per span, `Detail::tessellate`); surfaces then take part as polygons (a closed
+//!   tessellated surface is a solid), curves tessellate to polylines and are ignored like any open prim. No spline prim survives.
 //! * Hostile: `operation` > 4 -> `BadParam`; > 16384 polys per side or > 2^20 fragments -> `Failed`.
 use super::meshutil::{blend_weighted, cross, gather, newell_corners};
 use crate::SopNode;
@@ -822,6 +824,9 @@ impl Node<Detail> for Boolean {
         &self.specs
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
+        // NURBS/Bezier prims are tessellated (8 samples per span) and take part as polygons / are ignored as curves
+        let tess = super::splinesurf::tess_inputs(inputs);
+        let inputs = &tess[..];
         let p = ctx.params;
         let op = match p.menu("operation") {
             Some(v) if v <= OP_SHATTER => v,
@@ -1402,6 +1407,47 @@ mod tests {
         let out = bool_(&a, &unit([0.3, 0.0, 0.0]), OP_UNION);
         assert!(out.prim_count() > 0);
         assert!(t.elapsed().as_secs() < 10, "{:?}", t.elapsed());
+    }
+
+    /// Spline curve / surface operands never fail or panic: they are tessellated; curves are open prims (ignored), a flat NURBS
+    /// patch is an open surface, not a solid. Operation results stay polygon-only.
+    #[test]
+    fn nurbs_operands_are_tessellated_without_error() {
+        use super::super::splinesurf::testkit::{nurbs, nurbs_circle, spline_curve};
+        use hexe_geo::{Basis, PrimKind};
+        let a = unit([0.0; 3]);
+        let mut b = nurbs_circle();
+        let mut cv = Vec::new();
+        for r in 0..3 {
+            for c in 0..3 {
+                cv.push([c as f32 - 1.0, r as f32 - 1.0, 0.0]);
+            }
+        }
+        b.merge(&spline_curve(
+            &cv,
+            PrimKind::NurbsSurf {
+                cols: 3,
+                rows: 3,
+                ubasis: Basis::new(3),
+                vbasis: Basis::new(3),
+                uwrap: false,
+                vwrap: false,
+            },
+        ));
+        b.merge(&spline_curve(&[[0.0; 3], [1.0, 1.0, 0.0], [2.0, 0.0, 0.0]], nurbs(3)));
+        for op in 0..=4 {
+            for solid in [true, false] {
+                let r = run_with(&a, &b, op, solid).unwrap_or_else(|e| panic!("op {op} solid {solid}: {e:?}"));
+                assert!(!r.has_spline_prims(), "op {op}");
+                assert!(r.vertex_point.iter().all(|&v| v < r.point_count));
+            }
+        }
+        // curve-only B behaves exactly like an empty B: union = A
+        let u = run_with(&a, &nurbs_circle(), 0, true).expect("union");
+        assert_eq!((u.point_count, u.prim_count()), (8, 6));
+        // spline operand A + cube B: union keeps B
+        let v = run_with(&nurbs_circle(), &a, 0, true).expect("union");
+        assert_eq!(v.prim_count(), 6);
     }
 
     #[test]

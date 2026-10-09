@@ -19,11 +19,21 @@
 //!   the first prim holding the edge); `lodu` / `lodv` F 1 (0.1..=8) scale `cols` / `rows` (rounded, clamped to the
 //!   `cols` >= 3 / `rows` >= 1 minimums) for the tessellation; `capfan` B off: tube caps become triangle fans around one
 //!   new centre point per cap (pole fan) instead of one n-gon (an apex-collapsed end has no cap either way).
-//! * Nothing to convert = the input `Arc` is shared. NOT modelled (DEFERRED): NURBS / Bezier / metaball / volume / packed
-//!   sources, polysoup (hexe-geo has no such prim kinds: they stay `Unknown` passthrough).
+//! * NURBS / Bezier -> poly (`fromtype` all | `spline` (5), `totype` polygon / polyline / polyedges): every `NurbsCurve` / `BezierCurve` /
+//!   `NurbsSurf` / `BezierSurf` is tessellated first (`Detail::tessellate`) with `max(1, cols/2)` samples per u span and `rows`
+//!   per v span (so `cols`, `rows`, `lodu`, `lodv` set the density: defaults 8 / 8; curves use the u count), the produced polys
+//!   then follow the poly rules above (`polyline` turns a curve into a polyline, a closed one repeats its first corner). With
+//!   `fromtype` = `spline` only these prims convert. Other `fromtype`s leave spline prims untouched.
+//! * poly -> NURBS (`totype` nurbs (3), `order` I 4 (2..=11)): every Poly / Polyline prim (per `fromtype`; a polyline whose last
+//!   corner repeats its first is closed) with >= 2 corners becomes ONE `NurbsCurve` over the same points, order `min(order, n)`,
+//!   clamped uniform (open) / periodic uniform (closed). These are the poly's points as CVs (an APPROXIMATING B-spline, not an
+//!   interpolation: order 2 reproduces the polyline exactly, higher orders round the corners). Quad meshes are NOT lifted to NURBS
+//!   surfaces (DEFERRED).
+//! * Nothing to convert = the input `Arc` is shared. NOT modelled (DEFERRED): metaball / volume / packed sources, polysoup
+//!   (they stay `Unknown` passthrough).
 use super::meshutil::{MAX_ELEMS, Remap, V3, bad, failed, positions, rebuild};
 use crate::SopNode;
-use hexe_geo::{Detail, Prim, PrimKind};
+use hexe_geo::{Basis, Detail, Prim, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -37,6 +47,7 @@ const FROM_POLY: u32 = 1;
 const FROM_POLYLINE: u32 = 2;
 const FROM_SPHERE: u32 = 3;
 const FROM_TUBE: u32 = 4;
+const FROM_SPLINE: u32 = 5;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
@@ -46,12 +57,15 @@ pub fn spec() -> Vec<ParamSpec> {
             ("polyline", "Polyline"),
             ("sphere", "Sphere"),
             ("tube", "Tube"),
+            ("spline", "NURBS / Bezier"),
         ]),
         ParamSpec::new("totype", ParamValue::Menu(0)).label("Convert To").menu(&[
             ("polygon", "Polygon"),
             ("polyline", "Polyline"),
             ("polyedges", "Polygon Edges"),
+            ("nurbs", "NURBS"),
         ]),
+        ParamSpec::new("order", ParamValue::I(4)).label("NURBS Order").range(2.0, 11.0),
         ParamSpec::new("rows", ParamValue::I(8)).label("Rows").range(1.0, 64.0),
         ParamSpec::new("cols", ParamValue::I(16)).label("Columns").range(3.0, 64.0),
         ParamSpec::new("lodu", ParamValue::F(1.0)).label("LOD U (Columns x)").range(0.1, 8.0),
@@ -181,9 +195,10 @@ impl Node<Detail> for Convert {
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
-        let from = menu(p, "fromtype", FROM_TUBE)?;
-        let to = menu(p, "totype", 2)?;
-        let (to_line, to_edges) = (to == 1, to == 2);
+        let from = menu(p, "fromtype", FROM_SPLINE)?;
+        let to = menu(p, "totype", 3)?;
+        let (to_line, to_edges, to_nurbs) = (to == 1, to == 2, to == 3);
+        let order = p.int("order").unwrap_or(4).clamp(2, 11) as usize;
         let (rows, cols) = (dim(p, "rows", 1)?, dim(p, "cols", 3)?);
         let lod = |n: &str| -> Result<f64, CookError> {
             match p.float(n) {
@@ -195,8 +210,20 @@ impl Node<Detail> for Convert {
         let rows = ((rows as f64 * lodv).round() as usize).clamp(1, MAX_DIM as usize);
         let cols = ((cols as f64 * lodu).round() as usize).clamp(3, MAX_DIM as usize);
         let capfan = p.toggle("capfan").ok_or_else(|| bad("convert: `capfan`: missing or not a toggle"))?;
-        let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
-        let want = |k: u32| from == FROM_ALL || from == k;
+        let Some(src0) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
+        // spline prims -> polys first (density from cols / rows, already scaled by lodu / lodv)
+        let spline_in = src0.has_spline_prims() && !to_nurbs && (from == FROM_ALL || from == FROM_SPLINE);
+        let (src_a, origin): (Arc<Detail>, Vec<bool>) = if spline_in {
+            let (d, map) = src0.tessellate_mapped((cols / 2).max(1) as u32, rows as u32);
+            let o = map.iter().map(|&i| src0.prims.get(i).is_some_and(|q| q.kind.is_spline())).collect();
+            (Arc::new(d), o)
+        } else {
+            (Arc::clone(src0), Vec::new())
+        };
+        let src = &src_a;
+        let want = |i: usize, k: u32| {
+            from == FROM_ALL || from == k || (from == FROM_SPLINE && origin.get(i).copied().unwrap_or(false))
+        };
         let corners = |pr: &Prim| -> Option<&[u32]> {
             let (lo, hi) = (usize::try_from(pr.verts.start).ok()?, usize::try_from(pr.verts.end).ok()?);
             src.vertex_point.get(lo..hi)
@@ -210,22 +237,27 @@ impl Node<Detail> for Convert {
             ToPoly,
             Tess,
             Edges,
+            ToNurbs,
         }
         let acts: Vec<Act> = src
             .prims
             .iter()
-            .map(|pr| {
+            .enumerate()
+            .map(|(i, pr)| {
                 let Some(c) = corners(pr) else { return Act::Keep };
                 if !valid(c) {
                     return Act::Keep;
                 }
                 match (&pr.kind, to_line) {
-                    (PrimKind::Poly { .. }, _) if to_edges && want(FROM_POLY) && c.len() >= 2 => Act::Edges,
-                    (PrimKind::Polyline, _) if to_edges && want(FROM_POLYLINE) && c.len() >= 2 => Act::Edges,
-                    (PrimKind::Poly { .. }, true) if want(FROM_POLY) && c.len() >= 2 => Act::ToLine,
-                    (PrimKind::Polyline, false) if want(FROM_POLYLINE) && c.len() >= 2 => Act::ToPoly,
-                    (PrimKind::Sphere { .. }, false) if want(FROM_SPHERE) && c.len() == 1 => Act::Tess,
-                    (PrimKind::Tube { .. }, false) if want(FROM_TUBE) && c.len() == 1 => Act::Tess,
+                    (PrimKind::Poly { .. }, _) if to_nurbs && want(i, FROM_POLY) && c.len() >= 2 => Act::ToNurbs,
+                    (PrimKind::Polyline, _) if to_nurbs && want(i, FROM_POLYLINE) && c.len() >= 2 => Act::ToNurbs,
+                    (_, _) if to_nurbs => Act::Keep,
+                    (PrimKind::Poly { .. }, _) if to_edges && want(i, FROM_POLY) && c.len() >= 2 => Act::Edges,
+                    (PrimKind::Polyline, _) if to_edges && want(i, FROM_POLYLINE) && c.len() >= 2 => Act::Edges,
+                    (PrimKind::Poly { .. }, true) if want(i, FROM_POLY) && c.len() >= 2 => Act::ToLine,
+                    (PrimKind::Polyline, false) if want(i, FROM_POLYLINE) && c.len() >= 2 => Act::ToPoly,
+                    (PrimKind::Sphere { .. }, false) if want(i, FROM_SPHERE) && c.len() == 1 => Act::Tess,
+                    (PrimKind::Tube { .. }, false) if want(i, FROM_TUBE) && c.len() == 1 => Act::Tess,
                     _ => Act::Keep,
                 }
             })
@@ -309,6 +341,17 @@ impl Node<Detail> for Convert {
                         let vs = [Some(vstart + k), Some(vstart + (k + 1) % m)];
                         push(&mut vertex_point, &mut prims, &mut rm, PrimKind::Polyline, &ids, &vs, pi);
                     }
+                }
+                Act::ToNurbs => {
+                    let closed = match pr.kind {
+                        PrimKind::Poly { closed } => closed,
+                        _ => c.len() >= 4 && c.first() == c.last(),
+                    };
+                    let n = if matches!(pr.kind, PrimKind::Polyline) && closed { c.len() - 1 } else { c.len() };
+                    let ids = mapped(&c[..n]);
+                    let vs: Vec<Option<usize>> = (0..n).map(|k| Some(vstart + k)).collect();
+                    let kind = PrimKind::NurbsCurve { basis: Basis::new(order.min(n).max(2) as u32), closed };
+                    push(&mut vertex_point, &mut prims, &mut rm, kind, &ids, &vs, pi);
                 }
                 Act::ToPoly => {
                     let closed = c.len() >= 4 && c.first() == c.last();
@@ -574,8 +617,8 @@ mod tests {
     #[test]
     fn hostile_params_and_geometry() {
         for (k, v) in [
-            ("fromtype", ParamValue::Menu(5)),
-            ("totype", ParamValue::Menu(3)),
+            ("fromtype", ParamValue::Menu(6)),
+            ("totype", ParamValue::Menu(4)),
             ("lodu", ParamValue::F(0.0)),
             ("lodv", ParamValue::F(f32::NAN)),
             ("lodu", ParamValue::F(9.0)),
@@ -604,6 +647,84 @@ mod tests {
             defaults().with("rows", ParamValue::I(4096)).with("cols", ParamValue::I(4096)),
         );
         assert!(matches!(cap, Err(CookError::Failed(_))));
+    }
+
+    use super::super::splinesurf::testkit::{area, length, nurbs, nurbs_circle, spline_curve};
+
+    /// NURBS -> poly: the exact circle tessellates to a polyline whose points all lie on the unit circle and whose length is 2 pi;
+    /// lodu scales the density; polyline mode makes a Polyline prim; `fromtype` poly leaves the spline alone.
+    #[test]
+    fn nurbs_circle_converts_to_poly_and_polyline_with_lod_density() {
+        let d = run(nurbs_circle(), defaults()).expect("cooks");
+        assert!(
+            !d.has_spline_prims() && d.prim_count() == 1 && matches!(d.prims[0].kind, PrimKind::Poly { closed: false })
+        );
+        assert_eq!(d.point_count, 4 * 8 + 1, "cols 16 -> 8 per span x 4 spans + 1");
+        assert!(d.p().iter().all(|p| (p[0] * p[0] + p[1] * p[1] - 1.0).abs() < 1e-5));
+        assert!((length(&d) - std::f64::consts::TAU).abs() / std::f64::consts::TAU < 2e-3, "{}", length(&d));
+        let fine = run(nurbs_circle(), defaults().with("lodu", ParamValue::F(2.0))).expect("cooks");
+        assert_eq!(fine.point_count, 4 * 16 + 1);
+        let coarse = run(nurbs_circle(), defaults().with("lodu", ParamValue::F(0.5))).expect("cooks");
+        assert_eq!(coarse.point_count, 4 * 4 + 1);
+        let line = run(nurbs_circle(), defaults().with("totype", ParamValue::Menu(1))).expect("cooks");
+        assert!(matches!(line.prims[0].kind, PrimKind::Polyline));
+        let keep = run(nurbs_circle(), defaults().with("fromtype", ParamValue::Menu(1))).expect("cooks");
+        assert!(keep.has_spline_prims(), "from poly: spline untouched");
+    }
+
+    /// NURBS surface -> polys: a revolved wall = cylinder of area 2 pi (lodv scales the angular density), and `fromtype` spline
+    /// converts ONLY the spline prims of a mixed input.
+    #[test]
+    fn nurbs_surface_converts_to_a_cylinder_mesh_and_spline_filter_spares_polys() {
+        let n = super::super::revolve_sop::new();
+        let wall = spline_curve(&[[1.0, 0.0, 0.0], [1.0, 1.0, 0.0]], nurbs(2));
+        let surf = Detail::clone(
+            &super::super::meshutil::testkit::cook(&*n, wall, &super::super::meshutil::testkit::defaults(&*n))
+                .expect("revolves"),
+        );
+        let p = defaults().with("rows", ParamValue::I(8)).with("cols", ParamValue::I(4));
+        let d = run(surf.clone(), p.clone().with("lodv", ParamValue::F(2.0))).expect("cooks");
+        assert!(!d.has_spline_prims() && d.prims.iter().all(|q| matches!(q.kind, PrimKind::Poly { closed: true })));
+        // u: 1 span x (cols 4 / 2) = 2 segments; v: 4 arc spans x rows 16 = 64 segments
+        assert_eq!(d.prim_count(), 2 * 64);
+        let want = std::f64::consts::TAU;
+        assert!((area(&d) - want).abs() / want < 2e-3, "area {}", area(&d));
+        // mixed input: a loose triangle next to the surface; from spline converts only the surface (Poly rules unchanged)
+        let mut mixed =
+            super::super::surfutil::testkit::curve(&[[5.0, 0.0, 0.0], [6.0, 0.0, 0.0], [5.0, 1.0, 0.0]], true);
+        mixed.merge(&surf);
+        let m = run(mixed, p.with("fromtype", ParamValue::Menu(5)).with("totype", ParamValue::Menu(1))).expect("cooks");
+        assert!(!m.has_spline_prims());
+        assert!(matches!(m.prims[0].kind, PrimKind::Poly { closed: true }), "triangle spared");
+        assert!(m.prims[1..].iter().all(|q| matches!(q.kind, PrimKind::Polyline)), "surface quads -> polylines");
+    }
+
+    /// poly -> NURBS: order 2 reproduces the polyline exactly (round trip to polys is point-for-point equal); order 4 rounds corners
+    /// (stays inside the hull); closed polys give closed curves; spline filter / other prims pass through.
+    #[test]
+    fn poly_to_nurbs_and_back_round_trips_at_order_2() {
+        let pts = [[0.0, 0.0, 0.0], [1.0, 2.0, 0.0], [3.0, 2.0, 1.0], [4.0, 0.0, 0.0]];
+        let src = super::super::surfutil::testkit::curve(&pts, false);
+        let n = run(src.clone(), defaults().with("totype", ParamValue::Menu(3)).with("order", ParamValue::I(2)))
+            .expect("cooks");
+        assert!(matches!(&n.prims[0].kind, PrimKind::NurbsCurve { basis, closed: false } if basis.order == 2));
+        assert_eq!(n.p(), &pts[..]);
+        let back = run(n.as_ref().clone(), defaults().with("cols", ParamValue::I(3))).expect("cooks");
+        assert_eq!(back.p(), &pts[..], "1 sample per span: exactly the CVs");
+        assert!(matches!(back.prims[0].kind, PrimKind::Poly { closed: false }));
+        let c4 = run(src, defaults().with("totype", ParamValue::Menu(3))).expect("cooks");
+        assert!(matches!(&c4.prims[0].kind, PrimKind::NurbsCurve { basis, .. } if basis.order == 4));
+        let t = run(c4.as_ref().clone(), defaults()).expect("cooks");
+        assert!(t.p().iter().all(|q| (0.0..=4.0).contains(&q[0]) && q[1] <= 2.0 + 1e-5 && q[1] >= -1e-5));
+        // closed poly -> closed periodic curve; polyline with repeated end = closed
+        let ring = super::super::surfutil::testkit::curve(&[[0.0; 3], [2.0, 0.0, 0.0], [2.0, 2.0, 0.0]], true);
+        let r =
+            run(ring, defaults().with("totype", ParamValue::Menu(3)).with("order", ParamValue::I(3))).expect("cooks");
+        assert!(matches!(&r.prims[0].kind, PrimKind::NurbsCurve { closed: true, .. }));
+        assert!(area(&run(r.as_ref().clone(), defaults()).expect("cooks")) > 0.5);
+        // totype nurbs leaves spline prims alone (nothing to convert -> shared)
+        let keep = run(nurbs_circle(), defaults().with("totype", ParamValue::Menu(3))).expect("cooks");
+        assert!(keep.has_spline_prims() && keep.prim_count() == 1);
     }
 
     #[test]

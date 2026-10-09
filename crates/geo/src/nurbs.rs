@@ -475,8 +475,13 @@ impl Detail {
     /// be evaluated (bad order/knots/counts) degrades to an open poly through its CVs: never an error, never a panic.
     /// Non-spline prims keep their relative order; produced polys take the slot of the prim they replace.
     pub fn tessellate(&self, lod_u: u32, lod_v: u32) -> Detail {
+        self.tessellate_mapped(lod_u, lod_v).0
+    }
+
+    /// [`Detail::tessellate`] + for every output prim the index of the source prim it came from.
+    pub fn tessellate_mapped(&self, lod_u: u32, lod_v: u32) -> (Detail, Vec<usize>) {
         if !self.has_spline_prims() {
-            return self.clone();
+            return (self.clone(), (0..self.prims.len()).collect());
         }
         let np0 = self.point_count as usize;
         let mut samples: Vec<Vec<(PointId, f32)>> = Vec::new();
@@ -561,7 +566,7 @@ impl Detail {
         if remove.iter().any(|&r| r) {
             out.remove_points(&remove);
         }
-        out
+        (out, psrc)
     }
 
     /// Delete points flagged in `remove` (point attrs + point groups compacted, `vertex_point` renumbered). Vertices that still

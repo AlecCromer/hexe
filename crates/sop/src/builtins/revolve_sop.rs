@@ -12,8 +12,15 @@
 //! * Quad `(i, j)` = `[(i,j), (i+1,j), (i+1,j+1), (i,j+1)]`: for a profile running along `+axis` at positive radius the Houdini
 //!   normal points away from the axis (full revolve of an upward profile = outward-facing shell).
 //! * Output has only `uv` (vertex V3): `u` = column / divs (0..1), `v` = profile arclength fraction. No attribute carry.
-//!   NOT modelled (DEFERRED): caps, NURBS/Bezier output, `rotate` about a local frame per point, attribute inheritance.
+//! * `surftype` menu `auto` (0, default) | `polygon` (1) | `nurbs` (2). auto: Poly/Polyline profiles -> quad mesh as above, `NurbsCurve` /
+//!   `BezierCurve` profiles -> ONE exact rational `NurbsSurf` / `BezierSurf` each (u = profile in its own basis, v = angle: rational
+//!   quadratic arcs, 4 for a full turn else `ceil(span/90deg)`, weights = point attr `Pw`; `divs` / `tris` / `caps` / `carryattrs` /
+//!   `useptaxis` do not apply to NURBS output). polygon: spline profiles are tessellated first (8 samples per span) and revolved as
+//!   polys. nurbs: Poly/Polyline profiles ALSO revolve into NURBS surfaces (linear order-2 u basis). Surface-of-revolution
+//!   geometry is analytical-oracle only (UNVERIFIED vs Houdini).
+//!   NOT modelled (DEFERRED): caps on NURBS output, `rotate` about a local frame per point.
 use super::meshutil::{V3, add, bad, cross, dot, newell_corners, positions, scale, sub, toggle};
+use super::splinesurf::{TESS_LOD, linear_curve, revolve_surface, spline_curves};
 use super::surfutil::{Mesh, arc_fractions, curves, normalize};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Detail};
@@ -37,6 +44,11 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("caps", ParamValue::B(false)).label("Cap Partial Sweeps"),
         ParamSpec::new("carryattrs", ParamValue::B(true)).label("Inherit Attributes"),
         ParamSpec::new("useptaxis", ParamValue::B(false)).label("Per-Point Axis Attributes"),
+        ParamSpec::new("surftype", ParamValue::Menu(0)).label("Surface Type").menu(&[
+            ("auto", "Auto (Polygon, NURBS from NURBS)"),
+            ("polygon", "Polygon"),
+            ("nurbs", "NURBS"),
+        ]),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -86,12 +98,23 @@ impl Node<Detail> for Revolve {
             )));
         }
         let divs = divs as usize;
-        let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
+        let mode = match p.menu("surftype") {
+            Some(v @ 0..=2) => v,
+            Some(v) => return Err(bad(format!("revolve: `surftype`: menu index {v} out of range 0..=2"))),
+            None => 0,
+        };
+        let Some(src0) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
+        let tessed = if mode == 1 && src0.has_spline_prims() {
+            Some(Arc::new(src0.tessellate(TESS_LOD, TESS_LOD)))
+        } else {
+            None
+        };
+        let src: &Arc<Detail> = tessed.as_ref().unwrap_or(src0);
         let pos = positions(src);
         let cols = if full { divs } else { divs + 1 };
         let sweep = if full { 360.0f64.copysign(span) } else { span };
         let mut m = Mesh::default();
-        for c in curves(src) {
+        for c in if mode == 2 { Vec::new() } else { curves(src) } {
             let q: Vec<V3> = c.pts.iter().map(|&i| pos[i as usize]).collect();
             let vfr = arc_fractions(&q, c.closed);
             // ids[i][j]
@@ -177,7 +200,25 @@ impl Node<Detail> for Revolve {
                 }
             }
         }
-        Ok(Arc::new(if carry { m.finish_with(src) } else { m.finish() }))
+        let mut out = if carry { m.finish_with(src) } else { m.finish() };
+        if mode != 1 {
+            let mut profiles: Vec<(usize, super::splinesurf::SplineCurve)> =
+                spline_curves(src).into_iter().map(|c| (c.prim, c)).collect();
+            if mode == 2 {
+                profiles.extend(curves(src).iter().map(|c| (c.prim, linear_curve(c))));
+                profiles.sort_by_key(|x| x.0);
+            }
+            let n_poly = out.point_count as usize;
+            for (_, c) in &profiles {
+                let s = revolve_surface(src, c, origin, axis, a0, span, full)?;
+                out.merge(&s);
+            }
+            // merge default-fills `Pw` with 0 on the polygon points: those carry weight 1
+            if let Some(hexe_geo::Attribute { data: AttrData::F32(w), .. }) = out.attr_mut(AttrClass::Point, "Pw") {
+                w.iter_mut().take(n_poly).for_each(|x| *x = 1.0);
+            }
+        }
+        Ok(Arc::new(out))
     }
 }
 
@@ -379,6 +420,97 @@ mod tests {
         // off: both points use the node axis (+Y): point 1 ring stays at height 1
         let o = run(w, defaults().with("divs", ParamValue::I(4))).expect("cooks");
         assert!(o.p()[4..8].iter().all(|c| (c[1] - 1.0).abs() < 1e-6));
+    }
+
+    use super::super::splinesurf::testkit::{area, nurbs, spline_curve};
+    use hexe_geo::{Basis, PrimKind};
+
+    fn nurbs_wall() -> Detail {
+        spline_curve(&[[1.0, 0.0, 0.0], [1.0, 1.0, 0.0]], nurbs(2))
+    }
+
+    /// NURBS profile -> ONE exact rational NurbsSurf: every tessellated point is on the unit cylinder, area = 2 pi r h (inscribed
+    /// 64-gon: within 0.2%), evaluation at v = 1/4 is the profile rotated 90deg (+X -> -Z).
+    #[test]
+    fn nurbs_wall_revolves_into_an_exact_cylinder_surface() {
+        let d = run(nurbs_wall(), defaults()).expect("cooks");
+        assert_eq!((d.prim_count(), d.point_count), (1, 2 * 9));
+        assert!(matches!(&d.prims[0].kind, PrimKind::NurbsSurf { cols: 2, rows: 9, uwrap: false, vwrap: false, .. }));
+        let q = d.evaluate_uv(0, 0.5, 0.25).expect("evaluates");
+        assert!(q[0].abs() < 1e-5 && (q[1] - 0.5).abs() < 1e-5 && (q[2] + 1.0).abs() < 1e-5, "{q:?}");
+        for k in 0..=40 {
+            let q = d.evaluate_uv(0, 0.3, k as f32 / 40.0).expect("evaluates");
+            assert!((q[0] * q[0] + q[2] * q[2] - 1.0).abs() < 1e-5 && (q[1] - 0.3).abs() < 1e-5, "{q:?}");
+        }
+        let t = d.tessellate(1, 16);
+        assert!(!t.has_spline_prims());
+        let want = std::f64::consts::TAU;
+        assert!((area(&t) - want).abs() / want < 2e-3, "area {}", area(&t));
+        // outward normals (same winding as the polygon path)
+        let pos = positions(&t);
+        for pr in &t.prims {
+            let ids: Vec<usize> =
+                t.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect();
+            let n = prim_normal(&pos, &ids).expect("normal");
+            let c: V3 = ids.iter().fold([0.0; 3], |a, &i| add(a, scale(pos[i], 0.25)));
+            assert!(n[0] * c[0] + n[2] * c[2] > 0.0, "{n:?} {c:?}");
+        }
+    }
+
+    /// Partial sweep: 90deg = ONE arc (3 CVs, weight cos 45deg), 100deg = 2 arcs; end of the sweep hits the rotated profile.
+    #[test]
+    fn partial_sweeps_use_one_rational_arc_per_quarter() {
+        let q = run(nurbs_wall(), defaults().with("endangle", ParamValue::F(90.0))).expect("cooks");
+        assert_eq!(q.point_count, 2 * 3);
+        let e = q.evaluate_uv(0, 1.0, 1.0).expect("evaluates");
+        assert!(e[0].abs() < 1e-5 && (e[1] - 1.0).abs() < 1e-5 && (e[2] + 1.0).abs() < 1e-5, "{e:?}");
+        let want = std::f64::consts::FRAC_PI_2;
+        assert!((area(&q.tessellate(1, 32)) - want).abs() / want < 2e-3);
+        let h = run(nurbs_wall(), defaults().with("endangle", ParamValue::F(100.0))).expect("cooks");
+        assert_eq!(h.point_count, 2 * 5);
+        let want = 100.0f64.to_radians();
+        assert!((area(&h.tessellate(1, 32)) - want).abs() / want < 2e-3);
+        // every sample on the circle
+        for k in 0..=20 {
+            let s = h.evaluate_uv(0, 1.0, k as f32 / 20.0).expect("evaluates");
+            assert!((s[0] * s[0] + s[2] * s[2] - 1.0).abs() < 1e-5, "{s:?}");
+        }
+    }
+
+    #[test]
+    fn bezier_profile_gives_a_bezier_surface_and_polygon_mode_tessellates_first() {
+        let b = spline_curve(
+            &[[1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [2.0, 1.0, 0.0], [1.0, 1.5, 0.0]],
+            PrimKind::BezierCurve { basis: Basis::new(4), closed: false },
+        );
+        let d = run(b.clone(), defaults()).expect("cooks");
+        assert!(matches!(&d.prims[0].kind, PrimKind::BezierSurf { cols: 4, rows: 9, .. }));
+        // v = 0 edge is the profile itself
+        assert_eq!(d.evaluate_uv(0, 0.5, 0.0), b.evaluate(0, 0.5));
+        let poly =
+            run(b, defaults().with("surftype", ParamValue::Menu(1)).with("divs", ParamValue::I(8))).expect("cooks");
+        assert!(!poly.has_spline_prims() && poly.prim_count() > 8);
+    }
+
+    #[test]
+    fn nurbs_surftype_lifts_polygon_profiles_and_closed_profiles_wrap() {
+        let d = run(wall(), defaults().with("surftype", ParamValue::Menu(2))).expect("cooks");
+        assert!(matches!(&d.prims[0].kind, PrimKind::NurbsSurf { cols: 2, rows: 9, .. }) && d.prim_count() == 1);
+        assert!((area(&d.tessellate(1, 16)) - std::f64::consts::TAU).abs() < 0.02);
+        // closed NURBS ring profile revolved a half turn: torus patch, u wraps
+        let ring = spline_curve(
+            &[[2.0, 0.0, 0.0], [3.0, 1.0, 0.0], [2.0, 2.0, 0.0], [1.0, 1.0, 0.0]],
+            PrimKind::NurbsCurve { basis: Basis { order: 3, knots: Vec::new(), end: false }, closed: true },
+        );
+        let t = run(ring, defaults().with("endangle", ParamValue::F(180.0))).expect("cooks");
+        assert!(matches!(&t.prims[0].kind, PrimKind::NurbsSurf { cols: 4, rows: 5, uwrap: true, vwrap: false, .. }));
+        assert!(t.tessellate(4, 4).p().iter().flatten().all(|x| x.is_finite()));
+        // poly + spline profiles in one input: polys stay polys, the spline adds one surface
+        let mut mixed = wall();
+        mixed.merge(&nurbs_wall());
+        let m = run(mixed, defaults().with("divs", ParamValue::I(4))).expect("cooks");
+        assert_eq!(m.prims.iter().filter(|p| p.kind.is_spline_surf()).count(), 1);
+        assert_eq!(m.prims.iter().filter(|p| matches!(p.kind, PrimKind::Poly { .. })).count(), 4);
     }
 
     #[test]

@@ -125,6 +125,7 @@ mod polyfill_sop;
 mod polyreduce_sop;
 mod revolve_sop;
 mod skin_sop;
+mod splinesurf;
 mod surfutil;
 mod sweep_sop;
 // --- end S2 mods ---
