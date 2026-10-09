@@ -226,7 +226,11 @@ fn read_write_any_dispatch() {
         write_any(&p, &c).unwrap();
         assert_eq!(counts(&read_any(&p).unwrap()), (8, 24, 6), "{name}");
     }
-    assert!(matches!(write_any(scratch("c.bgeo"), &c), Err(GeoError::Unsupported(_))));
+    let b = scratch("c.bgeo");
+    write_any(&b, &c).unwrap();
+    assert!(std::fs::read(&b).unwrap().starts_with(&[0x7f, b'N', b'S', b'J', b'b']));
+    assert_eq!(counts(&read_any(&b).unwrap()), (8, 24, 6));
+    assert!(matches!(write_any(scratch("c.bgeo.sc"), &c), Err(GeoError::Unsupported(_))));
     assert!(matches!(write_any(scratch("c.stl"), &c), Err(GeoError::Unsupported(_))));
     assert!(matches!(read_any(scratch("c.stl")), Err(GeoError::Unsupported(_))));
     assert!(matches!(read_any(scratch("nope.obj")), Err(GeoError::Io(_))));

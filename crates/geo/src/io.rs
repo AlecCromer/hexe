@@ -1,5 +1,6 @@
 //! Extension-dispatched file IO: `read_any` / `write_any`.
-//! Read: `.geo .bgeo .bgeo.sc` -> `read_geo` (sniffs), `.obj`, `.ply`. Write: `.geo` (JSON), `.obj`, `.ply` (ascii).
+//! Read: `.geo .bgeo .bgeo.sc` -> `read_geo` (sniffs), `.obj`, `.ply`. Write: `.geo` (JSON), `.bgeo` (binary JSON), `.obj`, `.ply`
+//! (ascii); `.bgeo.sc` (blosc) is read-only.
 //! Reads are size-capped by `MAX_BYTES` before the file is loaded.
 use crate::error::check_len;
 use crate::*;
@@ -46,7 +47,8 @@ pub fn write_any(path: impl AsRef<Path>, d: &Detail) -> Result<(), GeoError> {
     let path = path.as_ref();
     let bytes = match kind_of(path)? {
         Kind::Geo if path.to_str().is_some_and(|s| s.to_ascii_lowercase().ends_with(".geo")) => write_geo_json(d),
-        Kind::Geo => return Err(GeoError::Unsupported("writing binary .bgeo / .bgeo.sc (use .geo)".into())),
+        Kind::Geo if path.to_str().is_some_and(|s| s.to_ascii_lowercase().ends_with(".bgeo")) => write_geo_bjson(d)?,
+        Kind::Geo => return Err(GeoError::Unsupported("writing blosc-compressed .bgeo.sc (use .bgeo or .geo)".into())),
         Kind::Obj => write_obj(d)?,
         Kind::Ply => write_ply(d)?,
     };

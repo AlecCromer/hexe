@@ -79,8 +79,23 @@ fn cook_scene(json: &str, time: f32) -> Result<(Vec<u8>, u32, u32), String> {
 }
 
 /// Like `cook_scene`; relative `file` SOP paths also resolve against `base` (the scene file's directory).
+#[cfg(test)]
 fn cook_scene_in(json: &str, time: f32, base: Option<&std::path::Path>) -> Result<(Vec<u8>, u32, u32), String> {
+    cook_scene_range(json, time, base, None)
+}
+
+/// `cook_scene_in`, first cooking the display node at every frame of `frames` = `(start, end, step)` (frame 1 = time 0)
+/// so a `rop_geometry` renders its range; the output is then the display cook at `time`.
+fn cook_scene_range(
+    json: &str,
+    time: f32,
+    base: Option<&std::path::Path>,
+    frames: Option<(i64, i64, i64)>,
+) -> Result<(Vec<u8>, u32, u32), String> {
     let (mut graph, display) = hexe_sop::load_scene_in(json, base).map_err(|e| e.to_string())?;
+    if let Some((a, b, s)) = frames {
+        hexe_sop::render_frames(&mut graph, display, a, b, s)?;
+    }
     let detail = graph.cook(display, time).map_err(|e| e.to_string())?;
     Ok((hexe_geo::write_geo_json(&detail), detail.point_count, detail.prim_count()))
 }
@@ -89,14 +104,36 @@ struct CookArgs {
     scene: String,
     out: String,
     time: f32,
+    frames: Option<(i64, i64, i64)>,
+}
+
+/// `A`, `A-B` or `A-BxS` (frames, step >= 1, start <= end).
+fn parse_frames(v: &str) -> Result<(i64, i64, i64), String> {
+    let bad = || format!("cook: bad --frames `{v}` (want A, A-B or A-BxS)");
+    let (range, step) = match v.split_once('x') {
+        Some((r, s)) => (r, s.parse::<i64>().map_err(|_| bad())?),
+        None => (v, 1),
+    };
+    let (a, b) = match range.split_once('-').filter(|(a, _)| !a.is_empty()) {
+        Some((a, b)) => (a.parse::<i64>().map_err(|_| bad())?, b.parse::<i64>().map_err(|_| bad())?),
+        None => {
+            let a = range.parse::<i64>().map_err(|_| bad())?;
+            (a, a)
+        }
+    };
+    if step < 1 || b < a {
+        return Err(bad());
+    }
+    Ok((a, b, step))
 }
 
 fn parse_cook(args: &[String]) -> Result<CookArgs, String> {
-    let (mut scene, mut out, mut time) = (None, None, 0.0f32);
+    let (mut scene, mut out, mut time, mut frames) = (None, None, 0.0f32, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--out" | "-o" => out = Some(it.next().ok_or("cook: --out needs a path")?.clone()),
+            "--frames" => frames = Some(parse_frames(it.next().ok_or("cook: --frames needs A-B[xS]")?)?),
             "--time" => {
                 let v = it.next().ok_or("cook: --time needs a number")?;
                 time = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --time `{v}`"))?;
@@ -110,6 +147,7 @@ fn parse_cook(args: &[String]) -> Result<CookArgs, String> {
         scene: scene.ok_or("usage: hexe-cli cook <scene.json> --out <file.geo> [--time T]")?,
         out: out.ok_or("cook: --out <file.geo> is required")?,
         time,
+        frames,
     })
 }
 
@@ -120,7 +158,7 @@ fn cook(args: &[String]) -> Result<String, String> {
         return Err(format!("{}: scene larger than {MAX_SCENE_BYTES} bytes", a.scene));
     }
     let json = std::fs::read_to_string(&a.scene).map_err(|e| format!("{}: {e}", a.scene))?;
-    let (bytes, points, prims) = cook_scene_in(&json, a.time, std::path::Path::new(&a.scene).parent())?;
+    let (bytes, points, prims) = cook_scene_range(&json, a.time, std::path::Path::new(&a.scene).parent(), a.frames)?;
     std::fs::write(&a.out, bytes).map_err(|e| format!("{}: {e}", a.out))?;
     Ok(format!("cooked {points} points, {prims} prims -> {}\n", a.out))
 }
@@ -305,6 +343,41 @@ mod tests {
         assert!(dispatch(&args).unwrap().starts_with("cooked 8 points, 6 prims"));
         let back = hexe_geo::read_any(&out).unwrap();
         assert_eq!((back.point_count, back.vertex_count(), back.prim_count()), (8, 24, 6));
+    }
+    #[test]
+    fn cook_frames_renders_the_rop_range_and_parses_strictly() {
+        assert_eq!(parse_frames("3").unwrap(), (3, 3, 1));
+        assert_eq!(parse_frames("1-24").unwrap(), (1, 24, 1));
+        assert_eq!(parse_frames("1-10x3").unwrap(), (1, 10, 3));
+        for bad in ["", "x", "5-1", "1-5x0", "a-b", "1-"] {
+            assert!(parse_frames(bad).is_err(), "{bad}");
+        }
+        let dir = std::path::PathBuf::from(
+            std::env::var("HEXE_SCRATCH")
+                .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/hexe-scratch").into()),
+        );
+        std::fs::create_dir_all(&dir).unwrap();
+        let name = |f: u32| dir.join(format!("cli_fr_{f}.obj"));
+        for f in 1..=4 {
+            let _ = std::fs::remove_file(name(f));
+        }
+        let scene = format!(
+            r#"{{"nodes":[{{"name":"b","type":"box"}},{{"name":"r","type":"rop_geometry","params":{{"sopoutput":{:?},"trange":1,"f":[1,4,1]}}}}],"edges":[["b",0,"r",0]],"display":"r"}}"#,
+            dir.join("cli_fr_$F.obj").to_str().unwrap()
+        );
+        std::fs::write(dir.join("cli_fr_scene.json"), scene).unwrap();
+        let geo = dir.join("cli_fr.geo");
+        let args = s(&[
+            "cook",
+            dir.join("cli_fr_scene.json").to_str().unwrap(),
+            "--out",
+            geo.to_str().unwrap(),
+            "--frames",
+            "1-3",
+        ]);
+        assert!(dispatch(&args).unwrap().starts_with("cooked 8 points, 6 prims"));
+        assert_eq!((1..=4).map(|f| name(f).exists()).collect::<Vec<_>>(), [true, true, true, false]);
+        assert!(dispatch(&s(&["cook", "x.json", "--out", "o.geo", "--frames", "9-1"])).is_err());
     }
     #[test]
     fn example_file_rop_scene_cooks_from_any_cwd() {

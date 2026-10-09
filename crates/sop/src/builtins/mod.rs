@@ -96,6 +96,7 @@ mod resample_sop;
 mod reverse_sop;
 //
 mod rop_geometry_sop;
+pub use rop_geometry_sop::render_frames;
 //
 mod scatter_sop;
 //

@@ -106,6 +106,8 @@ pub fn load_scene_with(json: &str, reg: &Registry) -> Result<Loaded, SceneError>
 }
 /// Node types whose string param is an input path: `(type, param)`.
 const INPUT_PATHS: &[(&str, &str)] = &[("file", "file")];
+/// Node types whose string param is an OUTPUT path: a relative one is anchored at the scene directory (the file need not exist).
+const OUTPUT_PATHS: &[(&str, &str)] = &[("rop_geometry", "sopoutput")];
 pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> Result<Loaded, SceneError> {
     let def: SceneDef = serde_json::from_str(json).map_err(|e| SceneError(format!("invalid scene JSON: {e}")))?;
     let mut graph: Graph<Detail> = Graph::new();
@@ -128,6 +130,14 @@ pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> 
                     if joined.exists() {
                         overrides = overrides.with(token, ParamValue::S(joined.to_string_lossy().into_owned()));
                     }
+                }
+            }
+        }
+        if let Some(base) = base {
+            for (_, token) in OUTPUT_PATHS.iter().filter(|(t, _)| *t == n.ty) {
+                if let Some(rel) = overrides.string(token).filter(|s| !s.is_empty() && Path::new(s).is_relative()) {
+                    let joined = base.join(rel);
+                    overrides = overrides.with(token, ParamValue::S(joined.to_string_lossy().into_owned()));
                 }
             }
         }

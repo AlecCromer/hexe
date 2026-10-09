@@ -14,6 +14,8 @@ mod bgeo_legacy_tests;
 mod bjson;
 #[cfg(test)]
 mod bjson_tests;
+#[cfg(test)]
+mod bjson_write_tests;
 mod blosc;
 #[cfg(test)]
 mod blosc_tests;
@@ -36,7 +38,7 @@ mod tests;
 mod types;
 
 pub use bgeo_legacy::read_geo_bgeo_legacy;
-pub use bjson::{bjson_to_value, read_geo_bjson};
+pub use bjson::{bjson_to_value, read_geo_bjson, value_to_bjson, write_geo_bjson};
 pub use blosc::{read_geo_sc, sc_decompress};
 pub use error::GeoError;
 pub use gpd::read_geo_gpd;

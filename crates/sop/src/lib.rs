@@ -12,6 +12,7 @@
 mod builtins;
 mod registry;
 mod scene;
+pub use builtins::render_frames;
 pub use registry::{CtorFn, Registry, SopNode, SpecFn};
 pub use scene::{
     Loaded, SceneError, fill_unwired, load_scene, load_scene_in, load_scene_with, load_scene_with_base, save_scene,

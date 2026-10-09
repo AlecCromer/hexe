@@ -224,3 +224,113 @@ pub fn bjson_to_value(bytes: &[u8]) -> Result<Value, GeoError> {
 pub fn read_geo_bjson(bytes: &[u8]) -> Result<Detail, GeoError> {
     detail_from_value(&bjson_to_value(bytes)?)
 }
+
+// ---- writer ------------------------------------------------------------------------------------------------------------
+/// Length / count prefix, the inverse of `Rd::len`: one byte when <= 0xF0, else `0xF0 + k` and `k` little-endian bytes.
+fn put_len(o: &mut Vec<u8>, n: usize) {
+    let n = n as u64;
+    if n <= 0xF0 {
+        o.push(n as u8);
+        return;
+    }
+    let b = n.to_le_bytes();
+    let k = b.iter().rposition(|&x| x != 0).map_or(1, |i| i + 1);
+    o.push(0xF0 + k as u8);
+    o.extend_from_slice(&b[..k]);
+}
+fn put_string(o: &mut Vec<u8>, s: &str) {
+    o.push(tok::STRING);
+    put_len(o, s.len());
+    o.extend_from_slice(s.as_bytes());
+}
+/// Homogeneous numeric arrays (>= 4 entries) are packed as a `UNIFORM` array: `i32`/`i64` ints, or floats as `f32` when
+/// every entry is exactly an `f32` (else `f64`). Returns `false` when the array is not packable.
+fn put_uniform(o: &mut Vec<u8>, a: &[Value]) -> bool {
+    if a.len() < 4 {
+        return false;
+    }
+    if let Some(ints) = a.iter().map(Value::as_i64).collect::<Option<Vec<i64>>>() {
+        let small = ints.iter().all(|&x| i32::try_from(x).is_ok());
+        o.push(tok::UNIFORM);
+        o.push(if small { tok::I32 } else { tok::I64 });
+        put_len(o, ints.len());
+        for x in ints {
+            if small {
+                o.extend_from_slice(&(x as i32).to_le_bytes());
+            } else {
+                o.extend_from_slice(&x.to_le_bytes());
+            }
+        }
+        return true;
+    }
+    let floats: Option<Vec<f64>> = a.iter().map(|v| if v.as_i64().is_some() { None } else { v.as_f64() }).collect();
+    let Some(fs) = floats else { return false };
+    let narrow = fs.iter().all(|&x| f64::from(x as f32) == x);
+    o.push(tok::UNIFORM);
+    o.push(if narrow { tok::F32 } else { tok::F64 });
+    put_len(o, fs.len());
+    for x in fs {
+        if narrow {
+            o.extend_from_slice(&(x as f32).to_le_bytes());
+        } else {
+            o.extend_from_slice(&x.to_le_bytes());
+        }
+    }
+    true
+}
+fn put_value(o: &mut Vec<u8>, v: &Value, depth: usize) -> Result<(), GeoError> {
+    if depth > MAX_DEPTH {
+        return syn("bjson writer: nested too deeply");
+    }
+    match v {
+        Value::Null => o.push(tok::NULL),
+        Value::Bool(b) => o.push(if *b { tok::TRUE } else { tok::FALSE }),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if let Ok(s) = i32::try_from(i) {
+                    o.push(tok::I32);
+                    o.extend_from_slice(&s.to_le_bytes());
+                } else {
+                    o.push(tok::I64);
+                    o.extend_from_slice(&i.to_le_bytes());
+                }
+            } else {
+                o.push(tok::F64);
+                o.extend_from_slice(&n.as_f64().unwrap_or(f64::NAN).to_le_bytes());
+            }
+        }
+        Value::String(s) => put_string(o, s),
+        Value::Array(a) => {
+            if !put_uniform(o, a) {
+                o.push(tok::ARRAY);
+                for x in a {
+                    put_value(o, x, depth + 1)?;
+                }
+                o.push(tok::ARRAY_END);
+            }
+        }
+        Value::Object(m) => {
+            o.push(tok::MAP);
+            for (k, x) in m {
+                put_string(o, k);
+                put_value(o, x, depth + 1)?;
+            }
+            o.push(tok::MAP_END);
+        }
+    }
+    Ok(())
+}
+/// Generic tree -> binary-JSON container (inverse of `bjson_to_value`; no string table, uniform arrays where possible).
+pub fn value_to_bjson(v: &Value) -> Result<Vec<u8>, GeoError> {
+    let mut o = MAGIC.to_vec();
+    put_value(&mut o, v, 0)?;
+    check_len(o.len())?;
+    Ok(o)
+}
+/// `Detail` -> Houdini binary `.bgeo` (the `.geo` JSON tree, binary-encoded). UNVERIFIED against Houdini's own reader
+/// (hython blocked); the reader of this crate and the 20.5.487 shipped-corpus token table are the oracle.
+pub fn write_geo_bjson(d: &Detail) -> Result<Vec<u8>, GeoError> {
+    let json = crate::json_write::write_geo_json(d);
+    let v: Value = serde_json::from_slice(&json).map_err(|e| GeoError::Syntax(format!("bjson writer: {e}")))?;
+    value_to_bjson(&v)
+}
