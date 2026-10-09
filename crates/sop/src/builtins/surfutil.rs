@@ -139,6 +139,10 @@ impl Mesh {
         }
         g
     }
+    /// Source prim stamp (`cur_prim` at emit time) of every prim emitted so far.
+    pub fn prim_sources(&self) -> Vec<Option<usize>> {
+        self.prim_src.clone()
+    }
     /// Final `Detail`: points, closed polys, vertex `uv`.
     pub fn finish(self) -> Detail {
         let mut g = Detail::default();

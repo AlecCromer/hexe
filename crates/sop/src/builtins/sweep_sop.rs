@@ -25,7 +25,12 @@
 //!   every backbone point attr to the ring points of its station and every cross-section point attr (not shadowed by a
 //!   backbone name) to the ring points of its column. Closed backbone: holonomy correction - the transport mismatch
 //!   after one loop is spread linearly over the arclength, so the seam has no twist jump (planar loops: 0).
-//! * NOT modelled (DEFERRED): third (surface) input to sweep, per-prim attr carry, ramp UI (2-key linear only).
+//! * Depth: third input `override` = cross-section curves per backbone point: station with backbone point `p` uses curve
+//!   `xsection[p]` (backbone point attr I32; negative / out of range = base section) or, without that attr, curve `p`;
+//!   used only when it has the base section's point count + closedness (else the base section; section-point attrs still
+//!   carry from the base columns). `carryprimattrs` B on: every backbone prim attr is copied onto all prims (sides, caps)
+//!   swept from that backbone prim.
+//! * NOT modelled (DEFERRED): sweeping a surface (Houdini's surface input), ramp UI (2-key linear only).
 use super::meshutil::{V3, add, bad, cross, dot, gather, positions, scale, sub, toggle};
 use super::surfutil::{Curve, Mesh, arc_fractions, curves, normalize};
 use crate::SopNode;
@@ -33,7 +38,8 @@ use hexe_geo::{AttrClass, AttrData, Attribute, Detail};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
 use std::sync::Arc;
 
-const INPUTS: [InputSpec; 2] = [InputSpec { name: "backbone" }, InputSpec { name: "crosssection" }];
+const INPUTS: [InputSpec; 3] =
+    [InputSpec { name: "backbone" }, InputSpec { name: "crosssection" }, InputSpec { name: "override" }];
 const OP: &str = "sweep";
 const SHAPE_INPUT: u32 = 0;
 const SHAPE_TUBE: u32 = 1;
@@ -64,6 +70,7 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("scaleend", ParamValue::F(1.0)).label("Scale At End").range(0.0, 10.0),
         ParamSpec::new("useptattrs", ParamValue::B(true)).label("Use Point Attributes"),
         ParamSpec::new("carryattrs", ParamValue::B(true)).label("Carry Point Attributes"),
+        ParamSpec::new("carryprimattrs", ParamValue::B(true)).label("Carry Primitive Attributes"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -220,6 +227,14 @@ fn v3_at(v: Option<&Vec<[f32; 3]>>, i: usize) -> Option<V3> {
     let r = [f64::from(c[0]), f64::from(c[1]), f64::from(c[2])];
     r.iter().all(|x| x.is_finite()).then_some(r)
 }
+/// Index into the override input's curves for backbone point `p`: the backbone point attr `xsection` (I32; negative = none)
+/// when present, else the point number itself (curve `p` <-> point `p`).
+fn override_idx(xs: Option<&Vec<i32>>, p: usize) -> Option<usize> {
+    match xs {
+        Some(v) => v.get(p).and_then(|&i| usize::try_from(i).ok()),
+        None => Some(p),
+    }
+}
 fn generated(shape: u32, radius: f64, width: f64, cols: usize) -> Shape {
     let local: Vec<V3> = match shape {
         SHAPE_TUBE => (0..cols)
@@ -300,6 +315,25 @@ impl Node<Detail> for Sweep {
         } else {
             vec![generated(shape, radius, width, cols)]
         };
+        // third input: per-station cross-section override (same column count + closedness as the base section only)
+        let ovr: Vec<Shape> = match inputs.get(2) {
+            Some(o) => {
+                let opos = positions(o);
+                curves(o)
+                    .into_iter()
+                    .map(|c| Shape {
+                        local: c.pts.iter().map(|&i| opos[i as usize]).collect(),
+                        closed: c.closed,
+                        src: vec![None; c.pts.len()],
+                    })
+                    .collect()
+            }
+            None => Vec::new(),
+        };
+        let a_xs = match point_attr(bb, "xsection") {
+            Some(AttrData::I32(v)) => Some(v),
+            _ => None,
+        };
         let pscale = if useps { point_f32(bb, "pscale") } else { None };
         let (a_scale, a_twist, a_roll) = if useattrs {
             (point_f32(bb, "scale"), point_f32(bb, "twist"), point_f32(bb, "roll"))
@@ -317,6 +351,7 @@ impl Node<Detail> for Sweep {
             if st.len() < 2 {
                 continue;
             }
+            m.cur_prim = Some(back.prim);
             let q: Vec<V3> = st.iter().map(|&i| bpos[i]).collect();
             let mut t = tangents(&q, back.closed);
             let mut nrm = normals(&q, &t, up);
@@ -361,7 +396,11 @@ impl Node<Detail> for Sweep {
                         * pscale.and_then(|v| v.get(st[k]).copied()).map_or(1.0, f64::from)
                         * at(a_scale, st[k]).unwrap_or(1.0)
                         * ramp;
-                    for (l, ls) in sec.local.iter().zip(&sec.src) {
+                    let shp = override_idx(a_xs, st[k])
+                        .and_then(|i| ovr.get(i))
+                        .filter(|o| o.local.len() == cols && o.closed == sec.closed)
+                        .unwrap_or(sec);
+                    for (l, ls) in shp.local.iter().zip(&sec.src) {
                         let off = add(add(scale(n, l[0]), scale(b, l[1])), scale(t[k], l[2]));
                         ids.push(m.point(OP, add(q[k], scale(off, s)))?);
                         src_b.push(Some(st[k]));
@@ -399,7 +438,18 @@ impl Node<Detail> for Sweep {
                 }
             }
         }
+        let prim_src = m.prim_sources();
         let mut out = m.finish();
+        if p.toggle("carryprimattrs").unwrap_or(true) {
+            for a in bb.attrs.iter().filter(|a| a.class == AttrClass::Prim) {
+                out.add_attr(Attribute {
+                    name: a.name.clone(),
+                    class: AttrClass::Prim,
+                    data: gather(&a.data, &prim_src),
+                    type_info: a.type_info,
+                });
+            }
+        }
         if carry {
             let mut taken: Vec<String> = vec!["P".into()];
             for a in bb.attrs.iter().filter(|a| a.class == AttrClass::Point && a.name != "P") {
@@ -713,6 +763,67 @@ mod tests {
         let d = run(skew, square(), defaults()).expect("cooks");
         assert_eq!((d.point_count, d.prim_count()), (16, 16));
         assert!(d.p().iter().flatten().all(|c| c.is_finite()));
+    }
+
+    fn run3(back: Detail, sec: Detail, ovr: Detail, p: ParamSet) -> Result<Arc<Detail>, CookError> {
+        let n = new();
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+        n.cook(&ctx, &[Arc::new(back), Arc::new(sec), Arc::new(ovr)])
+    }
+    fn sq(h: f32) -> Detail {
+        curve(&[[-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0]], true)
+    }
+    /// Third input, `xsection` attr: only the middle station (attr 0 -> override curve 0 = half-size 1) takes the override
+    /// ring; the others (-1) keep the base section (half-size 0.5). Ring k = points 4k..4k+4 (z = k).
+    #[test]
+    fn third_input_overrides_the_cross_section_of_selected_stations() {
+        let back = with_attr(zline(), "xsection", AttrData::I32(vec![-1, 0, -1]));
+        let d = run3(back, square(), sq(1.0), defaults()).expect("cooks");
+        assert_eq!((d.point_count, d.prim_count()), (12, 8));
+        for (i, p) in d.p().iter().enumerate() {
+            let want = if (4..8).contains(&i) { 1.0 } else { 0.5 };
+            assert!((p[0].abs() - want).abs() < 1e-6 && (p[1].abs() - want).abs() < 1e-6, "pt {i} {p:?}");
+            assert!((p[2] - (i / 4) as f32).abs() < 1e-6);
+        }
+        // no override input at all = the plain sweep
+        let plain = run(zline(), square(), defaults()).expect("cooks");
+        assert!(plain.p().iter().all(|p| p[0].abs() == 0.5));
+    }
+    /// Without the attr, override curve `p` serves backbone point `p` (here p = 0: half-size 2, p = 1: half-size 3;
+    /// station 2 has no curve = base). A curve with another point count (triangle) is ignored.
+    #[test]
+    fn third_input_is_positional_without_attr_and_ignores_mismatched_curves() {
+        let mut ov = sq(2.0);
+        ov.merge(&sq(3.0));
+        let d = run3(zline(), square(), ov.clone(), defaults()).expect("cooks");
+        for (i, p) in d.p().iter().enumerate() {
+            let want = [2.0, 3.0, 0.5][i / 4];
+            assert!((p[0].abs() - want).abs() < 1e-6, "pt {i} {p:?}");
+        }
+        ov.merge(&curve(&[[0.0, 0.0, 0.0], [9.0, 0.0, 0.0], [0.0, 9.0, 0.0]], true));
+        let d = run3(zline(), square(), ov, defaults()).expect("cooks");
+        assert!(d.p()[8..].iter().all(|p| p[0].abs() == 0.5), "triangle override must be ignored");
+    }
+    /// Per-prim attr carry: two backbones (prim attr tag 7 / 9) -> every swept prim (sides + caps) carries its backbone's tag.
+    #[test]
+    fn backbone_prim_attrs_carry_onto_swept_prims() {
+        let mut two = zline();
+        two.merge(&curve(&[[5.0, 0.0, 0.0], [5.0, 0.0, 1.0]], false));
+        two.add_attr(Attribute {
+            name: "tag".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![7, 9]),
+            type_info: hexe_geo::TypeInfo::None,
+        });
+        let d = run(two.clone(), square(), caps(defaults())).expect("cooks");
+        // backbone 0: 2 segs x 4 + 2 caps = 10 prims; backbone 1: 1 seg x 4 + 2 caps = 6
+        assert_eq!(d.prim_count(), 16);
+        let Some(AttrData::I32(t)) = d.attr(AttrClass::Prim, "tag").map(|a| &a.data) else { panic!("tag") };
+        assert_eq!(t.iter().filter(|&&x| x == 7).count(), 10);
+        assert_eq!(t.iter().filter(|&&x| x == 9).count(), 6);
+        assert!(t[..10].iter().all(|&x| x == 7) && t[10..].iter().all(|&x| x == 9));
+        let off = run(two, square(), defaults().with("carryprimattrs", ParamValue::B(false))).expect("cooks");
+        assert!(off.attr(AttrClass::Prim, "tag").is_none());
     }
 
     #[test]
