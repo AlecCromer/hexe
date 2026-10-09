@@ -190,7 +190,7 @@ fn glob(pat: &str, s: &str) -> bool {
     true
 }
 /// Source restricted to the prims with `keep[i]` (points compacted in original order; attrs / groups follow).
-fn subset(src: &Detail, keep: &[bool]) -> Result<Detail, CookError> {
+pub(super) fn subset(src: &Detail, keep: &[bool]) -> Result<Detail, CookError> {
     let mut used = vec![false; src.point_count as usize];
     let (mut vertex_point, mut prims) = (Vec::new(), Vec::new());
     let (mut vert_src, mut prim_src) = (Vec::new(), Vec::new());

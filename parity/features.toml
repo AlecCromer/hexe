@@ -1204,8 +1204,12 @@ evidence = [
   "crates/sop/src/builtins/knife_sop.rs::group_names_are_configurable_replaced_and_optional",
   "crates/sop/src/builtins/knife_sop.rs::hostile_params",
   "crates/sop/src/builtins/knife_sop.rs::example_scene_cooks_and_registry_has_slot",
+  "crates/sop/src/builtins/knife_sop.rs::cap_closes_the_cut_with_one_outward_ngon_per_rim_loop",
+  "crates/sop/src/builtins/knife_sop.rs::shatter_unwelds_the_halves_along_the_seam",
+  "crates/sop/src/builtins/knife_sop.rs::group_filter_cuts_only_selected_prims",
+  "crates/sop/src/builtins/knife_sop.rs::updatenormals_writes_unit_point_normals",
 ]
-notes = "H29: = clip core (clip_sop.rs, same plane params, keep default BOTH) + groups: seamgroup(cut, POINT: cut points + kept ON-plane points), abovegroup(above)/belowgroup(below) PRIM groups; empty name = skip. Box at y=0: 12 pts (4 seam), 10 prims (5+5), halves welded on shared cut points. NOT modelled (DEFERRED): cap/fill, remove-seam, keepedges, shatter, second-input cutter surface, group filter. UNVERIFIED vs Houdini (hython blocked): seam group semantics/naming, default keep. Example: examples/knife.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "H29: = clip core (clip_sop.rs, same plane params, keep default BOTH) + groups: seamgroup(cut, POINT: cut points + kept ON-plane points), abovegroup(above)/belowgroup(below) PRIM groups; empty name = skip. Box at y=0: 12 pts (4 seam), 10 prims (5+5), halves welded on shared cut points. QA adds (OUR names): cap B (one n-gon per rim loop = plane edges used once per side, reversed -> each half watertight; cap prims join their side group), shatter B (un-weld: below pass gets own seam-point copies, 16 pts for the box), group S (prim group cut only; rest passes un-welded, in neither side group), updatenormals B (point N). Oracles: box keep-above+cap = 6 prims watertight vol .5 cap area 1; keep-both cap = 12; shatter 16 pts halves disjoint; group = cut(sel)+4; unit N. REMAINING: remove-seam (semantics unclear), keepedges, second-input cutter surface. UNVERIFIED vs Houdini (hython blocked): seam group semantics/naming, default keep. Example: examples/knife.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-sweep"
