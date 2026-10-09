@@ -1145,8 +1145,14 @@ evidence = [
   "crates/sop/src/builtins/mountain_sop.rs::direction_param_overrides_n_attribute",
   "crates/sop/src/builtins/mountain_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/mountain_sop.rs::example_scene_cooks_and_registry_has_slot",
+  "crates/sop/src/builtins/mountain_sop.rs::fractal_octaves_combine_normalised_by_the_amplitude_sum",
+  "crates/sop/src/builtins/mountain_sop.rs::turbulence_is_abs_noise_and_attenuation_is_a_signed_power",
+  "crates/sop/src/builtins/mountain_sop.rs::noise_types_match_the_shared_noise_functions",
+  "crates/sop/src/builtins/mountain_sop.rs::animate_scrolls_the_noise_with_time",
+  "crates/sop/src/builtins/mountain_sop.rs::group_limits_displacement",
+  "crates/sop/src/builtins/mountain_sop.rs::updatenormals_writes_unit_normals",
 ]
-notes = "C2: height(1) elementsize(1, >0) seed(0) offset(0) direction(0,0,0 = use N). P' = P + dir*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. dir = direction param if nonzero (normalized), else point N attr, else Newell point normals (as peak). height 0 = Arc shared. NOT modelled (DEFERRED): fractal octaves/roughness, turbulence/attenuation/slope, animate, other noise types, group, N recompute. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize, direction param semantics. Example: examples/mountain.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "C2: height(1) elementsize(1, >0) seed(0) offset(0) direction(0,0,0 = use N). P' = P + dir*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. dir = direction param if nonzero (normalized), else point N attr, else Newell point normals (as peak). height 0 = Arc shared. QA adds (OUR names): noisetype perlin|simplex|value|worley (shared attribnoise fns); octaves(1..16)+roughness(.5)+lacunarity(2): n = sum(a_k n_k)/sum(a_k), octave seed = seed+7919k; turbulence (|n_k|); attenuation (sign*|n|^att); animate+animspeed (q += time*speed); group (point); updatenormals (point N). Oracles: 2-octave hand formula, turbulence = |plain|, att2 = signed square, dz == noise_named, scroll == shifted lattice, group members only, unit N. REMAINING: slope (+slope dir), sparse-convolution/alligator noise types, exact Houdini attenuation/amplitude curves. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize, direction param semantics. Example: examples/mountain.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-ray"

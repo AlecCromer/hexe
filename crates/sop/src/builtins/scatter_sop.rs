@@ -404,7 +404,8 @@ fn interp(data: &AttrData, tris: &[Tri], tidx: &[usize], bary: &[(f64, f64)]) ->
         other => other.clone(),
     }
 }
-/// Count scatter (tests + `generateby` = Count).
+/// Count scatter (test helper).
+#[cfg(test)]
 fn scatter(d: &Detail, npts: usize, seed: u64, density_name: &str) -> Result<Detail, CookError> {
     scatter_with(d, &Opts::basic(npts, seed, density_name))
 }

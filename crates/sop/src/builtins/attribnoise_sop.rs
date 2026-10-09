@@ -338,6 +338,18 @@ fn base_noise(kind: Kind, q: [f64; 3], seed: u64, chan: u64) -> f64 {
     }
 }
 
+/// Base noise by name (`perlin` | `simplex` | `value` | `worley`), in [-1, 1]; shared with `mountain`.
+pub(super) fn noise_named(name: &str, q: [f64; 3], seed: u64, chan: u64) -> Option<f64> {
+    let kind = match name {
+        "perlin" => Kind::Perlin,
+        "simplex" => Kind::Simplex,
+        "value" => Kind::Value,
+        "worley" => Kind::Worley,
+        _ => return None,
+    };
+    Some(base_noise(kind, q, seed, chan))
+}
+
 fn sample(cfg: &Config, p: [f64; 3], chan: usize) -> f64 {
     let base_q = std::array::from_fn(|k| p[k] * cfg.freq[k] + cfg.offset[k]);
     if !base_q.iter().all(|c| c.is_finite()) {

@@ -8,12 +8,15 @@
 //! = uniform-averaged Newell point normals (as `peak`; points without a usable face stay). Only `P` changes.
 //! Params: `height` F 1 (amplitude; 0 = input `Arc` shared), `elementsize` F 1 (> 0), `seed` I 0, `offset` V3 0,
 //! `direction` V3 (0,1,0) (zero = use N).
-//! NOT modelled (DEFERRED): Houdini's `roughness`/`fractal` octaves, `turbulence`/`attenuation`/`slope` knobs, `animate`
-//! (time scroll), the other noise types (simplex, sparse...), point group, `N` recompute.
-use super::attribnoise_sop::perlin;
+//! QA params (OUR names, UNVERIFIED): `noisetype` perlin|simplex|value|worley; `octaves` I 1 (1..=16) with `roughness` F 0.5 (amplitude
+//! ratio) and `lacunarity` F 2 (frequency ratio): `n = sum(a_k n_k) / sum(a_k)` (keeps |n| <= 1, octave k seed = seed + 7919 k);
+//! `turbulence` B (each octave |n_k|, so n in [0,1]); `attenuation` F 1 (`n -> sign(n) |n|^att`); `animate` B + `animspeed` V3: noise
+//! coordinate += time * animspeed (scrolling); `group` (point group, non-members stay); `updatenormals` B (point N recomputed).
+//! NOT modelled (DEFERRED): `slope`, sparse-convolution / alligator noise types, the exact Houdini amplitude / attenuation curves.
+use super::attribnoise_sop::noise_named;
 use super::meshutil::{V3, add, bad, float, int, point_normals, positions, scale, to_f32};
 use crate::SopNode;
-use hexe_geo::{AttrClass, AttrData, Detail};
+use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -26,6 +29,21 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("seed", ParamValue::I(0)).label("Seed").range(0.0, 100.0),
         ParamSpec::new("offset", ParamValue::V3([0.0; 3])).label("Offset"),
         ParamSpec::new("direction", ParamValue::V3([0.0, 0.0, 0.0])).label("Direction"),
+        ParamSpec::new("noisetype", ParamValue::Menu(0)).label("Noise Type").menu(&[
+            ("perlin", "Perlin"),
+            ("simplex", "Simplex"),
+            ("value", "Value"),
+            ("worley", "Worley"),
+        ]),
+        ParamSpec::new("octaves", ParamValue::I(1)).label("Fractal Depth").range(1.0, 16.0),
+        ParamSpec::new("roughness", ParamValue::F(0.5)).label("Roughness").range(0.0, 1.0),
+        ParamSpec::new("lacunarity", ParamValue::F(2.0)).label("Lacunarity").range(1.0, 4.0),
+        ParamSpec::new("turbulence", ParamValue::B(false)).label("Turbulence"),
+        ParamSpec::new("attenuation", ParamValue::F(1.0)).label("Attenuation").range(0.1, 4.0),
+        ParamSpec::new("animate", ParamValue::B(false)).label("Animate"),
+        ParamSpec::new("animspeed", ParamValue::V3([0.0, 0.0, 1.0])).label("Animation Speed"),
+        ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
+        ParamSpec::new("updatenormals", ParamValue::B(false)).label("Update Normals"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -80,17 +98,75 @@ impl Node<Detail> for Mountain {
                 _ => point_normals(src, &pos),
             }
         };
+        let p = ctx.params;
+        let kind = ["perlin", "simplex", "value", "worley"]
+            .get(p.menu("noisetype").unwrap_or(0) as usize)
+            .copied()
+            .ok_or_else(|| bad("`noisetype`: menu index out of range"))?;
+        let octaves = p.int("octaves").unwrap_or(1).clamp(1, 16) as u32;
+        let rough = p.float("roughness").map_or(0.5, f64::from);
+        let lac = p.float("lacunarity").map_or(2.0, f64::from);
+        let att = p.float("attenuation").map_or(1.0, f64::from);
+        if ![rough, lac, att].iter().all(|v| v.is_finite()) || !(0.0..=1.0).contains(&rough) || lac <= 0.0 || att <= 0.0 {
+            return Err(bad("`roughness` in 0..=1, `lacunarity` > 0, `attenuation` > 0 (all finite)"));
+        }
+        let turb = p.toggle("turbulence").unwrap_or(false);
+        let scroll: V3 = if p.toggle("animate").unwrap_or(false) {
+            let s = p.vec3("animspeed").unwrap_or([0.0; 3]);
+            if !s.iter().all(|c| c.is_finite()) {
+                return Err(bad("`animspeed`: not finite"));
+            }
+            s.map(|c| f64::from(c) * f64::from(ctx.time))
+        } else {
+            [0.0; 3]
+        };
+        let mask: Option<Vec<bool>> = match p.string("group").unwrap_or("").trim() {
+            "" => None,
+            names => {
+                let mut m = vec![false; pos.len()];
+                for n in names.split_whitespace() {
+                    let g = src
+                        .group(AttrClass::Point, n)
+                        .ok_or_else(|| CookError::Failed(format!("mountain: unknown point group `{n}`")))?;
+                    for (s, b) in m.iter_mut().zip(&g.mask) {
+                        *s |= *b;
+                    }
+                }
+                Some(m)
+            }
+        };
+        let field = |q: V3| -> f64 {
+            let (mut sum, mut amp, mut norm, mut f) = (0.0, 1.0, 0.0, 1.0);
+            for o in 0..octaves {
+                let n = noise_named(kind, q.map(|c| c * f), seed.wrapping_add(u64::from(o) * 7919), 0).unwrap_or(0.0);
+                sum += amp * if turb { n.abs() } else { n };
+                norm += amp;
+                amp *= rough;
+                f *= lac;
+            }
+            let n = if norm > 0.0 { sum / norm } else { 0.0 };
+            if att == 1.0 { n } else { n.signum() * n.abs().powf(att) }
+        };
         let moved: Vec<V3> = pos
             .iter()
             .zip(&normals)
-            .map(|(&p, &n)| {
+            .enumerate()
+            .map(|(i, (&p, &n))| {
+                if mask.as_ref().is_some_and(|m| !m.get(i).copied().unwrap_or(false)) {
+                    return p;
+                }
                 let q = add(p, off);
-                let q = [q[0] / size, q[1] / size, q[2] / size];
-                add(p, scale(n, height * perlin(q, seed, 0)))
+                let q = [q[0] / size + scroll[0], q[1] / size + scroll[1], q[2] / size + scroll[2]];
+                add(p, scale(n, height * field(q)))
             })
             .collect();
         let mut out = (**src).clone();
         *out.p_mut() = to_f32("mountain", &moved)?;
+        if p.toggle("updatenormals").unwrap_or(false) {
+            let pp = positions(&out);
+            let n: Vec<[f32; 3]> = point_normals(&out, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
+            out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(n), type_info: TypeInfo::Normal });
+        }
         Ok(Arc::new(out))
     }
 }
@@ -98,6 +174,7 @@ impl Node<Detail> for Mountain {
 #[cfg(test)]
 mod tests {
     use super::super::meshutil::testkit::{cook, cook_arc, cube, defaults, grid3};
+    use super::super::attribnoise_sop::perlin;
     use super::*;
     use hexe_geo::{Attribute, TypeInfo};
     use hexe_graph::ParamSet;
@@ -119,6 +196,117 @@ mod tests {
         d
     }
 
+    /// `field()` with explicit +Z point normals (the Newell normal of this winding is -Z).
+    fn field_up() -> Detail {
+        let mut d = field();
+        d.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(vec![[0.0, 0.0, 1.0]; 400]), type_info: TypeInfo::Normal });
+        d
+    }
+    fn dz(d: &Detail) -> Vec<f64> {
+        d.p().iter().map(|p| f64::from(p[2])).collect()
+    }
+    fn qof(p: [f32; 3], size: f64) -> [f64; 3] {
+        p.map(|c| f64::from(c) / size)
+    }
+    fn cook_at(d: Detail, p: &ParamSet, time: f32) -> Detail {
+        let ctx = CookCtx { time, fps: 24.0, params: p, log: &|_| {} };
+        (*new().cook(&ctx, &[Arc::new(d)]).expect("cooks")).clone()
+    }
+    /// Two octaves: dz = (n0 + r n1) / (1 + r), n0 = perlin(q), n1 = perlin(lac q, seed + 7919) (exact, hand-evaluated).
+    #[test]
+    fn fractal_octaves_combine_normalised_by_the_amplitude_sum() {
+        let p = with(1.0).with("octaves", ParamValue::I(2)).with("roughness", ParamValue::F(0.5)).with("lacunarity", ParamValue::F(3.0));
+        let out = cook(&*new(), field_up(), &p).expect("cooks");
+        for (src, z) in field_up().p().iter().zip(dz(&out)) {
+            let q = qof(*src, 1.0);
+            let want = (perlin(q, 0, 0) + 0.5 * perlin(q.map(|c| c * 3.0), 7919, 0)) / 1.5;
+            assert!((z - want).abs() < 1e-6, "{z} vs {want}");
+            assert!(z.abs() <= 1.0 + 1e-6);
+        }
+        let one = cook(&*new(), field_up(), &with(1.0).with("octaves", ParamValue::I(1))).expect("cooks");
+        assert_eq!(one, cook(&*new(), field_up(), &with(1.0)).expect("cooks"), "octaves 1 = plain noise");
+    }
+    /// Turbulence = |n| per octave (>= 0); attenuation 2 squares the magnitude keeping the sign.
+    #[test]
+    fn turbulence_is_abs_noise_and_attenuation_is_a_signed_power() {
+        let plain = dz(&cook(&*new(), field_up(), &with(1.0)).expect("cooks"));
+        let turb = dz(&cook(&*new(), field_up(), &with(1.0).with("turbulence", ParamValue::B(true))).expect("cooks"));
+        for (a, t) in plain.iter().zip(&turb) {
+            assert!((t - a.abs()).abs() < 1e-6 && *t >= 0.0);
+        }
+        let att = dz(&cook(&*new(), field_up(), &with(1.0).with("attenuation", ParamValue::F(2.0))).expect("cooks"));
+        for (a, t) in plain.iter().zip(&att) {
+            assert!((t - a.signum() * a * a).abs() < 1e-6, "{a} -> {t}");
+        }
+    }
+    /// Noise types: dz == noise_named(type, q) exactly; distinct fields, all bounded.
+    #[test]
+    fn noise_types_match_the_shared_noise_functions() {
+        let mut fields = Vec::new();
+        for (menu, name) in [(0u32, "perlin"), (1, "simplex"), (2, "value"), (3, "worley")] {
+            let out = cook(&*new(), field_up(), &with(1.0).with("noisetype", ParamValue::Menu(menu))).expect("cooks");
+            for (src, z) in field().p().iter().zip(dz(&out)) {
+                let want = noise_named(name, qof(*src, 1.0), 0, 0).expect("known noise");
+                assert!((z - want).abs() < 1e-6 && z.abs() <= 1.0 + 1e-6, "{name}: {z} vs {want}");
+            }
+            fields.push(dz(&out));
+        }
+        for i in 0..4 {
+            for j in i + 1..4 {
+                assert_ne!(fields[i], fields[j], "{i} vs {j}");
+            }
+        }
+        assert!(matches!(cook(&*new(), cube(), &with(1.0).with("noisetype", ParamValue::Menu(9))), Err(CookError::BadParam(_))));
+    }
+    /// Animate scrolls the noise coordinate by time * animspeed: z(p, t) == z(p + t * speed * size, 0). Off = time-independent.
+    #[test]
+    fn animate_scrolls_the_noise_with_time() {
+        let base = with(1.0).with("elementsize", ParamValue::F(2.0));
+        let anim = base.clone().with("animate", ParamValue::B(true)).with("animspeed", ParamValue::V3([0.5, 0.0, 0.25]));
+        let at_t = cook_at(field(), &anim, 1.5);
+        // shift = t * speed * size = (1.5, 0, 0.75)
+        let mut shifted = field();
+        for p in shifted.p_mut().iter_mut() {
+            p[0] += 1.5;
+            p[2] += 0.75;
+        }
+        let at_0 = cook_at(shifted.clone(), &base, 0.0);
+        for (a, b) in at_t.p().iter().zip(at_0.p()) {
+            // flat +Z normals: both displace along Z; the shifted copy carries the 0.75 base offset in z
+            assert!((f64::from(a[2]) - (f64::from(b[2]) - 0.75)).abs() < 1e-5, "{a:?} vs {b:?}");
+        }
+        let still = cook_at(field(), &base.clone().with("animspeed", ParamValue::V3([9.0, 9.0, 9.0])), 7.0);
+        assert_eq!(still, cook_at(field(), &base, 0.0), "animate off ignores time");
+    }
+    /// Group = first 100 points: only those move; non-members bit-identical; unknown group = Failed.
+    #[test]
+    fn group_limits_displacement() {
+        let mut d = field();
+        d.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Point, mask: (0..400).map(|i| i < 100).collect() });
+        let out = cook(&*new(), d.clone(), &with(1.0).with("group", ParamValue::S("g".into()))).expect("cooks");
+        let full = cook(&*new(), d.clone(), &with(1.0)).expect("cooks");
+        for i in 0..400 {
+            if i < 100 {
+                assert_eq!(out.p()[i], full.p()[i]);
+            } else {
+                assert_eq!(out.p()[i], d.p()[i]);
+            }
+        }
+        let nope = cook(&*new(), d, &with(1.0).with("group", ParamValue::S("zz".into())));
+        assert!(matches!(nope, Err(CookError::Failed(_))));
+    }
+    /// updatenormals: unit point N written after displacement; the undisplaced flat grid (height tiny) has N ~ +-Z; off = none.
+    #[test]
+    fn updatenormals_writes_unit_normals() {
+        assert!(cook(&*new(), field(), &with(0.001)).expect("cooks").attr(AttrClass::Point, "N").is_none());
+        let out = cook(&*new(), field(), &with(0.001).with("updatenormals", ParamValue::B(true))).expect("cooks");
+        let Some(AttrData::V3(n)) = out.attr(AttrClass::Point, "N").map(|a| &a.data) else { panic!("N") };
+        assert_eq!(n.len(), 400);
+        for v in n {
+            let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            assert!((l - 1.0).abs() < 1e-4 && v[2].abs() > 0.99, "{v:?}");
+        }
+    }
     #[test]
     fn amplitude_zero_is_identity_sharing_the_arc() {
         let a = Arc::new(field());
