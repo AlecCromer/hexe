@@ -257,20 +257,9 @@ id = "sop-polybevel"
 title = "PolyBevel SOP (edge chamfer / round fillet)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["polybevel"]
 evidence = [
-"crates/sop/src/builtins/polybevel_sop.rs::cube_all_edges_chamfer_is_24_points_6_quads_12_edge_quads_8_corner_tris",
-"crates/sop/src/builtins/polybevel_sop.rs::chamfer_strip_of_one_edge_is_at_exact_offset_positions",
-"crates/sop/src/builtins/polybevel_sop.rs::cube_divisions_2_is_48_points_38_prims_with_hexagon_caps",
-"crates/sop/src/builtins/polybevel_sop.rs::divisions_2_round_profile_point_is_on_the_circle_solid_is_the_chord_midpoint",
-"crates/sop/src/builtins/polybevel_sop.rs::edge_group_top_loop_bevels_only_those_edges",
-"crates/sop/src/builtins/polybevel_sop.rs::point_group_selects_edges_with_both_ends_in_group",
-"crates/sop/src/builtins/polybevel_sop.rs::lone_edge_tapers_without_new_topology",
-"crates/sop/src/builtins/polybevel_sop.rs::open_grid_bevels_interior_edges_only",
-"crates/sop/src/builtins/polybevel_sop.rs::point_attrs_inherit_normals_recompute_groups_and_prim_attrs_follow",
-"crates/sop/src/builtins/polybevel_sop.rs::hostile_params_degenerate_prims_and_caps",
-"crates/sop/src/builtins/polybevel_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
 ]
 notes = "H22: params group/offset/divisions/filletshape = OUR minimal subset. Bevelable edge = exactly 2 valid closed polys, opposite winding (boundary / non-manifold edges never beveled). offset = in-face perpendicular distance (cube chamfer width = offset*sqrt2). Vertex splits into sectors (corners joined across unbeveled edges) + cap polys for closed sector loops; cube all-edges: div1 = 24 pts/26 prims (6 quads+12 strips+8 tris), div2 = 48/38 (8 hexagon caps). round = conic arc w=sin(theta/2) (exact circle at 90deg), solid = straight profile. Group = 'a-b' edge pairs or point groups (both ends in group); grouptype implicit (no parm). Point attrs copy source vertex (profile pts too), strips inherit first face prim attrs, existing N (point/vertex/prim) recomputed flat/uniform. LIMITS: a lone beveled edge (vertex with 1 beveled edge) tapers = no strip (selection needs loops/ends meeting 2+ beveled edges); no uv fix-up, per-edge offset, angle limit, offset-collision cleanup. LIMITS: a lone beveled edge (vertex with 1 beveled edge) tapers = no strip (selection needs loops/ends meeting 2+ beveled edges); no proper fan at valence>3 (cap = one n-gon), no uv fix-up, per-edge offset, angle limit, offset-collision cleanup. UNVERIFIED-vs-Houdini: grouptype parm (we infer edges/points from group pattern), valence>3 cap triangulation (no oracle). Example: examples/polybevel.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): COUNT-DIFF (hexe 48/38 vs Houdini 56/54, fewer beveled elements), see docs/HOUDINI-ORACLE.md."
 
@@ -300,16 +289,9 @@ id = "sop-subdivide"
 title = "Subdivide SOP (Catmull-Clark / linear)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["subdivide"]
 evidence = [
-  "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_iter1_is_26_points_24_closed_quads",
-  "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_iter2_is_98_points_96_closed_quads",
-  "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_corner_is_five_eighteenths_exact",
-  "crates/sop/src/builtins/subdivide_sop.rs::box_linear_iter1_keeps_corners_exactly_and_splits_26_24",
-  "crates/sop/src/builtins/subdivide_sop.rs::single_triangle_catmull_clark_is_7_points_3_quads_boundary_rules",
-  "crates/sop/src/builtins/subdivide_sop.rs::open_grid_3x3_is_25_points_16_quads_boundary_corners_on_boundary",
-  "crates/sop/src/builtins/subdivide_sop.rs::scene_loader_cooks_example_and_registry_has_slot",
 ]
 notes = "H18: iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear; >=2 OpenSubdiv = Unsupported) / group. CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Output = quads only; face/edge pts appended after input pts. NOT modelled: creases (creaseweight attr), Loop subdivision for tri meshes, OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), boundary interp modes, crack protection vs unselected prims. UNVERIFIED-vs-Houdini: crease semantics, Loop tri subdivision, boundary modes (no oracle). Example: examples/subdivide.json. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, point order differs), see docs/HOUDINI-ORACLE.md."
 
@@ -346,13 +328,9 @@ id = "sop-facet"
 title = "Facet SOP"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["facet"]
 evidence = [
-  "crates/sop/src/builtins/facet_sop.rs::box_unique_points_is_24_points_with_same_positions_per_corner",
-  "crates/sop/src/builtins/facet_sop.rs::box_cusp_60_is_24_points_and_cusp_100_keeps_8",
-  "crates/sop/src/builtins/facet_sop.rs::flat_grid_cusp_60_is_unchanged_and_shares_the_arc",
-  "crates/sop/src/builtins/facet_sop.rs::post_nml_unique_gives_face_normals_and_shared_gives_diagonals",
 ]
 notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N). NOT modelled: consolidate (merge coplanar faces), orient_polygons (winding flip for outward), remove_inline, group, prim-normal flip options. UNVERIFIED-vs-Houdini: consolidate parm (face merging, no oracle), orient_polygons semantics (no oracle). Houdini-oracle (H32, real Houdini 20.5): ORDER-DIFF (counts match, point renumbering differs), see docs/HOUDINI-ORACLE.md."
 
@@ -1135,15 +1113,9 @@ id = "sop-divide"
 title = "Divide SOP (polygon -> triangles / <= numsides pieces)"
 area = "A"
 tier = "P1"
-status = "shipped"
+status = "partial"
 commands = ["divide"]
 evidence = [
-  "crates/sop/src/builtins/divide_sop.rs::box_six_quads_become_twelve_triangles",
-  "crates/sop/src/builtins/divide_sop.rs::attrs_follow_their_source_and_small_polys_pass",
-  "crates/sop/src/builtins/divide_sop.rs::hexagon_chunks_and_open_polys_pass_through",
-  "crates/sop/src/builtins/divide_sop.rs::concave_l_shape_is_ear_clipped_exactly",
-  "crates/sop/src/builtins/divide_sop.rs::hostile_params_and_degenerate_polys",
-  "crates/sop/src/builtins/divide_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "H29: convex(on) numsides(3, 3..=1024). Polys with > numsides corners are split by corner-chunk fan (quad [a,b,c,d] -> [a,b,c],[a,c,d]); convex on additionally ear-clips CONCAVE polys into triangles (L-shape area 3 -> 4 tris summing to exactly 3). Points unchanged, winding kept, prim attrs copied to pieces, vertex attrs follow source vertices. Box 6 quads -> 12 tris/8 pts. Nothing split = Arc shared. NOT modelled (DEFERRED): bricker (brick-wall offset pattern), removesharededges, planar mode (coplanar merging), avoidsmallangles, holes. UNVERIFIED-vs-Houdini: bricker/removesharededges/planar parms missing (no oracle), diagonal choice / piece order, concave+numsides>3 behaviour (we emit triangles). Example: examples/divide.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, triangulation order differs), see docs/HOUDINI-ORACLE.md."
 
@@ -1257,13 +1229,8 @@ id = "sop-polyreduce"
 title = "PolyReduce SOP (shortest-edge collapse to a target percentage; quadric-free)"
 area = "A"
 tier = "P2"
-status = "shipped"
+status = "partial"
 commands = ["polyreduce"]
 evidence = [
-  "crates/sop/src/builtins/polyreduce_sop.rs::grid_reduces_to_about_half_with_boundary_locked_and_area_preserved",
-  "crates/sop/src/builtins/polyreduce_sop.rs::closed_octahedron_collapses_staying_a_closed_outward_manifold",
-  "crates/sop/src/builtins/polyreduce_sop.rs::percentage_extremes_attributes_and_non_poly_prims",
-  "crates/sop/src/builtins/polyreduce_sop.rs::hostile_params_and_geometry",
-  "crates/sop/src/builtins/polyreduce_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "S2: percentage(50, share of closed polys kept, 100 = Arc shared) lockboundary(off). Greedy shortest-edge collapse to the midpoint (ties: lowest ids), link-condition guard (common neighbours must lie in a poly sharing the edge), no collapse of points used by non-poly prims, boundary-pair guard; stops at target or when no legal edge is left (result may stay above target; quads degrade to tris, only triangle pairs drop polys). Grid 6x6 tris 50 -> <=26 with boundary locked and area exactly 25; octahedron stays a closed outward 2-manifold; Cd blends via meshutil::rebuild, prim attrs copy. NOT modelled (DEFERRED): quadric error metric (Garland-Heckbert), flip/normal-deviation test, seam/UV preservation, finalcount target mode, symmetry. UNVERIFIED-vs-Houdini: quadric vs shortest-edge quality differs fundamentally (no oracle for shortest-edge mode), percentage vs finalcount semantics (we lack finalcount parm). Example: examples/polyreduce.json. Analytical oracle only (no Houdini oracle: our algorithm differs from Houdini's quadric-based reducer)."
