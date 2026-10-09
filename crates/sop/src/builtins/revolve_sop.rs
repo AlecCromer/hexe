@@ -13,10 +13,10 @@
 //!   normal points away from the axis (full revolve of an upward profile = outward-facing shell).
 //! * Output has only `uv` (vertex V3): `u` = column / divs (0..1), `v` = profile arclength fraction. No attribute carry.
 //!   NOT modelled (DEFERRED): caps, NURBS/Bezier output, `rotate` about a local frame per point, attribute inheritance.
-use super::meshutil::{V3, add, bad, cross, dot, positions, scale, sub, toggle};
+use super::meshutil::{V3, add, bad, cross, dot, newell_corners, positions, scale, sub, toggle};
 use super::surfutil::{Mesh, arc_fractions, curves, normalize};
 use crate::SopNode;
-use hexe_geo::Detail;
+use hexe_geo::{AttrClass, AttrData, Detail};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -34,6 +34,9 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("endangle", ParamValue::F(360.0)).label("End Angle").range(0.0, 360.0),
         ParamSpec::new("divs", ParamValue::I(12)).label("Divisions").range(1.0, 100.0),
         ParamSpec::new("tris", ParamValue::B(false)).label("Triangles"),
+        ParamSpec::new("caps", ParamValue::B(false)).label("Cap Partial Sweeps"),
+        ParamSpec::new("carryattrs", ParamValue::B(true)).label("Inherit Attributes"),
+        ParamSpec::new("useptaxis", ParamValue::B(false)).label("Per-Point Axis Attributes"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -73,6 +76,7 @@ impl Node<Detail> for Revolve {
         let (a0, a1) = (angle(p, "startangle")?, angle(p, "endangle")?);
         let divs = p.int("divs").ok_or_else(|| bad("revolve: `divs`: missing or not an int"))?;
         let tris = toggle(p, "tris")?;
+        let (caps, carry, ptaxis) = (toggle(p, "caps")?, toggle(p, "carryattrs")?, toggle(p, "useptaxis")?);
         let span = a1 - a0;
         let full = span.abs() >= 360.0 - 1e-9;
         if divs < if full { 3 } else { 1 } || divs > MAX_DIVS {
@@ -92,7 +96,22 @@ impl Node<Detail> for Revolve {
             let vfr = arc_fractions(&q, c.closed);
             // ids[i][j]
             let mut ids: Vec<Vec<u32>> = Vec::with_capacity(q.len());
-            for pt in &q {
+            m.cur_prim = Some(c.prim);
+            for (qi, pt) in q.iter().enumerate() {
+                let srcp = c.pts[qi] as usize;
+                m.cur_pt = Some(srcp);
+                // per-point axis: attrs `axisorigin` / `axisdir` on the profile point (missing / zero = the node's axis)
+                let (origin, axis) = if ptaxis {
+                    let g = |n: &str| match src.attr(AttrClass::Point, n).map(|a| &a.data) {
+                        Some(AttrData::V3(v)) => {
+                            v.get(srcp).map(|c| c.map(f64::from)).filter(|c| c.iter().all(|x| x.is_finite()))
+                        }
+                        _ => None,
+                    };
+                    (g("axisorigin").unwrap_or(origin), g("axisdir").and_then(normalize).unwrap_or(axis))
+                } else {
+                    (origin, axis)
+                };
                 let rel = sub(*pt, origin);
                 let h = dot(rel, axis);
                 let radial = sub(rel, scale(axis, h));
@@ -126,8 +145,39 @@ impl Node<Detail> for Revolve {
                     )?;
                 }
             }
+            // caps: a closed profile swept through a partial angle is closed by one n-gon per end, facing away from the body
+            if caps && !full && c.closed && q.len() >= 3 {
+                let dir = span.signum();
+                for (col, sign) in [(0usize, -1.0), (cols - 1, 1.0)] {
+                    let mut ring: Vec<u32> = Vec::with_capacity(q.len());
+                    let mut uvs: Vec<[f32; 3]> = Vec::with_capacity(q.len());
+                    for (i, row) in ids.iter().enumerate() {
+                        if ring.last() != Some(&row[col]) {
+                            ring.push(row[col]);
+                            uvs.push([col as f32 / divs as f32, vfr[i] as f32, 0.0]);
+                        }
+                    }
+                    if ring.len() > 1 && ring.first() == ring.last() {
+                        ring.pop();
+                        uvs.pop();
+                    }
+                    if ring.len() < 3 {
+                        continue;
+                    }
+                    let pts: Vec<V3> = ring.iter().map(|&id| m.pts[id as usize].map(f64::from)).collect();
+                    let cen = scale(pts.iter().fold([0.0; 3], |a, &b| add(a, b)), 1.0 / pts.len() as f64);
+                    let rel = sub(cen, origin);
+                    let radial = sub(rel, scale(axis, dot(rel, axis)));
+                    let want = scale(cross(axis, radial), sign * dir);
+                    if dot(newell_corners(&pts), want) < 0.0 {
+                        ring.reverse();
+                        uvs.reverse();
+                    }
+                    m.poly(OP, &ring, &uvs)?;
+                }
+            }
         }
-        Ok(Arc::new(m.finish()))
+        Ok(Arc::new(if carry { m.finish_with(src) } else { m.finish() }))
     }
 }
 
@@ -137,7 +187,6 @@ mod tests {
     use super::super::surfutil::testkit::{curve, signed_volume};
     use super::*;
     use crate::load_scene;
-    use hexe_geo::{AttrClass, AttrData};
 
     fn run(d: Detail, p: ParamSet) -> Result<Arc<Detail>, CookError> {
         let n = new();
@@ -257,6 +306,79 @@ mod tests {
         huge.p_mut()[1] = [f32::MAX, f32::MAX, f32::MAX];
         let r = run(huge, defaults());
         assert!(r.is_ok() || matches!(r, Err(CookError::Failed(_))));
+    }
+
+    fn attr(d: &mut Detail, name: &str, class: AttrClass, data: AttrData) {
+        d.add_attr(hexe_geo::Attribute { name: name.into(), class, data, type_info: hexe_geo::TypeInfo::None });
+    }
+
+    #[test]
+    fn caps_close_a_partial_sweep_of_a_closed_profile_into_a_pappus_volume() {
+        // unit square profile at x in [1,2], y in [0,1]: area 1, centroid radius 1.5 -> V(90deg) = 1.5 * pi/2 (Pappus)
+        let prof = curve(&[[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 1.0, 0.0], [1.0, 1.0, 0.0]], true);
+        let p = defaults().with("endangle", ParamValue::F(90.0)).with("divs", ParamValue::I(16));
+        let open = run(prof.clone(), p.clone()).expect("cooks");
+        let capped = run(prof.clone(), p.clone().with("caps", ParamValue::B(true))).expect("cooks");
+        assert_eq!((open.prim_count(), capped.prim_count()), (64, 66));
+        assert_eq!(open.point_count, capped.point_count);
+        let v = signed_volume(&capped);
+        let want = 1.5 * std::f64::consts::FRAC_PI_2;
+        assert!(v > 0.0 && (v - want).abs() / want < 0.01, "{v} vs {want}");
+        // cap normals: the start cap faces -tangent (+Z at +X, x=1.5), the end cap faces +tangent (-X at the -Z side)
+        let pos = positions(&capped);
+        let ids = |i: usize| -> Vec<usize> {
+            let pr = &capped.prims[i];
+            capped.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&k| k as usize).collect()
+        };
+        let (s, e) = (prim_normal(&pos, &ids(64)).expect("n"), prim_normal(&pos, &ids(65)).expect("n"));
+        assert!(s[2] > 0.99 && e[0] < -0.99, "{s:?} {e:?}");
+        // full revolve and open profiles ignore caps
+        let full =
+            run(prof, defaults().with("caps", ParamValue::B(true)).with("divs", ParamValue::I(8))).expect("cooks");
+        assert_eq!(full.prim_count(), 32);
+        let wall_caps = run(wall(), p.with("caps", ParamValue::B(true))).expect("cooks");
+        assert_eq!(wall_caps.prim_count(), 16);
+    }
+
+    #[test]
+    fn point_and_prim_attrs_are_inherited_by_the_swept_points_and_quads() {
+        let mut w = wall();
+        attr(&mut w, "id", AttrClass::Point, AttrData::I32(vec![7, 9]));
+        attr(&mut w, "cls", AttrClass::Prim, AttrData::F32(vec![2.5]));
+        let d = run(w.clone(), defaults().with("divs", ParamValue::I(4))).expect("cooks");
+        assert_eq!(
+            d.attr(AttrClass::Point, "id").map(|a| a.data.clone()),
+            Some(AttrData::I32(vec![7, 7, 7, 7, 9, 9, 9, 9]))
+        );
+        assert_eq!(d.attr(AttrClass::Prim, "cls").map(|a| a.data.clone()), Some(AttrData::F32(vec![2.5; 4])));
+        let n =
+            run(w, defaults().with("divs", ParamValue::I(4)).with("carryattrs", ParamValue::B(false))).expect("cooks");
+        assert!(n.attr(AttrClass::Point, "id").is_none() && n.attr(AttrClass::Prim, "cls").is_none());
+        // a profile point on the axis stays ONE point carrying its source value
+        let mut h = half_circle();
+        attr(&mut h, "id", AttrClass::Point, AttrData::I32((0..7).collect()));
+        let s = run(h, defaults().with("divs", ParamValue::I(6))).expect("cooks");
+        let Some(AttrData::I32(id)) = s.attr(AttrClass::Point, "id").map(|a| a.data.clone()) else { panic!("id") };
+        assert_eq!(id.len(), s.point_count as usize);
+        assert_eq!(id.iter().filter(|&&v| v == 0).count(), 1);
+        assert_eq!(id.iter().filter(|&&v| v == 3).count(), 6);
+    }
+
+    #[test]
+    fn per_point_axis_attrs_override_the_node_axis_per_profile_point() {
+        let mut w = wall(); // (1,0,0) -> (1,1,0)
+        attr(&mut w, "axisdir", AttrClass::Point, AttrData::V3(vec![[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]));
+        attr(&mut w, "axisorigin", AttrClass::Point, AttrData::V3(vec![[0.0; 3], [0.0; 3]]));
+        let p = defaults().with("divs", ParamValue::I(4)).with("useptaxis", ParamValue::B(true));
+        let d = run(w.clone(), p).expect("cooks");
+        let q = d.p();
+        // point 0 about +Y: +X -> -Z; point 1 about +X: +Y -> +Z
+        assert!((q[1][0]).abs() < 1e-6 && (q[1][2] + 1.0).abs() < 1e-6, "{:?}", q[1]);
+        assert!((q[4][0] - 1.0).abs() < 1e-6 && (q[4][1] - 1.0).abs() < 1e-6);
+        assert!((q[5][0] - 1.0).abs() < 1e-6 && q[5][1].abs() < 1e-6 && (q[5][2] - 1.0).abs() < 1e-6, "{:?}", q[5]);
+        // off: both points use the node axis (+Y): point 1 ring stays at height 1
+        let o = run(w, defaults().with("divs", ParamValue::I(4))).expect("cooks");
+        assert!(o.p()[4..8].iter().all(|c| (c[1] - 1.0).abs() < 1e-6));
     }
 
     #[test]

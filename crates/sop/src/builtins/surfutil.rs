@@ -13,13 +13,15 @@ use hexe_graph::CookError;
 pub(super) struct Curve {
     pub pts: Vec<u32>,
     pub closed: bool,
+    /// Index of the source prim in `d.prims`.
+    pub prim: usize,
 }
 
 /// Every `Poly` / `Polyline` prim with >= 2 in-range corners, in prim order. A `Polyline` whose last point repeats its first
 /// (the convention `convert` writes for a closed loop) is reported closed without the repeated corner.
 pub(super) fn curves(d: &Detail) -> Vec<Curve> {
     let mut out = Vec::new();
-    for pr in &d.prims {
+    for (prim, pr) in d.prims.iter().enumerate() {
         let closed_kind = match pr.kind {
             PrimKind::Poly { closed } => closed,
             PrimKind::Polyline => false,
@@ -36,7 +38,7 @@ pub(super) fn curves(d: &Detail) -> Vec<Curve> {
             pts.pop();
             closed = true;
         }
-        out.push(Curve { pts, closed });
+        out.push(Curve { pts, closed, prim });
     }
     out
 }
@@ -47,6 +49,11 @@ pub(super) struct Mesh {
     pub pts: Vec<[f32; 3]>,
     prims: Vec<(Vec<u32>, bool)>,
     uvs: Vec<[f32; 3]>,
+    /// Source point / prim stamped on every NEW point / prim (set by the caller before emitting; `None` = generated).
+    pub cur_pt: Option<usize>,
+    pub cur_prim: Option<usize>,
+    point_src: Vec<Option<usize>>,
+    prim_src: Vec<Option<usize>>,
 }
 
 impl Mesh {
@@ -60,6 +67,7 @@ impl Mesh {
             return Err(failed(op, "output exceeds the point cap"));
         }
         self.pts.push(r);
+        self.point_src.push(self.cur_pt);
         Ok((self.pts.len() - 1) as u32)
     }
     /// New closed poly with per-corner uv.
@@ -68,6 +76,7 @@ impl Mesh {
             return Err(failed(op, "output exceeds the primitive cap"));
         }
         self.prims.push((ids.to_vec(), true));
+        self.prim_src.push(self.cur_prim);
         self.uvs.extend_from_slice(uv);
         Ok(())
     }
@@ -94,6 +103,26 @@ impl Mesh {
             self.poly(op, &ids, &uvs)?;
         }
         Ok(())
+    }
+    /// `finish`, then every point attr (except `P`) and prim attr of `src` is gathered onto the new points / prims through
+    /// the recorded `cur_pt` / `cur_prim` stamps (generated elements get the default value). `uv` (vertex) is untouched.
+    pub fn finish_with(self, src: &Detail) -> Detail {
+        let (psrc, qsrc) = (self.point_src.clone(), self.prim_src.clone());
+        let mut g = self.finish();
+        for a in &src.attrs {
+            let idx = match a.class {
+                AttrClass::Point if a.name != "P" => &psrc,
+                AttrClass::Prim => &qsrc,
+                _ => continue,
+            };
+            g.add_attr(Attribute {
+                name: a.name.clone(),
+                class: a.class,
+                data: super::meshutil::gather(&a.data, idx),
+                type_info: a.type_info,
+            });
+        }
+        g
     }
     /// Final `Detail`: points, closed polys, vertex `uv`.
     pub fn finish(self) -> Detail {

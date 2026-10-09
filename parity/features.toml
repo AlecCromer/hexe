@@ -1192,9 +1192,12 @@ evidence = [
   "crates/sop/src/builtins/revolve_sop.rs::partial_angle_origin_and_axis_params",
   "crates/sop/src/builtins/revolve_sop.rs::uv_is_vertex_class_with_u_over_divs_and_v_arclength",
   "crates/sop/src/builtins/revolve_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/revolve_sop.rs::caps_close_a_partial_sweep_of_a_closed_profile_into_a_pappus_volume",
+  "crates/sop/src/builtins/revolve_sop.rs::point_and_prim_attrs_are_inherited_by_the_swept_points_and_quads",
+  "crates/sop/src/builtins/revolve_sop.rs::per_point_axis_attrs_override_the_node_axis_per_profile_point",
   "crates/sop/src/builtins/revolve_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "S2: origin(0) dir(0,1,0) startangle(0) endangle(360) divs(12, >=3 full / >=1 partial) tris(off, extra). Right-hand rotation about dir (+X -> -Z about +Y). |span| >= 360 = full turn, seam wraps (divs columns, no duplicate points), else divs+1 columns. Profile points on the axis (<1e-6) become one shared point (half circle -> closed sphere, volume within 10% of 4/3 pi at 24 divs); segments on the axis emit nothing. Upward profile at +radius -> outward normals. Vertex uv V3 (u = col/divs, v = profile arclength). NOT modelled (DEFERRED): caps, NURBS/Bezier output, attribute inheritance, per-point axis. UNVERIFIED vs Houdini (hython blocked): parm names beyond origin/dir/angles/divs, winding vs Houdini on reversed profiles, uv. Example: examples/revolve.json (torus). Analytical oracle only."
+notes = "S2: origin(0) dir(0,1,0) startangle(0) endangle(360) divs(12, >=3 full / >=1 partial) tris(off, extra). Right-hand rotation about dir (+X -> -Z about +Y). |span| >= 360 = full turn, seam wraps (divs columns, no duplicate points), else divs+1 columns. Profile points on the axis (<1e-6) become one shared point (half circle -> closed sphere, volume within 10% of 4/3 pi at 24 divs); segments on the axis emit nothing. Upward profile at +radius -> outward normals. Vertex uv V3 (u = col/divs, v = profile arclength). QB: caps (partial sweep of a closed profile -> 2 outward n-gons; Pappus volume pinned), carryattrs (point attrs -> ring points, prim attrs -> quads/caps), useptaxis (point attrs axisorigin/axisdir per profile point). REMAINING: NURBS/Bezier output (no such prim kind in hexe-geo). UNVERIFIED vs Houdini (hython blocked): parm names beyond origin/dir/angles/divs, winding vs Houdini on reversed profiles, uv. Example: examples/revolve.json (torus). Analytical oracle only."
 
 [[feature]]
 id = "sop-skin"
