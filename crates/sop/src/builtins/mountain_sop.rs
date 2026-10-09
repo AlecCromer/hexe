@@ -1,12 +1,13 @@
-//! Mountain SOP (token `mountain`): displace points along their normal by Perlin noise.
+//! Mountain SOP (token `mountain`): displace points along a direction by Perlin noise.
 //!
 //! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
-//! `P' = P + N * height * noise((P + offset) / elementsize)`. `noise` = the classic gradient (Perlin) noise of
+//! `P' = P + dir * height * noise((P + offset) / elementsize)`. `noise` = the classic gradient (Perlin) noise of
 //! `attribnoise` (`attribnoise_sop::perlin`, channel 0, hashed with `seed`): value in `[-1, 1]`, EXACTLY 0 at every
-//! integer lattice point of the scaled space, deterministic for a given (`seed`, position). `N` = the point `N` attribute
-//! (V3, one per point) used as is; absent / wrong-typed / wrong-length = uniform-averaged Newell point normals (as `peak`;
-//! points without a usable face stay). Only `P` changes.
-//! Params: `height` F 1 (amplitude; 0 = input `Arc` shared), `elementsize` F 1 (> 0), `seed` I 0, `offset` V3 0.
+//! integer lattice point of the scaled space, deterministic for a given (`seed`, position). `dir` = `direction` param
+//! if nonzero (normalized), else point `N` attribute (V3, one per point) used as is; absent / wrong-typed / wrong-length
+//! = uniform-averaged Newell point normals (as `peak`; points without a usable face stay). Only `P` changes.
+//! Params: `height` F 1 (amplitude; 0 = input `Arc` shared), `elementsize` F 1 (> 0), `seed` I 0, `offset` V3 0,
+//! `direction` V3 (0,1,0) (zero = use N).
 //! NOT modelled (DEFERRED): Houdini's `roughness`/`fractal` octaves, `turbulence`/`attenuation`/`slope` knobs, `animate`
 //! (time scroll), the other noise types (simplex, sparse...), point group, `N` recompute.
 use super::attribnoise_sop::perlin;
@@ -24,6 +25,7 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("elementsize", ParamValue::F(1.0)).label("Element Size").range(0.01, 10.0),
         ParamSpec::new("seed", ParamValue::I(0)).label("Seed").range(0.0, 100.0),
         ParamSpec::new("offset", ParamValue::V3([0.0; 3])).label("Offset"),
+        ParamSpec::new("direction", ParamValue::V3([0.0, 0.0, 0.0])).label("Direction"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -59,11 +61,24 @@ impl Node<Detail> for Mountain {
             return Ok(Arc::clone(src));
         }
         let pos = positions(src);
-        let normals: Vec<V3> = match src.attr(AttrClass::Point, "N").map(|a| &a.data) {
-            Some(AttrData::V3(n)) if n.len() == pos.len() => {
-                n.iter().map(|v| [f64::from(v[0]), f64::from(v[1]), f64::from(v[2])]).collect()
+        let dir = match ctx.params.vec3("direction") {
+            Some(v) if v.iter().all(|c| c.is_finite()) => v.map(f64::from),
+            _ => return Err(bad("`direction`: missing or not a finite vector")),
+        };
+        let use_uniform_dir = dir[0] != 0.0 || dir[1] != 0.0 || dir[2] != 0.0;
+        let normals: Vec<V3> = if use_uniform_dir {
+            let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+            if len < 1e-12 {
+                return Err(bad("`direction` length too small"));
             }
-            _ => point_normals(src, &pos),
+            vec![[dir[0] / len, dir[1] / len, dir[2] / len]; pos.len()]
+        } else {
+            match src.attr(AttrClass::Point, "N").map(|a| &a.data) {
+                Some(AttrData::V3(n)) if n.len() == pos.len() => {
+                    n.iter().map(|v| [f64::from(v[0]), f64::from(v[1]), f64::from(v[2])]).collect()
+                }
+                _ => point_normals(src, &pos),
+            }
         };
         let moved: Vec<V3> = pos
             .iter()
@@ -190,6 +205,34 @@ mod tests {
         let r =
             cook(&*new(), cube(), &with(1.0).with("seed", ParamValue::I(-5)).with("elementsize", ParamValue::F(1e-30)));
         assert!(r.is_ok() || matches!(r, Err(CookError::Failed(_))));
+    }
+
+    #[test]
+    fn direction_param_overrides_n_attribute() {
+        let mut d = field();
+        d.add_attr(Attribute {
+            name: "N".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(vec![[1.0, 0.0, 0.0]; 400]),
+            type_info: TypeInfo::Normal,
+        });
+        // direction = (1,0,0): displaces along X regardless of N attr
+        let p1 = with(0.5).with("direction", ParamValue::V3([1.0, 0.0, 0.0]));
+        let out1 = cook(&*new(), d.clone(), &p1).expect("cooks");
+        for (a, b) in d.p().iter().zip(out1.p()) {
+            assert_eq!((a[1], a[2]), (b[1], b[2]), "displaced along +X only");
+        }
+        // direction = (0,0,1): displaces along Z instead
+        let p2 = with(0.5).with("direction", ParamValue::V3([0.0, 0.0, 1.0]));
+        let out2 = cook(&*new(), d.clone(), &p2).expect("cooks");
+        for (a, b) in d.p().iter().zip(out2.p()) {
+            assert_eq!((a[0], a[1]), (b[0], b[1]), "displaced along +Z only");
+        }
+        assert_ne!(out1.p(), out2.p(), "different directions give different results");
+        // direction = 0: falls back to N attr = (1,0,0)
+        let p3 = with(0.5).with("direction", ParamValue::V3([0.0, 0.0, 0.0]));
+        let out3 = cook(&*new(), d.clone(), &p3).expect("cooks");
+        assert_eq!(out3.p(), out1.p(), "zero direction uses N attr");
     }
 
     #[test]

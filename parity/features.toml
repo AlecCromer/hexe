@@ -1010,7 +1010,7 @@ evidence = [
   "crates/sop/src/builtins/clip_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/clip_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. NOT modelled (DEFERRED): capclip, group filter, N recompute, Houdini 'keep all' vs 'both' naming, polysoup/NURBS. UNVERIFIED vs Houdini (hython blocked): menu order, point/prim order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "C2 (H33 order-twin): origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. H33: slot/cut order = Houdini (below in-place, split above appended; poly cycle starts at first kept corner). houdini_twin testkit for order verification. NOT modelled (DEFERRED): capclip, group filter, N recompute, Houdini 'keep all' vs 'both' naming, polysoup/NURBS. UNVERIFIED vs Houdini (hython blocked): menu order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-connectivity"
@@ -1097,7 +1097,7 @@ notes = "H29: origin(0) dir(0,1,0) length(1) angle(deg, 0). Rotation about dir b
 
 [[feature]]
 id = "sop-mountain"
-title = "Mountain SOP (Perlin displacement along N)"
+title = "Mountain SOP (Perlin displacement along direction or N)"
 area = "A"
 tier = "P1"
 status = "partial"
@@ -1108,10 +1108,11 @@ evidence = [
   "crates/sop/src/builtins/mountain_sop.rs::height_is_linear_and_negative_mirrors",
   "crates/sop/src/builtins/mountain_sop.rs::lattice_points_are_fixed",
   "crates/sop/src/builtins/mountain_sop.rs::existing_n_attribute_is_the_direction",
+  "crates/sop/src/builtins/mountain_sop.rs::direction_param_overrides_n_attribute",
   "crates/sop/src/builtins/mountain_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/mountain_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "H29: height(1) elementsize(1, >0) seed(0) offset(0). P' = P + N*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. N = point N attr else Newell point normals (as peak). height 0 = Arc shared. NOT modelled (DEFERRED): fractal octaves/roughness, turbulence/attenuation/slope, animate, other noise types, group, N recompute. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize. Example: examples/mountain.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "C2: height(1) elementsize(1, >0) seed(0) offset(0) direction(0,0,0 = use N). P' = P + dir*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. dir = direction param if nonzero (normalized), else point N attr, else Newell point normals (as peak). height 0 = Arc shared. NOT modelled (DEFERRED): fractal octaves/roughness, turbulence/attenuation/slope, animate, other noise types, group, N recompute. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize, direction param semantics. Example: examples/mountain.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-ray"

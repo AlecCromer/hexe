@@ -298,6 +298,63 @@ pub(super) mod testkit {
         }
         d
     }
+    /// Houdini-twin evidence: cook the committed oracle scene and compare it with the REAL Houdini 20.5 `.geo` of the same case:
+    /// point/prim counts, `P` in index order (1e-5), every prim's point-id list verbatim (+ closedness), attribute NAME sets per
+    /// class and group names per class. Differences come back as `Err(text)` so a test can also pin a KNOWN gap.
+    pub fn houdini_twin(scene: &str, houdini_geo: &[u8]) -> Result<(), String> {
+        use hexe_geo::{AttrClass, PrimKind, read_geo};
+        let h = read_geo(houdini_geo).map_err(|e| format!("houdini.geo: {e:?}"))?;
+        let (mut g, id) = crate::load_scene(scene).map_err(|e| format!("scene: {e:?}"))?;
+        let d = g.cook(id, 0.0).map_err(|e| format!("cook: {e:?}"))?;
+        if (d.point_count, d.prim_count(), d.vertex_count()) != (h.point_count, h.prim_count(), h.vertex_count()) {
+            return Err(format!(
+                "counts hexe {}/{}/{} vs houdini {}/{}/{}",
+                d.point_count,
+                d.prim_count(),
+                d.vertex_count(),
+                h.point_count,
+                h.prim_count(),
+                h.vertex_count()
+            ));
+        }
+        for (k, (a, b)) in d.p().iter().zip(h.p()).enumerate() {
+            if a.iter().zip(b).any(|(x, y)| (x - y).abs() > 1e-5) {
+                return Err(format!("P[{k}] hexe {a:?} vs houdini {b:?}"));
+            }
+        }
+        let ids = |x: &Detail, i: usize| {
+            x.vertex_point[x.prims[i].verts.start as usize..x.prims[i].verts.end as usize].to_vec()
+        };
+        for i in 0..d.prims.len() {
+            if ids(&d, i) != ids(&h, i) {
+                return Err(format!("prim {i} hexe {:?} vs houdini {:?}", ids(&d, i), ids(&h, i)));
+            }
+            if matches!(d.prims[i].kind, PrimKind::Poly { closed: true })
+                != matches!(h.prims[i].kind, PrimKind::Poly { closed: true })
+            {
+                return Err(format!("prim {i} closedness differs"));
+            }
+        }
+        for class in [AttrClass::Point, AttrClass::Vertex, AttrClass::Prim, AttrClass::Detail] {
+            let names = |x: &Detail| {
+                let mut v: Vec<String> = x.attrs.iter().filter(|a| a.class == class).map(|a| a.name.clone()).collect();
+                v.sort();
+                v
+            };
+            if names(&d) != names(&h) {
+                return Err(format!("{class:?} attrs hexe {:?} vs houdini {:?}", names(&d), names(&h)));
+            }
+            let groups = |x: &Detail| {
+                let mut v: Vec<String> = x.groups.iter().filter(|g| g.class == class).map(|g| g.name.clone()).collect();
+                v.sort();
+                v
+            };
+            if groups(&d) != groups(&h) {
+                return Err(format!("{class:?} groups hexe {:?} vs houdini {:?}", groups(&d), groups(&h)));
+            }
+        }
+        Ok(())
+    }
     pub fn prim_pts(d: &Detail, i: usize) -> Vec<[f32; 3]> {
         let pr = &d.prims[i];
         d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| d.p()[p as usize]).collect()
