@@ -140,7 +140,7 @@ fn best_fit_plane(pts: &[V3]) -> Option<(V3, V3)> {
     let c = pts.iter().fold([0.0; 3], |a, p| [a[0] + p[0], a[1] + p[1], a[2] + p[2]]);
     let nw = newell_corners(pts);
     let mag = dot(nw, nw).sqrt();
-    if !(mag > 1e-12) {
+    if mag.is_nan() || mag <= 1e-12 {
         return None;
     }
     Some(([c[0] / n, c[1] / n, c[2] / n], [nw[0] / mag, nw[1] / mag, nw[2] / mag]))
@@ -232,10 +232,10 @@ fn dedup(poly: Vec<BCorner>) -> Vec<BCorner> {
     }
     while out.len() > 1 && same(&out[0], &out[out.len() - 1]) {
         let last = out.pop();
-        if let (Some(l), true) = (last, out[0].pt.is_none()) {
-            if l.pt.is_some() {
-                out[0] = l;
-            }
+        if let (Some(l), true) = (last, out[0].pt.is_none())
+            && l.pt.is_some()
+        {
+            out[0] = l;
         }
     }
     out
@@ -256,10 +256,7 @@ fn clip_axis(poly: &[BCorner], axis: usize, val: f64, keep_ge: bool) -> Vec<BCor
         }
         if ia != ib {
             let t = (da / (da - db)).clamp(0.0, 1.0);
-            let mut pos = [0.0; 3];
-            for k in 0..3 {
-                pos[k] = a.pos[k] + t * (b.pos[k] - a.pos[k]);
-            }
+            let mut pos: V3 = std::array::from_fn(|k| a.pos[k] + t * (b.pos[k] - a.pos[k]));
             pos[axis] = val;
             out.push(BCorner { pos, w: lerp_w(&a.w, &b.w, t), vsrc: a.vsrc, pt: None });
         }
@@ -274,7 +271,7 @@ fn slab(poly: Vec<BCorner>, axis: usize, size: f64, offset: f64) -> Result<Vec<V
         return Ok(vec![poly]); // flat along this axis: nothing to cut
     }
     let (f0, f1) = ((mn - offset) / size + CELL_SNAP, (mx - offset) / size - CELL_SNAP);
-    if !(f1 - f0 < MAX_ELEMS as f64) {
+    if (f1 - f0).is_nan() || f1 - f0 >= MAX_ELEMS as f64 {
         return Err(failed("divide", "brick grid too fine (output too large)"));
     }
     let (i0, i1) = (f0.floor() as i64, (f1.ceil() as i64).max(f0.floor() as i64 + 1));
@@ -414,7 +411,7 @@ impl Node<Detail> for Divide {
         let remove_shared = toggle(ctx.params, "removesharededges")?;
         let bricker = toggle(ctx.params, "bricker")?;
         let (size, offset) = (v3(ctx.params, "size")?, v3(ctx.params, "offset")?);
-        if bricker && size.iter().any(|&s| !(s > 0.0)) {
+        if bricker && size.iter().any(|&s| s.is_nan() || s <= 0.0) {
             return Err(bad(format!("divide: brick `size` {size:?} must be > 0 on every axis")));
         }
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };

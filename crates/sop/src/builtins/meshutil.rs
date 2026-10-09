@@ -243,9 +243,9 @@ pub(super) fn blend_weighted(d: &AttrData, srcs: &[Vec<(usize, f64)>]) -> AttrDa
     let flat4 = |v: &[[f32; 4]]| wavg(&v.iter().flatten().copied().collect::<Vec<f32>>(), 4, srcs);
     match d {
         AttrData::F32(v) => AttrData::F32(wavg(v, 1, srcs)),
-        AttrData::V2(v) => AttrData::V2(flat2(v).chunks_exact(2).map(|c| [c[0], c[1]]).collect()),
-        AttrData::V3(v) => AttrData::V3(flat3(v).chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()),
-        AttrData::V4(v) => AttrData::V4(flat4(v).chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()),
+        AttrData::V2(v) => AttrData::V2(flat2(v).as_chunks::<2>().0.to_vec()),
+        AttrData::V3(v) => AttrData::V3(flat3(v).as_chunks::<3>().0.to_vec()),
+        AttrData::V4(v) => AttrData::V4(flat4(v).as_chunks::<4>().0.to_vec()),
         AttrData::FN { size, data } => AttrData::FN { size: *size, data: wavg(data, *size as usize, srcs) },
         AttrData::I32(_) | AttrData::IN { .. } | AttrData::Str { .. } => {
             let heavy: Vec<Option<usize>> =
