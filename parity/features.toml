@@ -286,14 +286,18 @@ notes = "H32: `splittype` menu 0 connected components (DEFAULT, Houdini; closed 
 
 [[feature]]
 id = "sop-subdivide"
-title = "Subdivide SOP (Catmull-Clark / linear)"
+title = "Subdivide SOP (Catmull-Clark / linear / Loop)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["subdivide"]
 evidence = [
+  "crates/sop/src/builtins/subdivide_sop.rs::box_catmull_clark_iter1_is_26_points_24_closed_quads",
+  "crates/sop/src/builtins/subdivide_sop.rs::cube_all_edge_crease_10_stays_cube_shaped",
+  "crates/sop/src/builtins/subdivide_sop.rs::loop_icosahedron_20_to_80_to_320_tris",
+  "crates/sop/src/builtins/subdivide_sop.rs::loop_requires_all_tri_input",
 ]
-notes = "H18: iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear; >=2 OpenSubdiv = Unsupported) / group. CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Output = quads only; face/edge pts appended after input pts. NOT modelled: creases (creaseweight attr), Loop subdivision for tri meshes, OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), boundary interp modes, crack protection vs unselected prims. UNVERIFIED-vs-Houdini: crease semantics, Loop tri subdivision, boundary modes (no oracle). Example: examples/subdivide.json. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, point order differs), see docs/HOUDINI-ORACLE.md."
+notes = "iterations I (0..=6) / algorithm menu (0 catmull-clark, 1 linear, 2 loop; >=3 OpenSubdiv = Unsupported) / group / treatboundaryascrease B (default on). CC: edge pt (A+B+F1+F2)/4 interior else midpoint; vertex (F+2R+(n-3)P)/n interior, (6P+A+B)/8 boundary (2 boundary edges), else P. Box CC corner = 5/18 (orig x 5/9). Creases: creaseweight attr (point class), s >= 1 -> crease rule, s >= 10 infinitely sharp, 0 < s < 1 blend smooth/crease, s-1 propagates (NOT implemented, no multi-level creases). Boundary edges treated as creases when treatboundaryascrease on. Loop: Warren beta weights, boundary 1/8-3/4-1/8 rule, all-tri input required else Failed. Output = quads (CC) or tris (Loop) only; face/edge pts appended after input pts. NOT modelled: OpenSubdiv, UV/vertex-attr interpolation (new vertices default-fill), boundary interp modes, crack protection vs unselected prims, crease propagation across iterations. UNVERIFIED-vs-Houdini: Loop beta formula (Warren claimed), boundary modes (no oracle). Example: examples/subdivide.json. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF (counts match, point order differs), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-smooth"

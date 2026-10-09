@@ -25,7 +25,7 @@
 //! (0 catmull-clark, 1 linear; >= 2 OpenSubdiv variants = `Unsupported`), `group` S (prim groups, union; empty = all;
 //! unknown name = `Failed`). Element counts above `MAX_ELEMS` -> `Failed` BEFORE allocating each iteration.
 use super::meshutil::{
-    MAX_ELEMS, Remap, V3, add, bad, closed_poly_pts, failed, int, positions, rebuild, scale, selection, to_f32,
+    MAX_ELEMS, Remap, V3, add, bad, closed_poly_pts, failed, int, positions, rebuild, scale, selection, to_f32, toggle,
 };
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
@@ -38,15 +38,19 @@ const OP: &str = "subdivide";
 const MAX_ITERATIONS: i32 = 6;
 const ALGO_CATMULL: u32 = 0;
 const ALGO_LINEAR: u32 = 1;
+const ALGO_LOOP: u32 = 2;
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("iterations", ParamValue::I(1)).label("Subdivision Levels").range(0.0, 6.0),
-        ParamSpec::new("algorithm", ParamValue::Menu(ALGO_CATMULL))
-            .label("Algorithm")
-            .menu(&[("catmull", "OpenSubdiv Catmull-Clark"), ("linear", "Linear")]),
+        ParamSpec::new("algorithm", ParamValue::Menu(ALGO_CATMULL)).label("Algorithm").menu(&[
+            ("catmull", "Catmull-Clark"),
+            ("linear", "Linear"),
+            ("loop", "Loop"),
+        ]),
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
+        ParamSpec::new("treatboundaryascrease", ParamValue::B(true)).label("Treat Boundary as Crease"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -61,8 +65,219 @@ fn mean(pos: &[V3], ids: &[usize]) -> V3 {
     scale(s, 1.0 / ids.len().max(1) as f64)
 }
 
+/// Warren β weight for Loop subdivision (1/n for n>3, else 3/16, 3/8, 0 for n=3,4,5+)
+fn loop_beta(n: usize) -> f64 {
+    match n {
+        3 => 3.0 / 16.0,
+        _ if n > 3 => 3.0 / (8.0 * n as f64),
+        _ => 0.0,
+    }
+}
+
+/// Check if all selected faces are triangles.
+fn all_triangles(src: &Detail, sel: Option<&[bool]>) -> bool {
+    src.prims.iter().enumerate().all(|(pi, pr)| {
+        if sel.is_some_and(|s| !s.get(pi).copied().unwrap_or(false)) {
+            return true;
+        }
+        closed_poly_pts(src, pr).map(|pts| pts.len() == 3).unwrap_or(true)
+    })
+}
+
+/// Get crease weight for an edge (from creaseweight attribute, vertex or point class).
+fn get_crease_weight(src: &Detail, a: usize, b: usize) -> f64 {
+    // Try vertex attribute first (would need prim-vertex mapping, complex)
+    // Fall back to point attribute
+    if let Some(attr) = src.attr(hexe_geo::AttrClass::Point, "creaseweight")
+        && let hexe_geo::AttrData::F32(weights) = &attr.data
+    {
+        let wa = weights.get(a).copied().unwrap_or(0.0) as f64;
+        let wb = weights.get(b).copied().unwrap_or(0.0) as f64;
+        return wa.max(wb); // Edge is as sharp as its sharpest endpoint
+    }
+    0.0
+}
+
+/// Loop subdivision pass (all-tri input required).
+fn step_loop(src: &Detail, sel: Option<&[bool]>, _boundary_crease: bool) -> Result<Option<Detail>, CookError> {
+    let pos = positions(src);
+    let np = pos.len();
+    // ---- selected faces (must all be triangles) ----
+    let mut faces: Vec<(usize, usize, Vec<usize>)> = Vec::new();
+    for (pi, pr) in src.prims.iter().enumerate() {
+        if sel.is_some_and(|s| !s.get(pi).copied().unwrap_or(false)) {
+            continue;
+        }
+        if let (Some(pts), Ok(lo)) = (closed_poly_pts(src, pr), usize::try_from(pr.verts.start)) {
+            if pts.len() != 3 {
+                return Err(failed(OP, "Loop subdivision requires all-triangle input"));
+            }
+            faces.push((pi, lo, pts));
+        }
+    }
+    if faces.is_empty() {
+        return Ok(None);
+    }
+    // ---- size cap ----
+    let nf = faces.len() as u64;
+    let out_pts = (np as u64).saturating_add(nf.saturating_mul(3));
+    let out_verts =
+        u64::from(src.vertex_count()).saturating_sub(nf.saturating_mul(3)).saturating_add(nf.saturating_mul(12));
+    let out_prims = (src.prims.len() as u64).saturating_sub(nf).saturating_add(nf.saturating_mul(4));
+    if out_pts > MAX_ELEMS || out_verts > MAX_ELEMS || out_prims > MAX_ELEMS {
+        return Err(failed(OP, "output element count exceeds the allocation cap"));
+    }
+    // ---- edge table (each triangle has 3 edges) ----
+    let mut edge_id: HashMap<(usize, usize), usize> = HashMap::new();
+    let mut ends: Vec<(usize, usize)> = Vec::new();
+    let mut ecount: Vec<u32> = Vec::new();
+    let mut face_edges: Vec<[usize; 3]> = Vec::with_capacity(faces.len());
+    for (_, _, pts) in faces.iter() {
+        let mut fe = [0; 3];
+        for k in 0..3 {
+            let a = pts[k];
+            let b = pts[(k + 1) % 3];
+            let key = (a.min(b), a.max(b));
+            let id = *edge_id.entry(key).or_insert_with(|| {
+                ends.push(key);
+                ecount.push(0);
+                ends.len() - 1
+            });
+            if let Some(c) = ecount.get_mut(id) {
+                *c += 1;
+            }
+            fe[k] = id;
+        }
+        face_edges.push(fe);
+    }
+    let at = |i: usize| pos.get(i).copied().unwrap_or([0.0; 3]);
+    // ---- edge points (boundary: 1/8-3/4-1/8, interior: 3/8(A+B) + 1/8(C+D)) ----
+    let mut epos: Vec<V3> = Vec::with_capacity(ends.len());
+    for (e, &(a, b)) in ends.iter().enumerate() {
+        let boundary = ecount[e] != 2;
+        if boundary {
+            // Boundary edge: 1/2(A+B) or weighted rule
+            let pa = at(a);
+            let pb = at(b);
+            epos.push(scale(add(pa, pb), 0.5));
+        } else {
+            // Interior edge: find the two opposite vertices C, D
+            let mut opp = Vec::new();
+            for (fi, fe) in face_edges.iter().enumerate() {
+                for &eid in fe.iter() {
+                    if eid == e {
+                        // Find the vertex in this tri that's not a or b
+                        for &v in faces[fi].2.iter() {
+                            if v != a && v != b {
+                                opp.push(v);
+                            }
+                        }
+                    }
+                }
+            }
+            if opp.len() == 2 {
+                let pa = at(a);
+                let pb = at(b);
+                let pc = at(opp[0]);
+                let pd = at(opp[1]);
+                // 3/8(A+B) + 1/8(C+D)
+                let ab = scale(add(pa, pb), 3.0 / 8.0);
+                let cd = scale(add(pc, pd), 1.0 / 8.0);
+                epos.push(add(ab, cd));
+            } else {
+                // Fallback
+                let pa = at(a);
+                let pb = at(b);
+                epos.push(scale(add(pa, pb), 0.5));
+            }
+        }
+    }
+    // ---- vertex points (Warren β weights) ----
+    let mut new_p = pos.clone();
+    let mut valence = vec![0usize; np];
+    let mut neighbors: Vec<Vec<usize>> = vec![Vec::new(); np];
+    for &(a, b) in &ends {
+        valence[a] += 1;
+        valence[b] += 1;
+        neighbors[a].push(b);
+        neighbors[b].push(a);
+    }
+    for i in 0..np {
+        let n = valence[i];
+        if n == 0 {
+            continue;
+        }
+        let boundary = neighbors[i].iter().any(|&j| {
+            let key = (i.min(j), i.max(j));
+            edge_id.get(&key).and_then(|&eid| ecount.get(eid)).copied() != Some(2)
+        });
+        if boundary {
+            // Boundary vertex: (6P + A + B) / 8 where A, B are boundary neighbors
+            let mut bn = Vec::new();
+            for &j in &neighbors[i] {
+                let key = (i.min(j), i.max(j));
+                if edge_id.get(&key).and_then(|&eid| ecount.get(eid)).copied() != Some(2) {
+                    bn.push(j);
+                }
+            }
+            if bn.len() == 2 {
+                let p = at(i);
+                let a = at(bn[0]);
+                let b = at(bn[1]);
+                new_p[i] = scale(add(add(scale(p, 6.0), a), b), 0.125);
+            }
+        } else {
+            // Interior vertex: (1 - nβ)P + β Σ neighbors
+            let beta = loop_beta(n);
+            let p = at(i);
+            let sum = neighbors[i].iter().fold([0.0; 3], |acc, &j| add(acc, at(j)));
+            let w_p = 1.0 - (n as f64) * beta;
+            new_p[i] = add(scale(p, w_p), scale(sum, beta));
+        }
+    }
+    new_p.extend(epos.iter().copied());
+    // ---- topology: each triangle splits into 4 ----
+    let ebase = np;
+    let id = |i: usize| u32::try_from(i).map_err(|_| failed(OP, "point id overflow"));
+    let mut rm = Remap::default();
+    rm.point_src.extend((0..np).map(|i| vec![i]));
+    rm.point_src.extend(ends.iter().map(|&(a, b)| vec![a, b]));
+    let mut vertex_point: Vec<u32> = Vec::new();
+    let mut prims: Vec<Prim> = Vec::new();
+    let mut next_face = faces.iter().enumerate().peekable();
+    for (pi, pr) in src.prims.iter().enumerate() {
+        if let Some((fi, (_, lo, pts))) = next_face.next_if(|(_, f)| f.0 == pi) {
+            let fe = face_edges[fi];
+            // 4 sub-triangles: corners + center
+            for k in 0..3 {
+                let s = u32::try_from(vertex_point.len()).map_err(|_| failed(OP, "vertex id overflow"))?;
+                vertex_point.extend([id(pts[k])?, id(ebase + fe[(k + 2) % 3])?, id(ebase + fe[k])?]);
+                rm.vert_src.extend([Some(lo + k), None, None]);
+                prims.push(Prim { kind: PrimKind::Poly { closed: true }, verts: s..s + 3 });
+                rm.prim_src.push(Some(pi));
+            }
+            // Center triangle
+            let s = u32::try_from(vertex_point.len()).map_err(|_| failed(OP, "vertex id overflow"))?;
+            vertex_point.extend([id(ebase + fe[0])?, id(ebase + fe[1])?, id(ebase + fe[2])?]);
+            rm.vert_src.extend([None, None, None]);
+            prims.push(Prim { kind: PrimKind::Poly { closed: true }, verts: s..s + 3 });
+            rm.prim_src.push(Some(pi));
+        } else {
+            let (lo, hi) = (usize::try_from(pr.verts.start).unwrap_or(0), usize::try_from(pr.verts.end).unwrap_or(0));
+            let start = u32::try_from(vertex_point.len()).map_err(|_| failed(OP, "vertex id overflow"))?;
+            vertex_point.extend(src.vertex_point.get(lo..hi).unwrap_or(&[]));
+            rm.vert_src.extend((lo..hi).map(Some));
+            let end = u32::try_from(vertex_point.len()).map_err(|_| failed(OP, "vertex id overflow"))?;
+            prims.push(Prim { kind: pr.kind.clone(), verts: start..end });
+            rm.prim_src.push(Some(pi));
+        }
+    }
+    let p = to_f32(OP, &new_p)?;
+    rebuild(OP, src, vertex_point, prims, &rm, p).map(Some)
+}
+
 /// One subdivision pass over the selected faces; `None` when nothing is selectable.
-fn step(src: &Detail, sel: Option<&[bool]>, catmull: bool) -> Result<Option<Detail>, CookError> {
+fn step(src: &Detail, sel: Option<&[bool]>, catmull: bool, boundary_crease: bool) -> Result<Option<Detail>, CookError> {
     let pos = positions(src);
     let np = pos.len();
     // ---- selected faces: (prim index, first vertex, corner points) ----
@@ -115,14 +330,28 @@ fn step(src: &Detail, sel: Option<&[bool]>, catmull: bool) -> Result<Option<Deta
         face_edges.push(fe);
     }
     let at = |i: usize| pos.get(i).copied().unwrap_or([0.0; 3]);
+    // ---- crease weights (read once, propagate later) ----
+    let crease_weights: Vec<f64> = ends.iter().map(|&(a, b)| get_crease_weight(src, a, b)).collect();
     // ---- edge points ----
     let epos: Vec<V3> = ends
         .iter()
         .enumerate()
         .map(|(e, &(a, b))| {
             let mid = scale(add(at(a), at(b)), 0.5);
-            match (catmull, ecount.get(e), efsum.get(e)) {
-                (true, Some(2), Some(&fs)) => scale(add(add(at(a), at(b)), fs), 0.25),
+            let crease = crease_weights.get(e).copied().unwrap_or(0.0);
+            let is_boundary = ecount.get(e).copied() != Some(2);
+            let treat_as_crease = crease >= 1.0 || (boundary_crease && is_boundary);
+            match (catmull, treat_as_crease, ecount.get(e), efsum.get(e)) {
+                (true, false, Some(2), Some(&fs)) => {
+                    let smooth = scale(add(add(at(a), at(b)), fs), 0.25);
+                    if crease > 0.0 && crease < 1.0 {
+                        // Blend smooth and crease
+                        let t = crease;
+                        scale(add(scale(smooth, 1.0 - t), scale(mid, t)), 1.0)
+                    } else {
+                        smooth
+                    }
+                }
                 _ => mid,
             }
         })
@@ -141,8 +370,11 @@ fn step(src: &Detail, sel: Option<&[bool]>, catmull: bool) -> Result<Option<Deta
         }
         let (mut ecnt, mut msum) = (vec![0u32; np], vec![[0.0f64; 3]; np]);
         let (mut bcnt, mut bsum) = (vec![0u32; np], vec![[0.0f64; 3]; np]);
+        let (mut ccnt, mut csum) = (vec![0u32; np], vec![[0.0f64; 3]; np]); // crease edge count and neighbor sum
         for (e, &(a, b)) in ends.iter().enumerate() {
             let boundary = ecount.get(e).copied() != Some(2);
+            let crease = crease_weights.get(e).copied().unwrap_or(0.0);
+            let is_crease = crease >= 1.0 || (boundary && boundary_crease);
             let mid = scale(add(at(a), at(b)), 0.5);
             for (v, o) in [(a, b), (b, a)] {
                 if let (Some(c), Some(s)) = (ecnt.get_mut(v), msum.get_mut(v)) {
@@ -153,15 +385,26 @@ fn step(src: &Detail, sel: Option<&[bool]>, catmull: bool) -> Result<Option<Deta
                     *c += 1;
                     *s = add(*s, at(o));
                 }
+                if let (true, Some(c), Some(s)) = (is_crease, ccnt.get_mut(v), csum.get_mut(v)) {
+                    *c += 1;
+                    *s = add(*s, at(o));
+                }
             }
         }
         for i in 0..np {
-            let (fc, ec, bc) = (fcnt[i], ecnt[i], bcnt[i]);
+            let (fc, ec, bc, cc) = (fcnt[i], ecnt[i], bcnt[i], ccnt[i]);
             if fc == 0 {
                 continue;
             }
             let p = at(i);
-            if bc == 0 {
+            // Crease vertex: if all edges are creases
+            if cc == ec && cc >= 3 {
+                // All edges are creases: keep vertex fixed
+                continue;
+            } else if cc == 2 {
+                // Crease corner: (6P + A + B) / 8 where A, B are crease neighbors
+                new_p[i] = scale(add(scale(p, 6.0), csum[i]), 0.125);
+            } else if bc == 0 {
                 // interior: valence = incident edges = incident faces
                 if ec == fc && ec >= 3 {
                     let n = f64::from(ec);
@@ -233,20 +476,41 @@ impl Node<Detail> for Subdivide {
         if !(0..=MAX_ITERATIONS).contains(&iters) {
             return Err(bad(format!("`iterations` must be in 0..={MAX_ITERATIONS}, got {iters}")));
         }
-        let catmull = match p.menu("algorithm") {
+        let algo = p.menu("algorithm");
+        let catmull = match algo {
             Some(ALGO_CATMULL) => true,
             Some(ALGO_LINEAR) => false,
+            Some(ALGO_LOOP) => {
+                // Loop: validate all-tri input
+                let names = p.string("group").unwrap_or("");
+                let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
+                let sel = selection(OP, src, names)?;
+                if !all_triangles(src, sel.as_deref()) {
+                    return Err(failed(OP, "Loop subdivision requires all-triangle input"));
+                }
+                let boundary_crease = toggle(p, "treatboundaryascrease").unwrap_or(true);
+                let mut cur = Arc::clone(src);
+                for _ in 0..iters {
+                    let sel = selection(OP, &cur, names)?;
+                    match step_loop(&cur, sel.as_deref(), boundary_crease)? {
+                        Some(d) => cur = Arc::new(d),
+                        None => break,
+                    }
+                }
+                return Ok(cur);
+            }
             Some(m) => {
                 return Err(CookError::Unsupported(format!("subdivide algorithm menu {m} (OpenSubdiv variants)")));
             }
             None => return Err(bad("`algorithm`: missing or not a menu")),
         };
+        let boundary_crease = toggle(p, "treatboundaryascrease").unwrap_or(true);
         let names = p.string("group").unwrap_or("");
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let mut cur = Arc::clone(src);
         for _ in 0..iters {
             let sel = selection(OP, &cur, names)?;
-            match step(&cur, sel.as_deref(), catmull)? {
+            match step(&cur, sel.as_deref(), catmull, boundary_crease)? {
                 Some(d) => cur = Arc::new(d),
                 None => break,
             }
@@ -265,6 +529,52 @@ mod tests {
     fn with(iters: i32, algo: u32) -> ParamSet {
         defaults(&*new()).with("iterations", ParamValue::I(iters)).with("algorithm", ParamValue::Menu(algo))
     }
+    fn icosahedron() -> Detail {
+        let mut d = Detail::default();
+        let t = (1.0 + 5.0f32.sqrt()) / 2.0;
+        let v = vec![
+            [-1.0, t, 0.0],
+            [1.0, t, 0.0],
+            [-1.0, -t, 0.0],
+            [1.0, -t, 0.0],
+            [0.0, -1.0, t],
+            [0.0, 1.0, t],
+            [0.0, -1.0, -t],
+            [0.0, 1.0, -t],
+            [t, 0.0, -1.0],
+            [t, 0.0, 1.0],
+            [-t, 0.0, -1.0],
+            [-t, 0.0, 1.0],
+        ];
+        d.add_points(12);
+        *d.p_mut() = v;
+        let tris = [
+            [0, 11, 5],
+            [0, 5, 1],
+            [0, 1, 7],
+            [0, 7, 10],
+            [0, 10, 11],
+            [1, 5, 9],
+            [5, 11, 4],
+            [11, 10, 2],
+            [10, 7, 6],
+            [7, 1, 8],
+            [3, 9, 4],
+            [3, 4, 2],
+            [3, 2, 6],
+            [3, 6, 8],
+            [3, 8, 9],
+            [4, 9, 5],
+            [2, 4, 11],
+            [6, 2, 10],
+            [8, 6, 7],
+            [9, 8, 1],
+        ];
+        for tri in tris {
+            d.add_poly(&tri, true);
+        }
+        d
+    }
     fn all_closed_quads(d: &Detail) -> bool {
         d.prims.iter().all(|p| matches!(p.kind, PrimKind::Poly { closed: true }) && p.verts.len() == 4)
     }
@@ -281,7 +591,8 @@ mod tests {
             [
                 ("iterations", ParamValue::I(1)),
                 ("algorithm", ParamValue::Menu(0)),
-                ("group", ParamValue::S(String::new()))
+                ("group", ParamValue::S(String::new())),
+                ("treatboundaryascrease", ParamValue::B(true))
             ]
         );
     }
@@ -378,7 +689,9 @@ mod tests {
         for it in [-1, 7, i32::MAX] {
             assert!(matches!(cook(&*new(), cube(), &with(it, 0)), Err(CookError::BadParam(_))), "{it}");
         }
-        for m in [2, 3, 99] {
+        // Loop (menu 2) requires all-tri, so cube should fail
+        assert!(matches!(cook(&*new(), cube(), &with(1, 2)), Err(CookError::Failed(_))));
+        for m in [3, 4, 99] {
             assert!(matches!(cook(&*new(), cube(), &with(1, m)), Err(CookError::Unsupported(_))), "{m}");
         }
         // a dense grid whose first iteration exceeds MAX_ELEMS must fail up front, not OOM
@@ -440,6 +753,43 @@ mod tests {
         assert_eq!(id[..4], [0, 0, 0, 0]);
         assert_eq!(id.len(), 24);
         assert_eq!(prim_pts(&out, 0).len(), 4);
+    }
+    #[test]
+    fn loop_icosahedron_20_to_80_to_320_tris() {
+        let ico = icosahedron();
+        assert_eq!((ico.point_count, ico.prim_count()), (12, 20));
+        let out1 = cook(&*new(), ico.clone(), &with(1, ALGO_LOOP)).expect("cooks");
+        assert_eq!((out1.point_count, out1.prim_count()), (42, 80));
+        assert!(out1.prims.iter().all(|p| matches!(p.kind, PrimKind::Poly { closed: true }) && p.verts.len() == 3));
+        let out2 = cook(&*new(), (*out1).clone(), &with(1, ALGO_LOOP)).expect("cooks");
+        assert_eq!((out2.point_count, out2.prim_count()), (162, 320));
+        assert!(out2.prims.iter().all(|p| matches!(p.kind, PrimKind::Poly { closed: true }) && p.verts.len() == 3));
+    }
+    #[test]
+    fn loop_requires_all_tri_input() {
+        assert!(matches!(cook(&*new(), cube(), &with(1, ALGO_LOOP)), Err(CookError::Failed(_))));
+    }
+    #[test]
+    fn cube_all_edge_crease_10_stays_cube_shaped() {
+        let mut d = cube();
+        // Add creaseweight attribute with value 10.0 for all points
+        d.add_attr(Attribute {
+            name: "creaseweight".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(vec![10.0; 8]),
+            type_info: TypeInfo::None,
+        });
+        let out = cook(&*new(), d.clone(), &with(1, 0)).expect("cooks");
+        // With infinite creases, corners should not move
+        for i in 0..8 {
+            assert_eq!(out.p()[i], d.p()[i], "corner {i} moved");
+        }
+    }
+    #[test]
+    fn params_include_treatboundaryascrease() {
+        let n = new();
+        let specs: Vec<&str> = n.params().iter().map(|s| s.name.as_str()).collect();
+        assert!(specs.contains(&"treatboundaryascrease"));
     }
     #[test]
     fn scene_loader_cooks_example_and_registry_has_slot() {
