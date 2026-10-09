@@ -22,7 +22,12 @@
 //! `copynum` counts EMITTED copies), `pieceattrib` (source prim attr == target point attr (int/string): that point gets only the
 //! matching source prims), `targetattribs` (globs; target point attrs copied onto each copy's points AND prims), target `orient`
 //! (V4 xyzw quaternion, wins over N/up when `use_orient`) and `scale` (V3, times pscale; source N gets the inverse-scale),
-//! target `N` falls back to the vertex-class `N` of each point's first vertex. NOT done: `pack`, implicit N without `use_orient`.
+//! target `N` falls back to the vertex-class `N` of each point's first vertex. NOT done: implicit N without `use_orient`.
+//! `pack` (default off; OUR design, geo has `PrimKind::PackedRef` as a unit kind with no payload): instead of geometry, ONE
+//! point per emitted copy at the target `P` + one `PackedRef` prim (1 vertex) with prim attrs `packed_ref` (Str: `input0`, or
+//! `input0:<piece key>` with `pieceattrib`) and `transform` (FN size 9, row-major `R * diag(s)`: unpacking = `P + transform *
+//! p`). `copynum` / `targetattribs` still apply (point + prim). The packed geometry itself is NOT stored (geo has no packed-
+//! geometry payload; hexe-geo is out of scope for this lane): resolve `packed_ref` against the source input.
 //!
 //! Empty source, empty / missing targets → empty output. Hostile input: non-finite target `P` / `pscale` / `N` / `up`, an
 //! f32-overflowing result, or an output above `MAX_ELEMS` points / vertices / prims → `CookError::Failed`.
@@ -46,6 +51,7 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("targetgroup", ParamValue::S(String::new())).label("Target Group"),
         ParamSpec::new("pieceattrib", ParamValue::S(String::new())).label("Piece Attribute"),
         ParamSpec::new("targetattribs", ParamValue::S(String::new())).label("Target Attributes"),
+        ParamSpec::new("pack", ParamValue::B(false)).label("Pack and Instance"),
     ]
 }
 
@@ -98,6 +104,20 @@ impl Xf {
     fn rotate(&self, v: V3) -> V3 {
         let [x, y, z] = self.rot;
         [0, 1, 2].map(|k| x[k] * v[0] + y[k] * v[1] + z[k] * v[2])
+    }
+    /// Row-major 3x3 `R * diag(s)` (the packed prim's `transform`; the translation is the packed point).
+    fn matrix(&self) -> Result<[f32; 9], CookError> {
+        let mut m = [0.0f32; 9];
+        for r in 0..3 {
+            for c in 0..3 {
+                let v = (self.rot[c][r] * self.s[c]) as f32;
+                if !v.is_finite() {
+                    return Err(failed("packed transform overflows f32"));
+                }
+                m[r * 3 + c] = v;
+            }
+        }
+        Ok(m)
     }
     fn point(&self, p: [f32; 3]) -> Result<[f32; 3], CookError> {
         let q = d3(p);
@@ -271,6 +291,7 @@ impl Node<Detail> for CopyToPoints {
         let tgroup = ctx.params.string("targetgroup").unwrap_or("");
         let piece = ctx.params.string("pieceattrib").unwrap_or("");
         let tattribs = ctx.params.string("targetattribs").unwrap_or("");
+        let pack = ctx.params.toggle("pack").unwrap_or(false);
         let (Some(src0), Some(tgt)) = (inputs.first(), inputs.get(1)) else {
             return Ok(Arc::new(Detail::default()));
         };
@@ -308,6 +329,7 @@ impl Node<Detail> for CopyToPoints {
         let ident = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
         let mut out = Detail::default();
         let mut emitted: Vec<(usize, usize, usize)> = Vec::new(); // (target point, points, prims)
+        let mut packed: Vec<([f32; 3], [f32; 9], String)> = Vec::new(); // `pack`: (P, transform, packed_ref)
         let mut piece_cache: std::collections::HashMap<String, Arc<Detail>> = std::collections::HashMap::new();
         for (i, p) in targets.iter().enumerate() {
             if tmask.as_ref().is_some_and(|m| !m.get(i).copied().unwrap_or(false)) {
@@ -341,9 +363,11 @@ impl Node<Detail> for CopyToPoints {
                 },
             };
             // which source for this target point
+            let mut ref_key = String::from("input0");
             let src: Arc<Detail> = match (&piece_src, &piece_tgt) {
                 (Some(ps), Some(pt)) => {
                     let Some(key) = piece_key(pt, i) else { continue };
+                    ref_key = format!("input0:{key}");
                     if let Some(c) = piece_cache.get(&key) {
                         Arc::clone(c)
                     } else {
@@ -363,6 +387,11 @@ impl Node<Detail> for CopyToPoints {
                 continue;
             }
             let xf = Xf { rot, s: sv, t: d3(p) };
+            if pack {
+                packed.push((p, xf.matrix()?, ref_key));
+                emitted.push((i, 1, 1));
+                continue;
+            }
             let has_n = src.attrs.iter().any(|a| a.name == "N" && matches!(a.data, AttrData::V3(_)));
             let uniform = sv[0] == sv[1] && sv[1] == sv[2];
             let mut c: Detail = (*src).clone();
@@ -383,6 +412,39 @@ impl Node<Detail> for CopyToPoints {
         }
         if emitted.is_empty() {
             return Ok(Arc::new(Detail::default()));
+        }
+        if pack {
+            // one PackedRef prim (1 vertex) per copy on a point at the target position; `packed_ref` Str prim attr names
+            // the source (`input0`, or `input0:<piece key>`), `transform` FN9 prim attr = row-major R*diag(s)
+            let n = u32::try_from(packed.len()).map_err(|_| failed("packed copy count overflow"))?;
+            out = Detail::default();
+            out.add_points(n);
+            *out.p_mut() = packed.iter().map(|c| c.0).collect();
+            for k in 0..n {
+                out.vertex_point.push(k);
+                out.prims.push(hexe_geo::Prim { kind: hexe_geo::PrimKind::PackedRef, verts: k..k + 1 });
+            }
+            let mut table: Vec<String> = Vec::new();
+            let mut idx: Vec<i32> = Vec::with_capacity(packed.len());
+            for c in &packed {
+                let k = table.iter().position(|t| *t == c.2).unwrap_or_else(|| {
+                    table.push(c.2.clone());
+                    table.len() - 1
+                });
+                idx.push(i32::try_from(k).unwrap_or(0));
+            }
+            out.add_attr(Attribute {
+                name: "packed_ref".into(),
+                class: AttrClass::Prim,
+                data: AttrData::Str { idx, table },
+                type_info: TypeInfo::None,
+            });
+            out.add_attr(Attribute {
+                name: "transform".into(),
+                class: AttrClass::Prim,
+                data: AttrData::FN { size: 9, data: packed.iter().flat_map(|c| c.1).collect() },
+                type_info: TypeInfo::None,
+            });
         }
         if copynum {
             let ids = |f: &dyn Fn(&(usize, usize, usize)) -> usize| -> Vec<i32> {
@@ -483,6 +545,96 @@ mod tests {
         assert!((0..3).all(|k| (g[k] - w[k]).abs() <= EPS), "got {g:?} want {w:?}");
     }
 
+    /// pack: 3x3 targets -> 9 points / 9 PackedRef prims (1 vertex each), P = target position, `packed_ref` = `input0`,
+    /// identity `transform` (no pscale / orient).
+    #[test]
+    fn pack_makes_one_packed_prim_per_target_with_ref_and_identity_transform() {
+        let out = run(&hand_box(), &targets(), &[("pack", ParamValue::B(true))]).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count(), out.vertex_count()), (9, 9, 9));
+        for i in 0..9usize {
+            close(out.p()[i], grid_p(i));
+            assert_eq!(out.prims[i].kind, PrimKind::PackedRef);
+            assert_eq!(out.prims[i].verts, i as u32..i as u32 + 1);
+        }
+        let Some(AttrData::Str { idx, table }) = out.attr(AttrClass::Prim, "packed_ref").map(|a| &a.data) else {
+            panic!("packed_ref")
+        };
+        assert_eq!((idx.len(), table.as_slice()), (9, &["input0".to_string()][..]));
+        let Some(AttrData::FN { size: 9, data }) = out.attr(AttrClass::Prim, "transform").map(|a| &a.data) else {
+            panic!("transform")
+        };
+        assert_eq!(data.len(), 81);
+        for m in data.chunks(9) {
+            assert_eq!(m, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+        }
+        // off by default: real geometry
+        assert_eq!(run(&hand_box(), &targets(), &[]).expect("cooks").point_count, 72);
+    }
+    /// pack + pscale 2 + orient N = +X (frame: z -> +X, x = up x n = (0,1,0) x (1,0,0) = (0,0,-1), y = n x x = (0,1,0)):
+    /// row-major R*s has columns 2*x, 2*y, 2*z; targetgroup + copynum + targetattribs still apply.
+    #[test]
+    fn pack_transform_carries_pscale_and_orient_and_respects_target_group_copynum() {
+        let mut t = with_attr(targets(), "pscale", AttrData::F32(vec![2.0; 9]));
+        t.add_attr(Attribute {
+            name: "N".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(vec![[1.0, 0.0, 0.0]; 9]),
+            type_info: TypeInfo::Normal,
+        });
+        t.add_attr(Attribute {
+            name: "id".into(),
+            class: AttrClass::Point,
+            data: AttrData::I32((0..9).collect()),
+            type_info: TypeInfo::None,
+        });
+        let mut mask = vec![false; 9];
+        mask[2] = true;
+        mask[5] = true;
+        t.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Point, mask });
+        let over = [
+            ("pack", ParamValue::B(true)),
+            ("use_orient", ParamValue::B(true)),
+            ("targetgroup", s("g")),
+            ("copynum", ParamValue::B(true)),
+            ("targetattribs", s("id")),
+        ];
+        let out = run(&hand_box(), &t, &over).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (2, 2));
+        close(out.p()[0], grid_p(2));
+        close(out.p()[1], grid_p(5));
+        let Some(AttrData::FN { data, .. }) = out.attr(AttrClass::Prim, "transform").map(|a| &a.data) else {
+            panic!("transform")
+        };
+        // columns (2x, 2y, 2z) = (0,0,-2), (0,2,0), (2,0,0) -> row-major [0,0,2, 0,2,0, -2,0,0]
+        let want = [0.0, 0.0, 2.0, 0.0, 2.0, 0.0, -2.0, 0.0, 0.0];
+        for (g, w) in data[..9].iter().zip(want) {
+            assert!((g - w).abs() < 1e-6, "{:?}", &data[..9]);
+        }
+        let Some(AttrData::I32(c)) = out.attr(AttrClass::Prim, "copynum").map(|a| &a.data) else { panic!("copynum") };
+        assert_eq!(c, &vec![0, 1]);
+        let Some(AttrData::I32(id)) = out.attr(AttrClass::Point, "id").map(|a| &a.data) else { panic!("id") };
+        assert_eq!(id, &vec![2, 5]);
+    }
+    /// pack + pieceattrib: refs name the piece key (`input0:<key>`), one table entry per distinct piece.
+    #[test]
+    fn pack_with_pieces_names_each_piece_in_packed_ref() {
+        let mut b = hand_box();
+        b.add_attr(Attribute {
+            name: "piece".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![0, 0, 0, 1, 1, 1]),
+            type_info: TypeInfo::None,
+        });
+        let t = with_attr(targets(), "piece", AttrData::I32(vec![0, 1, 0, 1, 0, 1, 0, 1, 0]));
+        let out = run(&b, &t, &[("pack", ParamValue::B(true)), ("pieceattrib", s("piece"))]).expect("cooks");
+        assert_eq!(out.prim_count(), 9);
+        let Some(AttrData::Str { idx, table }) = out.attr(AttrClass::Prim, "packed_ref").map(|a| &a.data) else {
+            panic!("packed_ref")
+        };
+        assert_eq!(table, &vec!["input0:0".to_string(), "input0:1".to_string()]);
+        assert_eq!(idx, &vec![0, 1, 0, 1, 0, 1, 0, 1, 0]);
+    }
+
     #[test]
     fn declares_two_inputs_and_three_params() {
         let n = new();
@@ -499,6 +651,7 @@ mod tests {
                 ("targetgroup", ParamValue::S(String::new())),
                 ("pieceattrib", ParamValue::S(String::new())),
                 ("targetattribs", ParamValue::S(String::new())),
+                ("pack", ParamValue::B(false)),
             ]
         );
     }
