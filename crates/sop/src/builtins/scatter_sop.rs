@@ -27,7 +27,9 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("relaxpoints", ParamValue::B(false)).label("Relax Points"),
         ParamSpec::new("relaxiterations", ParamValue::I(5)).label("Relax Iterations").range(0.0, 50.0),
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
-        ParamSpec::new("generateby", ParamValue::Menu(0)).label("Generate By").menu(&[("count", "Count"), ("density", "Density")]),
+        ParamSpec::new("generateby", ParamValue::Menu(0))
+            .label("Generate By")
+            .menu(&[("count", "Count"), ("density", "Density")]),
         ParamSpec::new("density", ParamValue::F(10.0)).label("Density").range(0.0, 100.0),
         ParamSpec::new("attribs", ParamValue::S(String::new())).label("Attributes to Transfer"),
         ParamSpec::new("primnumattrib", ParamValue::S("sourceprim".into())).label("Source Prim Attribute"),
@@ -91,7 +93,9 @@ fn density<'a>(d: &'a Detail, name: &str) -> Result<Density<'a>, CookError> {
     match (f32_of(AttrClass::Prim), f32_of(AttrClass::Point)) {
         (Some(v), _) => Ok(Density::Prim(v)),
         (None, Some(v)) => Ok(Density::Point(v)),
-        _ => Err(CookError::BadParam(format!("scatter: `density_attrib` `{name}` is not a float prim/point attribute"))),
+        _ => {
+            Err(CookError::BadParam(format!("scatter: `density_attrib` `{name}` is not a float prim/point attribute")))
+        }
     }
 }
 fn triangles(d: &Detail, dens: &Density, sel: &Option<Vec<bool>>) -> Vec<Tri> {
@@ -227,8 +231,14 @@ fn relax(tris: &[Tri], tidx: &[usize], bary: &mut [(f64, f64)], rad: f64, iters:
         return;
     }
     for _ in 0..iters {
-        let pts: Vec<[f64; 3]> = tidx.iter().zip(bary.iter()).map(|(&ti, &(u, v))| tris.get(ti).map_or([0.0; 3], |t| point_of(t, u, v))).collect();
-        let cell = |p: [f64; 3]| -> (i64, i64, i64) { (((p[0] / rad).floor()) as i64, ((p[1] / rad).floor()) as i64, ((p[2] / rad).floor()) as i64) };
+        let pts: Vec<[f64; 3]> = tidx
+            .iter()
+            .zip(bary.iter())
+            .map(|(&ti, &(u, v))| tris.get(ti).map_or([0.0; 3], |t| point_of(t, u, v)))
+            .collect();
+        let cell = |p: [f64; 3]| -> (i64, i64, i64) {
+            (((p[0] / rad).floor()) as i64, ((p[1] / rad).floor()) as i64, ((p[2] / rad).floor()) as i64)
+        };
         let mut grid: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
         for (i, p) in pts.iter().enumerate() {
             grid.entry(cell(*p)).or_default().push(i);
@@ -340,7 +350,12 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
             type_info: TypeInfo::None,
         });
     }
-    out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(nrm), type_info: TypeInfo::Normal });
+    out.add_attr(Attribute {
+        name: "N".into(),
+        class: AttrClass::Point,
+        data: AttrData::V3(nrm),
+        type_info: TypeInfo::Normal,
+    });
     // ---- attribute transfer ----
     let pats: Vec<&str> = o.attribs.split_whitespace().collect();
     if !pats.is_empty() {
@@ -391,15 +406,16 @@ fn interp(data: &AttrData, tris: &[Tri], tidx: &[usize], bary: &[(f64, f64)]) ->
                 res.push(0.0);
                 continue;
             };
-            let s: f64 = (0..3).map(|k| bw[k] * f64::from(flat.get(t.ids[k] as usize * w + c).copied().unwrap_or(0.0))).sum();
+            let s: f64 =
+                (0..3).map(|k| bw[k] * f64::from(flat.get(t.ids[k] as usize * w + c).copied().unwrap_or(0.0))).sum();
             res.push(s as f32);
         }
     }
     match data {
         AttrData::F32(_) => AttrData::F32(res),
-        AttrData::V2(_) => AttrData::V2(res.chunks_exact(2).map(|c| [c[0], c[1]]).collect()),
-        AttrData::V3(_) => AttrData::V3(res.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()),
-        AttrData::V4(_) => AttrData::V4(res.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()),
+        AttrData::V2(_) => AttrData::V2(res.as_chunks::<2>().0.to_vec()),
+        AttrData::V3(_) => AttrData::V3(res.as_chunks::<3>().0.to_vec()),
+        AttrData::V4(_) => AttrData::V4(res.as_chunks::<4>().0.to_vec()),
         AttrData::FN { size, .. } => AttrData::FN { size: *size, data: res },
         other => other.clone(),
     }
@@ -679,16 +695,35 @@ mod tests {
         assert_eq!(rel.point_count, 100);
         let (b, r) = (nn_min(base.p()), nn_min(rel.p()));
         assert!(r > b * 2.0, "min NN {b} -> {r}");
-        assert!(rel.p().iter().all(|p| (-1e-6..=1.0 + 1e-6).contains(&p[0]) && (-1e-6..=1.0 + 1e-6).contains(&p[1]) && p[2] == 0.0));
+        assert!(
+            rel.p()
+                .iter()
+                .all(|p| (-1e-6..=1.0 + 1e-6).contains(&p[0]) && (-1e-6..=1.0 + 1e-6).contains(&p[1]) && p[2] == 0.0)
+        );
     }
     /// Point attr w = x interpolates exactly to P.x (linear field, barycentric = exact); prim attr id copied per sourceprim; ints nearest; unlisted attrs absent.
     #[test]
     fn attribute_transfer_interpolates_points_and_copies_prims() {
         let mut d = a4_b1();
         let xs: Vec<f32> = d.p().iter().map(|p| p[0]).collect();
-        d.add_attr(Attribute { name: "w".into(), class: AttrClass::Point, data: AttrData::F32(xs), type_info: TypeInfo::None });
-        d.add_attr(Attribute { name: "id".into(), class: AttrClass::Prim, data: AttrData::I32(vec![10, 20]), type_info: TypeInfo::None });
-        d.add_attr(Attribute { name: "skip".into(), class: AttrClass::Prim, data: AttrData::I32(vec![1, 2]), type_info: TypeInfo::None });
+        d.add_attr(Attribute {
+            name: "w".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(xs),
+            type_info: TypeInfo::None,
+        });
+        d.add_attr(Attribute {
+            name: "id".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![10, 20]),
+            type_info: TypeInfo::None,
+        });
+        d.add_attr(Attribute {
+            name: "skip".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![1, 2]),
+            type_info: TypeInfo::None,
+        });
         let mut o = opts(2000);
         o.attribs = "w id".into();
         let out = scatter_with(&d, &o).expect("cooks");
@@ -696,9 +731,10 @@ mod tests {
         for (p, &wv) in out.p().iter().zip(w) {
             assert!((p[0] - wv).abs() < 1e-5, "w {wv} vs x {}", p[0]);
         }
-        let (Some(AttrData::I32(id)), Some(AttrData::I32(sp))) =
-            (out.attr(AttrClass::Point, "id").map(|a| &a.data), out.attr(AttrClass::Point, "sourceprim").map(|a| &a.data))
-        else {
+        let (Some(AttrData::I32(id)), Some(AttrData::I32(sp))) = (
+            out.attr(AttrClass::Point, "id").map(|a| &a.data),
+            out.attr(AttrClass::Point, "sourceprim").map(|a| &a.data),
+        ) else {
             panic!("id/sourceprim")
         };
         assert!(id.iter().zip(sp).all(|(&i, &s)| i == 10 * (s + 1)));
@@ -711,7 +747,9 @@ mod tests {
     }
     #[test]
     fn glob_matches_star_patterns() {
-        assert!(glob("*", "abc") && glob("a*", "abc") && glob("*c", "abc") && glob("a*c", "abc") && glob("a*b*c", "aXbYc"));
+        assert!(
+            glob("*", "abc") && glob("a*", "abc") && glob("*c", "abc") && glob("a*c", "abc") && glob("a*b*c", "aXbYc")
+        );
         assert!(!glob("a*d", "abc") && !glob("abc", "abd") && !glob("ab*bc", "abc"));
     }
     #[test]

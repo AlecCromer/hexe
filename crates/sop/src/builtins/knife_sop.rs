@@ -19,8 +19,8 @@ use super::copytopoints_sop::subset;
 use super::meshutil::{bad, gather, point_normals, positions, selection};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, Group, PrimKind, TypeInfo};
-use std::collections::{HashMap, HashSet};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
@@ -168,7 +168,9 @@ impl Node<Detail> for Knife {
             let remap: HashMap<u32, u32> = ids.iter().enumerate().map(|(k, &i)| (i as u32, first + k as u32)).collect();
             for (i, pr) in detail.prims.iter().enumerate() {
                 if bm.get(i).copied().unwrap_or(false) {
-                    for v in detail.vertex_point.get_mut(pr.verts.start as usize..pr.verts.end as usize).unwrap_or(&mut []) {
+                    for v in
+                        detail.vertex_point.get_mut(pr.verts.start as usize..pr.verts.end as usize).unwrap_or(&mut [])
+                    {
                         if let Some(&n) = remap.get(v) {
                             *v = n;
                         }
@@ -179,8 +181,14 @@ impl Node<Detail> for Knife {
         }
         if upd {
             let pp = positions(&detail);
-            let nn: Vec<[f32; 3]> = point_normals(&detail, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
-            detail.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(nn), type_info: TypeInfo::Normal });
+            let nn: Vec<[f32; 3]> =
+                point_normals(&detail, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
+            detail.add_attr(Attribute {
+                name: "N".into(),
+                class: AttrClass::Point,
+                data: AttrData::V3(nn),
+                type_info: TypeInfo::Normal,
+            });
         }
         set_group(&mut detail, &seam, AttrClass::Point, sm);
         set_group(&mut detail, &above, AttrClass::Prim, am);
@@ -289,7 +297,8 @@ mod tests {
     fn cap_closes_the_cut_with_one_outward_ngon_per_rim_loop() {
         let off = cook(&*new(), cube(), &with(0, 0.0)).expect("cooks");
         assert!(!watertight(&off), "uncapped half is open");
-        let out = cook(&*new(), cube(), &params_on(&[("keep", ParamValue::Menu(0)), ("cap", ParamValue::B(true))])).expect("cooks");
+        let out = cook(&*new(), cube(), &params_on(&[("keep", ParamValue::Menu(0)), ("cap", ParamValue::B(true))]))
+            .expect("cooks");
         assert_eq!(out.prim_count(), 6);
         assert!(watertight(&out));
         assert!((volume(&out).abs() - 0.5).abs() < 1e-6, "{}", volume(&out));
@@ -316,7 +325,12 @@ mod tests {
         assert_eq!((out.point_count, out.prim_count()), (16, 10));
         let (a, b) = (mask(&out, AttrClass::Prim, "above"), mask(&out, AttrClass::Prim, "below"));
         let used = |side: &[bool], want: bool| -> HashSet<u32> {
-            out.prims.iter().enumerate().filter(|(i, _)| side[*i] == want).flat_map(|(_, p)| out.vertex_point[p.verts.start as usize..p.verts.end as usize].to_vec()).collect()
+            out.prims
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| side[*i] == want)
+                .flat_map(|(_, p)| out.vertex_point[p.verts.start as usize..p.verts.end as usize].to_vec())
+                .collect()
         };
         assert!(used(&a, true).is_disjoint(&used(&b, true)), "halves share points");
         let seam = mask(&out, AttrClass::Point, "cut");
@@ -328,7 +342,11 @@ mod tests {
     fn group_filter_cuts_only_selected_prims() {
         let full = cook(&*new(), cube(), &defaults(&*new())).expect("cooks");
         let mut c = cube();
-        c.groups.push(Group { name: "g".into(), class: AttrClass::Prim, mask: vec![true, true, false, false, false, false] });
+        c.groups.push(Group {
+            name: "g".into(),
+            class: AttrClass::Prim,
+            mask: vec![true, true, false, false, false, false],
+        });
         let out = cook(&*new(), c.clone(), &params_on(&[("group", ParamValue::S("g".into()))])).expect("cooks");
         // prims 0,1 are the x = -.5 / +.5 style faces or top/bottom depending on the cube; either way total = cut(selected) + 4 untouched
         let sel_cut = {
@@ -341,8 +359,15 @@ mod tests {
         assert_eq!(out.prim_count(), sel_cut + 4);
         assert!(out.prim_count() < full.prim_count() + 1 && sel_cut >= 2);
         let (a, b) = (mask(&out, AttrClass::Prim, "above"), mask(&out, AttrClass::Prim, "below"));
-        assert_eq!(a.iter().chain(&b).filter(|m| **m).count(), sel_cut as usize, "pass-through prims are in neither group");
-        assert!(matches!(cook(&*new(), c, &params_on(&[("group", ParamValue::S("nope".into()))])), Err(CookError::Failed(_))));
+        assert_eq!(
+            a.iter().chain(&b).filter(|m| **m).count(),
+            sel_cut as usize,
+            "pass-through prims are in neither group"
+        );
+        assert!(matches!(
+            cook(&*new(), c, &params_on(&[("group", ParamValue::S("nope".into()))])),
+            Err(CookError::Failed(_))
+        ));
     }
     /// updatenormals: unit point N for every point of the capped half; off = none.
     #[test]

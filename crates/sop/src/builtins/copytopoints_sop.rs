@@ -209,7 +209,8 @@ pub(super) fn subset(src: &Detail, keep: &[bool]) -> Result<Detail, CookError> {
             }
         }
         let mut np = pr.clone();
-        np.verts = u32::try_from(lo).map_err(|_| failed("vertex overflow"))?..u32::try_from(vertex_point.len()).map_err(|_| failed("vertex overflow"))?;
+        np.verts = u32::try_from(lo).map_err(|_| failed("vertex overflow"))?
+            ..u32::try_from(vertex_point.len()).map_err(|_| failed("vertex overflow"))?;
         prims.push(np);
         prim_src.push(Some(pi));
     }
@@ -231,7 +232,9 @@ pub(super) fn subset(src: &Detail, keep: &[bool]) -> Result<Detail, CookError> {
 fn piece_key(d: &AttrData, i: usize) -> Option<String> {
     match d {
         AttrData::I32(v) => v.get(i).map(|x| x.to_string()),
-        AttrData::Str { idx, table } => idx.get(i).and_then(|&k| usize::try_from(k).ok()).and_then(|k| table.get(k)).cloned(),
+        AttrData::Str { idx, table } => {
+            idx.get(i).and_then(|&k| usize::try_from(k).ok()).and_then(|k| table.get(k)).cloned()
+        }
         _ => None,
     }
 }
@@ -286,8 +289,10 @@ impl Node<Detail> for CopyToPoints {
         };
         let tmask = point_mask(tgt, tgroup)?;
         // piece attribute: per source-base prim key, per target point key
-        let piece_src = (!piece.is_empty()).then(|| src_base.attr(AttrClass::Prim, piece).map(|a| a.data.clone())).flatten();
-        let piece_tgt = (!piece.is_empty()).then(|| tgt.attr(AttrClass::Point, piece).map(|a| a.data.clone())).flatten();
+        let piece_src =
+            (!piece.is_empty()).then(|| src_base.attr(AttrClass::Prim, piece).map(|a| a.data.clone())).flatten();
+        let piece_tgt =
+            (!piece.is_empty()).then(|| tgt.attr(AttrClass::Point, piece).map(|a| a.data.clone())).flatten();
         check_size(&src_base, targets.len())?;
         let pscale: Option<&[f32]> = match tgt.attr(AttrClass::Point, "pscale").map(|a| &a.data) {
             Some(AttrData::F32(v)) if use_pscale => Some(v),
@@ -342,7 +347,9 @@ impl Node<Detail> for CopyToPoints {
                     if let Some(c) = piece_cache.get(&key) {
                         Arc::clone(c)
                     } else {
-                        let keep: Vec<bool> = (0..src_base.prims.len()).map(|k| piece_key(ps, k).as_deref() == Some(key.as_str())).collect();
+                        let keep: Vec<bool> = (0..src_base.prims.len())
+                            .map(|k| piece_key(ps, k).as_deref() == Some(key.as_str()))
+                            .collect();
                         let sub = Arc::new(subset(&src_base, &keep)?);
                         piece_cache.insert(key, Arc::clone(&sub));
                         sub
@@ -379,10 +386,19 @@ impl Node<Detail> for CopyToPoints {
         }
         if copynum {
             let ids = |f: &dyn Fn(&(usize, usize, usize)) -> usize| -> Vec<i32> {
-                emitted.iter().enumerate().flat_map(|(k, e)| std::iter::repeat_n(i32::try_from(k).unwrap_or(i32::MAX), f(e))).collect()
+                emitted
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(k, e)| std::iter::repeat_n(i32::try_from(k).unwrap_or(i32::MAX), f(e)))
+                    .collect()
             };
             for (class, data) in [(AttrClass::Point, ids(&|e| e.1)), (AttrClass::Prim, ids(&|e| e.2))] {
-                out.add_attr(Attribute { name: "copynum".into(), class, data: AttrData::I32(data), type_info: TypeInfo::None });
+                out.add_attr(Attribute {
+                    name: "copynum".into(),
+                    class,
+                    data: AttrData::I32(data),
+                    type_info: TypeInfo::None,
+                });
             }
         }
         // target attribute transfer (points + prims): value of the target point each copy sits on
@@ -399,7 +415,12 @@ impl Node<Detail> for CopyToPoints {
                     continue;
                 }
                 for (class, ix) in [(AttrClass::Point, &pidx), (AttrClass::Prim, &qidx)] {
-                    out.add_attr(Attribute { name: a.name.clone(), class, data: gather(&a.data, ix), type_info: a.type_info });
+                    out.add_attr(Attribute {
+                        name: a.name.clone(),
+                        class,
+                        data: gather(&a.data, ix),
+                        type_info: a.type_info,
+                    });
                 }
             }
         }
@@ -543,7 +564,10 @@ mod tests {
         let Some(AttrData::I32(c)) = out.attr(AttrClass::Point, "copynum").map(|a| &a.data) else { panic!("copynum") };
         assert_eq!(c.iter().step_by(8).copied().collect::<Vec<_>>(), [0, 1, 2]);
         for (n, i) in [1usize, 4, 7].into_iter().enumerate() {
-            close(out.p()[n * 8], [box_corner(0)[0] + grid_p(i)[0], box_corner(0)[1] + grid_p(i)[1], box_corner(0)[2] + grid_p(i)[2]]);
+            close(
+                out.p()[n * 8],
+                [box_corner(0)[0] + grid_p(i)[0], box_corner(0)[1] + grid_p(i)[1], box_corner(0)[2] + grid_p(i)[2]],
+            );
         }
     }
     /// Piece attr: source quad 0 (x in 0..1, piece 0) and quad 1 (x in 10..11, piece 1); targets piece [0,1,1] -> 4+4+4 points, 3 prims.
@@ -552,16 +576,32 @@ mod tests {
         let mut src = Detail::default();
         src.add_points(8);
         *src.p_mut() = vec![
-            [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0],
-            [10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [11.0, 1.0, 0.0], [10.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [11.0, 0.0, 0.0],
+            [11.0, 1.0, 0.0],
+            [10.0, 1.0, 0.0],
         ];
         src.add_poly(&[0, 1, 2, 3], true);
         src.add_poly(&[4, 5, 6, 7], true);
-        src.add_attr(Attribute { name: "piece".into(), class: AttrClass::Prim, data: AttrData::I32(vec![0, 1]), type_info: TypeInfo::None });
+        src.add_attr(Attribute {
+            name: "piece".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![0, 1]),
+            type_info: TypeInfo::None,
+        });
         let mut t = Detail::default();
         t.add_points(3);
         *t.p_mut() = vec![[0.0, 0.0, 100.0], [0.0, 0.0, 200.0], [0.0, 0.0, 300.0]];
-        t.add_attr(Attribute { name: "piece".into(), class: AttrClass::Point, data: AttrData::I32(vec![0, 1, 1]), type_info: TypeInfo::None });
+        t.add_attr(Attribute {
+            name: "piece".into(),
+            class: AttrClass::Point,
+            data: AttrData::I32(vec![0, 1, 1]),
+            type_info: TypeInfo::None,
+        });
         let out = run(&src, &t, &[("pieceattrib", s("piece"))]).expect("cooks");
         assert_eq!((out.point_count, out.prim_count()), (12, 3));
         close(out.p()[0], [0.0, 0.0, 100.0]);
@@ -598,7 +638,11 @@ mod tests {
         let mut t = Detail::default();
         t.add_points(1);
         *t.p_mut() = vec![[10.0, 20.0, 30.0]];
-        let t = with_attr(with_attr(t, "scale", AttrData::V3(vec![[2.0, 1.0, 1.0]])), "orient", AttrData::V4(vec![[0.0, 0.0, h, h]]));
+        let t = with_attr(
+            with_attr(t, "scale", AttrData::V3(vec![[2.0, 1.0, 1.0]])),
+            "orient",
+            AttrData::V4(vec![[0.0, 0.0, h, h]]),
+        );
         let out = run(&hand_box(), &t, &[("use_orient", ParamValue::B(true))]).expect("cooks");
         close(out.p()[7], [10.0 - 0.5, 20.0 + 1.0, 30.0 + 0.5]);
         // without use_orient the quaternion is ignored; scale alone: (1,.5,.5)+t
@@ -615,7 +659,12 @@ mod tests {
         t.add_points(3);
         *t.p_mut() = vec![[0.0, 0.0, 0.0], [5.0, 0.0, 0.0], [0.0, 5.0, 0.0]];
         t.add_poly(&[0, 1, 2], true);
-        t.add_attr(Attribute { name: "N".into(), class: AttrClass::Vertex, data: AttrData::V3(vec![[1.0, 0.0, 0.0]; 3]), type_info: TypeInfo::Normal });
+        t.add_attr(Attribute {
+            name: "N".into(),
+            class: AttrClass::Vertex,
+            data: AttrData::V3(vec![[1.0, 0.0, 0.0]; 3]),
+            type_info: TypeInfo::Normal,
+        });
         let out = run(&src, &t, &[("use_orient", ParamValue::B(true))]).expect("cooks");
         assert_eq!(out.point_count, 3);
         close(out.p()[0], [1.0, 0.0, 0.0]);

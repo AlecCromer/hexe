@@ -88,7 +88,7 @@ fn bezier_open(ctrl: &[[f32; 3]], order: usize, divisions: usize) -> Vec<[f32; 3
     if n < 2 || divisions == 0 {
         return ctrl.to_vec();
     }
-    if n > deg && (n - 1) % deg == 0 {
+    if n > deg && (n - 1).is_multiple_of(deg) {
         let mut out = Vec::new();
         for s in 0..(n - 1) / deg {
             let seg = &ctrl[s * deg..=(s + 1) * deg];
@@ -113,6 +113,7 @@ fn de_boor(c: &[[f64; 3]], p: usize, knots: &[f64], t: f64) -> [f64; 3] {
             let i = s - p + j;
             let den = knots[i + p - r + 1] - knots[i];
             let a = if den.abs() < 1e-300 { 0.0 } else { (t - knots[i]) / den };
+            #[allow(clippy::needless_range_loop)]
             for k in 0..3 {
                 d[j][k] = (1.0 - a) * d[j - 1][k] + a * d[j][k];
             }
@@ -153,7 +154,17 @@ fn nurbs_points(
     let c: Vec<[f64; 3]> = ctrl.iter().map(w).collect();
     let knots: Vec<f64> = if user_knots.is_empty() {
         let spans = n - p;
-        (0..n + k).map(|i| if i < k { 0.0 } else if i >= n { spans as f64 } else { (i - p) as f64 }).collect()
+        (0..n + k)
+            .map(|i| {
+                if i < k {
+                    0.0
+                } else if i >= n {
+                    spans as f64
+                } else {
+                    (i - p) as f64
+                }
+            })
+            .collect()
     } else {
         if user_knots.len() != n + k {
             return Err(CookError::BadParam(format!(
@@ -379,13 +390,15 @@ mod tests {
             assert!(close3(*q, want), "i {i}: {q:?} vs {want:?}");
         }
         // cubic over 6 CVs: 3 spans -> 3*4+1 = 13
-        let c = cook(r#"{"coords":"0,0,0 1,1,0 2,0,0 3,1,0 4,0,0 5,1,0","type":2,"order":4,"divisions":4}"#).expect("nurbs");
+        let c = cook(r#"{"coords":"0,0,0 1,1,0 2,0,0 3,1,0 4,0,0 5,1,0","type":2,"order":4,"divisions":4}"#)
+            .expect("nurbs");
         assert_eq!(c.point_count, 13);
     }
     /// Closed periodic NURBS: n*divisions points, no duplicate end point, stays in the CV hull, one closed prim.
     #[test]
     fn nurbs_closed_is_periodic_n_times_divisions_inside_the_hull() {
-        let d = cook(r#"{"coords":"0,0,0 4,0,0 4,4,0 0,4,0","type":2,"order":3,"divisions":8,"close":true}"#).expect("nurbs");
+        let d = cook(r#"{"coords":"0,0,0 4,0,0 4,4,0 0,4,0","type":2,"order":3,"divisions":8,"close":true}"#)
+            .expect("nurbs");
         assert_eq!((d.point_count, d.prim_count()), (32, 1));
         assert!(matches!(d.prims[0].kind, PrimKind::Poly { closed: true }));
         assert!(d.p().iter().all(|p| (0.0..=4.0).contains(&p[0]) && (0.0..=4.0).contains(&p[1]) && p[2] == 0.0));
@@ -395,7 +408,8 @@ mod tests {
     /// Piecewise Bezier: 7 CVs order 4 = 2 cubic segments -> 2*5+1 = 11 points, the joint CV (index 3) is hit exactly at sample 5.
     #[test]
     fn bezier_piecewise_hits_the_shared_joint_cv() {
-        let d = cook(r#"{"coords":"0,0,0 1,1,0 2,1,0 3,0,0 4,-1,0 5,-1,0 6,0,0","type":1,"order":4,"divisions":5}"#).expect("bezier");
+        let d = cook(r#"{"coords":"0,0,0 1,1,0 2,1,0 3,0,0 4,-1,0 5,-1,0 6,0,0","type":1,"order":4,"divisions":5}"#)
+            .expect("bezier");
         assert_eq!(d.point_count, 11);
         assert!(close3(d.p()[5], [3.0, 0.0, 0.0]) && close3(d.p()[10], [6.0, 0.0, 0.0]));
     }
@@ -408,7 +422,8 @@ mod tests {
         for (k, c) in cs.iter().enumerate() {
             assert!(close3(d.p()[k * 6], *c), "cv {k}");
         }
-        let cl = cook(r#"{"coords":"0,0,0 1,2,0 3,1,0 4,3,0","type":1,"method":1,"divisions":6,"close":true}"#).expect("bp");
+        let cl =
+            cook(r#"{"coords":"0,0,0 1,2,0 3,1,0 4,3,0","type":1,"method":1,"divisions":6,"close":true}"#).expect("bp");
         assert_eq!(cl.point_count, 24);
     }
     /// Knots: valid user knots == the default clamped ones; wrong length / decreasing is an error.

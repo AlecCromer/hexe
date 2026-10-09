@@ -463,7 +463,9 @@ fn run(d: &Detail, cfg: &Config) -> Result<Detail, CookError> {
     } else {
         match d.attr(AttrClass::Point, &cfg.rest).map(|a| &a.data) {
             Some(AttrData::V3(v)) => Some(v.clone()),
-            _ => return Err(CookError::Failed(format!("attribnoise: no V3 point attribute `{}` for `rest`", cfg.rest))),
+            _ => {
+                return Err(CookError::Failed(format!("attribnoise: no V3 point attribute `{}` for `rest`", cfg.rest)));
+            }
         }
     };
     let pos = positions(d, cfg.class, rest_pos.as_deref().unwrap_or(d.p()));
@@ -514,16 +516,30 @@ fn run(d: &Detail, cfg: &Config) -> Result<Detail, CookError> {
     }
     if cfg.update_normals && cfg.attrib == "P" {
         let pp = mesh_positions(&out);
-        let n: Vec<[f32; 3]> = point_normals(&out, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
-        out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(n), type_info: TypeInfo::Normal });
+        let n: Vec<[f32; 3]> =
+            point_normals(&out, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
+        out.add_attr(Attribute {
+            name: "N".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(n),
+            type_info: TypeInfo::Normal,
+        });
         if let Some(AttrData::V3(old)) = out.attr(AttrClass::Prim, "N").map(|a| a.data.clone()) {
             let fresh: Vec<[f32; 3]> = (0..out.prims.len())
                 .map(|i| {
                     let nrm = closed_poly_pts(&out, &out.prims[i]).and_then(|pts| prim_normal(&pp, &pts));
-                    nrm.map_or_else(|| old.get(i).copied().unwrap_or([0.0; 3]), |v| [v[0] as f32, v[1] as f32, v[2] as f32])
+                    nrm.map_or_else(
+                        || old.get(i).copied().unwrap_or([0.0; 3]),
+                        |v| [v[0] as f32, v[1] as f32, v[2] as f32],
+                    )
                 })
                 .collect();
-            out.add_attr(Attribute { name: "N".into(), class: AttrClass::Prim, data: AttrData::V3(fresh), type_info: TypeInfo::Normal });
+            out.add_attr(Attribute {
+                name: "N".into(),
+                class: AttrClass::Prim,
+                data: AttrData::V3(fresh),
+                type_info: TypeInfo::Normal,
+            });
         }
     }
     Ok(out)
@@ -832,7 +848,8 @@ mod tests {
         assert!((f64::from(w[0]) - lattice_value(0, 0, 2, 3, -1)).abs() < 1e-6);
         assert!((f64::from(w[1]) - lattice_value(0, 0, 0, 0, 0)).abs() < 1e-6);
         assert!((w[2] - w[0]).abs() < 1e-2, "{} vs {}", w[0], w[2]);
-        let c = cook(&w_attr(cloud(500)), &[("attrib", s("w")), ("noise", s("value")), ("operation", s("set"))]).expect("cooks");
+        let c = cook(&w_attr(cloud(500)), &[("attrib", s("w")), ("noise", s("value")), ("operation", s("set"))])
+            .expect("cooks");
         assert!(f32s(&c, "w").iter().all(|v| (-1.0..=1.0).contains(v)));
     }
     /// Worley at a feature point is exactly the minimum -1; every sample lies in [-1, 1] and not all equal.
@@ -842,7 +859,8 @@ mod tests {
         let d = w_attr(points(&[[f[0] as f32, f[1] as f32, f[2] as f32]]));
         let o = cook(&d, &[("attrib", s("w")), ("noise", s("worley")), ("operation", s("set"))]).expect("cooks");
         assert!((f32s(&o, "w")[0] + 1.0).abs() < 1e-4, "{}", f32s(&o, "w")[0]);
-        let c = cook(&w_attr(cloud(500)), &[("attrib", s("w")), ("noise", s("worley")), ("operation", s("set"))]).expect("cooks");
+        let c = cook(&w_attr(cloud(500)), &[("attrib", s("w")), ("noise", s("worley")), ("operation", s("set"))])
+            .expect("cooks");
         let w = f32s(&c, "w");
         assert!(w.iter().all(|v| (-1.0..=1.0).contains(v)));
         assert!(w.iter().any(|v| (v - w[0]).abs() > 0.05));
@@ -851,7 +869,11 @@ mod tests {
     #[test]
     fn group_limits_noise_to_members() {
         let mut src = cloud(100);
-        src.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Point, mask: (0..100).map(|i| i < 50).collect() });
+        src.groups.push(hexe_geo::Group {
+            name: "g".into(),
+            class: AttrClass::Point,
+            mask: (0..100).map(|i| i < 50).collect(),
+        });
         let o = cook(&src, &[("group", s("g"))]).expect("cooks");
         for i in 0..100 {
             if i < 50 {

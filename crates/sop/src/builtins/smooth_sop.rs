@@ -131,7 +131,6 @@ pub(crate) fn cotangent_weights(d: &Detail, pts: &[V3]) -> HashMap<(usize, usize
 }
 
 /// Edge list with weights. method: 0=uniform, 1=scale, 2=curvature (cotangent), 3=volume-preserving (uniform).
-
 fn build_edges(d: &Detail, pts: &[V3], method: u32) -> Vec<(usize, usize, f64)> {
     let np = d.point_count as usize;
     let mut edges: Vec<(usize, usize, f64)> = Vec::new();
@@ -422,7 +421,10 @@ impl Node<Detail> for Smooth {
 
         // Point-group selection: unselected points are left untouched (they still take part in the Laplacian).
         let sel = point_selection(src, p.string("group").unwrap_or(""))?;
-        let pinned = |i: usize| (constrain && boundary.get(i).copied().unwrap_or(false)) || sel.as_ref().is_some_and(|s| !s.get(i).copied().unwrap_or(false));
+        let pinned = |i: usize| {
+            (constrain && boundary.get(i).copied().unwrap_or(false))
+                || sel.as_ref().is_some_and(|s| !s.get(i).copied().unwrap_or(false))
+        };
         let solve = |b: &[f64]| -> Vec<f64> {
             let mut x = b.to_vec();
             cg_solve(&row_ptr, &col_ind, &vals, strength, b, &mut x, quality as usize, 1e-9);
@@ -470,9 +472,9 @@ impl Node<Detail> for Smooth {
             }
             match &mut a.data {
                 AttrData::F32(v) => *v = res,
-                AttrData::V2(v) => *v = res.chunks_exact(2).map(|c| [c[0], c[1]]).collect(),
-                AttrData::V3(v) => *v = res.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect(),
-                AttrData::V4(v) => *v = res.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect(),
+                AttrData::V2(v) => *v = res.as_chunks::<2>().0.to_vec(),
+                AttrData::V3(v) => *v = res.as_chunks::<3>().0.to_vec(),
+                AttrData::V4(v) => *v = res.as_chunks::<4>().0.to_vec(),
                 AttrData::FN { data, .. } => *data = res,
                 _ => {}
             }
@@ -486,7 +488,17 @@ impl Node<Detail> for Smooth {
                 let s = (before / after).cbrt();
                 let np_f = np.max(1) as f64;
                 let c = result.iter().fold([0.0; 3], |a, p| [a[0] + p[0], a[1] + p[1], a[2] + p[2]]).map(|v| v / np_f);
-                let scaled: Vec<V3> = result.iter().enumerate().map(|(i, p)| if pinned(i) { *p } else { [c[0] + (p[0] - c[0]) * s, c[1] + (p[1] - c[1]) * s, c[2] + (p[2] - c[2]) * s] }).collect();
+                let scaled: Vec<V3> = result
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        if pinned(i) {
+                            *p
+                        } else {
+                            [c[0] + (p[0] - c[0]) * s, c[1] + (p[1] - c[1]) * s, c[2] + (p[2] - c[2]) * s]
+                        }
+                    })
+                    .collect();
                 *out.p_mut() = to_f32(OP, &scaled)?;
             }
         }
@@ -494,8 +506,14 @@ impl Node<Detail> for Smooth {
         // Normal update: point N = uniform-averaged unit Newell normals of the smoothed surface.
         if toggle(p, "updatenormals")? {
             let pos = positions(&out);
-            let n: Vec<[f32; 3]> = point_normals(&out, &pos).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
-            out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(n), type_info: TypeInfo::Normal });
+            let n: Vec<[f32; 3]> =
+                point_normals(&out, &pos).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
+            out.add_attr(Attribute {
+                name: "N".into(),
+                class: AttrClass::Point,
+                data: AttrData::V3(n),
+                type_info: TypeInfo::Normal,
+            });
         }
         Ok(Arc::new(out))
     }
@@ -570,7 +588,8 @@ mod tests {
         src.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Point, mask });
         // lift the centre so uniform smoothing has something to do
         src.p_mut()[4][2] = 1.0;
-        let out = cook(&*new(), src.clone(), &with(0, 1.0, 50).with("group", ParamValue::S("g".into()))).expect("cooks");
+        let out =
+            cook(&*new(), src.clone(), &with(0, 1.0, 50).with("group", ParamValue::S("g".into()))).expect("cooks");
         for i in [0, 1, 2, 3, 5, 6, 7, 8] {
             assert_eq!(out.p()[i], src.p()[i], "point {i} not in group");
         }
@@ -585,9 +604,20 @@ mod tests {
         let mut src = grid3();
         let mut w = vec![0.0f32; 9];
         w[4] = 9.0;
-        src.add_attr(Attribute { name: "w".into(), class: AttrClass::Point, data: AttrData::F32(w), type_info: TypeInfo::None });
-        src.add_attr(Attribute { name: "u".into(), class: AttrClass::Point, data: AttrData::F32(vec![5.0; 9].into_iter().enumerate().map(|(i, v)| v + i as f32).collect()), type_info: TypeInfo::None });
-        let out = cook(&*new(), src.clone(), &with(0, 1.0, 100).with("attribs", ParamValue::S("w".into()))).expect("cooks");
+        src.add_attr(Attribute {
+            name: "w".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(w),
+            type_info: TypeInfo::None,
+        });
+        src.add_attr(Attribute {
+            name: "u".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(vec![5.0; 9].into_iter().enumerate().map(|(i, v)| v + i as f32).collect()),
+            type_info: TypeInfo::None,
+        });
+        let out =
+            cook(&*new(), src.clone(), &with(0, 1.0, 100).with("attribs", ParamValue::S("w".into()))).expect("cooks");
         let Some(AttrData::F32(ow)) = out.attr(AttrClass::Point, "w").map(|a| &a.data) else { panic!("w lost") };
         assert!(ow[4] < 9.0 && ow[4] > 0.0, "spike must drop: {}", ow[4]);
         let sum: f32 = ow.iter().sum();

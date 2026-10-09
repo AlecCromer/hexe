@@ -897,7 +897,12 @@ mod tests {
     }
 
     fn int_attr(d: &mut Detail, class: AttrClass, name: &str, v: Vec<i32>) {
-        d.add_attr(Attribute { name: name.into(), class, data: hexe_geo::AttrData::I32(v), type_info: hexe_geo::TypeInfo::None });
+        d.add_attr(Attribute {
+            name: name.into(),
+            class,
+            data: hexe_geo::AttrData::I32(v),
+            type_info: hexe_geo::TypeInfo::None,
+        });
     }
     fn i32s(d: &Detail, class: AttrClass, name: &str) -> Vec<i32> {
         match d.attr(class, name).map(|a| &a.data) {
@@ -931,7 +936,12 @@ mod tests {
     #[test]
     fn point_attributes_follow_coincident_operand_points() {
         let (mut a, b) = (unit([0.0; 3]), unit([5.0, 0.0, 0.0]));
-        a.add_attr(Attribute { name: "w".into(), class: AttrClass::Point, data: hexe_geo::AttrData::F32((0..8).map(|i| 1.0 + i as f32).collect()), type_info: hexe_geo::TypeInfo::None });
+        a.add_attr(Attribute {
+            name: "w".into(),
+            class: AttrClass::Point,
+            data: hexe_geo::AttrData::F32((0..8).map(|i| 1.0 + i as f32).collect()),
+            type_info: hexe_geo::TypeInfo::None,
+        });
         let out = bool_(&a, &b, OP_UNION);
         let Some(hexe_geo::AttrData::F32(w)) = out.attr(AttrClass::Point, "w").map(|x| &x.data) else { panic!("w") };
         assert_eq!(w.len(), 16);
@@ -963,7 +973,9 @@ mod tests {
         assert!(close(volume(&out), 0.875), "{}", volume(&out));
         assert_watertight(&out);
         // B's far corner (1,1,1) survives, A's far corner (-.5,-.5,-.5) does not
-        assert!(pts(&out).iter().any(|p| p[0] > 0 && p[1] > 0 && p[2] > 0 && out.p().iter().any(|q| q == &[1.0, 1.0, 1.0])));
+        assert!(
+            pts(&out).iter().any(|p| p[0] > 0 && p[1] > 0 && p[2] > 0 && out.p().iter().any(|q| q == &[1.0, 1.0, 1.0]))
+        );
         assert!(!out.p().iter().any(|q| q == &[-0.5, -0.5, -0.5]));
         // the 3 whole faces + 3 hexagons from B are `b_only`, the 3 flipped squares of A inside B are `a_only`... named by operand
         assert_eq!(group_count(&out, "b_only") + group_count(&out, "a_only") + group_count(&out, "seam"), 9);
@@ -993,7 +1005,11 @@ mod tests {
         }
         assert!(close(tot, 6.0) && close(ins, 0.75), "total {tot} inside {ins}");
         // B contributes nothing: all points lie on the surface of A's cube [-.5,.5]^3
-        assert!(out.p().iter().all(|q| q.iter().all(|c| c.abs() <= 0.5 + 1e-6) && q.iter().any(|c| (c.abs() - 0.5).abs() < 1e-6)));
+        assert!(
+            out.p()
+                .iter()
+                .all(|q| q.iter().all(|c| c.abs() <= 0.5 + 1e-6) && q.iter().any(|c| (c.abs() - 0.5).abs() < 1e-6))
+        );
     }
     #[test]
     fn intersect_cube_cube_diagonal_is_the_half_cube() {

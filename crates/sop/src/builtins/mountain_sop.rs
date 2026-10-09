@@ -107,7 +107,8 @@ impl Node<Detail> for Mountain {
         let rough = p.float("roughness").map_or(0.5, f64::from);
         let lac = p.float("lacunarity").map_or(2.0, f64::from);
         let att = p.float("attenuation").map_or(1.0, f64::from);
-        if ![rough, lac, att].iter().all(|v| v.is_finite()) || !(0.0..=1.0).contains(&rough) || lac <= 0.0 || att <= 0.0 {
+        if ![rough, lac, att].iter().all(|v| v.is_finite()) || !(0.0..=1.0).contains(&rough) || lac <= 0.0 || att <= 0.0
+        {
             return Err(bad("`roughness` in 0..=1, `lacunarity` > 0, `attenuation` > 0 (all finite)"));
         }
         let turb = p.toggle("turbulence").unwrap_or(false);
@@ -164,8 +165,14 @@ impl Node<Detail> for Mountain {
         *out.p_mut() = to_f32("mountain", &moved)?;
         if p.toggle("updatenormals").unwrap_or(false) {
             let pp = positions(&out);
-            let n: Vec<[f32; 3]> = point_normals(&out, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
-            out.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(n), type_info: TypeInfo::Normal });
+            let n: Vec<[f32; 3]> =
+                point_normals(&out, &pp).into_iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect();
+            out.add_attr(Attribute {
+                name: "N".into(),
+                class: AttrClass::Point,
+                data: AttrData::V3(n),
+                type_info: TypeInfo::Normal,
+            });
         }
         Ok(Arc::new(out))
     }
@@ -173,8 +180,8 @@ impl Node<Detail> for Mountain {
 
 #[cfg(test)]
 mod tests {
-    use super::super::meshutil::testkit::{cook, cook_arc, cube, defaults, grid3};
     use super::super::attribnoise_sop::perlin;
+    use super::super::meshutil::testkit::{cook, cook_arc, cube, defaults, grid3};
     use super::*;
     use hexe_geo::{Attribute, TypeInfo};
     use hexe_graph::ParamSet;
@@ -199,7 +206,12 @@ mod tests {
     /// `field()` with explicit +Z point normals (the Newell normal of this winding is -Z).
     fn field_up() -> Detail {
         let mut d = field();
-        d.add_attr(Attribute { name: "N".into(), class: AttrClass::Point, data: AttrData::V3(vec![[0.0, 0.0, 1.0]; 400]), type_info: TypeInfo::Normal });
+        d.add_attr(Attribute {
+            name: "N".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(vec![[0.0, 0.0, 1.0]; 400]),
+            type_info: TypeInfo::Normal,
+        });
         d
     }
     fn dz(d: &Detail) -> Vec<f64> {
@@ -215,7 +227,10 @@ mod tests {
     /// Two octaves: dz = (n0 + r n1) / (1 + r), n0 = perlin(q), n1 = perlin(lac q, seed + 7919) (exact, hand-evaluated).
     #[test]
     fn fractal_octaves_combine_normalised_by_the_amplitude_sum() {
-        let p = with(1.0).with("octaves", ParamValue::I(2)).with("roughness", ParamValue::F(0.5)).with("lacunarity", ParamValue::F(3.0));
+        let p = with(1.0)
+            .with("octaves", ParamValue::I(2))
+            .with("roughness", ParamValue::F(0.5))
+            .with("lacunarity", ParamValue::F(3.0));
         let out = cook(&*new(), field_up(), &p).expect("cooks");
         for (src, z) in field_up().p().iter().zip(dz(&out)) {
             let q = qof(*src, 1.0);
@@ -256,13 +271,17 @@ mod tests {
                 assert_ne!(fields[i], fields[j], "{i} vs {j}");
             }
         }
-        assert!(matches!(cook(&*new(), cube(), &with(1.0).with("noisetype", ParamValue::Menu(9))), Err(CookError::BadParam(_))));
+        assert!(matches!(
+            cook(&*new(), cube(), &with(1.0).with("noisetype", ParamValue::Menu(9))),
+            Err(CookError::BadParam(_))
+        ));
     }
     /// Animate scrolls the noise coordinate by time * animspeed: z(p, t) == z(p + t * speed * size, 0). Off = time-independent.
     #[test]
     fn animate_scrolls_the_noise_with_time() {
         let base = with(1.0).with("elementsize", ParamValue::F(2.0));
-        let anim = base.clone().with("animate", ParamValue::B(true)).with("animspeed", ParamValue::V3([0.5, 0.0, 0.25]));
+        let anim =
+            base.clone().with("animate", ParamValue::B(true)).with("animspeed", ParamValue::V3([0.5, 0.0, 0.25]));
         let at_t = cook_at(field(), &anim, 1.5);
         // shift = t * speed * size = (1.5, 0, 0.75)
         let mut shifted = field();
@@ -282,7 +301,11 @@ mod tests {
     #[test]
     fn group_limits_displacement() {
         let mut d = field();
-        d.groups.push(hexe_geo::Group { name: "g".into(), class: AttrClass::Point, mask: (0..400).map(|i| i < 100).collect() });
+        d.groups.push(hexe_geo::Group {
+            name: "g".into(),
+            class: AttrClass::Point,
+            mask: (0..400).map(|i| i < 100).collect(),
+        });
         let out = cook(&*new(), d.clone(), &with(1.0).with("group", ParamValue::S("g".into()))).expect("cooks");
         let full = cook(&*new(), d.clone(), &with(1.0)).expect("cooks");
         for i in 0..400 {
