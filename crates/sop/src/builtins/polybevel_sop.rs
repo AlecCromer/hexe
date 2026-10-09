@@ -25,8 +25,14 @@
 //! default-fill except at the strip ends); caps default-fill; groups follow the same maps. Existing `N` (V3, any of
 //! point / vertex / prim) is RECOMPUTED: point = unit-summed Newell normals of incident closed polys, vertex / prim = flat
 //! Newell normal of the owning prim. Prims that are not valid closed polys pass through (their points map to the first
-//! point of the source vertex). Not modelled: edge-angle limits, per-edge offsets, uv fix-up, n-gon corner caps shaped
-//! for sharp / non-planar corners, concave offset-collision cleanup.
+//! point of the source vertex). Not modelled: uv fix-up.
+//!
+//! Depth (Q-DEPTH): LONE ends (1 beveled edge at a vertex, clean fan): strip keeps full width; corner A (face traversing
+//! `p->v->u`) and B (`u->v->vb`) slide along their other edge to own points; the fan faces next to them take A / B
+//! (valence 3 = that face's corner is replaced by A,B; valence > 3 = hole cap A..B + shared fan point). Caps of rings
+//! with > 3 sectors = triangle fan around the ring mean. Per-edge offset = mean of the end points' `offset` F32 point attr
+//! (replaces `offset`; unequal offsets at a corner intersect the two shifted lines). Collision clamp: every offset halved
+//! (<= 24x) until no shrunk face is collapsed or inside-out (edge directions + normal kept).
 //!
 //! Params: `group` S (space-separated tokens; `a-b` = the edge between point numbers a and b, anything else = a POINT
 //! group naming both endpoints; empty = all edges; unknown group = `Failed`), `offset` F 0.1 (negative / non-finite =
@@ -45,6 +51,7 @@ use std::sync::Arc;
 
 const OP: &str = "polybevel";
 const MAX_DIVISIONS: i32 = 64;
+const MAX_HALVINGS: usize = 24;
 const SHAPE_ROUND: u32 = 0;
 const SHAPE_SOLID: u32 = 1;
 const EPS: f64 = 1e-9;
@@ -98,6 +105,14 @@ struct BEdge {
     f2: (usize, usize),
 }
 
+/// A LONE vertex end: exactly one beveled edge, the faces around the vertex form a clean fan. `order` = corner ids from
+/// the face traversing `p -> v -> u` (u = the beveled neighbour; its corner keeps its own point A, sliding along `v-va`),
+/// across the unbeveled fan, to the face traversing `u -> v -> vb` (own point B, sliding along `v-vb`).
+struct Lone {
+    order: Vec<usize>,
+    va: usize,
+    vb: usize,
+}
 fn find(parent: &mut [usize], mut x: usize) -> usize {
     let mut root = x;
     while let Some(&p) = parent.get(root) {
@@ -158,26 +173,32 @@ impl EdgeSel {
 }
 
 /// Where the corner `i` of `f` lands, relative to its vertex (see module docs).
-fn corner_shift(pos: &[V3], f: &Face, i: usize, prev_b: bool, next_b: bool, d: f64) -> V3 {
+fn corner_shift(pos: &[V3], f: &Face, i: usize, dp: Option<f64>, dn: Option<f64>) -> V3 {
     let m = f.pts.len();
     let p = |k: usize| at(pos, at(&f.pts, k % m, 0), ZERO);
     let (pp, v, q) = (p(i + m - 1), p(i), p(i + 1));
     let (Some(e1), Some(e2)) = (unit(sub(v, pp)), unit(sub(q, v))) else { return ZERO };
     let (Some(in1), Some(in2)) = (unit(cross(e1, f.nrm)), unit(cross(e2, f.nrm))) else { return ZERO };
-    match (prev_b, next_b) {
-        (false, false) => ZERO,
-        (true, true) => {
+    match (dp, dn) {
+        (None, None) => ZERO,
+        // intersection of the two shifted boundary lines `p.in1 = d1`, `p.in2 = d2` (equal d: `d/(1+c) (in1 + in2)`)
+        (Some(d1), Some(d2)) => {
             let c = dot(in1, in2);
-            if 1.0 + c < 1e-6 { scale(in1, d) } else { scale(add(in1, in2), d / (1.0 + c)) }
+            let den = 1.0 - c * c;
+            if den < 1e-6 {
+                scale(in1, d1)
+            } else {
+                add(scale(in1, (d1 - c * d2) / den), scale(in2, (d2 - c * d1) / den))
+            }
         }
-        (true, false) => {
+        (Some(d1), None) => {
             let k = dot(e2, in1);
-            if k.abs() < 1e-6 { scale(in1, d) } else { scale(e2, d / k) }
+            if k.abs() < 1e-6 { scale(in1, d1) } else { scale(e2, d1 / k) }
         }
-        (false, true) => {
+        (None, Some(d2)) => {
             let back = scale(e1, -1.0);
             let k = dot(back, in2);
-            if k.abs() < 1e-6 { scale(in2, d) } else { scale(back, d / k) }
+            if k.abs() < 1e-6 { scale(in2, d2) } else { scale(back, d2 / k) }
         }
     }
 }
@@ -224,10 +245,23 @@ fn bevel(
     div: usize,
     round: bool,
     flat: Option<f64>,
+    kfac: f64,
 ) -> Result<Option<Detail>, CookError> {
     let pos = positions(src);
     let np = pos.len();
     let sel = EdgeSel::parse(src, names)?;
+    // per-edge offset: mean of the end points' `offset` point attr (F32) when present, else the global `d`; x `kfac`
+    let pt_off: Option<&[f32]> = match src.attr(AttrClass::Point, "offset").map(|a| &a.data) {
+        Some(AttrData::F32(v)) => Some(v.as_slice()),
+        _ => None,
+    };
+    let edge_off = |a: usize, b: usize| -> f64 {
+        let base = match pt_off.map(|v| (v.get(a), v.get(b))) {
+            Some((Some(x), Some(y))) => (f64::from(*x) + f64::from(*y)) / 2.0,
+            _ => d,
+        };
+        base * kfac
+    };
     // ---- valid faces, corner ids ----
     let mut faces: Vec<Face> = Vec::new();
     let mut face_of_prim: Vec<Option<usize>> = vec![None; src.prims.len()];
@@ -261,6 +295,10 @@ fn bevel(
             if !seen.insert((a.min(b), a.max(b))) || !sel.has(a, b) {
                 continue;
             }
+            let eo = edge_off(a, b);
+            if !eo.is_finite() || eo <= 0.0 {
+                continue;
+            }
             if let (Some([_]), Some(&[f2])) =
                 (dmap.get(&(a, b)).map(Vec::as_slice), dmap.get(&(b, a)).map(Vec::as_slice))
             {
@@ -281,12 +319,17 @@ fn bevel(
     }
     let beveled: HashSet<(usize, usize)> = bedges.iter().map(|e| (e.a.min(e.b), e.a.max(e.b))).collect();
     let is_b = |a: usize, b: usize| beveled.contains(&(a.min(b), a.max(b)));
+    let bev_d = |a: usize, b: usize| is_b(a, b).then(|| edge_off(a, b));
     // ---- size cap (u64, before any allocation) ----
     let nb = bedges.len() as u64;
     let dv = div as u64;
-    let out_pts = (np as u64).saturating_add(ncorners as u64).saturating_add(nb.saturating_mul(2 * (dv - 1)));
-    let out_verts = u64::from(src.vertex_count()).saturating_add(nb.saturating_mul(6 * dv));
-    let out_prims = (src.prims.len() as u64).saturating_add(nb.saturating_mul(dv + 2));
+    let out_pts = (np as u64)
+        .saturating_add(ncorners as u64)
+        .saturating_add(nb.saturating_mul(2 * (dv - 1)))
+        .saturating_add(np as u64);
+    let out_verts =
+        u64::from(src.vertex_count()).saturating_add(nb.saturating_mul(14 * dv)).saturating_add(ncorners as u64);
+    let out_prims = (src.prims.len() as u64).saturating_add(nb.saturating_mul(4 * dv + 2));
     if out_pts > MAX_ELEMS || out_verts > MAX_ELEMS || out_prims > MAX_ELEMS {
         return Err(failed(OP, "output element count exceeds the allocation cap"));
     }
@@ -314,11 +357,76 @@ fn bevel(
             }
         }
     }
+    // ---- lone ends: vertices touched by exactly ONE beveled edge whose face fan is a clean manifold ring ----
+    let mut bcount = vec![0usize; np];
+    let mut bnbr = vec![0usize; np];
+    for e in &bedges {
+        for (v, o) in [(e.a, e.b), (e.b, e.a)] {
+            if let (Some(c), Some(n)) = (bcount.get_mut(v), bnbr.get_mut(v)) {
+                *c += 1;
+                *n = o;
+            }
+        }
+    }
+    let cinfo = |c: usize, fi_hint: &[(usize, usize)]| fi_hint.get(c).copied().unwrap_or((0, 0));
+    let mut corner_loc: Vec<(usize, usize)> = Vec::with_capacity(ncorners);
+    for (fi, f) in faces.iter().enumerate() {
+        for i in 0..f.pts.len() {
+            corner_loc.push((fi, i));
+        }
+    }
+    let mut lone: BTreeMap<usize, Lone> = BTreeMap::new();
+    for (v, cs) in by_vertex.iter().enumerate() {
+        if at(&bcount, v, 0) != 1 || cs.len() < 3 {
+            continue;
+        }
+        let u = at(&bnbr, v, 0);
+        // (corner id, prev vertex, next vertex) of every face corner at `v`
+        let info: Vec<(usize, usize, usize)> = cs
+            .iter()
+            .filter_map(|&c| {
+                let (fi, i) = cinfo(c, &corner_loc);
+                let f = faces.get(fi)?;
+                let m = f.pts.len();
+                Some((c, *f.pts.get((i + m - 1) % m)?, *f.pts.get((i + 1) % m)?))
+            })
+            .collect();
+        let starts: Vec<_> = info.iter().filter(|t| t.2 == u).collect();
+        let ends: Vec<_> = info.iter().filter(|t| t.1 == u).collect();
+        let (Some(&&start), Some(&&end), 1, 1) = (starts.first(), ends.first(), starts.len(), ends.len()) else {
+            continue;
+        };
+        let mut order = vec![start];
+        let mut ok = false;
+        for _ in 0..info.len() {
+            let Some(&cur) = order.last() else { break };
+            let cands: Vec<_> = info.iter().filter(|t| t.2 == cur.1 && t.0 != cur.0).collect();
+            let (Some(&&nx), 1) = (cands.first(), cands.len()) else { break };
+            if order.iter().any(|t| t.0 == nx.0) {
+                break;
+            }
+            order.push(nx);
+            if nx.0 == end.0 {
+                ok = true;
+                break;
+            }
+        }
+        if ok && order.len() == info.len() && order.len() >= 3 {
+            let corners: Vec<usize> = order.iter().map(|t| t.0).collect();
+            lone.insert(v, Lone { order: corners, va: start.1, vb: end.2 });
+        }
+    }
     for (&(v, o), cs) in &by_edge {
-        if !is_b(v, o) {
+        if !is_b(v, o) && !lone.contains_key(&v) {
             for w in cs.windows(2) {
                 union(&mut parent, at(w, 0, 0), at(w, 1, 0));
             }
+        }
+    }
+    for l in lone.values() {
+        let mids = l.order.get(1..l.order.len() - 1).unwrap_or(&[]);
+        for w in mids.windows(2) {
+            union(&mut parent, at(w, 0, 0), at(w, 1, 0));
         }
     }
     for (v, cs) in by_vertex.iter().enumerate() {
@@ -356,13 +464,29 @@ fn bevel(
             }
         }
     }
+    // corners of lone fans that emit TWO points (the unbeveled faces next to the cut-off corner)
+    let mut corner_pair: HashMap<usize, (usize, usize)> = HashMap::new();
+    for l in lone.values() {
+        let (Some(&start), Some(&end)) = (l.order.first(), l.order.last()) else { continue };
+        let n = l.order.len();
+        for (k, &c) in l.order.iter().enumerate().take(n - 1).skip(1) {
+            let (fi, i) = at(&corner_loc, c, (0, 0));
+            let Some(f) = faces.get(fi) else { continue };
+            let m = f.pts.len();
+            let (prev, next) = (at(&f.pts, (i + m - 1) % m, 0), at(&f.pts, (i + 1) % m, 0));
+            let own = at(&corner_pt, c, 0);
+            let before = if k == n - 2 && prev == l.vb { at(&corner_pt, end, 0) } else { own };
+            let after = if k == 1 && next == l.va { at(&corner_pt, start, 0) } else { own };
+            corner_pair.insert(c, (before, after));
+        }
+    }
     let mut acc: Vec<V3> = vec![ZERO; point_src.len()];
     let mut cnt: Vec<f64> = vec![0.0; point_src.len()];
     for (fi, f) in faces.iter().enumerate() {
         let m = f.pts.len();
         for (i, &v) in f.pts.iter().enumerate() {
             let (pv, nv) = (at(&f.pts, (i + m - 1) % m, v), at(&f.pts, (i + 1) % m, v));
-            let x = corner_shift(&pos, f, i, is_b(pv, v), is_b(v, nv), d);
+            let x = corner_shift(&pos, f, i, bev_d(pv, v), bev_d(v, nv));
             let pt = at(&corner_pt, at(&off, fi, 0) + i, 0);
             if let (Some(a), Some(c)) = (acc.get_mut(pt), cnt.get_mut(pt)) {
                 *a = add(*a, add(at(&pos, v, ZERO), x));
@@ -385,6 +509,7 @@ fn bevel(
     }
     let mut strips: Vec<Strip> = Vec::new();
     let mut paths: BTreeMap<usize, Vec<Vec<usize>>> = BTreeMap::new();
+    let mut lone_rings: Vec<(usize, Vec<usize>)> = Vec::new();
     for e in &bedges {
         let (Some(fa), Some(fb)) = (faces.get(e.f1.0), faces.get(e.f2.0)) else { continue };
         let (ma, mb) = (fa.pts.len(), fb.pts.len());
@@ -412,8 +537,13 @@ fn bevel(
             ends.push(ids);
         }
         let (Some(a_ids), Some(b_ids)) = (ends.first().cloned(), ends.get(1).cloned()) else { continue };
-        paths.entry(e.a).or_default().push(a_ids.iter().rev().copied().collect());
-        paths.entry(e.b).or_default().push(b_ids.clone());
+        for (v, ids) in [(e.a, a_ids.iter().rev().copied().collect::<Vec<usize>>()), (e.b, b_ids.clone())] {
+            if lone.contains_key(&v) {
+                lone_rings.push((v, ids));
+            } else {
+                paths.entry(v).or_default().push(ids);
+            }
+        }
         let vi = |fa: &Face, i: usize| Some(fa.first + i % fa.pts.len());
         strips.push(Strip {
             a: a_ids,
@@ -441,8 +571,19 @@ fn bevel(
     };
     for (pi, pr) in src.prims.iter().enumerate() {
         if let Some(fi) = face_of_prim.get(pi).copied().flatten().and_then(|fi| faces.get(fi).map(|f| (fi, f))) {
-            let poly: Vec<(usize, Option<usize>)> =
-                (0..fi.1.pts.len()).map(|i| (at(&corner_pt, at(&off, fi.0, 0) + i, 0), Some(fi.1.first + i))).collect();
+            let mut poly: Vec<(usize, Option<usize>)> = Vec::with_capacity(fi.1.pts.len() + 2);
+            for i in 0..fi.1.pts.len() {
+                let cid = at(&off, fi.0, 0) + i;
+                match corner_pair.get(&cid) {
+                    Some(&(p, q)) => {
+                        poly.push((p, Some(fi.1.first + i)));
+                        if q != p {
+                            poly.push((q, Some(fi.1.first + i)));
+                        }
+                    }
+                    None => poly.push((at(&corner_pt, cid, 0), Some(fi.1.first + i))),
+                }
+            }
             emit(&poly, Some(pi), CLOSED)?;
         } else {
             let (lo, hi) = (pr.verts.start as usize, pr.verts.end as usize);
@@ -474,7 +615,31 @@ fn bevel(
             }
         }
     }
-    for ps in paths.values() {
+    for (v, ring) in lone_rings {
+        // lone fan with >= 2 unbeveled faces: the cut-off corner leaves a hole (strip end + the fan's shared point)
+        let Some(l) = lone.get(&v) else { continue };
+        if l.order.len() < 4 {
+            continue;
+        }
+        let Some(mid) = l.order.get(1).and_then(|&c| corner_pt.get(c).copied()) else { continue };
+        let mut ids = ring;
+        ids.push(mid);
+        let mut nsum = ZERO;
+        for &c in &l.order {
+            if let Some(f) = corner_loc.get(c).and_then(|&(fi, _)| faces.get(fi)) {
+                nsum = add(nsum, f.nrm);
+            }
+        }
+        if let Some(n) = prim_normal(&pt_pos, &ids)
+            && dot(n, nsum) < 0.0
+        {
+            ids.reverse();
+        }
+        if let Some(p) = dedup(ids.into_iter().map(|p| (p, None)).collect()) {
+            emit(&p, None, CLOSED)?;
+        }
+    }
+    for (&v, ps) in &paths {
         let mut used = vec![false; ps.len()];
         let (Some(first), Some(slot)) = (ps.first(), used.first_mut()) else { continue };
         *slot = true;
@@ -499,8 +664,47 @@ fn bevel(
             && tail == head
             && let Some(p) = dedup(ring.into_iter().map(|p| (p, None)).collect())
         {
-            emit(&p, None, CLOSED)?;
+            if ps.len() > 3 {
+                // valence > 3: triangle fan around the mean of the ring (planarity not guaranteed for an n-gon)
+                let m = p.len() as f64;
+                let c = scale(p.iter().fold(ZERO, |s, q| add(s, at(&pt_pos, q.0, ZERO))), 1.0 / m);
+                let cid = pt_pos.len();
+                pt_pos.push(c);
+                point_src.push(vec![v]);
+                for (i, q) in p.iter().enumerate() {
+                    let nx = at(&p, (i + 1) % p.len(), *q);
+                    emit(&[(q.0, None), (nx.0, None), (cid, None)], None, CLOSED)?;
+                }
+            } else {
+                emit(&p, None, CLOSED)?;
+            }
         }
+    }
+    // drop points no corner uses any more (lone fan with one unbeveled face)
+    let mut used_pt = vec![false; pt_pos.len()];
+    for &p in &vertex_point {
+        if let Some(s) = used_pt.get_mut(p as usize) {
+            *s = true;
+        }
+    }
+    if used_pt.iter().any(|u| !u) {
+        let mut newid = vec![0u32; pt_pos.len()];
+        let (mut np2, mut pp, mut ps2) = (0u32, Vec::new(), Vec::new());
+        for (i, (q, s)) in pt_pos.iter().zip(point_src.iter()).enumerate() {
+            if at(&used_pt, i, false) {
+                if let Some(n) = newid.get_mut(i) {
+                    *n = np2;
+                }
+                np2 += 1;
+                pp.push(*q);
+                ps2.push(s.clone());
+            }
+        }
+        for p in &mut vertex_point {
+            *p = at(&newid, *p as usize, 0);
+        }
+        pt_pos = pp;
+        point_src = ps2;
     }
     let mut out =
         rebuild(OP, src, vertex_point, prims, &Remap { point_src, vert_src, prim_src }, to_f32(OP, &pt_pos)?)?;
@@ -581,14 +785,47 @@ impl Node<Detail> for PolyBevel {
             None
         };
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
-        if offset == 0.0 {
+        if offset == 0.0 && src.attr(AttrClass::Point, "offset").is_none() {
             return Ok(Arc::clone(src));
         }
-        match bevel(src, names, offset, div as usize, round, flat)? {
-            Some(d) => Ok(Arc::new(d)),
-            None => Ok(Arc::clone(src)),
+        // offset-collision clamp: halve every offset until no face is flipped / collapsed
+        let mut k = 1.0;
+        for _ in 0..=MAX_HALVINGS {
+            let Some(out) = bevel(src, names, offset, div as usize, round, flat, k)? else {
+                return Ok(Arc::clone(src));
+            };
+            if !flipped(src, &out) {
+                return Ok(Arc::new(out));
+            }
+            k *= 0.5;
+        }
+        Ok(Arc::clone(src))
+    }
+}
+/// True when a shrunk face of `out` (prim `i` = source prim `i`) is collapsed or inside-out: a same-corner-count face
+/// must keep every edge direction (dot > 0 with the source edge) and its normal; others only the normal.
+fn flipped(src: &Detail, out: &Detail) -> bool {
+    let (ps, po) = (positions(src), positions(out));
+    for (pi, pr) in src.prims.iter().enumerate() {
+        let Some(pts) = closed_poly_pts(src, pr) else { continue };
+        let Some(n0) = prim_normal(&ps, &pts) else { continue };
+        let Some(opts) = out.prims.get(pi).and_then(|o| closed_poly_pts(out, o)) else { return true };
+        match prim_normal(&po, &opts) {
+            Some(n1) if dot(n0, n1) > 0.0 => {}
+            _ => return true,
+        }
+        if opts.len() == pts.len() {
+            let m = pts.len();
+            for i in 0..m {
+                let e0 = sub(at(&ps, at(&pts, (i + 1) % m, 0), ZERO), at(&ps, at(&pts, i, 0), ZERO));
+                let e1 = sub(at(&po, at(&opts, (i + 1) % m, 0), ZERO), at(&po, at(&opts, i, 0), ZERO));
+                if dot(e0, e1) <= EPS {
+                    return true;
+                }
+            }
         }
     }
+    false
 }
 
 #[cfg(test)]
@@ -764,20 +1001,121 @@ mod tests {
         let bad = with(0.1, 1, 0, "nope");
         assert!(matches!(cook(&*new(), cube(), &bad), Err(CookError::Failed(_))));
     }
-    /// A lone beveled edge: both end vertices keep ONE sector (documented taper) -> strip degenerates, nothing breaks.
+    /// A lone beveled edge (cube edge 0-1 = (-.5,-.5,-.5)->(-.5,-.5,.5)): the strip keeps its FULL width to both ends
+    /// (A = on face x=-.5, B = on face y=-.5), the two faces at the ends (z = -+.5) lose that corner to the A-B edge and
+    /// become pentagons. 6 untouched pts + 4 end pts = 10; 6 faces + 1 strip = 7; Euler 10 - 15 + 7 = 2.
     #[test]
-    fn lone_edge_tapers_without_new_topology() {
+    fn lone_edge_strip_keeps_full_width_and_cuts_the_end_faces() {
         let out = cook(&*new(), cube(), &with(0.1, 1, 0, "0-1")).expect("cooks");
-        assert_eq!((out.point_count, out.prim_count()), (8, 6));
+        assert_eq!((out.point_count, out.prim_count()), (10, 7));
+        assert_eq!((count(&out, 5), count(&out, 4)), (2, 5));
+        assert_watertight_sphere(&out);
         assert_outward(&out);
+        for z in [-0.5, 0.5] {
+            assert!(has_pt(&out, [-0.5, -0.4, z]) && has_pt(&out, [-0.4, -0.5, z]), "end pts at z={z}");
+            assert!(!has_pt(&out, [-0.5, -0.5, z]), "cut-off corner survives at z={z}");
+        }
+    }
+    /// Per-edge offset: point attr `offset` (mean of the two end points) REPLACES the global offset. Lone edge 0-1 with
+    /// offset 0.2 on both end points: end points land 0.2 in from both faces.
+    #[test]
+    fn point_attr_offset_sets_the_edge_offset() {
+        let mut d = cube();
+        d.add_attr(Attribute {
+            name: "offset".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(vec![0.2, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            type_info: TypeInfo::None,
+        });
+        // global offset 0 does not switch the SOP off while the attr is present
+        let out = cook(&*new(), d, &with(0.0, 1, 0, "0-1")).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (10, 7));
+        assert!(has_pt(&out, [-0.5, -0.3, 0.5]) && has_pt(&out, [-0.3, -0.5, -0.5]));
+        // mixed end values average: (0.1 + 0.3) / 2 = 0.2
+        let mut d = cube();
+        d.add_attr(Attribute {
+            name: "offset".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(vec![0.1, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            type_info: TypeInfo::None,
+        });
+        let out = cook(&*new(), d, &with(0.5, 1, 0, "0-1")).expect("cooks");
+        assert!(has_pt(&out, [-0.5, -0.3, 0.5]), "mean offset .2");
+    }
+    /// Corner where the two beveled boundaries carry DIFFERENT offsets: unit square, corner 1 (edges along x then y):
+    /// the corner moves d_prev along the normal of the x-edge (y) and d_next along the normal of the y-edge (x).
+    #[test]
+    fn corner_with_unequal_offsets_is_the_intersection_of_both_shifted_lines() {
+        let pos = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
+        let pts = vec![0, 1, 2, 3];
+        let nrm = prim_normal(&pos, &pts).expect("normal");
+        let f = Face { prim: 0, first: 0, pts, nrm };
+        let s = corner_shift(&pos, &f, 1, Some(0.1), Some(0.3));
+        assert!((s[1].abs() - 0.1).abs() < 1e-12 && (s[0].abs() - 0.3).abs() < 1e-12 && s[2].abs() < 1e-12, "{s:?}");
+        // inward: toward the square's centre
+        assert!(s[0] < 0.0 && s[1] > 0.0, "{s:?}");
+    }
+    /// Offset collision: cube half-width is 0.5, so offset 0.6 would turn every face inside-out. The SOP halves the
+    /// offset (0.6 -> 0.3) until no face is flipped; result == a direct 0.3 bevel, all points in |c| {0.2, 0.5}.
+    #[test]
+    fn offset_collision_halves_the_offset_until_no_face_flips() {
+        let big = cook(&*new(), cube(), &with(0.6, 1, 0, "")).expect("cooks");
+        let ok = cook(&*new(), cube(), &with(0.3, 1, 0, "")).expect("cooks");
+        assert_eq!(big.p(), ok.p());
+        assert_eq!((big.point_count, big.prim_count()), (24, 26));
+        assert_outward(&big);
+        for p in big.p() {
+            let mut a = p.map(|c| (c.abs() * 10.0).round() / 10.0);
+            a.sort_by(f32::total_cmp);
+            assert_eq!(a, [0.2, 0.2, 0.5], "{p:?}");
+        }
+        // exactly the half-width collapses every face: clamped too (0.5 -> 0.25)
+        let half = cook(&*new(), cube(), &with(0.5, 1, 0, "")).expect("cooks");
+        assert!(
+            half.p().iter().all(|p| p.iter().any(|c| (c.abs() - 0.25).abs() < 1e-6 || (c.abs() - 0.5).abs() < 1e-6))
+        );
+        assert_outward(&half);
+    }
+    /// Square pyramid: apex 0 = (0,0,1), base 1..4 = (+-1,+-1,0). Closed 2-manifold, apex valence 4.
+    fn pyramid() -> Detail {
+        let mut d = Detail::default();
+        d.add_points(5);
+        *d.p_mut() = vec![[0.0, 0.0, 1.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0], [-1.0, -1.0, 0.0], [1.0, -1.0, 0.0]];
+        for f in [&[0, 1, 2][..], &[0, 2, 3], &[0, 3, 4], &[0, 4, 1], &[1, 4, 3, 2]] {
+            d.add_poly(f, true);
+        }
+        d
+    }
+    /// Lone edge ending in a VALENCE-4 vertex (pyramid apex-edge 0-1): the apex end splits into A, B and one shared
+    /// point V (2 unbeveled faces) and a triangle hole cap (A, B, V); the valence-3 base end cuts like the cube.
+    /// pts: apex A,B,V (3) + base end A,B (2) + 3 untouched base = 8; prims: 5 + strip + cap = 7; Euler 8 - 13 + 7 = 2.
+    #[test]
+    fn lone_edge_at_valence_4_vertex_closes_with_a_cap() {
+        let out = cook(&*new(), pyramid(), &with(0.1, 1, 0, "0-1")).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (8, 7));
+        assert_watertight_sphere(&out);
+        assert!(has_pt(&out, [0.0, 0.0, 1.0]), "shared fan point V keeps the apex position");
+    }
+    /// Valence-4 apex with ALL four apex edges beveled: 4 sectors form the cap ring -> triangle FAN around the ring mean
+    /// (on the axis x = y = 0), not an n-gon. Base end of each edge is a lone valence-3 end.
+    /// pts: 4 apex sectors + 1 fan centre + 4 x 2 base = 13; prims: 5 + 4 strips + 4 fan tris = 13; Euler 13 - 24 + 13 = 2.
+    #[test]
+    fn valence_4_cap_is_a_triangle_fan_around_the_ring_mean() {
+        let out = cook(&*new(), pyramid(), &with(0.1, 1, 0, "0-1 0-2 0-3 0-4")).expect("cooks");
+        assert_eq!((out.point_count, out.prim_count()), (13, 13));
+        // 4 side tris + 4 fan tris; 4 strip quads; the base quad loses all 4 corners = octagon
+        assert_eq!((count(&out, 3), count(&out, 4), count(&out, 8)), (8, 4, 1));
+        assert_watertight_sphere(&out);
+        let axis: Vec<[f32; 3]> = out.p().iter().copied().filter(|p| p[0].abs() < 1e-6 && p[1].abs() < 1e-6).collect();
+        assert_eq!(axis.len(), 1, "exactly one centre point on the axis: {axis:?}");
     }
     /// Open 2x2 grid: the 4 interior spokes are bevelable. Corners (4) keep 1 pt; edge-midpoints (4) split in 2; centre
-    /// splits in 4 = 16 pts; 4 faces + 4 strips + 1 square cap at the centre = 9 prims.
+    /// splits in 4 + 1 fan centre (valence 4) = 17 pts; 4 faces + 4 strips + 4 fan tris at the centre = 12 prims.
     #[test]
     fn open_grid_bevels_interior_edges_only() {
         let out = cook(&*new(), grid3(), &with(0.1, 1, 0, "")).expect("cooks");
-        assert_eq!((out.point_count, out.prim_count()), (16, 9));
-        assert_eq!((count(&out, 4), count(&out, 3)), (9, 0));
+        assert_eq!((out.point_count, out.prim_count()), (17, 12));
+        assert_eq!((count(&out, 4), count(&out, 3)), (8, 4));
         assert!(out.p().iter().all(|p| p[2] == 0.0));
         // face 0 (grid corner (0,0)) loses 0.1 along both spokes: its inner corner (1,1) -> (0.9, 0.9)
         assert!(has_pt(&out, [0.9, 0.9, 0.0]));
