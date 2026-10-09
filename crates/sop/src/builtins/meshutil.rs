@@ -218,6 +218,44 @@ pub(super) fn blend(d: &AttrData, srcs: &[Vec<usize>]) -> AttrData {
         AttrData::I32(_) | AttrData::IN { .. } | AttrData::Str { .. } => gather(d, &first),
     }
 }
+/// Like `blend` but with explicit per-source weights (linear interpolation on cut points): floats = weighted mean,
+/// int / string types copy the heaviest source.
+pub(super) fn blend_weighted(d: &AttrData, srcs: &[Vec<(usize, f64)>]) -> AttrData {
+    fn wavg(v: &[f32], size: usize, srcs: &[Vec<(usize, f64)>]) -> Vec<f32> {
+        let size = size.max(1);
+        let mut out = Vec::with_capacity(srcs.len().saturating_mul(size));
+        for s in srcs {
+            for j in 0..size {
+                let (mut sum, mut ws) = (0.0f64, 0.0f64);
+                for &(i, w) in s {
+                    if let Some(x) = i.checked_mul(size).and_then(|b| v.get(b + j)) {
+                        sum += w * f64::from(*x);
+                        ws += w;
+                    }
+                }
+                out.push(if ws > 0.0 { (sum / ws) as f32 } else { 0.0 });
+            }
+        }
+        out
+    }
+    let flat2 = |v: &[[f32; 2]]| wavg(&v.iter().flatten().copied().collect::<Vec<f32>>(), 2, srcs);
+    let flat3 = |v: &[[f32; 3]]| wavg(&v.iter().flatten().copied().collect::<Vec<f32>>(), 3, srcs);
+    let flat4 = |v: &[[f32; 4]]| wavg(&v.iter().flatten().copied().collect::<Vec<f32>>(), 4, srcs);
+    match d {
+        AttrData::F32(v) => AttrData::F32(wavg(v, 1, srcs)),
+        AttrData::V2(v) => AttrData::V2(flat2(v).chunks_exact(2).map(|c| [c[0], c[1]]).collect()),
+        AttrData::V3(v) => AttrData::V3(flat3(v).chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()),
+        AttrData::V4(v) => AttrData::V4(flat4(v).chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()),
+        AttrData::FN { size, data } => AttrData::FN { size: *size, data: wavg(data, *size as usize, srcs) },
+        AttrData::I32(_) | AttrData::IN { .. } | AttrData::Str { .. } => {
+            let heavy: Vec<Option<usize>> = srcs
+                .iter()
+                .map(|s| s.iter().max_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0))
+                .collect();
+            gather(d, &heavy)
+        }
+    }
+}
 /// How an output mesh derives from its source: per output point the source points it blends, per output vertex /
 /// prim the source element it copies (`None` = default-filled).
 #[derive(Default)]

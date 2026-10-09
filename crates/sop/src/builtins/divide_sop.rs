@@ -1,34 +1,53 @@
-//! Divide SOP (token `divide`): split closed polygons into pieces with at most `numsides` corners.
+//! Divide SOP (token `divide`): split closed polygons into pieces with at most `numsides` corners, or clip them to a brick grid.
 //!
 //! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
 //! Params: `convex` B on, `numsides` I 3 (3..=1024, else `BadParam`), `planar` B off + `planartol` F 0.0001,
-//! `removesharededges` B off, `bricker` B off + `size` V3 (1,1,1) + `offset` V3 (0,0,0), `dupcut` B off (unused).
-//! Only closed polys with MORE than `numsides` valid corners are split; everything else passes through unchanged. Points never change.
+//! `removesharededges` B off, `bricker` B off + `size` V3 (1,1,1) (all > 0, else `BadParam`) + `offset` V3 (0,0,0).
+//! Only closed polys with MORE than `numsides` valid corners are split; everything else passes through unchanged. Points never
+//! change in the non-bricker path.
 //! * `convex` off: simple corner-chunk fan. Corner list `L = [c0 .. cn-1]`; while `|L| > numsides`: emit `[L0 .. L(k-1)]`
 //!   (`k = numsides`) and drop `L1 .. L(k-2)`. For `k = 3` this is the plain fan `(c0,ci,ci+1)`: a quad `[a,b,c,d]` gives
 //!   `[a,b,c]` and `[a,c,d]`. Exact (area-preserving) for convex polys only.
 //! * `convex` on (default): a poly that is convex (all Newell-projected turns the same way) is split as above; a concave one is
 //!   ear-clipped into triangles first (area-preserving; falls back to the fan for degenerate / self-touching input).
 //!   So `convex` on + `numsides` 3 always triangulates; pieces of a concave poly are triangles even when `numsides` > 3.
-//! * `planar` on: skip prims whose corners deviate from best-fit plane by more than `planartol` (L2 distance).
-//! * `bricker` on: clip each prim by axis-aligned brick grid defined by `size` and `offset`. Sutherland-Hodgman against each
-//!   plane family (X/Y/Z min/max per brick cell), output all non-degenerate pieces, interpolate point attrs on new points.
-//! * `removesharededges` on: after dividing, dissolve edges shared by two coplanar output prims (merge back into one polygon).
+//! * `planar` on: a prim whose corners deviate from their best-fit plane (Newell normal through the centroid) by more than
+//!   `planartol` (max point-plane distance) is SKIPPED = passed through undivided / unclipped. Degenerate (no plane) prims are not skipped.
+//! * `removesharededges` on: after dividing a prim, pieces of that SAME prim that share exactly one edge (opposite direction)
+//!   and are coplanar (1e-5) are merged back (repeat to fixpoint); a prim that merges back to one piece passes through. No-op
+//!   with `bricker` on (it would undo the bricks).
+//! * `bricker` on: each closed poly is Sutherland-Hodgman sliced per axis into the slabs `offset + [i, i+1] * size`. Pieces =
+//!   separate polys (winding kept). Outermost slab of a prim is unbounded outward (no sliver loss). Axes along which the poly is
+//!   flat (< 1e-9) are not clipped. Cut points are new points (deduped across pieces by 1e-5 position grid) whose float point
+//!   attrs are linearly interpolated (int / string copy the dominant source); original corners keep their point ids; a new vertex
+//!   copies the vertex attrs of the source corner it follows.
 //!
-//! Corners keep their winding. Each piece copies the prim attrs / group membership of its parent prim, and every piece
-//! vertex copies the vertex attrs of its source vertex. Nothing split = input `Arc` shared.
+//! Each piece copies the prim attrs / group membership of its parent prim, and every piece vertex copies the vertex attrs of its
+//! source vertex. Nothing split = input `Arc` shared.
+//! NOT modelled (DEFERRED): `avoidsmallangles`, `usemaxsides` variants, polys with holes, `dupcut`, vertex-attr interpolation on cuts,
+//! removesharededges across different source prims.
 use super::meshutil::{
-    MAX_ELEMS, Remap, V3, bad, closed_poly_pts, dot, failed, int, newell_corners, positions, rebuild, toggle, v3,
+    MAX_ELEMS, Remap, V3, bad, blend_weighted, closed_poly_pts, dot, failed, float, int, newell_corners, positions, rebuild,
+    toggle, v3,
 };
 use crate::SopNode;
-use hexe_geo::{Detail, Prim, PrimKind};
+use hexe_geo::{AttrClass, Detail, Prim, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 const MAX_SIDES: i32 = 1024;
 /// Ear clipping is O(n^2) per poly; longer polys use the fan.
 const MAX_EAR_CLIP: usize = 2048;
+/// Removing shared edges is O(n^3) per prim; prims split into more pieces keep them.
+const MAX_MERGE_PIECES: usize = 256;
+/// Half-space inside tolerance for the brick clip.
+const CLIP_EPS: f64 = 1e-12;
+/// Slab-index snap (in cell units) so f32 noise on a brick plane does not spawn a sliver cell.
+const CELL_SNAP: f64 = 1e-6;
+/// Merge coplanarity tolerance of `removesharededges`.
+const COPLANAR_TOL: f64 = 1e-5;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
@@ -40,7 +59,6 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("bricker", ParamValue::B(false)).label("Bricker"),
         ParamSpec::new("size", ParamValue::V3([1.0, 1.0, 1.0])).label("Brick Size"),
         ParamSpec::new("offset", ParamValue::V3([0.0, 0.0, 0.0])).label("Brick Offset"),
-        ParamSpec::new("dupcut", ParamValue::B(false)).label("Duplicate Cut Points"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -113,203 +131,263 @@ fn ear_clip(flat: &[[f64; 2]], sign: f64) -> Option<Vec<Vec<usize>>> {
     Some(out)
 }
 
-/// Best-fit plane (point + normal) for a set of 3D points. Returns None if degenerate.
+/// Best-fit plane (centroid, unit Newell normal). `None` for < 3 points or a degenerate (zero-area) loop.
 fn best_fit_plane(pts: &[V3]) -> Option<(V3, V3)> {
     if pts.len() < 3 {
         return None;
     }
-    // Centroid
     let n = pts.len() as f64;
-    let c = pts.iter().fold([0.0; 3], |mut acc, p| {
-        for i in 0..3 {
-            acc[i] += p[i];
-        }
-        acc
-    });
-    let centroid = [c[0] / n, c[1] / n, c[2] / n];
-
-    // Covariance matrix (only upper triangle)
-    let mut cov = [[0.0; 3]; 3];
-    for p in pts {
-        let d = [p[0] - centroid[0], p[1] - centroid[1], p[2] - centroid[2]];
-        for i in 0..3 {
-            for j in i..3 {
-                cov[i][j] += d[i] * d[j];
-            }
-        }
-    }
-
-    // Find smallest eigenvalue's eigenvector via cross products (for 3D plane fitting)
-    // Simplified: use Newell normal as the plane normal (good enough for planarity test)
+    let c = pts.iter().fold([0.0; 3], |a, p| [a[0] + p[0], a[1] + p[1], a[2] + p[2]]);
     let nw = newell_corners(pts);
     let mag = dot(nw, nw).sqrt();
-    if mag < 1e-12 {
+    if !(mag > 1e-12) {
         return None;
     }
-    let normal = [nw[0] / mag, nw[1] / mag, nw[2] / mag];
-    Some((centroid, normal))
+    Some(([c[0] / n, c[1] / n, c[2] / n], [nw[0] / mag, nw[1] / mag, nw[2] / mag]))
 }
 
-/// Max deviation of points from a plane (point on plane, normal).
+/// Max point-plane distance.
 fn max_deviation(pts: &[V3], plane: (V3, V3)) -> f64 {
     let (c, n) = plane;
-    pts.iter()
-        .map(|p| {
-            let d = [p[0] - c[0], p[1] - c[1], p[2] - c[2]];
-            (d[0] * n[0] + d[1] * n[1] + d[2] * n[2]).abs()
-        })
-        .fold(0.0f64, f64::max)
+    pts.iter().map(|p| dot([p[0] - c[0], p[1] - c[1], p[2] - c[2]], n).abs()).fold(0.0, f64::max)
 }
 
-/// Sutherland-Hodgman clip polygon against half-space { x : dot(x - plane_pt, plane_n) >= 0 }.
-/// Returns corner positions (possibly introducing new points via linear interpolation).
-fn clip_half_space(poly: &[V3], plane_pt: V3, plane_n: V3) -> Vec<V3> {
-    if poly.is_empty() {
-        return vec![];
+/// Merge pieces (corner-index lists) of one prim that share exactly one edge and are coplanar, to fixpoint.
+fn merge_pieces(mut pieces: Vec<Vec<usize>>, cp: &[V3]) -> Vec<Vec<usize>> {
+    if pieces.len() > MAX_MERGE_PIECES {
+        return pieces;
     }
-    let mut out = Vec::new();
-    let n = poly.len();
-    let inside = |p: V3| -> bool {
-        let d = [p[0] - plane_pt[0], p[1] - plane_pt[1], p[2] - plane_pt[2]];
-        d[0] * plane_n[0] + d[1] * plane_n[1] + d[2] * plane_n[2] >= -1e-12
-    };
-    for i in 0..n {
-        let (a, b) = (poly[i], poly[(i + 1) % n]);
-        let (in_a, in_b) = (inside(a), inside(b));
-        if in_a {
-            out.push(a);
+    // the one edge (i in a, j in b) with a[i]->a[i+1] == b[j+1]->b[j]; None when 0 or >= 2 shared edges
+    let shared = |a: &[usize], b: &[usize]| -> Option<(usize, usize)> {
+        let mut hit = None;
+        for i in 0..a.len() {
+            let (u, v) = (a[i], a[(i + 1) % a.len()]);
+            for j in 0..b.len() {
+                if b[j] == v && b[(j + 1) % b.len()] == u {
+                    if hit.is_some() {
+                        return None;
+                    }
+                    hit = Some((i, j));
+                }
+            }
         }
-        if in_a != in_b {
-            // Edge crosses the plane; find intersection
-            let da = [a[0] - plane_pt[0], a[1] - plane_pt[1], a[2] - plane_pt[2]];
-            let va = da[0] * plane_n[0] + da[1] * plane_n[1] + da[2] * plane_n[2];
-            let db = [b[0] - plane_pt[0], b[1] - plane_pt[1], b[2] - plane_pt[2]];
-            let vb = db[0] * plane_n[0] + db[1] * plane_n[1] + db[2] * plane_n[2];
-            let denom = vb - va;
-            if denom.abs() > 1e-14 {
-                let t = -va / denom;
-                let t = t.clamp(0.0, 1.0); // clamp for numerical safety
-                let isect = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])];
-                out.push(isect);
+        hit
+    };
+    loop {
+        let mut found = None;
+        'scan: for x in 0..pieces.len() {
+            for y in x + 1..pieces.len() {
+                let Some((i, j)) = shared(&pieces[x], &pieces[y]) else { continue };
+                let pts: Vec<V3> = pieces[x].iter().chain(&pieces[y]).filter_map(|&c| cp.get(c).copied()).collect();
+                if best_fit_plane(&pts).is_some_and(|pl| max_deviation(&pts, pl) < COPLANAR_TOL) {
+                    found = Some((x, y, i, j));
+                    break 'scan;
+                }
+            }
+        }
+        let Some((x, y, i, j)) = found else { return pieces };
+        let (a, b) = (&pieces[x], &pieces[y]);
+        let mut m = Vec::with_capacity(a.len() + b.len() - 2);
+        m.extend((1..=a.len()).map(|s| a[(i + s) % a.len()])); // a[i+1] .. a[i]
+        m.extend((2..b.len()).map(|s| b[(j + s) % b.len()])); // b[j+2] .. b[j-1]
+        pieces[x] = m;
+        pieces.remove(y);
+    }
+}
+
+/// One polygon corner during brick clipping: position, source-point weights, nearest source vertex, original point id (if uncut).
+#[derive(Clone)]
+struct BCorner {
+    pos: V3,
+    w: Vec<(usize, f64)>,
+    vsrc: usize,
+    pt: Option<u32>,
+}
+
+fn lerp_w(a: &[(usize, f64)], b: &[(usize, f64)], t: f64) -> Vec<(usize, f64)> {
+    let mut out: Vec<(usize, f64)> = Vec::with_capacity(a.len() + b.len());
+    let scaled = a.iter().map(|&(i, w)| (i, w * (1.0 - t))).chain(b.iter().map(|&(i, w)| (i, w * t)));
+    for (i, w) in scaled {
+        match out.iter_mut().find(|e| e.0 == i) {
+            Some(e) => e.1 += w,
+            None => out.push((i, w)),
+        }
+    }
+    out
+}
+
+/// Drop cyclically consecutive duplicate corners (prefer the one that is an original point).
+fn dedup(poly: Vec<BCorner>) -> Vec<BCorner> {
+    let same = |a: &BCorner, b: &BCorner| (0..3).all(|k| (a.pos[k] - b.pos[k]).abs() < 1e-9);
+    let mut out: Vec<BCorner> = Vec::with_capacity(poly.len());
+    for c in poly {
+        match out.last_mut() {
+            Some(l) if same(l, &c) => {
+                if l.pt.is_none() && c.pt.is_some() {
+                    *l = c;
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    while out.len() > 1 && same(&out[0], &out[out.len() - 1]) {
+        let last = out.pop();
+        if let (Some(l), true) = (last, out[0].pt.is_none()) {
+            if l.pt.is_some() {
+                out[0] = l;
             }
         }
     }
     out
 }
 
-/// Brick-grid clip: given a polygon's corner positions, clip against the brick grid defined by size/offset.
-/// Returns a list of polygon pieces (each a vec of positions).
-fn brick_clip(corners: &[V3], size: V3, offset: V3) -> Vec<Vec<V3>> {
-    if corners.is_empty() || size.iter().any(|&s| s <= 0.0) {
-        return vec![];
-    }
-
-    // Find bounding box
-    let mut bbox_min = corners[0];
-    let mut bbox_max = corners[0];
-    for &p in corners {
-        for i in 0..3 {
-            bbox_min[i] = bbox_min[i].min(p[i]);
-            bbox_max[i] = bbox_max[i].max(p[i]);
+/// Sutherland-Hodgman against one axis-aligned half-space: keep `pos[axis] >= val` (or `<=` when `!keep_ge`).
+fn clip_axis(poly: &[BCorner], axis: usize, val: f64, keep_ge: bool) -> Vec<BCorner> {
+    let sg = if keep_ge { 1.0 } else { -1.0 };
+    let d = |c: &BCorner| (c.pos[axis] - val) * sg;
+    let n = poly.len();
+    let mut out = Vec::with_capacity(n + 2);
+    for i in 0..n {
+        let (a, b) = (&poly[i], &poly[(i + 1) % n]);
+        let (da, db) = (d(a), d(b));
+        let (ia, ib) = (da >= -CLIP_EPS, db >= -CLIP_EPS);
+        if ia {
+            out.push(a.clone());
+        }
+        if ia != ib {
+            let t = (da / (da - db)).clamp(0.0, 1.0);
+            let mut pos = [0.0; 3];
+            for k in 0..3 {
+                pos[k] = a.pos[k] + t * (b.pos[k] - a.pos[k]);
+            }
+            pos[axis] = val;
+            out.push(BCorner { pos, w: lerp_w(&a.w, &b.w, t), vsrc: a.vsrc, pt: None });
         }
     }
+    dedup(out)
+}
 
-    // Brick cells that overlap the bounding box
-    let mut cells = Vec::new();
+/// Slice one poly into the slabs `offset + [i, i+1] * size` along `axis`; non-degenerate pieces, in slab order.
+fn slab(poly: Vec<BCorner>, axis: usize, size: f64, offset: f64) -> Result<Vec<Vec<BCorner>>, CookError> {
+    let (mn, mx) = poly.iter().fold((f64::MAX, f64::MIN), |(lo, hi), c| (lo.min(c.pos[axis]), hi.max(c.pos[axis])));
+    if mx - mn < 1e-9 {
+        return Ok(vec![poly]); // flat along this axis: nothing to cut
+    }
+    let (f0, f1) = ((mn - offset) / size + CELL_SNAP, (mx - offset) / size - CELL_SNAP);
+    if !(f1 - f0 < MAX_ELEMS as f64) {
+        return Err(failed("divide", "brick grid too fine (output too large)"));
+    }
+    let (i0, i1) = (f0.floor() as i64, (f1.ceil() as i64).max(f0.floor() as i64 + 1));
+    let mut out = Vec::new();
+    for i in i0..i1 {
+        let mut piece = poly.clone();
+        if i > i0 {
+            piece = clip_axis(&piece, axis, offset + i as f64 * size, true);
+        }
+        if i + 1 < i1 && piece.len() >= 3 {
+            piece = clip_axis(&piece, axis, offset + (i + 1) as f64 * size, false);
+        }
+        if piece.len() >= 3 {
+            let ps: Vec<V3> = piece.iter().map(|c| c.pos).collect();
+            let nw = newell_corners(&ps);
+            if dot(nw, nw) > 1e-24 {
+                out.push(piece);
+            }
+        }
+        if out.len() as u64 > MAX_ELEMS {
+            return Err(failed("divide", "output too large"));
+        }
+    }
+    Ok(out)
+}
+
+fn brick_pieces(corners: Vec<BCorner>, size: V3, offset: V3) -> Result<Vec<Vec<BCorner>>, CookError> {
+    let mut cur = vec![corners];
     for axis in 0..3 {
-        let s = size[axis];
-        let o = offset[axis];
-        let i_min = ((bbox_min[axis] - o) / s).floor() as i32;
-        let i_max = ((bbox_max[axis] - o) / s).ceil() as i32;
-        // Ensure at least one cell even for planar geometry
-        let i_max = if i_max <= i_min { i_min + 1 } else { i_max };
-        cells.push((i_min, i_max));
+        let mut next = Vec::new();
+        for poly in cur {
+            next.extend(slab(poly, axis, size[axis], offset[axis])?);
+        }
+        if next.len() as u64 > MAX_ELEMS {
+            return Err(failed("divide", "output too large"));
+        }
+        cur = next;
     }
+    Ok(cur)
+}
 
-    // Clip against each brick cell
-    let mut pieces = Vec::new();
-    for ix in cells[0].0..cells[0].1 {
-        for iy in cells[1].0..cells[1].1 {
-            for iz in cells[2].0..cells[2].1 {
-                let brick_min = [
-                    offset[0] + (ix as f64) * size[0],
-                    offset[1] + (iy as f64) * size[1],
-                    offset[2] + (iz as f64) * size[2],
-                ];
-                let brick_max = [brick_min[0] + size[0], brick_min[1] + size[1], brick_min[2] + size[2]];
-
-                let mut poly = corners.to_vec();
-                // Clip against 6 half-spaces (min/max for each axis)
-                for axis in 0..3 {
-                    let mut n = [0.0; 3];
-                    n[axis] = 1.0;
-                    poly = clip_half_space(&poly, [brick_min[0], brick_min[1], brick_min[2]], n);
-                    if poly.len() < 3 {
-                        break;
-                    }
-                    n[axis] = -1.0;
-                    poly = clip_half_space(&poly, [brick_max[0], brick_max[1], brick_max[2]], n);
-                    if poly.len() < 3 {
-                        break;
-                    }
-                }
-                if poly.len() >= 3 {
-                    pieces.push(poly);
-                }
-            }
+/// Output topology under construction: original points keep their ids, cut points are appended (deduped by position).
+struct Out {
+    vertex_point: Vec<u32>,
+    prims: Vec<Prim>,
+    vert_src: Vec<Option<usize>>,
+    prim_src: Vec<Option<usize>>,
+    newp: Vec<[f32; 3]>,
+    neww: Vec<Vec<(usize, f64)>>,
+    map: HashMap<[i64; 3], u32>,
+    base: u32,
+}
+impl Out {
+    fn new(base: u32) -> Self {
+        Out {
+            vertex_point: Vec::new(),
+            prims: Vec::new(),
+            vert_src: Vec::new(),
+            prim_src: Vec::new(),
+            newp: Vec::new(),
+            neww: Vec::new(),
+            map: HashMap::new(),
+            base,
         }
     }
-    pieces
-}
-
-/// Check if two polygons share an edge and are coplanar. Returns Some(edge indices) if they do.
-fn shared_edge(poly_a: &[V3], poly_b: &[V3]) -> Option<(usize, usize)> {
-    let eps = 1e-9;
-    for i in 0..poly_a.len() {
-        let (a0, a1) = (poly_a[i], poly_a[(i + 1) % poly_a.len()]);
-        for j in 0..poly_b.len() {
-            let (b0, b1) = (poly_b[j], poly_b[(j + 1) % poly_b.len()]);
-            // Check if edge matches (either direction)
-            let fwd = (a0[0] - b0[0]).abs() < eps
-                && (a0[1] - b0[1]).abs() < eps
-                && (a0[2] - b0[2]).abs() < eps
-                && (a1[0] - b1[0]).abs() < eps
-                && (a1[1] - b1[1]).abs() < eps
-                && (a1[2] - b1[2]).abs() < eps;
-            let rev = (a0[0] - b1[0]).abs() < eps
-                && (a0[1] - b1[1]).abs() < eps
-                && (a0[2] - b1[2]).abs() < eps
-                && (a1[0] - b0[0]).abs() < eps
-                && (a1[1] - b0[1]).abs() < eps
-                && (a1[2] - b0[2]).abs() < eps;
-            if fwd || rev {
-                return Some((i, j));
-            }
+    fn len_u32(&self) -> Result<u32, CookError> {
+        u32::try_from(self.vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))
+    }
+    /// Original prim copied verbatim (invalid prims keep their vertex ids as they were).
+    fn pass(&mut self, src: &Detail, qi: usize, pr: &Prim) -> Result<(), CookError> {
+        let start = self.len_u32()?;
+        for v in pr.verts.start as usize..pr.verts.end as usize {
+            self.vertex_point.push(src.vertex_point.get(v).copied().unwrap_or(0));
+            self.vert_src.push(Some(v));
         }
+        let end = self.len_u32()?;
+        self.prims.push(Prim { kind: pr.kind.clone(), verts: start..end });
+        self.prim_src.push(Some(qi));
+        Ok(())
     }
-    None
-}
-
-/// Check if two polygons are coplanar.
-fn coplanar(poly_a: &[V3], poly_b: &[V3]) -> bool {
-    let mut all_pts = poly_a.to_vec();
-    all_pts.extend_from_slice(poly_b);
-    if let Some(plane) = best_fit_plane(&all_pts) { max_deviation(&all_pts, plane) < 1e-6 } else { false }
-}
-
-/// Merge two polygons that share an edge by removing the shared edge.
-fn merge_polygons(poly_a: &[V3], poly_b: &[V3], edge_a: usize, edge_b: usize) -> Vec<V3> {
-    // Walk around poly_a starting after the shared edge, then poly_b starting after its shared edge
-    let mut result = Vec::new();
-    // From poly_a: (edge_a+2) to edge_a (wrapping)
-    for i in 0..poly_a.len() - 2 {
-        result.push(poly_a[(edge_a + 2 + i) % poly_a.len()]);
+    /// New closed poly of `(point id, source vertex)` corners, child of source prim `qi`.
+    fn emit(&mut self, qi: usize, corners: &[(u32, usize)]) -> Result<(), CookError> {
+        let start = self.len_u32()?;
+        for &(p, v) in corners {
+            self.vertex_point.push(p);
+            self.vert_src.push(Some(v));
+        }
+        let end = self.len_u32()?;
+        self.prims.push(Prim { kind: PrimKind::Poly { closed: true }, verts: start..end });
+        self.prim_src.push(Some(qi));
+        if self.vertex_point.len() as u64 > MAX_ELEMS {
+            return Err(failed("divide", "output too large"));
+        }
+        Ok(())
     }
-    // From poly_b: (edge_b+2) to edge_b (wrapping)
-    for i in 0..poly_b.len() - 2 {
-        result.push(poly_b[(edge_b + 2 + i) % poly_b.len()]);
+    /// Point id of a clipped corner: the original id when uncut, else a (deduped) new point.
+    fn point_of(&mut self, c: &BCorner) -> Result<u32, CookError> {
+        if let Some(p) = c.pt {
+            return Ok(p);
+        }
+        let key = [(c.pos[0] * 1e5).round() as i64, (c.pos[1] * 1e5).round() as i64, (c.pos[2] * 1e5).round() as i64];
+        if let Some(&id) = self.map.get(&key) {
+            return Ok(id);
+        }
+        let id = u32::try_from(self.newp.len())
+            .ok()
+            .and_then(|n| n.checked_add(self.base))
+            .ok_or_else(|| failed("divide", "point id overflow"))?;
+        self.newp.push([c.pos[0] as f32, c.pos[1] as f32, c.pos[2] as f32]);
+        self.neww.push(c.w.clone());
+        self.map.insert(key, id);
+        Ok(id)
     }
-    result
 }
 
 impl Node<Detail> for Divide {
@@ -328,235 +406,101 @@ impl Node<Detail> for Divide {
             k @ 3..=MAX_SIDES => k as usize,
             k => return Err(bad(format!("divide: `numsides` {k} out of range 3..={MAX_SIDES}"))),
         };
-        let planar_mode = toggle(ctx.params, "planar")?;
-        let planar_tol = ctx.params.float("planartol").map(f64::from).unwrap_or(0.0001);
+        let planar = toggle(ctx.params, "planar")?;
+        let planartol = float(ctx.params, "planartol")?;
+        if planartol < 0.0 {
+            return Err(bad(format!("divide: `planartol` {planartol} must be >= 0")));
+        }
         let remove_shared = toggle(ctx.params, "removesharededges")?;
-        let bricker_mode = toggle(ctx.params, "bricker")?;
-        let brick_size = v3(ctx.params, "size")?;
-        let brick_offset = v3(ctx.params, "offset")?;
-
+        let bricker = toggle(ctx.params, "bricker")?;
+        let (size, offset) = (v3(ctx.params, "size")?, v3(ctx.params, "offset")?);
+        if bricker && size.iter().any(|&s| !(s > 0.0)) {
+            return Err(bad(format!("divide: brick `size` {size:?} must be > 0 on every axis")));
+        }
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let pos = positions(src);
-
-        // Bricker or removesharededges path: build new geometry from scratch
-        if bricker_mode || remove_shared {
-            let mut piece_data: Vec<(Vec<V3>, usize)> = Vec::new();
-
-            for (qi, pr) in src.prims.iter().enumerate() {
-                let corners = closed_poly_pts(src, pr);
-                let Some(c) = corners.as_ref() else { continue };
-                let cp: Vec<V3> = c.iter().filter_map(|&p| pos.get(p).copied()).collect();
-                if cp.len() < 3 {
-                    continue;
-                }
-
-                // Planar check
-                if planar_mode
-                    && let Some(plane) = best_fit_plane(&cp)
-                    && max_deviation(&cp, plane) > planar_tol
-                {
-                    continue;
-                }
-
-                // Bricker mode: clip by brick grid
-                if bricker_mode {
-                    let pieces_pos = brick_clip(&cp, brick_size, brick_offset);
-                    for piece_pos in pieces_pos {
-                        piece_data.push((piece_pos, qi));
-                    }
-                } else {
-                    // Normal divide logic for removesharededges
-                    let pieces: Vec<Vec<usize>> = match c.len() > k || (convex && c.len() > 3) {
-                        true => {
-                            let flat = project(&cp).filter(|_| convex && cp.len() <= MAX_EAR_CLIP);
-                            match flat {
-                                Some((f, s)) if !is_convex(&f, s) => {
-                                    ear_clip(&f, s).unwrap_or_else(|| chunk_fan(c.len(), 3))
-                                }
-                                _ if c.len() > k => chunk_fan(c.len(), k),
-                                _ => vec![(0..c.len()).collect()],
-                            }
-                        }
-                        false => vec![(0..c.len()).collect()],
-                    };
-                    for piece in pieces {
-                        let piece_pos: Vec<V3> = piece.iter().map(|&ci| cp[ci]).collect();
-                        piece_data.push((piece_pos, qi));
-                    }
-                }
-
-                if u64::try_from(piece_data.len()).unwrap_or(u64::MAX) > MAX_ELEMS {
-                    return Err(failed("divide", "output too large"));
-                }
-            }
-
-            // removesharededges: merge coplanar pieces that share edges
-            if remove_shared && piece_data.len() > 1 {
-                let mut merged = vec![false; piece_data.len()];
-                let mut merge_groups: Vec<Vec<usize>> = Vec::new();
-
-                for i in 0..piece_data.len() {
-                    if merged[i] {
-                        continue;
-                    }
-                    let mut group = vec![i];
-                    merged[i] = true;
-
-                    let mut changed = true;
-                    while changed {
-                        changed = false;
-                        for j in 0..piece_data.len() {
-                            if merged[j] || piece_data[i].1 != piece_data[j].1 {
-                                continue;
-                            }
-                            for &gi in &group {
-                                if let Some((_ea, _eb)) = shared_edge(&piece_data[gi].0, &piece_data[j].0)
-                                    && coplanar(&piece_data[gi].0, &piece_data[j].0)
-                                {
-                                    group.push(j);
-                                    merged[j] = true;
-                                    changed = true;
-                                    break;
-                                }
-                            }
-                            if changed {
-                                break;
-                            }
-                        }
-                    }
-                    merge_groups.push(group);
-                }
-
-                let mut final_pieces = Vec::new();
-                for group in merge_groups {
-                    if group.len() == 1 {
-                        final_pieces.push(piece_data[group[0]].clone());
-                    } else {
-                        let mut current = piece_data[group[0]].0.clone();
-                        let parent = piece_data[group[0]].1;
-                        for &gi in &group[1..] {
-                            if let Some((ea, eb)) = shared_edge(&current, &piece_data[gi].0) {
-                                current = merge_polygons(&current, &piece_data[gi].0, ea, eb);
-                            }
-                        }
-                        final_pieces.push((current, parent));
-                    }
-                }
-                piece_data = final_pieces;
-            }
-
-            // Build output geometry from piece_data
-            let mut detail = Detail::default();
-            let mut all_points = Vec::new();
-            for (piece_pos, _parent) in &piece_data {
-                for &pt in piece_pos {
-                    all_points.push([pt[0] as f32, pt[1] as f32, pt[2] as f32]);
-                }
-            }
-            detail.add_points(all_points.len() as u32);
-            *detail.p_mut() = all_points;
-            let mut offset = 0u32;
-            for (piece_pos, _parent) in &piece_data {
-                let verts: Vec<u32> = (offset..offset + piece_pos.len() as u32).collect();
-                detail.add_poly(&verts, true);
-                offset += piece_pos.len() as u32;
-            }
-            return Ok(Arc::new(detail));
-        }
-
-        // Normal divide path (no bricker, no removesharededges)
-        let (mut vertex_point, mut prims) = (Vec::<u32>::new(), Vec::<Prim>::new());
-        let (mut vert_src, mut prim_src) = (Vec::<Option<usize>>::new(), Vec::<Option<usize>>::new());
+        let mut o = Out::new(src.point_count);
         let mut split = false;
-
         for (qi, pr) in src.prims.iter().enumerate() {
             let lo = pr.verts.start as usize;
-            let corners = closed_poly_pts(src, pr);
-            let Some(c) = corners.as_ref() else {
-                let start = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                let range = pr.verts.start as usize..pr.verts.end as usize;
-                for v in range {
-                    vertex_point.push(src.vertex_point.get(v).copied().unwrap_or(0));
-                    vert_src.push(Some(v));
-                }
-                let end = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                prims.push(Prim { kind: pr.kind.clone(), verts: start..end });
-                prim_src.push(Some(qi));
+            let Some(c) = closed_poly_pts(src, pr) else {
+                o.pass(src, qi, pr)?;
                 continue;
             };
-
             let cp: Vec<V3> = c.iter().filter_map(|&p| pos.get(p).copied()).collect();
-            if cp.len() < 3 {
-                let start = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                let range = pr.verts.start as usize..pr.verts.end as usize;
-                for v in range {
-                    vertex_point.push(src.vertex_point.get(v).copied().unwrap_or(0));
-                    vert_src.push(Some(v));
-                }
-                let end = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                prims.push(Prim { kind: pr.kind.clone(), verts: start..end });
-                prim_src.push(Some(qi));
+            if cp.len() != c.len() {
+                o.pass(src, qi, pr)?;
                 continue;
             }
-
-            // Planar check
-            if planar_mode
-                && let Some(plane) = best_fit_plane(&cp)
-                && max_deviation(&cp, plane) > planar_tol
-            {
-                split = true; // Output differs from input
+            if planar && best_fit_plane(&cp).is_some_and(|pl| max_deviation(&cp, pl) > planartol) {
+                o.pass(src, qi, pr)?;
                 continue;
             }
-
-            let pieces: Vec<Vec<usize>> = match c.len() > k || (convex && c.len() > 3) {
-                true => {
-                    let flat = project(&cp).filter(|_| convex && cp.len() <= MAX_EAR_CLIP);
-                    match flat {
-                        Some((f, s)) if !is_convex(&f, s) => ear_clip(&f, s).unwrap_or_else(|| chunk_fan(c.len(), 3)),
-                        _ if c.len() > k => chunk_fan(c.len(), k),
-                        _ => vec![(0..c.len()).collect()],
-                    }
+            let corner = |ci: usize| (u32::try_from(c[ci]).unwrap_or(0), lo + ci);
+            if bricker {
+                let start: Vec<BCorner> = (0..c.len())
+                    .map(|ci| BCorner { pos: cp[ci], w: vec![(c[ci], 1.0)], vsrc: lo + ci, pt: Some(corner(ci).0) })
+                    .collect();
+                let pieces = brick_pieces(start, size, offset)?;
+                if pieces.len() <= 1 {
+                    o.pass(src, qi, pr)?;
+                    continue;
                 }
-                false => vec![(0..c.len()).collect()],
-            };
-
-            if pieces.len() > 1 {
                 split = true;
+                for piece in &pieces {
+                    let mut cs = Vec::with_capacity(piece.len());
+                    for bc in piece {
+                        cs.push((o.point_of(bc)?, bc.vsrc));
+                    }
+                    o.emit(qi, &cs)?;
+                }
+                continue;
+            }
+            let mut pieces: Vec<Vec<usize>> = if c.len() > k || (convex && c.len() > 3) {
+                let flat = project(&cp).filter(|_| convex && cp.len() <= MAX_EAR_CLIP);
+                match flat {
+                    Some((f, s)) if !is_convex(&f, s) => ear_clip(&f, s).unwrap_or_else(|| chunk_fan(c.len(), 3)),
+                    _ if c.len() > k => chunk_fan(c.len(), k),
+                    _ => vec![(0..c.len()).collect()],
+                }
+            } else {
+                vec![(0..c.len()).collect()]
+            };
+            if remove_shared && pieces.len() > 1 {
+                pieces = merge_pieces(pieces, &cp);
             }
             if pieces.len() <= 1 {
-                let start = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                let range = pr.verts.start as usize..pr.verts.end as usize;
-                for v in range {
-                    vertex_point.push(src.vertex_point.get(v).copied().unwrap_or(0));
-                    vert_src.push(Some(v));
-                }
-                let end = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                prims.push(Prim { kind: pr.kind.clone(), verts: start..end });
-                prim_src.push(Some(qi));
+                o.pass(src, qi, pr)?;
                 continue;
             }
-
+            split = true;
             for piece in pieces {
-                let start = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                for ci in piece {
-                    vertex_point.push(c.get(ci).and_then(|&p| u32::try_from(p).ok()).unwrap_or(0));
-                    vert_src.push(Some(lo + ci));
-                }
-                let end = u32::try_from(vertex_point.len()).map_err(|_| failed("divide", "vertex id overflow"))?;
-                prims.push(Prim { kind: PrimKind::Poly { closed: true }, verts: start..end });
-                prim_src.push(Some(qi));
-            }
-            if u64::try_from(vertex_point.len()).unwrap_or(u64::MAX) > MAX_ELEMS {
-                return Err(failed("divide", "output too large"));
+                let cs: Vec<(u32, usize)> = piece.into_iter().map(corner).collect();
+                o.emit(qi, &cs)?;
             }
         }
-
         if !split {
             return Ok(Arc::clone(src));
         }
-        let rm = Remap { point_src: (0..pos.len()).map(|i| vec![i]).collect(), vert_src, prim_src };
-        let p = src.p().to_vec();
-        Ok(Arc::new(rebuild("divide", src, vertex_point, prims, &rm, p)?))
+        let n_src = pos.len();
+        let mut p = src.p().to_vec();
+        p.extend_from_slice(&o.newp);
+        let mut weights: Vec<Vec<(usize, f64)>> = (0..n_src).map(|i| vec![(i, 1.0)]).collect();
+        weights.extend(o.neww.iter().cloned());
+        let rm = Remap {
+            point_src: weights.iter().map(|w| w.iter().map(|x| x.0).collect()).collect(),
+            vert_src: o.vert_src,
+            prim_src: o.prim_src,
+        };
+        let mut out = rebuild("divide", src, o.vertex_point, o.prims, &rm, p)?;
+        if !o.newp.is_empty() {
+            for a in out.attrs.iter_mut().filter(|a| a.class == AttrClass::Point) {
+                if let Some(sa) = src.attrs.iter().find(|s| s.name == a.name && s.class == AttrClass::Point) {
+                    a.data = blend_weighted(&sa.data, &weights);
+                }
+            }
+        }
+        Ok(Arc::new(out))
     }
 }
 
@@ -682,91 +626,135 @@ mod tests {
         assert_eq!(cook(&*new(), d, &defaults(&*new())).expect("cooks").prim_count(), 13);
     }
 
+    /// Flat quad (0,0)-(w,h) in XY with a point attr `t` = x coordinate.
+    fn rect(w: f32, h: f32) -> Detail {
+        let mut d = poly(&[[0.0, 0.0, 0.0], [w, 0.0, 0.0], [w, h, 0.0], [0.0, h, 0.0]]);
+        d.add_attr(Attribute {
+            name: "t".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(vec![0.0, w, w, 0.0]),
+            type_info: TypeInfo::None,
+        });
+        d.add_attr(Attribute {
+            name: "pid".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![7]),
+            type_info: TypeInfo::None,
+        });
+        d
+    }
+    fn brick(size: [f32; 3]) -> ParamSet {
+        defaults(&*new()).with("bricker", ParamValue::B(true)).with("size", ParamValue::V3(size))
+    }
+    fn area3(d: &Detail) -> f64 {
+        let pos = positions(d);
+        d.prims
+            .iter()
+            .map(|pr| {
+                let pts: Vec<V3> = closed_poly_pts(d, pr).expect("closed").iter().map(|&p| pos[p]).collect();
+                let nw = newell_corners(&pts);
+                dot(nw, nw).sqrt() / 2.0
+            })
+            .sum()
+    }
+
     #[test]
     fn bricker_on_grid_produces_sixteen_quads() {
-        // 2x2 grid in XY plane, bricker size 0.5 -> 16 pieces
-        let mut d = Detail::default();
-        d.add_points(4);
-        *d.p_mut() = vec![[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 2.0, 0.0], [0.0, 2.0, 0.0]];
-        d.add_poly(&[0, 1, 2, 3], true);
-        let p = defaults(&*new()).with("bricker", ParamValue::B(true)).with("size", ParamValue::V3([0.5, 0.5, 1.0]));
-        let out = cook(&*new(), d, &p).expect("cooks");
-        assert_eq!(out.prim_count(), 16, "4x4 grid of 0.5-sized bricks");
+        let out = cook(&*new(), rect(2.0, 2.0), &brick([0.5, 0.5, 0.5])).expect("cooks");
+        assert_eq!(out.prim_count(), 16, "4x4 grid of 0.5 bricks");
+        assert!(out.prims.iter().all(|p| p.verts.len() == 4), "all quads");
+        assert_eq!(out.point_count, 25, "cut points shared between neighbouring pieces");
+        assert!((area3(&out) - 4.0).abs() < 1e-5);
+        // prim attr carried to every piece
+        let Some(AttrData::I32(pid)) = out.attr(AttrClass::Prim, "pid").map(|a| &a.data) else { panic!("pid") };
+        assert_eq!(pid, &vec![7; 16]);
+    }
+
+    #[test]
+    fn bricker_interpolates_point_attrs_on_cut_points() {
+        let out = cook(&*new(), rect(2.0, 2.0), &brick([0.7, 0.7, 1.0])).expect("cooks");
+        let Some(AttrData::F32(t)) = out.attr(AttrClass::Point, "t").map(|a| &a.data) else { panic!("t") };
+        let p = out.p();
+        assert!(out.point_count > 4 && t.len() == p.len());
+        for (i, pt) in p.iter().enumerate() {
+            assert!((t[i] - pt[0]).abs() < 1e-5, "t[{i}]={} vs x={}", t[i], pt[0]);
+        }
     }
 
     #[test]
     fn bricker_on_cube_preserves_total_area() {
-        let p = defaults(&*new()).with("bricker", ParamValue::B(true)).with("size", ParamValue::V3([0.5, 0.5, 0.5]));
-        let out = cook(&*new(), cube(), &p).expect("cooks");
-        // Unit cube: 6 faces, each 1x1; bricker 0.5 -> each face becomes 4 pieces
-        // Total area should be 6 (unchanged)
-        assert!(out.prim_count() > 6, "more pieces than original");
-        // Can't easily verify area without proper 3D surface area calc; trust geometry
+        for size in [[0.4, 0.4, 0.4], [0.3, 0.7, 0.45]] {
+            let p = brick(size).with("offset", ParamValue::V3([0.05, -0.1, 0.2]));
+            let out = cook(&*new(), cube(), &p).expect("cooks");
+            assert!(out.prim_count() > 6, "more pieces than original");
+            assert!((area3(&out) - 6.0).abs() < 1e-5, "area {}", area3(&out));
+        }
     }
 
     #[test]
-    fn removesharededges_merges_convex_divided_hexagon() {
+    fn bricker_offset_shifts_the_grid_and_bad_size_errors() {
+        let p = brick([1.0, 1.0, 1.0]).with("offset", ParamValue::V3([0.5, 0.5, 0.0]));
+        assert_eq!(cook(&*new(), rect(1.0, 1.0), &p).expect("cooks").prim_count(), 4);
+        for s in [[0.0, 1.0, 1.0], [1.0, -1.0, 1.0], [1.0, f32::NAN, 1.0]] {
+            assert!(matches!(cook(&*new(), rect(1.0, 1.0), &brick(s)), Err(CookError::BadParam(_))), "{s:?}");
+        }
+        // a poly inside one brick is passed through (Arc shared)
+        let a = Arc::new(rect(0.5, 0.5));
+        assert!(Arc::ptr_eq(&cook_arc(&*new(), &a, &brick([1.0, 1.0, 1.0])).expect("cooks"), &a));
+    }
+
+    fn hexagon() -> Detail {
         let hex: Vec<[f32; 3]> = (0..6)
             .map(|i| {
                 let t = std::f32::consts::TAU * i as f32 / 6.0;
                 [t.cos(), t.sin(), 0.0]
             })
             .collect();
-        let p = defaults(&*new())
-            .with("convex", ParamValue::B(true))
-            .with("numsides", ParamValue::I(3))
-            .with("removesharededges", ParamValue::B(true));
-        let out = cook(&*new(), poly(&hex), &p).expect("cooks");
-        // Convex hexagon divided into 4 triangles, all coplanar and sharing edges -> should merge back to 1
-        assert_eq!(out.prim_count(), 1, "merged back to one polygon");
+        poly(&hex)
     }
 
     #[test]
-    fn planar_detection_works() {
-        let planar = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
-        let bent = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.5], [0.0, 1.0, 0.0]];
+    fn removesharededges_merges_convex_divided_hexagon() {
+        let off = with(true, 3);
+        assert_eq!(cook(&*new(), hexagon(), &off).expect("cooks").prim_count(), 4, "divided without the toggle");
+        let p = off.with("removesharededges", ParamValue::B(true));
+        let out = cook(&*new(), hexagon(), &p).expect("cooks");
+        assert_eq!(out.prim_count(), 1, "merged back to one polygon");
+        assert_eq!(out.prims[0].verts.len(), 6);
+        assert!((area_xy(&out, 0).abs() - 2.598_076).abs() < 1e-4);
+        // concave L (ear-clipped into 4 tris) merges back to one 6-gon
+        let l = cook(&*new(), l_shape(), &p).expect("cooks");
+        assert_eq!((l.prim_count(), l.prims[0].verts.len()), (1, 6));
+        // a cube's coplanar triangle pairs merge back to its 6 quads
+        assert_eq!(cook(&*new(), cube(), &p).expect("cooks").prim_count(), 6);
+    }
 
-        let plane_planar = best_fit_plane(&planar).expect("planar quad has plane");
-        let dev_planar = max_deviation(&planar, plane_planar);
-        assert!(dev_planar < 1e-6, "planar quad deviation {}", dev_planar);
-
-        let plane_bent = best_fit_plane(&bent).expect("bent quad has plane");
-        let dev_bent = max_deviation(&bent, plane_bent);
-        assert!(dev_bent > 0.1, "bent quad deviation {} should be > 0.1", dev_bent);
+    #[test]
+    fn removesharededges_keeps_non_coplanar_pieces() {
+        let bent = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.5], [0.0, 1.0, 0.0]];
+        let p = with(true, 3).with("removesharededges", ParamValue::B(true));
+        assert_eq!(cook(&*new(), poly(&bent), &p).expect("cooks").prim_count(), 2);
     }
 
     #[test]
     fn planar_mode_skips_bent_quad() {
-        // Quad with one corner out of plane
-        let mut d = Detail::default();
-        d.add_points(4);
-        *d.p_mut() = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.5], [0.0, 1.0, 0.0]];
-        d.add_poly(&[0, 1, 2, 3], true);
-
-        // Verify geometry detection works
-        let cp = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.5], [0.0, 1.0, 0.0]];
-        let plane = best_fit_plane(&cp).expect("has plane");
-        let dev = max_deviation(&cp, plane);
-        assert!(dev > 0.01, "bent quad dev={} should exceed planartol", dev);
-
-        let p = ParamSet::new()
-            .with("convex", ParamValue::B(true))
-            .with("numsides", ParamValue::I(3))
-            .with("planar", ParamValue::B(true))
-            .with("planartol", ParamValue::F(0.01))
-            .with("bricker", ParamValue::B(false))
-            .with("removesharededges", ParamValue::B(false))
-            .with("size", ParamValue::V3([1.0, 1.0, 1.0]))
-            .with("offset", ParamValue::V3([0.0, 0.0, 0.0]))
-            .with("dupcut", ParamValue::B(false));
-        let out = cook(&*new(), d, &p).expect("cooks");
-        if out.prim_count() != 0 {
-            eprintln!("ERROR: expected 0 prims, got {}. Point count={}", out.prim_count(), out.point_count);
-            for (i, pr) in out.prims.iter().enumerate() {
-                eprintln!("  Prim {}: {:?}", i, pr);
-            }
-        }
-        assert_eq!(out.prim_count(), 0, "bent quad skipped");
+        let bent = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.5], [0.0, 1.0, 0.0]];
+        let flat = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
+        let on = with(true, 3).with("planar", ParamValue::B(true));
+        // bent quad skipped = left as one quad (Arc shared); flat quad still divided
+        let a = Arc::new(poly(&bent));
+        assert!(Arc::ptr_eq(&cook_arc(&*new(), &a, &on).expect("cooks"), &a));
+        assert_eq!(cook(&*new(), poly(&flat), &on).expect("cooks").prim_count(), 2);
+        // without the toggle the bent quad is divided; a loose tolerance divides it too
+        assert_eq!(cook(&*new(), poly(&bent), &with(true, 3)).expect("cooks").prim_count(), 2);
+        let loose = on.clone().with("planartol", ParamValue::F(1.0));
+        assert_eq!(cook(&*new(), poly(&bent), &loose).expect("cooks").prim_count(), 2);
+        let neg = on.with("planartol", ParamValue::F(-1.0));
+        assert!(matches!(cook(&*new(), poly(&flat), &neg), Err(CookError::BadParam(_))));
+        // planar also skips bricker clipping of a bent prim
+        let pb = brick([0.5, 0.5, 0.5]).with("planar", ParamValue::B(true));
+        let a = Arc::new(poly(&bent));
+        assert!(Arc::ptr_eq(&cook_arc(&*new(), &a, &pb).expect("cooks"), &a));
     }
 
     #[test]
