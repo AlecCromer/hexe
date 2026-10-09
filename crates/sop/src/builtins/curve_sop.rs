@@ -17,7 +17,14 @@ pub(super) const MAX_POINTS: usize = 1 << 20;
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("coords", ParamValue::S(String::new())).label("Coordinates"),
+        ParamSpec::new("type", ParamValue::Menu(0)).label("Type").menu(&[
+            ("poly", "Polygon"),
+            ("bezier", "Bezier"),
+            ("nurbs", "NURBS"),
+        ]),
+        ParamSpec::new("order", ParamValue::I(4)).label("Order").range(2.0, 11.0),
         ParamSpec::new("close", ParamValue::B(false)).label("Closed"),
+        ParamSpec::new("divisions", ParamValue::I(10)).label("Divisions").range(1.0, 100.0),
     ]
 }
 
@@ -27,6 +34,40 @@ pub fn new() -> Box<SopNode> {
 
 struct Curve {
     specs: Vec<ParamSpec>,
+}
+
+/// De Casteljau algorithm: evaluate Bezier curve at parameter t ∈ [0,1].
+fn de_casteljau(control_pts: &[[f32; 3]], t: f32) -> [f32; 3] {
+    if control_pts.is_empty() {
+        return [0.0; 3];
+    }
+    if control_pts.len() == 1 {
+        return control_pts[0];
+    }
+    let mut pts = control_pts.to_vec();
+    let n = pts.len();
+    for r in 1..n {
+        for i in 0..(n - r) {
+            for k in 0..3 {
+                pts[i][k] = (1.0 - t) * pts[i][k] + t * pts[i + 1][k];
+            }
+        }
+    }
+    pts[0]
+}
+
+/// Subdivide a Bezier curve into line segments.
+fn subdivide_bezier(control_pts: &[[f32; 3]], divisions: usize, closed: bool) -> Vec<[f32; 3]> {
+    if control_pts.is_empty() || divisions == 0 {
+        return vec![];
+    }
+    let mut result = Vec::new();
+    let steps = if closed { divisions } else { divisions + 1 };
+    for i in 0..steps {
+        let t = i as f32 / divisions as f32;
+        result.push(de_casteljau(control_pts, t));
+    }
+    result
 }
 
 /// Parse `"x,y,z x,y,z ..."` (shared with the Add SOP). `who` prefixes errors (`curve.coords`).
@@ -70,11 +111,26 @@ impl Node<Detail> for Curve {
             p.string("coords").ok_or_else(|| CookError::BadParam("curve.coords: missing or not a string".into()))?;
         let close =
             p.toggle("close").ok_or_else(|| CookError::BadParam("curve.close: missing or not a toggle".into()))?;
-        let pts = parse_coords("curve.coords", coords)?;
+        let curve_type = p.menu("type").unwrap_or(0);
+        let divisions = p.int("divisions").unwrap_or(10).max(1).min(1000) as usize;
+        
+        let control_pts = parse_coords("curve.coords", coords)?;
         let mut g = Detail::default();
+        if control_pts.is_empty() {
+            return Ok(Arc::new(g));
+        }
+        
+        let pts = match curve_type {
+            0 => control_pts, // poly: use control points directly
+            1 => subdivide_bezier(&control_pts, divisions, close), // bezier
+            2 => control_pts, // nurbs: TODO, use control points for now
+            _ => return Err(CookError::BadParam("curve.type: invalid type".into())),
+        };
+        
         if pts.is_empty() {
             return Ok(Arc::new(g));
         }
+        
         let n = u32::try_from(pts.len()).map_err(|_| CookError::Failed("curve: too many points".into()))?;
         let ids = g.add_points(n);
         *g.p_mut() = pts;
@@ -122,5 +178,17 @@ mod tests {
         let many = "0,0,0 ".repeat(MAX_POINTS + 1);
         assert!(matches!(parse_coords("t", &many), Err(CookError::Failed(_))));
         assert_eq!(parse_coords("t", &many[..many.len() - 6]).map(|v| v.len()).ok(), Some(MAX_POINTS));
+    }
+    
+    #[test]
+    fn bezier_endpoints_hit_control_points() {
+        // Bezier curve with 4 control points
+        let d = cook(r#"{"coords":"0,0,0 1,2,0 3,2,0 4,0,0","type":1,"divisions":10}"#).expect("bezier");
+        assert!(d.point_count > 4, "bezier should subdivide");
+        // First and last points should match first and last control points
+        let pts = d.p();
+        assert_eq!(pts[0], [0.0, 0.0, 0.0], "bezier start should be first control point");
+        assert!((pts[pts.len() - 1][0] - 4.0).abs() < 0.01, "bezier end should be near last control point");
+        assert!((pts[pts.len() - 1][1] - 0.0).abs() < 0.01, "bezier end y");
     }
 }
