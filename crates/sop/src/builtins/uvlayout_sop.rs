@@ -21,7 +21,12 @@
 //!   `uniform`(1): each island is scaled uniformly by `sqrt(3D area / uv area)` so every island has the same texel density
 //!   (before packing; `fit` then normalises). `useprimscale` B on: prim float attr `uvscale` of the island's FIRST prim
 //!   multiplies the island scale (per-island scale). `group` S: prim group of participating prims (others keep their uv).
-//!   NOT modelled: target texture resolution / texel-snapped gutters, optimal rect packing beyond first-fit shelves.
+//!   `packmode` maxrects (2, DEFAULT; shelf / ffdh stay selectable): MaxRects best-short-side-fit, islands by area descending
+//!   into a square bin grown x1.05 until all fit (<= 4096 islands, else shelf). `resolution` I (0 = off): texture side in
+//!   texels; then `padding` is a fraction of the texture snapped UP to whole texels (ceil), `margin` likewise, every island
+//!   is a whole-texel rect at a whole-texel origin packed by maxrects into the bin (always maxrects, any packmode); `fit` on
+//!   = largest uniform scale whose rects fit (bisection; texture too small -> `Failed`), off = 1 input unit = the texture.
+//!   NOT modelled: rotation inside the packer (only the pre-pack `rotate`), non-square textures.
 //!
 //! Output = the input with vertex `uv` replaced; everything else untouched. Hostile: negative / non-finite `padding`,
 //! non-toggle `fit` -> `BadParam`; island count above `MAX_ISLANDS` -> `Failed`.
@@ -42,9 +47,12 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("fit", ParamValue::B(true)).label("Fit To Unit Square"),
         ParamSpec::new("margin", ParamValue::F(0.0)).label("Margin").range(0.0, 0.5),
         ParamSpec::new("rotate", ParamValue::B(false)).label("Rotate Islands 90 Degrees (landscape)"),
-        ParamSpec::new("packmode", ParamValue::Menu(PACK_SHELF))
-            .label("Packing")
-            .menu(&[("shelf", "Shelf (next fit)"), ("ffdh", "Shelf (first fit)")]),
+        ParamSpec::new("packmode", ParamValue::Menu(PACK_MAXRECTS)).label("Packing").menu(&[
+            ("shelf", "Shelf (next fit)"),
+            ("ffdh", "Shelf (first fit)"),
+            ("maxrects", "MaxRects"),
+        ]),
+        ParamSpec::new("resolution", ParamValue::I(0)).label("Texture Resolution").range(0.0, 8192.0),
         ParamSpec::new("density", ParamValue::Menu(DENSITY_NONE))
             .label("Texel Density")
             .menu(&[("none", "Keep Island Scale"), ("uniform", "Uniform Texel Density")]),
@@ -111,6 +119,197 @@ const DENSITY_NONE: u32 = 0;
 const DENSITY_UNIFORM: u32 = 1;
 const PACK_SHELF: u32 = 0;
 const PACK_FFDH: u32 = 1;
+const PACK_MAXRECTS: u32 = 2;
+/// maxrects keeps an O(n) free list per placement; above this island count the shelf modes are used (res > 0: `Failed`).
+const MAXRECTS_LIMIT: usize = 4096;
+const MAX_RESOLUTION: i32 = 16384;
+const PACK_EPS: f64 = 1e-9;
+
+#[derive(Clone, Copy)]
+struct Rect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+/// Result of a rect packer: island slots (input units, min corner), used extent, and `(scale, offset)` when the packer
+/// fixes the final transform itself (texel mode).
+struct Packed {
+    slots: Vec<[f64; 2]>,
+    used_w: f64,
+    used_h: f64,
+    fixed: Option<(f64, f64)>,
+}
+fn overlaps(a: &Rect, b: &Rect) -> bool {
+    a.x < b.x + b.w - PACK_EPS && b.x < a.x + a.w - PACK_EPS && a.y < b.y + b.h - PACK_EPS && b.y < a.y + a.h - PACK_EPS
+}
+fn contains(a: &Rect, b: &Rect) -> bool {
+    b.x >= a.x - PACK_EPS
+        && b.y >= a.y - PACK_EPS
+        && b.x + b.w <= a.x + a.w + PACK_EPS
+        && b.y + b.h <= a.y + a.h + PACK_EPS
+}
+/// MaxRects, best-short-side-fit: place `items` (w, h incl. gutter) in `order` into a `bw x bh` bin; `None` when one does
+/// not fit. Returns the min corner of every item.
+fn maxrects(items: &[(f64, f64)], order: &[usize], bw: f64, bh: f64) -> Option<Vec<[f64; 2]>> {
+    let mut free = vec![Rect { x: 0.0, y: 0.0, w: bw, h: bh }];
+    let mut out = vec![[0.0; 2]; items.len()];
+    for &k in order {
+        let (w, h) = items.get(k).copied()?;
+        let mut best: Option<(f64, f64, usize)> = None;
+        for (i, f) in free.iter().enumerate() {
+            if w <= f.w + PACK_EPS && h <= f.h + PACK_EPS {
+                let (lw, lh) = (f.w - w, f.h - h);
+                let key = (lw.min(lh), lw.max(lh));
+                let better = best.is_none_or(|b| {
+                    key.0 < b.0 - PACK_EPS || ((key.0 - b.0).abs() <= PACK_EPS && key.1 < b.1 - PACK_EPS)
+                });
+                if better {
+                    best = Some((key.0, key.1, i));
+                }
+            }
+        }
+        let f = *free.get(best?.2)?;
+        let placed = Rect { x: f.x, y: f.y, w, h };
+        if let Some(o) = out.get_mut(k) {
+            *o = [f.x, f.y];
+        }
+        let mut next: Vec<Rect> = Vec::with_capacity(free.len() + 4);
+        for r in &free {
+            if !overlaps(r, &placed) {
+                next.push(*r);
+                continue;
+            }
+            if placed.x > r.x + PACK_EPS {
+                next.push(Rect { x: r.x, y: r.y, w: placed.x - r.x, h: r.h });
+            }
+            if placed.x + placed.w < r.x + r.w - PACK_EPS {
+                next.push(Rect { x: placed.x + placed.w, y: r.y, w: r.x + r.w - placed.x - placed.w, h: r.h });
+            }
+            if placed.y > r.y + PACK_EPS {
+                next.push(Rect { x: r.x, y: r.y, w: r.w, h: placed.y - r.y });
+            }
+            if placed.y + placed.h < r.y + r.h - PACK_EPS {
+                next.push(Rect { x: r.x, y: placed.y + placed.h, w: r.w, h: r.y + r.h - placed.y - placed.h });
+            }
+        }
+        // drop free rects contained in another (first of identical ones stays)
+        let keep: Vec<bool> = (0..next.len())
+            .map(|i| {
+                !(0..next.len()).any(|j| {
+                    j != i
+                        && matches!((next.get(j), next.get(i)), (Some(a), Some(b)) if contains(a, b) && (!contains(b, a) || j < i))
+                })
+            })
+            .collect();
+        free = next.into_iter().zip(keep).filter_map(|(r, k)| k.then_some(r)).collect();
+    }
+    Some(out)
+}
+/// Placement order: largest area first, ties by first prim.
+fn area_order(dims: &[(f64, f64)], first: &[usize]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..dims.len()).collect();
+    order.sort_by(|&a, &b| {
+        let (da, db) = (dims.get(a).copied().unwrap_or((0.0, 0.0)), dims.get(b).copied().unwrap_or((0.0, 0.0)));
+        (db.0 * db.1)
+            .total_cmp(&(da.0 * da.1))
+            .then(db.1.max(db.0).total_cmp(&da.1.max(da.0)))
+            .then(first.get(a).cmp(&first.get(b)))
+    });
+    order
+}
+/// Float maxrects (`packmode` maxrects): square bin grown x1.05 until everything fits (gutter `padding` between rects).
+fn pack_maxrects(dims: &[(f64, f64)], first: &[usize], padding: f64) -> Packed {
+    let items: Vec<(f64, f64)> = dims.iter().map(|d| (d.0 + padding, d.1 + padding)).collect();
+    let order = area_order(&items, first);
+    let total: f64 = items.iter().map(|d| d.0 * d.1).sum();
+    let big = items.iter().fold(0.0f64, |m, d| m.max(d.0).max(d.1));
+    let mut side = big.max(total.sqrt()).max(1e-12);
+    let mut slots = vec![[0.0; 2]; dims.len()];
+    for _ in 0..80 {
+        if let Some(sl) = maxrects(&items, &order, side, side) {
+            slots = sl;
+            break;
+        }
+        side *= 1.05;
+    }
+    let (mut uw, mut uh) = (0.0f64, 0.0f64);
+    for (s, d) in slots.iter().zip(dims) {
+        uw = uw.max(s[0] + d.0);
+        uh = uh.max(s[1] + d.1);
+    }
+    Packed { slots, used_w: uw, used_h: uh, fixed: None }
+}
+/// Texel packing (`resolution` > 0): gutter = `ceil(padding * res)` whole texels, margin = `ceil(margin * res)` texels, every
+/// island rect a whole number of texels at a whole-texel origin (maxrects into the `res` bin). `fit`: the largest uniform
+/// scale (texels per input unit) whose rects fit the bin (bisection); else 1 input unit = the whole texture (`res` texels)
+/// and the bin grows as needed.
+fn pack_texels(
+    dims: &[(f64, f64)],
+    first: &[usize],
+    res: f64,
+    padding: f64,
+    margin: f64,
+    fit: bool,
+) -> Result<Packed, CookError> {
+    let pad = (padding * res - PACK_EPS).ceil().max(0.0);
+    let mt = (margin * res - PACK_EPS).ceil().max(0.0);
+    let avail = res - 2.0 * mt;
+    let rects = |s: f64| -> Vec<(f64, f64)> {
+        dims.iter().map(|d| ((d.0 * s - PACK_EPS).ceil().max(1.0), (d.1 * s - PACK_EPS).ceil().max(1.0))).collect()
+    };
+    type Placed = (Vec<[f64; 2]>, Vec<(f64, f64)>);
+    let place = |s: f64, side: f64| -> Option<Placed> {
+        let r = rects(s);
+        let items: Vec<(f64, f64)> = r.iter().map(|d| (d.0 + pad, d.1 + pad)).collect();
+        let order = area_order(&items, first);
+        maxrects(&items, &order, side + pad, side + pad).map(|sl| (sl, r))
+    };
+    let (ts, slots_t, rects_t) = if fit {
+        let big = dims.iter().fold(0.0f64, |m, d| m.max(d.0).max(d.1));
+        let hi = if big > 0.0 && big.is_finite() { avail / big } else { 1.0 };
+        let mut best = place(hi, avail).map(|(sl, r)| (hi, sl, r));
+        if best.is_none() {
+            let (mut lo, mut up) = (0.0f64, hi);
+            for _ in 0..40 {
+                let mid = 0.5 * (lo + up);
+                match place(mid, avail) {
+                    Some((sl, r)) => {
+                        best = Some((mid, sl, r));
+                        lo = mid;
+                    }
+                    None => up = mid,
+                }
+            }
+        }
+        best.ok_or_else(|| failed(OP, "`resolution` too small for the island count + padding"))?
+    } else {
+        let r = rects(res);
+        let items: Vec<(f64, f64)> = r.iter().map(|d| (d.0 + pad, d.1 + pad)).collect();
+        let order = area_order(&items, first);
+        let total: f64 = items.iter().map(|d| d.0 * d.1).sum();
+        let big = items.iter().fold(0.0f64, |m, d| m.max(d.0).max(d.1));
+        let mut side = big.max(total.sqrt()).ceil();
+        let mut found = None;
+        for _ in 0..80 {
+            if let Some(sl) = maxrects(&items, &order, side + pad, side + pad) {
+                found = Some(sl);
+                break;
+            }
+            side = (side * 1.05).ceil() + 1.0;
+        }
+        let sl = found.ok_or_else(|| failed(OP, "texel packing found no bin"))?;
+        (res, sl, r)
+    };
+    let (mut uw, mut uh) = (0.0f64, 0.0f64);
+    for (s, d) in slots_t.iter().zip(&rects_t) {
+        uw = uw.max(s[0] + d.0);
+        uh = uh.max(s[1] + d.1);
+    }
+    // slots back in input units (final transform: (t - min + slot) * ts / res + mt / res)
+    let slots = slots_t.iter().map(|s| [s[0] / ts, s[1] / ts]).collect();
+    Ok(Packed { slots, used_w: uw / ts, used_h: uh / ts, fixed: Some((ts / res, mt / res)) })
+}
 
 impl Node<Detail> for UvLayout {
     fn type_name(&self) -> &'static str {
@@ -134,14 +333,22 @@ impl Node<Detail> for UvLayout {
         }
         let (rotate, use_prim_scale) = (toggle(ctx.params, "rotate")?, toggle(ctx.params, "useprimscale")?);
         let packmode = match ctx.params.menu("packmode") {
-            Some(v @ (PACK_SHELF | PACK_FFDH)) => v,
-            _ => return Err(bad(format!("{OP}: `packmode`: missing or menu index out of range 0..=1"))),
+            Some(v @ (PACK_SHELF | PACK_FFDH | PACK_MAXRECTS)) => v,
+            _ => return Err(bad(format!("{OP}: `packmode`: missing or menu index out of range 0..=2"))),
         };
         let density = match ctx.params.menu("density") {
             Some(v @ (DENSITY_NONE | DENSITY_UNIFORM)) => v,
             _ => return Err(bad(format!("{OP}: `density`: missing or menu index out of range 0..=1"))),
         };
         let group = ctx.params.string("group").ok_or_else(|| bad(format!("{OP}: `group`: missing or not a string")))?;
+        let res = ctx.params.int("resolution").unwrap_or(0);
+        if !(0..=MAX_RESOLUTION).contains(&res) {
+            return Err(bad(format!("{OP}: `resolution` must be in 0..={MAX_RESOLUTION}")));
+        }
+        let res = res as u32;
+        if res > 0 && (margin * f64::from(res)).ceil() * 2.0 >= f64::from(res) {
+            return Err(bad(format!("{OP}: `margin` leaves no texel inside `resolution`")));
+        }
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let uv = input_uv(src).ok_or_else(|| failed(OP, "input has no vertex `uv` (V2 or V3)"))?;
         if uv.len() != src.vertex_point.len() {
@@ -285,57 +492,80 @@ impl Node<Detail> for UvLayout {
                 isl.h = mx[1] - mn[1];
             }
         }
-        // shelf packing
-        let mut order: Vec<usize> = (0..islands.len()).collect();
-        order.sort_by(|&a, &b| {
-            let (ia, ib) = (&islands[a], &islands[b]);
-            ib.h.total_cmp(&ia.h).then(ia.first_prim.cmp(&ib.first_prim))
-        });
-        let area: f64 = islands.iter().map(|i| (i.w + padding) * (i.h + padding)).sum();
-        let widest = islands.iter().map(|i| i.w).fold(0.0, f64::max);
-        let row_w = widest.max(area.sqrt());
-        let mut slots: Vec<[f64; 2]> = vec![[0.0; 2]; islands.len()];
-        let (mut used_w, mut used_h) = (0.0f64, 0.0f64);
-        if packmode == PACK_FFDH {
-            // first-fit decreasing height: every island goes into the FIRST row it still fits, else opens a new row
-            let mut rows: Vec<(f64, f64, f64)> = Vec::new(); // (y, row height, x cursor)
-            for &k in &order {
-                let isl = &islands[k];
-                let at = rows.iter().position(|r| r.2 <= 0.0 || r.2 + isl.w <= row_w + 1e-12);
-                let ri = match at {
-                    Some(i) => i,
-                    None => {
-                        let y = rows.last().map_or(0.0, |r| r.0 + r.1 + padding);
-                        rows.push((y, isl.h, 0.0));
-                        rows.len() - 1
-                    }
-                };
-                let r = &mut rows[ri];
-                slots[k] = [r.2, r.0];
-                used_w = used_w.max(r.2 + isl.w);
-                used_h = used_h.max(r.0 + isl.h);
-                r.2 += isl.w + padding;
+        // maxrects / texel packing (None = shelf modes below)
+        let pre: Option<Packed> = if res > 0 || (packmode == PACK_MAXRECTS && islands.len() <= MAXRECTS_LIMIT) {
+            if islands.len() > MAXRECTS_LIMIT {
+                return Err(failed(OP, "too many islands for texel packing"));
             }
+            let dims: Vec<(f64, f64)> = islands.iter().map(|i| (i.w, i.h)).collect();
+            let first: Vec<usize> = islands.iter().map(|i| i.first_prim).collect();
+            Some(if res > 0 {
+                pack_texels(&dims, &first, f64::from(res), padding, margin, fit)?
+            } else {
+                pack_maxrects(&dims, &first, padding)
+            })
         } else {
-            let (mut x, mut y, mut row_h) = (0.0f64, 0.0f64, 0.0f64);
-            for &k in &order {
-                let isl = &islands[k];
-                if x > 0.0 && x + isl.w > row_w + 1e-12 {
-                    y += row_h + padding;
-                    x = 0.0;
-                    row_h = 0.0;
+            None
+        };
+        let (slots, used_w, used_h, fixed) = if let Some(p) = pre {
+            (p.slots, p.used_w, p.used_h, p.fixed)
+        } else {
+            // shelf packing
+            let mut order: Vec<usize> = (0..islands.len()).collect();
+            order.sort_by(|&a, &b| {
+                let (ia, ib) = (&islands[a], &islands[b]);
+                ib.h.total_cmp(&ia.h).then(ia.first_prim.cmp(&ib.first_prim))
+            });
+            let area: f64 = islands.iter().map(|i| (i.w + padding) * (i.h + padding)).sum();
+            let widest = islands.iter().map(|i| i.w).fold(0.0, f64::max);
+            let row_w = widest.max(area.sqrt());
+            let mut slots: Vec<[f64; 2]> = vec![[0.0; 2]; islands.len()];
+            let (mut used_w, mut used_h) = (0.0f64, 0.0f64);
+            if packmode == PACK_FFDH {
+                // first-fit decreasing height: every island goes into the FIRST row it still fits, else opens a new row
+                let mut rows: Vec<(f64, f64, f64)> = Vec::new(); // (y, row height, x cursor)
+                for &k in &order {
+                    let isl = &islands[k];
+                    let at = rows.iter().position(|r| r.2 <= 0.0 || r.2 + isl.w <= row_w + 1e-12);
+                    let ri = match at {
+                        Some(i) => i,
+                        None => {
+                            let y = rows.last().map_or(0.0, |r| r.0 + r.1 + padding);
+                            rows.push((y, isl.h, 0.0));
+                            rows.len() - 1
+                        }
+                    };
+                    let r = &mut rows[ri];
+                    slots[k] = [r.2, r.0];
+                    used_w = used_w.max(r.2 + isl.w);
+                    used_h = used_h.max(r.0 + isl.h);
+                    r.2 += isl.w + padding;
                 }
-                if x == 0.0 {
-                    row_h = isl.h;
+            } else {
+                let (mut x, mut y, mut row_h) = (0.0f64, 0.0f64, 0.0f64);
+                for &k in &order {
+                    let isl = &islands[k];
+                    if x > 0.0 && x + isl.w > row_w + 1e-12 {
+                        y += row_h + padding;
+                        x = 0.0;
+                        row_h = 0.0;
+                    }
+                    if x == 0.0 {
+                        row_h = isl.h;
+                    }
+                    slots[k] = [x, y];
+                    used_w = used_w.max(x + isl.w);
+                    used_h = used_h.max(y + isl.h);
+                    x += isl.w + padding;
                 }
-                slots[k] = [x, y];
-                used_w = used_w.max(x + isl.w);
-                used_h = used_h.max(y + isl.h);
-                x += isl.w + padding;
             }
-        }
+            (slots, used_w, used_h, None)
+        };
         let span = used_w.max(used_h);
-        let s = if fit && span > 0.0 { (1.0 - 2.0 * margin) / span } else { 1.0 };
+        let (s, margin) = match fixed {
+            Some(f) => f,
+            None => (if fit && span > 0.0 { (1.0 - 2.0 * margin) / span } else { 1.0 }, margin),
+        };
         let mut out_uv = uv.clone();
         for (isl, slot) in islands.iter().zip(&slots) {
             if !isl.min[0].is_finite() {
@@ -374,8 +604,13 @@ mod tests {
         let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
         new().cook(&ctx, &[Arc::new(d)])
     }
-    fn defaults() -> ParamSet {
+    /// Node defaults (maxrects packing).
+    fn fresh() -> ParamSet {
         new().params().iter().fold(ParamSet::new(), |p, s| p.with(&s.name, s.default.clone()))
+    }
+    /// Node defaults with the legacy next-fit shelf packer (the pre-maxrects tests pin shelf positions).
+    fn defaults() -> ParamSet {
+        fresh().with("packmode", ParamValue::Menu(PACK_SHELF))
     }
     fn params(padding: f32, fit: bool) -> ParamSet {
         defaults().with("padding", ParamValue::F(padding)).with("fit", ParamValue::B(fit))
@@ -517,7 +752,7 @@ mod tests {
             ("margin", ParamValue::F(0.5)),
             ("margin", ParamValue::F(-0.1)),
             ("margin", ParamValue::F(f32::NAN)),
-            ("packmode", ParamValue::Menu(2)),
+            ("packmode", ParamValue::Menu(3)),
             ("density", ParamValue::Menu(2)),
             ("rotate", ParamValue::I(1)),
             ("group", ParamValue::I(1)),
@@ -526,13 +761,125 @@ mod tests {
         }
     }
 
+    /// Packed-area ratio = sum of the island areas / area of the square the (fitted, margin 0) layout occupies.
+    fn packed_ratio(out: &Detail, n: usize) -> f64 {
+        let b = boxes(out, n);
+        let area: f64 = b.iter().map(|r| f64::from((r.1[0] - r.0[0]) * (r.1[1] - r.0[1]))).sum();
+        let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+        for r in &b {
+            for j in 0..2 {
+                lo[j] = lo[j].min(r.0[j]);
+                hi[j] = hi[j].max(r.1[j]);
+            }
+        }
+        let span = f64::from((hi[0] - lo[0]).max(hi[1] - lo[1]));
+        area / (span * span)
+    }
+    /// MaxRects (new default) vs the shelf packers on the 4,3,3x1,1,1 set (total area 30, padding 0, fit): next-fit shelf
+    /// and FFDH both need an 8-high extent (ratio 30/64 = 0.469), maxrects wraps it in a 7 x 7 square (30/49 = 0.612). No overlaps.
+    #[test]
+    fn maxrects_packs_denser_than_the_shelf_and_never_overlaps() {
+        let sizes = [(4.0, 4.0), (3.0, 3.0), (3.0, 1.0), (1.0, 1.0), (1.0, 1.0)];
+        let p = params(0.0, true);
+        let shelf = cook(islands(&sizes), p.clone()).expect("cooks");
+        let ffdh = cook(islands(&sizes), p.clone().with("packmode", ParamValue::Menu(PACK_FFDH))).expect("cooks");
+        let mr = cook(islands(&sizes), p.with("packmode", ParamValue::Menu(PACK_MAXRECTS))).expect("cooks");
+        let (rs, rf, rm) = (packed_ratio(&shelf, 5), packed_ratio(&ffdh, 5), packed_ratio(&mr, 5));
+        assert!((rs - 30.0 / 64.0).abs() < 1e-5, "shelf {rs}");
+        assert!(rm > rs + 0.1 && rm >= rf, "shelf {rs} ffdh {rf} maxrects {rm}");
+        assert!(rm >= 30.0 / 49.0 - 1e-5, "maxrects {rm}");
+        let b = boxes(&mr, 5);
+        for i in 0..5 {
+            assert!(b[i].0.iter().all(|&c| c >= -1e-6) && b[i].1.iter().all(|&c| c <= 1.0 + 1e-6), "{:?}", b[i]);
+            for j in i + 1..5 {
+                assert!(!overlap(b[i], b[j]), "{i} {j} {:?} {:?}", b[i], b[j]);
+            }
+        }
+        // shapes preserved: every island keeps its aspect ratio
+        for (r, &(w, h)) in b.iter().zip(&sizes) {
+            assert!(((r.1[0] - r.0[0]) * h - (r.1[1] - r.0[1]) * w).abs() < 1e-5, "{r:?}");
+        }
+    }
+    /// 16 islands of mixed sizes with padding: maxrects never overlaps, stays in the unit square, ratio >= the shelf's.
+    #[test]
+    fn maxrects_mixed_sizes_with_padding_fit_in_the_unit_square() {
+        let sizes: Vec<(f32, f32)> =
+            (0..16).map(|i| (0.3 + 0.17 * ((i * 7) % 5) as f32, 0.2 + 0.23 * ((i * 3) % 4) as f32)).collect();
+        let p = params(0.05, true);
+        let mr = cook(islands(&sizes), p.clone().with("packmode", ParamValue::Menu(PACK_MAXRECTS))).expect("cooks");
+        let sh = cook(islands(&sizes), p).expect("cooks");
+        let b = boxes(&mr, 16);
+        for i in 0..16 {
+            assert!(b[i].0.iter().all(|&c| c >= -1e-6) && b[i].1.iter().all(|&c| c <= 1.0 + 1e-6), "{:?}", b[i]);
+            for j in i + 1..16 {
+                assert!(!overlap(b[i], b[j]), "{i} {j}");
+            }
+        }
+        assert!(
+            packed_ratio(&mr, 16) >= packed_ratio(&sh, 16) - 1e-9,
+            "{} vs {}",
+            packed_ratio(&mr, 16),
+            packed_ratio(&sh, 16)
+        );
+    }
+    /// Resolution 64, padding 0.05: the gutter is snapped UP to whole texels (ceil(3.2) = 4 texels = 0.0625), every island
+    /// sits at a whole-texel origin, and four unit islands fill the texture as 2 x 2 rects of 30 texels (30 + 4 + 30 = 64).
+    #[test]
+    fn resolution_snaps_padding_and_island_origins_to_whole_texels() {
+        let p = fresh().with("resolution", ParamValue::I(64)).with("padding", ParamValue::F(0.05));
+        let b = boxes(&cook(islands(&[(1.0, 1.0); 4]), p).expect("cooks"), 4);
+        let mut xs: Vec<f32> = b.iter().map(|r| r.0[0]).collect();
+        xs.sort_by(f32::total_cmp);
+        for r in &b {
+            for c in r.0 {
+                assert!((c * 64.0 - (c * 64.0).round()).abs() < 1e-4, "origin {c} not on a texel");
+            }
+            assert!(r.1[0] <= 1.0 + 1e-6 && r.1[1] <= 1.0 + 1e-6);
+            // content is at most 30 texels (the rect) and at least 29
+            let w = (r.1[0] - r.0[0]) * 64.0;
+            assert!((29.0..=30.0 + 1e-3).contains(&w), "w {w}");
+        }
+        // origins: 0 and 34 texels in both axes
+        assert_eq!(xs, vec![0.0, 0.0, 34.0 / 64.0, 34.0 / 64.0]);
+        for i in 0..4 {
+            for j in i + 1..4 {
+                let (a, c) = (b[i], b[j]);
+                let gap_x = (a.0[0] - c.1[0]).max(c.0[0] - a.1[0]);
+                let gap_y = (a.0[1] - c.1[1]).max(c.0[1] - a.1[1]);
+                assert!(gap_x.max(gap_y) >= 4.0 / 64.0 - 1e-5, "gutter {gap_x} {gap_y} < 4 texels");
+            }
+        }
+    }
+    /// Resolution bounds and a texture too small for the islands + gutters.
+    #[test]
+    fn resolution_rejects_bad_values_and_too_small_textures() {
+        for r in [-1, 16385] {
+            assert!(matches!(
+                cook(islands(&[(1.0, 1.0)]), fresh().with("resolution", ParamValue::I(r))),
+                Err(CookError::BadParam(_))
+            ));
+        }
+        // margin eats the whole texture
+        let p = fresh().with("resolution", ParamValue::I(4)).with("margin", ParamValue::F(0.49));
+        assert!(matches!(cook(islands(&[(1.0, 1.0)]), p), Err(CookError::BadParam(_))));
+        // 9 islands with 1-texel gutters cannot fit 3 x 3 texels... they need 3*1 + 2*1 = 5 texels
+        let p = fresh().with("resolution", ParamValue::I(4)).with("padding", ParamValue::F(0.25));
+        assert!(matches!(cook(islands(&[(1.0, 1.0); 9]), p), Err(CookError::Failed(_))));
+        // fit off: 1 input unit = the whole texture
+        let p = fresh()
+            .with("resolution", ParamValue::I(16))
+            .with("fit", ParamValue::B(false))
+            .with("padding", ParamValue::F(0.0));
+        let b = boxes(&cook(islands(&[(0.5, 0.25)]), p).expect("cooks"), 1);
+        assert_eq!(b[0], ([0.0, 0.0], [0.5, 0.25]));
+    }
     #[test]
     fn params_and_defaults() {
         let n = new();
         assert_eq!(n.type_name(), "uvlayout");
         assert_eq!(
             n.params().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
-            ["padding", "fit", "margin", "rotate", "packmode", "density", "useprimscale", "group"]
+            ["padding", "fit", "margin", "rotate", "packmode", "resolution", "density", "useprimscale", "group"]
         );
     }
     #[test]
