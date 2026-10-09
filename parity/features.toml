@@ -990,6 +990,9 @@ status = "partial"
 commands = ["clip"]
 evidence = [
   "crates/sop/src/builtins/clip_sop.rs::box_keep_above_at_y0_is_top_plus_four_half_sides",
+  "crates/sop/src/builtins/clip_sop.rs::capclip_closes_the_cut_outward_with_exact_volume",
+  "crates/sop/src/builtins/clip_sop.rs::group_filters_leave_unselected_prims_whole_and_uncut",
+  "crates/sop/src/builtins/clip_sop.rs::recomputen_writes_point_normals_from_the_output_faces",
   "crates/sop/src/builtins/clip_sop.rs::box_keep_below_mirrors_and_both_shares_the_cut_points",
   "crates/sop/src/builtins/clip_sop.rs::dir_and_dist_place_the_plane_and_on_plane_faces_are_kept",
   "crates/sop/src/builtins/clip_sop.rs::open_polyline_is_split_into_runs",
@@ -998,7 +1001,7 @@ evidence = [
   "crates/sop/src/builtins/clip_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/clip_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "C2 (H33 order-twin): origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. H33: slot/cut order = Houdini (below in-place, split above appended; poly cycle starts at first kept corner). houdini_twin testkit for order verification. NOT modelled (DEFERRED): capclip, group filter, N recompute, Houdini 'keep all' vs 'both' naming, polysoup/NURBS. UNVERIFIED vs Houdini (hython blocked): menu order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "C2 (H33 order-twin): origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. H33: slot/cut order = Houdini (below in-place, split above appended; poly cycle starts at first kept corner). houdini_twin testkit for order verification. QB: capclip (boundary loops on the plane -> outward n-gons; half-box volume pinned), group (prim) + ptgroup (prims fully in point group) filters (unselected prims whole), recomputen (point N), keep menu labelled Keep All. REMAINING: polysoup/NURBS clipping (no such prim kinds in hexe-geo). UNVERIFIED vs Houdini (hython blocked): menu order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-connectivity"

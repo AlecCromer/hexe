@@ -55,8 +55,17 @@ struct PolyFill {
 
 /// Hole loops (point-id cycles in the winding that matches their neighbours), deterministic order.
 fn holes(d: &Detail) -> Vec<Vec<u32>> {
+    boundary_loops(d, None)
+}
+
+/// `holes` restricted to the prims flagged in `mask` (None = all): the open boundary of exactly that prim subset, in the
+/// winding that closes it outward (used by `clip`'s `capclip`).
+pub(super) fn boundary_loops(d: &Detail, mask: Option<&[bool]>) -> Vec<Vec<u32>> {
     let mut count: BTreeMap<(u32, u32), u32> = BTreeMap::new();
-    for pr in &d.prims {
+    for (qi, pr) in d.prims.iter().enumerate() {
+        if mask.is_some_and(|m| !m.get(qi).copied().unwrap_or(false)) {
+            continue;
+        }
         let Some(pts) = closed_poly_pts(d, pr) else { continue };
         for k in 0..pts.len() {
             *count.entry((pts[k] as u32, pts[(k + 1) % pts.len()] as u32)).or_insert(0) += 1;

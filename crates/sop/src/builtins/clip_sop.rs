@@ -14,8 +14,13 @@
 //!   (source order), then pass below. Point float attrs of a cut point are linearly interpolated (F32/V2/V3/V4, weight
 //!   `t`); int / string attrs copy the lower-id point; vertex attrs of a cut corner copy the edge's start corner; prim
 //!   attrs and groups follow the source prim.
-//! * NOT modelled (DEFERRED): `capclip` (cap polygon on the cut), prim/point `group` filter, N recompute, polysoup, curve
-//!   surface clipping of NURBS.
+//! * QB additions (`clip` node only): `group` S = PRIM group filter (empty = all; unflagged prims are emitted whole, uncut,
+//!   once); `ptgroup` S = point group (a prim is cut only when ALL its points are in it; AND-ed with `group`); `capclip` B
+//!   off = close the cut: the open boundary loops of each emitted side that lie entirely on the plane become one n-gon each
+//!   (winding closes the body outward: above-side cap faces -n, below-side cap +n; `keep` all caps both sides);
+//!   `recomputen` B off = write point `N` = uniform-averaged unit face normals of the output (with caps when `capclip`).
+//!   The keep menu's third entry is labelled `Keep All` (index 2, unchanged).
+//! * NOT modelled (DEFERRED): polysoup / NURBS surface clipping (no such prim kinds in hexe-geo).
 use super::meshutil::{MAX_ELEMS, Remap, V3, add, bad, dot, failed, positions, rebuild, scale, sub, to_f32};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Detail, Prim, PrimKind};
@@ -123,6 +128,17 @@ impl Cuts {
 
 /// Cut `src` by the plane (`o`, unit `n`), keeping `keep`. See the module doc.
 pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<Cut, CookError> {
+    clip_sel(op, src, o, n, keep, None)
+}
+/// `clip` restricted to the prims flagged in `sel` (None = all): unflagged prims are emitted whole, uncut, once.
+pub(super) fn clip_sel(
+    op: &str,
+    src: &Detail,
+    o: V3,
+    n: V3,
+    keep: Keep,
+    sel: Option<&[bool]>,
+) -> Result<Cut, CookError> {
     let pos = positions(src);
     let np = pos.len();
     let d: Vec<f64> = pos.iter().map(|&p| dot(sub(p, o), n)).collect();
@@ -225,6 +241,11 @@ pub(super) fn clip(op: &str, src: &Detail, o: V3, n: V3, keep: Keep) -> Result<C
     let mut appended: Vec<Slot> = Vec::new();
     for (qi, pr) in src.prims.iter().enumerate() {
         let Some(vp) = prim_vpts(src, pr, np) else { continue };
+        if sel.is_some_and(|s| !s.get(qi).copied().unwrap_or(false)) {
+            let corners: Vec<Corner> = vp.iter().map(|&(v, p)| (PRef::S(p), Some(v))).collect();
+            slots.push((qi, vec![(pr.kind.clone(), corners)], keep != Keep::Below));
+            continue;
+        }
         let on_plane = vp.iter().all(|&(_, p)| side.get(p) == Some(&0));
         let above = piece(pr, &vp, 1);
         let below = if keep == Keep::Both && on_plane { Vec::new() } else { piece(pr, &vp, -1) };
@@ -350,7 +371,20 @@ fn lerp_cut_attrs(src: &Detail, out: &mut Detail, n_src: usize, cuts: &[(usize, 
 }
 
 pub fn spec() -> Vec<ParamSpec> {
-    plane_specs(0)
+    let mut v = plane_specs(0);
+    // Houdini names the third entry "Keep All"
+    if let Some(k) = v.iter_mut().find(|s| s.name == "keep") {
+        *k = ParamSpec::new("keep", ParamValue::Menu(0)).label("Keep").menu(&[
+            ("above", "Keep Above"),
+            ("below", "Keep Below"),
+            ("all", "Keep All"),
+        ]);
+    }
+    v.push(ParamSpec::new("group", ParamValue::S(String::new())).label("Primitive Group"));
+    v.push(ParamSpec::new("ptgroup", ParamValue::S(String::new())).label("Point Group (prims fully inside)"));
+    v.push(ParamSpec::new("capclip", ParamValue::B(false)).label("Cap Clipped Surface"));
+    v.push(ParamSpec::new("recomputen", ParamValue::B(false)).label("Recompute Normals"));
+    v
 }
 pub fn new() -> Box<SopNode> {
     Box::new(Clip { specs: spec() })
@@ -369,9 +403,70 @@ impl Node<Detail> for Clip {
         &self.specs
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
-        let (o, n, keep) = plane_params("clip", ctx.params)?;
+        let p = ctx.params;
+        let (o, n, keep) = plane_params("clip", p)?;
+        let capclip = p.toggle("capclip").ok_or_else(|| bad("clip: `capclip`: missing or not a toggle"))?;
+        let recompute = p.toggle("recomputen").ok_or_else(|| bad("clip: `recomputen`: missing or not a toggle"))?;
+        let names = |k: &str| -> Result<String, CookError> {
+            p.string(k).map(str::to_string).ok_or_else(|| bad(format!("clip: `{k}`: missing or not a string")))
+        };
+        let (group, ptgroup) = (names("group")?, names("ptgroup")?);
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
-        Ok(Arc::new(clip("clip", src, o, n, keep)?.detail))
+        // prim selection: prim group AND (when given) prims whose points are ALL in the point group
+        let mut sel = super::meshutil::selection("clip", src, &group)?;
+        if ptgroup.split_whitespace().next().is_some() {
+            let mut pts = vec![false; src.point_count as usize];
+            for g in ptgroup.split_whitespace() {
+                let grp = src
+                    .group(AttrClass::Point, g)
+                    .ok_or_else(|| failed("clip", &format!("unknown point group `{g}`")))?;
+                for (s, m) in pts.iter_mut().zip(&grp.mask) {
+                    *s |= *m;
+                }
+            }
+            let np = src.point_count as usize;
+            let inside: Vec<bool> = src
+                .prims
+                .iter()
+                .map(|pr| {
+                    prim_vpts(src, pr, np)
+                        .is_some_and(|vp| vp.iter().all(|&(_, q)| pts.get(q).copied().unwrap_or(false)))
+                })
+                .collect();
+            sel = Some(match sel {
+                Some(s) => s.iter().zip(&inside).map(|(a, b)| *a && *b).collect(),
+                None => inside,
+            });
+        }
+        let cut = clip_sel("clip", src, o, n, keep, sel.as_deref())?;
+        let mut out = cut.detail;
+        if capclip {
+            // close the cut: boundary loops of each emitted side whose points all lie ON the plane (cut / on-plane points)
+            let mut caps: Vec<Vec<u32>> = Vec::new();
+            for (mask, want) in [(&cut.above, keep != Keep::Below), (&cut.below, keep != Keep::Above)] {
+                if want {
+                    caps.extend(
+                        super::polyfill_sop::boundary_loops(&out, Some(mask))
+                            .into_iter()
+                            .filter(|l| l.iter().all(|&i| cut.seam.get(i as usize).copied().unwrap_or(false))),
+                    );
+                }
+            }
+            for l in &caps {
+                out.add_poly(l, true);
+            }
+        }
+        if recompute {
+            let pos = positions(&out);
+            let nn = super::meshutil::point_normals(&out, &pos);
+            out.add_attr(hexe_geo::Attribute {
+                name: "N".into(),
+                class: AttrClass::Point,
+                data: AttrData::V3(nn.iter().map(|v| [v[0] as f32, v[1] as f32, v[2] as f32]).collect()),
+                type_info: hexe_geo::TypeInfo::Normal,
+            });
+        }
+        Ok(Arc::new(out))
     }
 }
 
@@ -393,6 +488,128 @@ mod tests {
         *d.p_mut() = (0..5).map(|i| [0.0, i as f32, 0.0]).collect();
         d.add_poly(&[0, 1, 2, 3, 4], false);
         d
+    }
+
+    fn vol(d: &Detail) -> f64 {
+        super::super::surfutil::testkit::signed_volume(d)
+    }
+    fn run_clip(d: Detail, p: ParamSet) -> Result<Arc<Detail>, CookError> {
+        let n = new();
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+        n.cook(&ctx, &[Arc::new(d)])
+    }
+    fn grouped(name: &str, prims: &[usize], pts: Option<Vec<bool>>) -> Detail {
+        let mut d = cube();
+        d.groups.push(hexe_geo::Group {
+            name: name.into(),
+            class: AttrClass::Prim,
+            mask: (0..d.prims.len()).map(|i| prims.contains(&i)).collect(),
+        });
+        if let Some(m) = pts {
+            d.groups.push(hexe_geo::Group { name: "toppts".into(), class: AttrClass::Point, mask: m });
+        }
+        d
+    }
+
+    #[test]
+    fn capclip_closes_the_cut_outward_with_exact_volume() {
+        let cap = |keep: u32, y: f32| with(keep, y).with("capclip", ParamValue::B(true));
+        // keep above y=0: top + 4 half sides + cap(-Y) -> half the unit box
+        let a = cook(&*new(), cube(), &cap(0, 0.0)).expect("cooks");
+        assert_eq!((a.point_count, a.prim_count()), (8, 6));
+        assert!((vol(&a) - 0.5).abs() < 1e-6, "{}", vol(&a));
+        let pos = positions(&a);
+        let last: Vec<usize> = {
+            let pr = &a.prims[5];
+            a.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&i| i as usize).collect()
+        };
+        let nrm = super::super::meshutil::prim_normal(&pos, &last).expect("cap normal");
+        assert!(nrm[1] < -0.99, "{nrm:?}");
+        // keep below: cap faces +Y
+        let b = cook(&*new(), cube(), &cap(1, 0.0)).expect("cooks");
+        assert!((vol(&b) - 0.5).abs() < 1e-6);
+        // a thinner slab: y > 0.25 -> volume 0.25
+        let t = cook(&*new(), cube(), &cap(0, 0.25)).expect("cooks");
+        assert!((vol(&t) - 0.25).abs() < 1e-6 && t.prim_count() == 6);
+        // keep all: both halves closed -> total volume 1, two caps
+        let both = cook(&*new(), cube(), &cap(2, 0.0)).expect("cooks");
+        assert_eq!(both.prim_count(), 10 + 2);
+        assert!((vol(&both) - 1.0).abs() < 1e-6, "{}", vol(&both));
+        // off (default): open shell, no cap
+        let off = cook(&*new(), cube(), &with(0, 0.0)).expect("cooks");
+        assert_eq!(off.prim_count(), 5);
+    }
+
+    #[test]
+    fn group_filters_leave_unselected_prims_whole_and_uncut() {
+        let ungrouped = cook(&*new(), cube(), &with(0, 0.0)).expect("cooks");
+        assert_eq!((ungrouped.point_count, ungrouped.prim_count()), (8, 5));
+        // only the +Y face (prim 3) is selected: it is above -> kept; the other five are emitted whole, no cut points
+        let g =
+            run_clip(grouped("g", &[3], None), with(0, 0.0).with("group", ParamValue::S("g".into()))).expect("cooks");
+        assert_eq!((g.point_count, g.prim_count()), (8, 6));
+        assert_eq!(on_plane(&g, 0.0), 0);
+        // every prim selected == no filter
+        let all =
+            run_clip(grouped("g", &[0, 1, 2, 3, 4, 5], None), with(0, 0.0).with("group", ParamValue::S("g".into())))
+                .expect("cooks");
+        assert_eq!((all.point_count, all.prim_count()), (8, 5));
+        // point group = the four top points: only the top face lies fully inside -> same as selecting prim 3
+        let top: Vec<bool> = cube().p().iter().map(|p| p[1] > 0.0).collect();
+        let p = run_clip(
+            grouped("g", &[], Some(top.clone())),
+            with(0, 0.0).with("ptgroup", ParamValue::S("toppts".into())),
+        )
+        .expect("cooks");
+        assert_eq!((p.point_count, p.prim_count()), (8, 6));
+        // the two filters AND together: prim group excluding the top face + the top point group -> nothing selected
+        let none = run_clip(
+            grouped("g", &[0, 1, 2, 4, 5], Some(top)),
+            with(0, 0.0).with("group", ParamValue::S("g".into())).with("ptgroup", ParamValue::S("toppts".into())),
+        )
+        .expect("cooks");
+        assert_eq!((none.point_count, none.prim_count()), (8, 6));
+        // unknown groups fail
+        for k in ["group", "ptgroup"] {
+            assert!(
+                matches!(
+                    run_clip(cube(), with(0, 0.0).with(k, ParamValue::S("nope".into()))),
+                    Err(CookError::Failed(_))
+                ),
+                "{k}"
+            );
+        }
+        assert!(matches!(
+            run_clip(cube(), with(0, 0.0).with("capclip", ParamValue::I(1))),
+            Err(CookError::BadParam(_))
+        ));
+    }
+
+    #[test]
+    fn recomputen_writes_point_normals_from_the_output_faces() {
+        let r = cook(
+            &*new(),
+            cube(),
+            &with(0, 0.0).with("capclip", ParamValue::B(true)).with("recomputen", ParamValue::B(true)),
+        )
+        .expect("cooks");
+        let Some(AttrData::V3(n)) = r.attr(AttrClass::Point, "N").map(|a| a.data.clone()) else { panic!("N") };
+        assert_eq!(n.len(), r.point_count as usize);
+        let s3 = (1.0f32 / 3.0f32.sqrt()).abs();
+        let at = |x: f32, y: f32, z: f32| {
+            r.p()
+                .iter()
+                .position(|p| (p[0] - x).abs() < 1e-6 && (p[1] - y).abs() < 1e-6 && (p[2] - z).abs() < 1e-6)
+                .expect("point")
+        };
+        // cut corner (0.5,0,0.5): sides +X, +Z and the -Y cap -> (1,-1,1)/sqrt3
+        let c = n[at(0.5, 0.0, 0.5)];
+        assert!((c[0] - s3).abs() < 1e-5 && (c[1] + s3).abs() < 1e-5 && (c[2] - s3).abs() < 1e-5, "{c:?}");
+        // top corner (0.5,0.5,0.5): top + sides +X, +Z -> (1,1,1)/sqrt3
+        let t = n[at(0.5, 0.5, 0.5)];
+        assert!((t[0] - s3).abs() < 1e-5 && (t[1] - s3).abs() < 1e-5 && (t[2] - s3).abs() < 1e-5, "{t:?}");
+        // off by default
+        assert!(cook(&*new(), cube(), &with(0, 0.0)).expect("cooks").attr(AttrClass::Point, "N").is_none());
     }
 
     /// Unit box (y in +-0.5) cut at y=0: 4 side quads are halved (quad with 2 old top + 2 cut points), top kept, bottom gone.
