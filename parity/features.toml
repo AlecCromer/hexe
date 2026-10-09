@@ -385,8 +385,14 @@ evidence = [
   "crates/sop/src/builtins/copytopoints_sop.rs::orient_n_maps_source_z_to_n_with_default_up",
   "crates/sop/src/builtins/copytopoints_sop.rs::copynum_off_by_default_and_numbers_points_and_prims_when_on",
   "crates/sop/src/builtins/copytopoints_sop.rs::scene_loader_wires_box_and_grid_and_example_cooks",
+  "crates/sop/src/builtins/copytopoints_sop.rs::source_group_copies_only_group_prims",
+  "crates/sop/src/builtins/copytopoints_sop.rs::target_group_limits_copies_and_copynum_counts_emitted",
+  "crates/sop/src/builtins/copytopoints_sop.rs::piece_attribute_routes_source_prims_to_matching_targets",
+  "crates/sop/src/builtins/copytopoints_sop.rs::targetattribs_transfers_target_point_attrs_to_copies",
+  "crates/sop/src/builtins/copytopoints_sop.rs::orient_quaternion_and_scale_attr_compose_scale_then_rotate",
+  "crates/sop/src/builtins/copytopoints_sop.rs::target_vertex_class_n_orients_when_no_point_n",
 ]
-notes = "H5: translate + pscale + optional orient (N/up, +Z=N) + optional copynum; params use_orient/use_pscale/copynum are OUR names, not the harvested v2 parm table. Missing vs Houdini v2: source/target groups, piece attr, pack, targetattribs transfer, orient/scale attrs, implicit N, vertex-class N from target. Frame convention (+Z=N, +Y=up) UNVERIFIED (hython blocked). Example: examples/copytopoints.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): ATTRIB-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "H5: translate + pscale + optional orient (N/up, +Z=N) + optional copynum; params use_orient/use_pscale/copynum are OUR names, not the harvested v2 parm table. QA adds (OUR parm names): sourcegroup (prim grp), targetgroup (point grp, copynum counts emitted), pieceattrib (src prim attr == tgt point attr int/str routes prims), targetattribs (globs; tgt point attrs -> copy points+prims), target orient (V4 xyzw, wins over N/up under use_orient) + scale (V3 x pscale; source N inverse-scaled), vertex-class target N fallback (first vertex of each point). Oracles: group counts 36/9, 24/18, piece 12/3, Cd per copy, scale-then-rotate point, vertex N maps +Z->+X. REMAINING: pack toggle (packed prims), implicit N without use_orient (Houdini transform-by-default; our use_orient default OFF kept). Frame convention (+Z=N, +Y=up) UNVERIFIED (hython blocked). Example: examples/copytopoints.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): ATTRIB-DIFF, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-line"
