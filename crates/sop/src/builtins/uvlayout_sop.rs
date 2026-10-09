@@ -254,10 +254,11 @@ impl Node<Detail> for UvLayout {
                     isl.scale = (a3 / a2).sqrt();
                 }
             }
-            if let Some(v) = prim_scale.and_then(|v| v.get(isl.first_prim)) {
-                if v.is_finite() && *v > 0.0 {
-                    isl.scale *= f64::from(*v);
-                }
+            if let Some(v) = prim_scale.and_then(|v| v.get(isl.first_prim))
+                && v.is_finite()
+                && *v > 0.0
+            {
+                isl.scale *= f64::from(*v);
             }
             // raw scaled bbox decides the 90 degree turn (landscape islands pack in shorter rows)
             let (mut mn, mut mx) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);

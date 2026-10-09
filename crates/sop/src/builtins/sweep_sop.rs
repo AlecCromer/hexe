@@ -335,11 +335,12 @@ impl Node<Detail> for Sweep {
             }
             if let Some(o) = a_orient {
                 for k in 0..rows {
-                    if let Some(c) = o.get(st[k]) {
-                        if c.iter().all(|x| x.is_finite()) && c.iter().any(|x| *x != 0.0) {
-                            t[k] = quat_rot(*c, [0.0, 0.0, 1.0]);
-                            nrm[k] = quat_rot(*c, [1.0, 0.0, 0.0]);
-                        }
+                    if let Some(c) = o.get(st[k])
+                        && c.iter().all(|x| x.is_finite())
+                        && c.iter().any(|x| *x != 0.0)
+                    {
+                        t[k] = quat_rot(*c, [0.0, 0.0, 1.0]);
+                        nrm[k] = quat_rot(*c, [1.0, 0.0, 0.0]);
                     }
                 }
             }
@@ -406,7 +407,7 @@ impl Node<Detail> for Sweep {
                     name: a.name.clone(),
                     class: AttrClass::Point,
                     data: gather(&a.data, &src_b),
-                    type_info: a.type_info.clone(),
+                    type_info: a.type_info,
                 });
                 taken.push(a.name.clone());
             }
@@ -418,7 +419,7 @@ impl Node<Detail> for Sweep {
                         name: a.name.clone(),
                         class: AttrClass::Point,
                         data: gather(&a.data, &src_s),
-                        type_info: a.type_info.clone(),
+                        type_info: a.type_info,
                     });
                 }
             }
