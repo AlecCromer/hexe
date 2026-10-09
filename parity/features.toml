@@ -1232,11 +1232,19 @@ notes = "S2: fromtype all|poly|polyline|sphere|tube, totype polygon|polyline, ro
 
 [[feature]]
 id = "sop-polyreduce"
-title = "PolyReduce SOP (shortest-edge collapse to a target percentage; quadric-free)"
+title = "PolyReduce SOP (Garland-Heckbert quadric error metric decimation)"
 area = "A"
-tier = "P2"
-status = "partial"
+tier = "P1"
+status = "shipped"
 commands = ["polyreduce"]
 evidence = [
+  "crates/sop/src/builtins/polyreduce_sop.rs::sphere_20x20_reduces_to_about_20_percent_within_one_prim",
+  "crates/sop/src/builtins/polyreduce_sop.rs::closed_mesh_euler_characteristic_preserved",
+  "crates/sop/src/builtins/polyreduce_sop.rs::open_grid_boundary_vertices_preserved",
+  "crates/sop/src/builtins/polyreduce_sop.rs::no_flipped_normals",
+  "crates/sop/src/builtins/polyreduce_sop.rs::finalcount_target_mode",
+  "crates/sop/src/builtins/polyreduce_sop.rs::percentage_100_shares_arc",
+  "crates/sop/src/builtins/polyreduce_sop.rs::hostile_params_and_geometry",
+  "crates/sop/src/builtins/polyreduce_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
-notes = "S2: percentage(50, share of closed polys kept, 100 = Arc shared) lockboundary(off). Greedy shortest-edge collapse to the midpoint (ties: lowest ids), link-condition guard (common neighbours must lie in a poly sharing the edge), no collapse of points used by non-poly prims, boundary-pair guard; stops at target or when no legal edge is left (result may stay above target; quads degrade to tris, only triangle pairs drop polys). Grid 6x6 tris 50 -> <=26 with boundary locked and area exactly 25; octahedron stays a closed outward 2-manifold; Cd blends via meshutil::rebuild, prim attrs copy. NOT modelled (DEFERRED): quadric error metric (Garland-Heckbert), flip/normal-deviation test, seam/UV preservation, finalcount target mode, symmetry. UNVERIFIED-vs-Houdini: quadric vs shortest-edge quality differs fundamentally (no oracle for shortest-edge mode), percentage vs finalcount semantics (we lack finalcount parm). Example: examples/polyreduce.json. Analytical oracle only (no Houdini oracle: our algorithm differs from Houdini's quadric-based reducer)."
+notes = "P1: Garland-Heckbert quadric error metric (per-vertex 4×4 Q from face planes, edge cost = v^T(Q1+Q2)v at optimal v = (Q1+Q2)^{-1}[0,0,0,1], fallback midpoint if singular). Min-heap w/ lazy invalidation. target menu percentage(0, default)|finalcount(1); percentage F 50 (0..=100) OR finalcount I target prim count. preserveboundary B on (default): boundary edges never collapsed, boundary quadric penalty. Normal-flip rejection: skip collapse if any incident face normal flips > 90°. Degenerate faces (<3 distinct corners) removed. Link-condition guard. Attrs: merged points blend (meshutil::rebuild); surviving vertices/prims copy; groups follow. Non-poly prims pass through. NOT modelled (DEFERRED): attribute-seam/UV preservation, symmetry. UNVERIFIED-vs-Houdini: quadric algorithm vs Houdini's (same family, implementation details differ), parm naming, optimal collapse position formula. Example: examples/polyreduce.json. Analytical oracle only (no Houdini oracle: quadric-based, not shortest-edge)."

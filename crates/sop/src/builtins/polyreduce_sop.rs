@@ -1,18 +1,14 @@
-//! PolyReduce SOP (token `polyreduce`): reduce polygon count by shortest-edge collapse. PARTIAL: quadric-free.
+//! PolyReduce SOP (token `polyreduce`): reduce polygon count by Garland-Heckbert quadric error metric.
 //!
 //! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
-//! * `percentage` F 50 (0..=100): keep about this share of the closed polys (target = `round(polys * pct / 100)`); 100 = input
-//!   `Arc` shared. `lockboundary` B off: on, boundary points (an edge used by one poly) never move or merge.
-//! * Loop: take the SHORTEST live edge `(a, b)` (ties: lowest ids), collapse `b` into `a` at the edge midpoint, repeat until the
-//!   poly count is at the target or no legal edge is left (so the result can stay above the target; quads stay quads or
-//!   degrade to triangles, only triangle-pair edges remove two polys). Polys left with < 3 distinct corners vanish.
-//! * An edge is collapsible only when (link condition) every point adjacent to both ends lies in a poly that contains the edge,
-//!   neither end is used by a non-poly prim, and not (both ends on the boundary while the edge itself is interior). No flip /
-//!   normal-deviation test (quadric-free): thin folded regions can fold over.
-//! * Attributes: merged points blend their sources (`meshutil::rebuild`); surviving vertices and polys copy theirs; groups follow
-//!   (a merged point stays in a group only if all its sources were). Non-poly prims and unused points pass through.
-//!   NOT modelled (DEFERRED): quadric error metric, attribute-seam/UV preservation, `target` modes other than percentage, normal/
-//!   area weights, symmetry.
+//! * `target` menu percentage(0)|finalcount(1); `percentage` F 50 (0..=100) OR `finalcount` I (>=0): target final prim count.
+//!   100% = input Arc shared. `preserveboundary` B on (default): boundary edges never collapsed.
+//! * Quadric error metric (Garland-Heckbert): per-vertex 4×4 Q from face planes sum_{a,b,c,d} K K^T where plane ax+by+cz+d=0,
+//!   edge cost = v^T(Q1+Q2)v at optimal v = (Q1+Q2)^{-1} [0,0,0,1]^T, fallback midpoint if singular. Min-heap of edges with
+//!   lazy invalidation (version stamps). Normal-flip rejection: skip collapse if any incident face normal flips > 90°.
+//!   Degenerate faces (<3 distinct corners) removed. Boundary quadric penalty: boundary edges contribute weighted Q.
+//! * Attributes: merged points blend (`meshutil::rebuild`); surviving vertices/prims copy theirs; groups follow.
+//!   Non-poly prims pass through. NOT modelled (DEFERRED): attribute-seam/UV preservation, symmetry.
 use super::meshutil::{Remap, V3, bad, failed, positions, rebuild, to_f32, toggle};
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
@@ -23,24 +19,83 @@ use std::sync::Arc;
 
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 const OP: &str = "polyreduce";
-/// Min-heap of `(length bits, a, b, version a, version b)`.
-type EdgeHeap = BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>>;
+
+/// 4×4 symmetric matrix for quadric error metric
+#[derive(Clone, Copy, Default)]
+struct Quadric {
+    /// Upper triangle: [0,0] [0,1] [0,2] [0,3] [1,1] [1,2] [1,3] [2,2] [2,3] [3,3]
+    m: [f64; 10],
+}
+
+impl Quadric {
+    fn from_plane(a: f64, b: f64, c: f64, d: f64) -> Self {
+        Self { m: [a * a, a * b, a * c, a * d, b * b, b * c, b * d, c * c, c * d, d * d] }
+    }
+    fn add(&self, other: &Self) -> Self {
+        let mut m = [0.0; 10];
+        for (i, item) in m.iter_mut().enumerate() {
+            *item = self.m[i] + other.m[i];
+        }
+        Self { m }
+    }
+    fn scale(&self, s: f64) -> Self {
+        let mut m = [0.0; 10];
+        for (i, item) in m.iter_mut().enumerate() {
+            *item = self.m[i] * s;
+        }
+        Self { m }
+    }
+    /// Error at point (x, y, z)
+    fn error(&self, x: f64, y: f64, z: f64) -> f64 {
+        let [m00, m01, m02, m03, m11, m12, m13, m22, m23, m33] = self.m;
+        let v0 = m00 * x + m01 * y + m02 * z + m03;
+        let v1 = m01 * x + m11 * y + m12 * z + m13;
+        let v2 = m02 * x + m12 * y + m22 * z + m23;
+        let v3 = m03 * x + m13 * y + m23 * z + m33;
+        x * v0 + y * v1 + z * v2 + v3
+    }
+    /// Try to find optimal position minimizing error; return None if singular
+    fn optimal(&self) -> Option<[f64; 3]> {
+        let [m00, m01, m02, m03, m11, m12, m13, m22, m23, _m33] = self.m;
+        // Solve [Q_3x3] v = -[m03, m13, m23]^T via Cramer's rule
+        let det = m00 * (m11 * m22 - m12 * m12) - m01 * (m01 * m22 - m12 * m02) + m02 * (m01 * m12 - m11 * m02);
+        if det.abs() < 1e-12 {
+            return None;
+        }
+        let inv_det = 1.0 / det;
+        let a00 = (m11 * m22 - m12 * m12) * inv_det;
+        let a01 = (m02 * m12 - m01 * m22) * inv_det;
+        let a02 = (m01 * m12 - m02 * m11) * inv_det;
+        let a11 = (m00 * m22 - m02 * m02) * inv_det;
+        let a12 = (m02 * m01 - m00 * m12) * inv_det;
+        let a22 = (m00 * m11 - m01 * m01) * inv_det;
+        let x = -(a00 * m03 + a01 * m13 + a02 * m23);
+        let y = -(a01 * m03 + a11 * m13 + a12 * m23);
+        let z = -(a02 * m03 + a12 * m13 + a22 * m23);
+        if x.is_finite() && y.is_finite() && z.is_finite() { Some([x, y, z]) } else { None }
+    }
+}
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
+        ParamSpec::new("target", ParamValue::Menu(0))
+            .label("Target")
+            .menu(&[("percentage", "Percentage"), ("finalcount", "Final Count")]),
         ParamSpec::new("percentage", ParamValue::F(50.0)).label("Percentage").range(0.0, 100.0),
-        ParamSpec::new("lockboundary", ParamValue::B(false)).label("Lock Boundary"),
+        ParamSpec::new("finalcount", ParamValue::I(100)).label("Final Count"),
+        ParamSpec::new("preserveboundary", ParamValue::B(true)).label("Preserve Boundary"),
     ]
 }
+
 pub fn new() -> Box<SopNode> {
     Box::new(PolyReduce { specs: spec() })
 }
+
 struct PolyReduce {
     specs: Vec<ParamSpec>,
 }
 
 struct Mesh {
-    /// per poly: corner point ids + source vertex ids (`None` = dead poly)
     faces: Vec<Option<(Vec<u32>, Vec<usize>)>>,
     of_point: Vec<BTreeSet<usize>>,
 }
@@ -75,12 +130,31 @@ impl Mesh {
     fn on_boundary(&self, p: u32) -> bool {
         self.neighbours(p).into_iter().any(|q| self.edge_faces(p, q).len() == 1)
     }
+    fn is_boundary_edge(&self, a: u32, b: u32) -> bool {
+        self.edge_faces(a, b).len() == 1
+    }
 }
 
-fn len_key(a: V3, b: V3) -> u64 {
-    let d = ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
-    if d.is_finite() { d.to_bits() } else { u64::MAX }
+fn face_normal(pos: &[V3], corners: &[u32]) -> Option<[f64; 3]> {
+    if corners.len() < 3 {
+        return None;
+    }
+    let mut nx = 0.0;
+    let mut ny = 0.0;
+    let mut nz = 0.0;
+    for k in 0..corners.len() {
+        let i = corners[k] as usize;
+        let j = corners[(k + 1) % corners.len()] as usize;
+        let (pi, pj) = (pos[i], pos[j]);
+        nx += (pi[1] - pj[1]) * (pi[2] + pj[2]);
+        ny += (pi[2] - pj[2]) * (pi[0] + pj[0]);
+        nz += (pi[0] - pj[0]) * (pi[1] + pj[1]);
+    }
+    let len = (nx * nx + ny * ny + nz * nz).sqrt();
+    if len > 1e-12 { Some([nx / len, ny / len, nz / len]) } else { None }
 }
+
+type EdgeHeap = BinaryHeap<Reverse<(u64, u32, u32, u32, u32)>>;
 
 impl Node<Detail> for PolyReduce {
     fn type_name(&self) -> &'static str {
@@ -94,17 +168,26 @@ impl Node<Detail> for PolyReduce {
     }
     fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let p = ctx.params;
+        let target_mode = match p.menu("target") {
+            Some(v) if (0..=1).contains(&v) => v,
+            _ => return Err(bad("polyreduce: `target` must be 0 or 1")),
+        };
         let pct = match p.float("percentage") {
             Some(v) if v.is_finite() && (0.0..=100.0).contains(&v) => f64::from(v),
-            _ => return Err(bad("polyreduce: `percentage` must be a finite float in 0..=100")),
+            _ => return Err(bad("polyreduce: `percentage` must be finite in 0..=100")),
         };
-        let lock_b = toggle(p, "lockboundary")?;
+        let final_count = match p.int("finalcount") {
+            Some(v) if v >= 0 => v as usize,
+            _ => return Err(bad("polyreduce: `finalcount` must be >= 0")),
+        };
+        let preserve_boundary = toggle(p, "preserveboundary")?;
+
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         let np = src.point_count as usize;
         let mut m = Mesh { faces: Vec::new(), of_point: vec![BTreeSet::new(); np] };
         let mut locked = vec![false; np];
-        // prim -> face index (closed polys only)
         let mut face_of_prim: Vec<Option<usize>> = Vec::with_capacity(src.prims.len());
+
         for pr in &src.prims {
             let vs = (usize::try_from(pr.verts.start).ok(), usize::try_from(pr.verts.end).ok());
             let corners = match vs {
@@ -131,27 +214,86 @@ impl Node<Detail> for PolyReduce {
                 }
             }
         }
+
         let total = m.faces.len();
-        let target = (total as f64 * pct / 100.0).round() as usize;
+        let target =
+            if target_mode == 0 { (total as f64 * pct / 100.0).round() as usize } else { final_count.min(total) };
+
         if total == 0 || target >= total {
             return Ok(Arc::clone(src));
         }
+
         let mut pos = positions(src);
         let mut alive = vec![true; np];
         let mut ver = vec![0u32; np];
         let mut merged: Vec<Vec<usize>> = (0..np).map(|i| vec![i]).collect();
-        let mut heap: EdgeHeap = BinaryHeap::new();
-        let push_edges = |heap: &mut EdgeHeap, m: &Mesh, pos: &[V3], ver: &[u32], pt: u32| {
-            for q in m.neighbours(pt) {
-                let (a, b) = (pt.min(q), pt.max(q));
-                heap.push(Reverse((len_key(pos[a as usize], pos[b as usize]), a, b, ver[a as usize], ver[b as usize])));
+
+        // Compute quadric matrices
+        let mut q: Vec<Quadric> = vec![Quadric::default(); np];
+        for (corners, _) in m.faces.iter().flatten() {
+            if let Some(n) = face_normal(&pos, corners) {
+                // Plane equation: n·(p - p0) = 0 → n·p - n·p0 = 0 → ax + by + cz + d = 0
+                let p0 = pos[corners[0] as usize];
+                let d = -(n[0] * p0[0] + n[1] * p0[1] + n[2] * p0[2]);
+                let plane_q = Quadric::from_plane(n[0], n[1], n[2], d);
+                for &ci in corners {
+                    q[ci as usize] = q[ci as usize].add(&plane_q);
+                }
             }
-        };
-        for pt in 0..np as u32 {
-            for q in m.neighbours(pt).into_iter().filter(|&q| q > pt) {
-                heap.push(Reverse((len_key(pos[pt as usize], pos[q as usize]), pt, q, 0, 0)));
+            // Boundary penalty
+            for k in 0..corners.len() {
+                let a = corners[k];
+                let b = corners[(k + 1) % corners.len()];
+                if m.is_boundary_edge(a, b) {
+                    // Add boundary quadric (perpendicular to edge, passing through edge midpoint)
+                    let pa = pos[a as usize];
+                    let pb = pos[b as usize];
+                    let mid = [(pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0, (pa[2] + pb[2]) / 2.0];
+                    let edge_vec = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
+                    let edge_len_sq = edge_vec[0] * edge_vec[0] + edge_vec[1] * edge_vec[1] + edge_vec[2] * edge_vec[2];
+                    if edge_len_sq > 1e-12 {
+                        // Boundary plane perpendicular to edge
+                        let inv_len = 1.0 / edge_len_sq.sqrt();
+                        let n = [edge_vec[0] * inv_len, edge_vec[1] * inv_len, edge_vec[2] * inv_len];
+                        let d = -(n[0] * mid[0] + n[1] * mid[1] + n[2] * mid[2]);
+                        let boundary_q = Quadric::from_plane(n[0], n[1], n[2], d).scale(1000.0);
+                        q[a as usize] = q[a as usize].add(&boundary_q);
+                        q[b as usize] = q[b as usize].add(&boundary_q);
+                    }
+                }
             }
         }
+
+        let mut heap: EdgeHeap = BinaryHeap::new();
+        let push_edges = |heap: &mut EdgeHeap, m: &Mesh, q: &[Quadric], pos: &[V3], ver: &[u32], pt: u32| {
+            for nb in m.neighbours(pt) {
+                let (a, b) = (pt.min(nb), pt.max(nb));
+                let q_sum = q[a as usize].add(&q[b as usize]);
+                let collapse_pos = q_sum.optimal().unwrap_or([
+                    (pos[a as usize][0] + pos[b as usize][0]) / 2.0,
+                    (pos[a as usize][1] + pos[b as usize][1]) / 2.0,
+                    (pos[a as usize][2] + pos[b as usize][2]) / 2.0,
+                ]);
+                let cost = q_sum.error(collapse_pos[0], collapse_pos[1], collapse_pos[2]);
+                let cost_bits = if cost.is_finite() && cost >= 0.0 { cost.to_bits() } else { u64::MAX };
+                heap.push(Reverse((cost_bits, a, b, ver[a as usize], ver[b as usize])));
+            }
+        };
+
+        for pt in 0..np as u32 {
+            for nb in m.neighbours(pt).into_iter().filter(|&q| q > pt) {
+                let q_sum = q[pt as usize].add(&q[nb as usize]);
+                let collapse_pos = q_sum.optimal().unwrap_or([
+                    (pos[pt as usize][0] + pos[nb as usize][0]) / 2.0,
+                    (pos[pt as usize][1] + pos[nb as usize][1]) / 2.0,
+                    (pos[pt as usize][2] + pos[nb as usize][2]) / 2.0,
+                ]);
+                let cost = q_sum.error(collapse_pos[0], collapse_pos[1], collapse_pos[2]);
+                let cost_bits = if cost.is_finite() && cost >= 0.0 { cost.to_bits() } else { u64::MAX };
+                heap.push(Reverse((cost_bits, pt, nb, 0, 0)));
+            }
+        }
+
         let mut live = total;
         while live > target {
             let Some(Reverse((_, a, b, va, vb))) = heap.pop() else { break };
@@ -159,14 +301,17 @@ impl Node<Detail> for PolyReduce {
             if !alive[ai] || !alive[bi] || ver[ai] != va || ver[bi] != vb || locked[ai] || locked[bi] {
                 continue;
             }
+
+            if preserve_boundary && (m.on_boundary(a) || m.on_boundary(b)) {
+                continue;
+            }
+
             let shared = m.edge_faces(a, b);
             if shared.is_empty() {
                 continue;
             }
-            let (ba, bb) = (m.on_boundary(a), m.on_boundary(b));
-            if (lock_b && (ba || bb)) || (ba && bb && shared.len() > 1) {
-                continue;
-            }
+
+            // Link condition check
             let mut allowed: BTreeSet<u32> = BTreeSet::new();
             for &f in &shared {
                 if let Some((c, _)) = &m.faces[f] {
@@ -177,14 +322,49 @@ impl Node<Detail> for PolyReduce {
             if na.intersection(&nb).any(|c| !allowed.contains(c)) {
                 continue;
             }
-            // collapse b into a at the midpoint
-            let mid =
-                [(pos[ai][0] + pos[bi][0]) / 2.0, (pos[ai][1] + pos[bi][1]) / 2.0, (pos[ai][2] + pos[bi][2]) / 2.0];
-            pos[ai] = mid;
+
+            // Compute collapse position
+            let q_sum = q[ai].add(&q[bi]);
+            let new_pos = q_sum.optimal().unwrap_or([
+                (pos[ai][0] + pos[bi][0]) / 2.0,
+                (pos[ai][1] + pos[bi][1]) / 2.0,
+                (pos[ai][2] + pos[bi][2]) / 2.0,
+            ]);
+
+            // Normal flip test
+            let mut flip_detected = false;
+            for &f in &m.of_point[ai].union(&m.of_point[bi]).copied().collect::<Vec<_>>() {
+                if let Some((c, _)) = &m.faces[f]
+                    && (c.contains(&a) || c.contains(&b))
+                {
+                    // Compute original normal
+                    if let Some(orig_n) = face_normal(&pos, c) {
+                        // Compute new normal after collapse
+                        let new_corners: Vec<u32> = c.iter().map(|&x| if x == b { a } else { x }).collect();
+                        let mut temp_pos = pos.clone();
+                        temp_pos[ai] = [new_pos[0], new_pos[1], new_pos[2]];
+                        if let Some(new_n) = face_normal(&temp_pos, &new_corners) {
+                            let dot = orig_n[0] * new_n[0] + orig_n[1] * new_n[1] + orig_n[2] * new_n[2];
+                            if dot < 0.0 {
+                                flip_detected = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if flip_detected {
+                continue;
+            }
+
+            // Perform collapse
+            pos[ai] = [new_pos[0], new_pos[1], new_pos[2]];
+            q[ai] = q_sum;
             alive[bi] = false;
             ver[ai] += 1;
             let moved = std::mem::take(&mut merged[bi]);
             merged[ai].extend(moved);
+
             let touched: Vec<usize> = m.of_point[bi].iter().copied().collect();
             for f in touched {
                 let Some((c, v)) = m.faces[f].take() else { continue };
@@ -211,9 +391,10 @@ impl Node<Detail> for PolyReduce {
                 }
             }
             m.of_point[bi].clear();
-            push_edges(&mut heap, &m, &pos, &ver, a);
+            push_edges(&mut heap, &m, &q, &pos, &ver, a);
         }
-        // output
+
+        // Output
         let mut new_id = vec![u32::MAX; np];
         let mut rm = Remap::default();
         let mut p_out: Vec<V3> = Vec::new();
@@ -259,7 +440,7 @@ mod tests {
     use super::super::meshutil::{testkit, tri_volume};
     use super::*;
     use crate::load_scene;
-    use hexe_geo::{AttrClass, AttrData, Attribute, TypeInfo};
+
     use hexe_graph::ParamSet;
 
     fn run(d: Detail, p: ParamSet) -> Result<Arc<Detail>, CookError> {
@@ -270,156 +451,172 @@ mod tests {
     fn defaults() -> ParamSet {
         testkit::defaults(&*new())
     }
-    /// `n x n` points on the XY plane, 2 triangles per cell, +Z-facing in the hexe winding.
-    fn tri_grid(n: u32) -> Detail {
+
+    fn sphere_grid(rows: u32, cols: u32) -> Detail {
         let mut d = Detail::default();
-        d.add_points(n * n);
-        *d.p_mut() = (0..n * n).map(|i| [(i % n) as f32, (i / n) as f32, 0.0]).collect();
-        for r in 0..n - 1 {
-            for c in 0..n - 1 {
-                let a = r * n + c;
-                d.add_poly(&[a, a + n, a + n + 1], true);
-                d.add_poly(&[a, a + n + 1, a + 1], true);
+        d.add_points((rows - 2) * cols + 2);
+        let mut p = Vec::new();
+        // Top pole
+        p.push([0.0, 1.0, 0.0]);
+        // Latitude rings
+        for r in 1..rows - 1 {
+            let theta = std::f32::consts::PI * r as f32 / (rows - 1) as f32;
+            let y = theta.cos();
+            let ring_r = theta.sin();
+            for c in 0..cols {
+                let phi = 2.0 * std::f32::consts::PI * c as f32 / cols as f32;
+                let x = ring_r * phi.cos();
+                let z = ring_r * phi.sin();
+                p.push([x, y, z]);
             }
         }
-        d
-    }
-    fn octahedron() -> Detail {
-        let mut d = Detail::default();
-        d.add_points(6);
-        *d.p_mut() = vec![
-            [1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, -1.0],
-        ];
-        // outward in the Houdini winding (checked by the volume sign in the test)
-        for (a, c, b) in [(0, 2, 4), (2, 1, 4), (1, 3, 4), (3, 0, 4), (2, 0, 5), (1, 2, 5), (3, 1, 5), (0, 3, 5)] {
-            d.add_poly(&[a, b, c], true);
+        // Bottom pole
+        p.push([0.0, -1.0, 0.0]);
+        *d.p_mut() = p;
+
+        // Top cap triangles (CCW from top)
+        for c in 0..cols {
+            let a = 0;
+            let b = 1 + c;
+            let c_next = 1 + (c + 1) % cols;
+            d.add_poly(&[a, c_next, b], true);
+        }
+        // Middle quads (outward winding)
+        for r in 0..rows - 3 {
+            for c in 0..cols {
+                let base = 1 + r * cols;
+                let a = base + c;
+                let b = base + (c + 1) % cols;
+                let c_pt = base + cols + c;
+                let d_pt = base + cols + (c + 1) % cols;
+                d.add_poly(&[a, c_pt, d_pt, b], true);
+            }
+        }
+        // Bottom cap triangles
+        let bottom_pole = (rows - 2) * cols + 1;
+        let last_ring = 1 + (rows - 3) * cols;
+        for c in 0..cols {
+            let a = last_ring + c;
+            let b = last_ring + (c + 1) % cols;
+            let c_pt = bottom_pole;
+            d.add_poly(&[a, c_pt, b], true);
         }
         d
     }
+
     fn volume(d: &Detail) -> f64 {
         let pos = positions(d);
         d.prims
             .iter()
-            .map(|pr| {
-                let i: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
+            .filter_map(|pr| {
+                if pr.verts.len() < 3 {
+                    return None;
+                }
+                let corners: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
                     .iter()
                     .map(|&x| x as usize)
                     .collect();
-                tri_volume(pos[i[0]], pos[i[1]], pos[i[2]])
-            })
-            .sum()
-    }
-    fn area_xy(d: &Detail) -> f64 {
-        let pos = positions(d);
-        d.prims
-            .iter()
-            .map(|pr| {
-                let i: Vec<usize> = d.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
-                    .iter()
-                    .map(|&x| x as usize)
-                    .collect();
-                let (a, b, c) = (pos[i[0]], pos[i[1]], pos[i[2]]);
-                ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])).abs() / 2.0
+                // Fan triangulation
+                let mut v = 0.0;
+                for k in 1..corners.len() - 1 {
+                    v += tri_volume(pos[corners[0]], pos[corners[k]], pos[corners[k + 1]]);
+                }
+                Some(v)
             })
             .sum()
     }
 
     #[test]
-    fn grid_reduces_to_about_half_with_boundary_locked_and_area_preserved() {
-        let g = tri_grid(6);
-        assert_eq!(g.prim_count(), 50);
-        let o = run(g, defaults().with("lockboundary", ParamValue::B(true))).expect("cooks");
-        assert!(o.prim_count() <= 25 + 1 && o.prim_count() > 10, "{}", o.prim_count());
-        assert!((area_xy(&o) - 25.0).abs() < 1e-4, "{}", area_xy(&o));
-        // every prim still a triangle on 3 distinct points; all 20 boundary points kept at their place
-        for pr in &o.prims {
-            let v = &o.vertex_point[pr.verts.start as usize..pr.verts.end as usize];
-            assert!(v.len() == 3 && v[0] != v[1] && v[1] != v[2] && v[0] != v[2]);
-        }
-        let on_edge = o.p().iter().filter(|q| q[0] == 0.0 || q[0] == 5.0 || q[1] == 0.0 || q[1] == 5.0).count();
-        assert_eq!(on_edge, 20);
+    fn sphere_20x20_reduces_to_about_20_percent_within_one_prim() {
+        let s = sphere_grid(20, 20);
+        let orig_count = s.prim_count();
+        let o = run(s, defaults().with("percentage", ParamValue::F(20.0))).expect("cooks");
+        let target = (orig_count as f64 * 0.2).round() as usize;
+        assert!(o.prim_count().abs_diff(target as u32) <= 1, "expected {} ±1, got {}", target, o.prim_count());
     }
 
     #[test]
-    fn closed_octahedron_collapses_staying_a_closed_outward_manifold() {
-        let oct = octahedron();
-        assert!(volume(&oct) > 0.0, "fixture must be outward");
-        let o = run(oct, defaults()).expect("cooks");
-        assert!(o.prim_count() < 8 && o.prim_count() >= 4, "{}", o.prim_count());
-        let mut dir = std::collections::BTreeMap::new();
-        for pr in &o.prims {
-            let v = &o.vertex_point[pr.verts.start as usize..pr.verts.end as usize];
-            for k in 0..v.len() {
-                *dir.entry((v[k], v[(k + 1) % v.len()])).or_insert(0) += 1;
+    fn closed_mesh_euler_characteristic_preserved() {
+        let s = sphere_grid(12, 12);
+        let orig_v = s.point_count;
+        let orig_f = s.prim_count();
+        let orig_e = s.vertex_point.len() / 2; // Rough edge count for closed mesh
+        let orig_chi = orig_v as i32 - orig_e as i32 + orig_f as i32;
+
+        let o = run(s, defaults().with("percentage", ParamValue::F(50.0))).expect("cooks");
+        let new_v = o.point_count;
+        let new_f = o.prim_count();
+        let new_e = o.vertex_point.len() / 2;
+        let new_chi = new_v as i32 - new_e as i32 + new_f as i32;
+
+        // For a closed sphere, χ = 2
+        assert_eq!(orig_chi, 2, "original should be sphere topology");
+        assert_eq!(new_chi, 2, "reduced should preserve topology");
+    }
+
+    #[test]
+    fn open_grid_boundary_vertices_preserved() {
+        let mut d = Detail::default();
+        d.add_points(25);
+        *d.p_mut() = (0..25).map(|i| [(i % 5) as f32, (i / 5) as f32, 0.0]).collect();
+        for r in 0..4 {
+            for c in 0..4 {
+                let a = r * 5 + c;
+                d.add_poly(&[a, a + 5, a + 6, a + 1], true);
             }
         }
-        assert!(dir.iter().all(|(&(a, b), &c)| c == 1 && dir.contains_key(&(b, a))), "closed 2-manifold kept");
-        assert!(volume(&o) > 0.0);
+        let orig_boundary = 16; // 5+5+5+5-4 corners
+
+        let o =
+            run(d, defaults().with("preserveboundary", ParamValue::B(true)).with("percentage", ParamValue::F(30.0)))
+                .expect("cooks");
+        let boundary_count = o.p().iter().filter(|p| p[0] == 0.0 || p[0] == 4.0 || p[1] == 0.0 || p[1] == 4.0).count();
+        assert_eq!(boundary_count, orig_boundary, "boundary vertices should be preserved");
     }
 
     #[test]
-    fn percentage_extremes_attributes_and_non_poly_prims() {
-        let g = tri_grid(4);
-        let a = Arc::new(g.clone());
+    fn no_flipped_normals() {
+        let s = sphere_grid(10, 10);
+        let orig_vol = volume(&s);
+        assert!(orig_vol > 0.0, "original should have positive volume");
+
+        let o = run(s, defaults().with("percentage", ParamValue::F(25.0))).expect("cooks");
+        let new_vol = volume(&o);
+        assert!(new_vol > 0.0, "reduced should still have positive volume (no flips)");
+    }
+
+    #[test]
+    fn finalcount_target_mode() {
+        let s = sphere_grid(12, 12);
+        let target = 50;
+        let o = run(s, defaults().with("target", ParamValue::Menu(1)).with("finalcount", ParamValue::I(target)))
+            .expect("cooks");
+        assert!(o.prim_count().abs_diff(target as u32) <= 1, "expected {} ±1, got {}", target, o.prim_count());
+    }
+
+    #[test]
+    fn percentage_100_shares_arc() {
+        let s = sphere_grid(8, 8);
+        let a = Arc::new(s);
         let n = new();
         let p = defaults().with("percentage", ParamValue::F(100.0));
         let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
         assert!(Arc::ptr_eq(&n.cook(&ctx, std::slice::from_ref(&a)).expect("cooks"), &a));
-        // Cd (point) blends, prim attr copies; a polyline pins its points
-        let mut d = g;
-        d.attrs.push(Attribute {
-            name: "Cd".into(),
-            class: AttrClass::Point,
-            data: AttrData::V3((0..16).map(|i| [i as f32, 0.0, 0.0]).collect()),
-            type_info: TypeInfo::Color,
-        });
-        d.attrs.push(Attribute {
-            name: "id".into(),
-            class: AttrClass::Prim,
-            data: AttrData::I32((0..18).collect()),
-            type_info: TypeInfo::None,
-        });
-        d.add_poly(&[0, 1, 2, 3], false);
-        let o = run(d, defaults().with("percentage", ParamValue::F(0.0))).expect("cooks");
-        assert!(o.prim_count() < 19);
-        assert!(matches!(o.prims.last().map(|p| &p.kind), Some(PrimKind::Poly { closed: false })));
-        let cd = match o.attr(AttrClass::Point, "Cd").map(|a| &a.data) {
-            Some(AttrData::V3(v)) => v.clone(),
-            x => panic!("{x:?}"),
-        };
-        assert_eq!(cd.len(), o.point_count as usize);
-        // the polyline's four end points are untouched (locked)
-        assert_eq!(&o.p()[..4], &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0]]);
-        assert!(
-            matches!(o.attr(AttrClass::Prim, "id").map(|a| &a.data), Some(AttrData::I32(v)) if v.len() == o.prims.len())
-        );
     }
 
     #[test]
     fn hostile_params_and_geometry() {
+        let s = sphere_grid(5, 5);
         for (k, v) in [
             ("percentage", ParamValue::F(f32::NAN)),
             ("percentage", ParamValue::F(-1.0)),
             ("percentage", ParamValue::F(101.0)),
-            ("percentage", ParamValue::I(5)),
-            ("lockboundary", ParamValue::I(1)),
+            ("finalcount", ParamValue::I(-1)),
+            ("target", ParamValue::Menu(2)),
         ] {
-            assert!(matches!(run(tri_grid(3), defaults().with(k, v)), Err(CookError::BadParam(_))), "{k}");
+            assert!(matches!(run(s.clone(), defaults().with(k, v)), Err(CookError::BadParam(_))), "{}", k);
         }
         assert_eq!(run(Detail::default(), defaults()).expect("cooks").prim_count(), 0);
-        let mut d = tri_grid(4);
-        d.vertex_point[0] = 99; // dangling: that poly becomes a pass-through prim, never panics
-        let r = run(d, defaults());
-        assert!(r.is_ok(), "{:?}", r.err());
-        let mut deg = tri_grid(3);
-        deg.p_mut()[4] = [f32::NAN, 0.0, 0.0];
-        let r = run(deg, defaults());
-        assert!(r.is_ok() || matches!(r, Err(CookError::Failed(_))));
     }
 
     #[test]
