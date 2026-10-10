@@ -581,7 +581,11 @@ mod tests {
         });
         let out = cook(&*new(), d.clone(), &defaults(&*new())).expect("cooks");
         let Some(AttrData::I32(pid)) = out.attr(AttrClass::Prim, "pid").map(|a| &a.data) else { panic!("pid") };
-        assert_eq!(pid, &vec![0, 1, 2, 3, 4, 5, 5, 4, 3, 2, 1, 0], "in place, then 2nd triangles in reverse prim order");
+        assert_eq!(
+            pid,
+            &vec![0, 1, 2, 3, 4, 5, 5, 4, 3, 2, 1, 0],
+            "in place, then 2nd triangles in reverse prim order"
+        );
         let Some(AttrData::F32(vv)) = out.attr(AttrClass::Vertex, "vv").map(|a| &a.data) else { panic!("vv") };
         assert_eq!(&vv[..3], &[0.0, 1.0, 2.0], "quad 0 first triangle (c0,c1,c2)");
         assert_eq!(&vv[33..], &[2.0, 3.0, 0.0], "quad 0 second triangle (c2,c3,c0) is last");

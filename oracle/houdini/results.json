@@ -2154,11 +2154,9 @@
    6,
    24
   ],
-  "p": "ORDER-DIFF",
-  "flags": [
-   "ORDER-DIFF"
-  ],
-  "verdict": "ORDER-DIFF",
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [

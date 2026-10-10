@@ -360,7 +360,7 @@ evidence = [
   "crates/sop/src/builtins/facet_sop.rs::orient_polygons_makes_adjacent_polys_opposite_winding",
   "crates/sop/src/builtins/facet_sop.rs::consolidate_fuses_nearby_points",
 ]
-notes = "H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N) / consolidate (distance-based point fusion) / orient_polygons (BFS winding consistency). NOT modelled: remove_inline, group, prim-normal flip options. UNVERIFIED-vs-Houdini: consolidate distance semantics (ours is Euclidean), orient_polygons BFS seed choice (no oracle). Houdini-oracle (H32, real Houdini 20.5): ORDER-DIFF (counts match, point renumbering differs), see docs/HOUDINI-ORACLE.md."
+notes = "H33 ORACLE (hython 20.5, fixtures/sop-facet MATCH + 3x3 grid probe): unique_points = first vertex of a point keeps its id, further vertices get appended ids per source point in DESCENDING point order (ascending vertex); unused points keep their ids. cusp cluster id order assumed same, UNVERIFIED. H18: unique_points / cusp+cusp_angle (leader clustering of face normals per point, <=64 clusters) / post_nml (uniform-averaged Newell point N) / consolidate (distance-based point fusion) / orient_polygons (BFS winding consistency). NOT modelled: remove_inline, group, prim-normal flip options. UNVERIFIED-vs-Houdini: consolidate distance semantics (ours is Euclidean), orient_polygons BFS seed choice (no oracle). Houdini-oracle (H32, real Houdini 20.5): ORDER-DIFF (counts match, point renumbering differs), see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-scatter"

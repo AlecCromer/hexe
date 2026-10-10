@@ -1,8 +1,8 @@
 //! Facet SOP (token `facet`): split shared points, optionally recompute point normals.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
-//! * `unique_points`: every vertex gets its own point (box 24 pts). New point `v` = vertex `v`; points no prim uses
-//!   are kept, appended after in input order. Wins over `cusp`.
+//! # Semantics (unique_points order hython-exact since H33; the rest UNVERIFIED vs Houdini)
+//! * `unique_points`: every vertex gets its own point (box 24 pts). First vertex of a point keeps the id, later ones get
+//!   appended ids (descending source point, ascending vertex; hython-exact). Unused points keep their ids. Wins over `cusp`.
 //! * `cusp` + `cusp_angle` (deg, clamped to 0..=180, default 60): the vertices of one point are grouped by LEADER
 //!   clustering of their prim's unit Newell normal: a vertex joins the first cluster whose leader normal is within
 //!   `cusp_angle` of its own (`dot >= cos(angle)`), else opens a new cluster (at most 64 clusters per point; later
@@ -175,21 +175,28 @@ impl Node<Detail> for Facet {
         let vp: Vec<usize> = src.vertex_point.iter().map(|&p| p as usize).collect();
         let pos = positions(src);
         // new point id per vertex + the source point of every new point
-        let mut new_vp: Vec<usize> = Vec::with_capacity(vp.len());
-        let mut origin: Vec<usize> = Vec::new();
+        let (mut new_vp, mut origin): (Vec<usize>, Vec<usize>) = (vp.clone(), (0..np).collect());
         if unique {
             if (vp.len() as u64).saturating_add(np as u64) > MAX_ELEMS {
                 return Err(failed(OP, "output element count exceeds the allocation cap"));
             }
-            let mut used = vec![false; np];
+            // Houdini 20.5 (hython-observed on box + 3x3 grid): the FIRST vertex of a point keeps its id, every further
+            // vertex gets a new point appended; new ids go out per original point in DESCENDING point order, vertices
+            // of one point ascending. Unused points keep their ids.
+            let mut by_point: Vec<Vec<usize>> = vec![Vec::new(); np];
             for (v, &pt) in vp.iter().enumerate() {
-                new_vp.push(v);
-                origin.push(pt);
-                if let Some(u) = used.get_mut(pt) {
-                    *u = true;
+                if let Some(list) = by_point.get_mut(pt) {
+                    list.push(v);
                 }
             }
-            origin.extend(used.iter().enumerate().filter(|(_, u)| !**u).map(|(i, _)| i));
+            for (pt, verts) in by_point.iter().enumerate().rev() {
+                for &v in verts.iter().skip(1) {
+                    if let Some(slot) = new_vp.get_mut(v) {
+                        *slot = origin.len();
+                    }
+                    origin.push(pt);
+                }
+            }
         } else if cusp {
             let cos = angle.to_radians().cos();
             let vn = vertex_normals(src, &pos);
@@ -199,8 +206,6 @@ impl Node<Detail> for Facet {
                     list.push(v);
                 }
             }
-            new_vp = vp.clone();
-            origin = (0..np).collect();
             for (pt, verts) in by_point.iter().enumerate() {
                 let mut leaders: Vec<Option<V3>> = Vec::new();
                 let mut ids: Vec<usize> = Vec::new();
@@ -238,9 +243,6 @@ impl Node<Detail> for Facet {
                     }
                 }
             }
-        } else {
-            new_vp = vp.clone();
-            origin = (0..np).collect();
         }
         let unchanged = origin.len() == np && new_vp == vp;
         let mut out = if unchanged {
@@ -349,10 +351,32 @@ mod tests {
         let src = cube();
         let out = cook(&*new(), src.clone(), &opts(true, false, 60.0, false)).expect("cooks");
         assert_eq!((out.point_count, out.prim_count()), (24, 6));
-        assert_eq!(out.vertex_point, (0..24).collect::<Vec<u32>>());
+        // first vertex of a point keeps the id (8 distinct), the other 16 are new; every vertex still sees its corner
+        let mut seen = out.vertex_point.clone();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..24).collect::<Vec<u32>>(), "24 distinct points");
         for (v, &pt) in src.vertex_point.iter().enumerate() {
-            assert_eq!(out.p()[v], src.p()[pt as usize]);
+            assert_eq!(out.p()[out.vertex_point[v] as usize], src.p()[pt as usize]);
         }
+        // hython-exact: first user keeps its id, new ids descend with the source point, ascend with the vertex
+        assert_eq!(&out.vertex_point[..4], &[0, 2, 3, 1].map(|x| x as u32), "prim 0 keeps its 4 ids");
+    }
+    /// hython 20.5, grid 3x3 + facet unique: prims [[0,1,4,3],[15,2,5,11],[14,12,7,6],[13,10,8,9]], 16 points.
+    #[test]
+    fn grid_unique_points_matches_houdinis_id_order() {
+        let mut src = Detail::default();
+        src.add_points(9);
+        for q in [[0u32, 1, 4, 3], [1, 2, 5, 4], [3, 4, 7, 6], [4, 5, 8, 7]] {
+            src.add_poly(&q, true);
+        }
+        let ids = |d: &Detail, q: usize| -> Vec<u32> {
+            d.vertex_point[d.prims[q].verts.start as usize..d.prims[q].verts.end as usize].to_vec()
+        };
+        assert_eq!(ids(&src, 1), vec![1, 2, 5, 4], "same input layout as Houdini's grid");
+        let out = cook(&*new(), src, &opts(true, false, 60.0, false)).expect("cooks");
+        let got: Vec<Vec<u32>> = (0..4).map(|q| ids(&out, q)).collect();
+        assert_eq!(got, vec![vec![0, 1, 4, 3], vec![15, 2, 5, 11], vec![14, 12, 7, 6], vec![13, 10, 8, 9]]);
+        assert_eq!(out.point_count, 16);
     }
     #[test]
     fn box_cusp_60_is_24_points_and_cusp_100_keeps_8() {
@@ -404,7 +428,7 @@ mod tests {
         let out = cook(&*new(), d.clone(), &opts(true, false, 60.0, false)).expect("cooks");
         assert_eq!(out.point_count, 25);
         let Some(AttrData::F32(w)) = out.attr(AttrClass::Point, "w").map(|a| &a.data) else { panic!("w lost") };
-        assert_eq!(w[24], 8.0, "orphan appended last");
+        assert_eq!(w[8], 8.0, "orphan keeps its id");
         assert_eq!(w[0], d.vertex_point[0] as f32);
         assert_eq!(out.group(AttrClass::Point, "g").map(|g| g.mask.iter().all(|m| *m)), Some(true));
         // hostile: bad angle, degenerate/open prims, empty

@@ -49,7 +49,7 @@ CAUSE = {
     "sop-clip": "cut-point order + prim order: Houdini appends the cut points (+x,-z) first, prims start [1,2,3,0]; hexe cut points (-x,-z) first. Point SET equal, counts 8/5/20 equal; no cap (dofill 0 vs capclip DEFERRED); winding now equal (H32)",
     "sop-knife": "same cut-point/prim order difference as clip (shared core); 12/10/40 equal, groups blanked in both",
     "sop-twist": "- (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess)",
-    "sop-facet": "unique_points: Houdini keeps the original 8 ids on prim 0 and appends the other corners ([1,5,4,0],[2,6,12,20]..); hexe renumbers 4 fresh points per prim",
+    "sop-facet": "zero-diff since H33: unique_points keeps the first vertex of each point on its id, later vertices get new ids appended per source point in DESCENDING order (ascending vertex); 3x3 grid also probed",
     "sop-subdivide": "Catmull-Clark counts 26/24/96 match Houdini osdcc; new face/edge/vertex point ORDER differs",
     "sop-smooth": "different model: Houdini smooth::2.0 (strength 0.5, quality 2, uniform) shrinks box to +-0.4286; hexe Laplacian x2 shrinks to +-0.2222",
     "sop-fuse": "- (box -> polyextrude -> fuse: both sides 8/6/24, polyextrude connected default now equal)",
