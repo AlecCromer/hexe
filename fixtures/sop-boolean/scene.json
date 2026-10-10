@@ -23,7 +23,8 @@
    "name": "bool1",
    "type": "boolean",
    "params": {
-    "operation": 1
+    "operation": 1,
+    "outputgroups": false
    }
   }
  ],

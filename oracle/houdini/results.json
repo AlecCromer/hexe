@@ -499,28 +499,11 @@
    9,
    42
   ],
-  "attrib_diff": {
-   "point_groups": {
-    "houdini": [],
-    "hexe": [
-     "seampts"
-    ]
-   },
-   "prim_groups": {
-    "houdini": [],
-    "hexe": [
-     "a_only",
-     "b_only",
-     "seam"
-    ]
-   }
-  },
   "p": "ORDER-DIFF",
   "flags": [
-   "ATTRIB-DIFF",
    "ORDER-DIFF"
   ],
-  "verdict": "ATTRIB-DIFF",
+  "verdict": "ORDER-DIFF",
   "bbox": {
    "houdini": [
     [

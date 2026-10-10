@@ -61,6 +61,8 @@ pub fn spec() -> Vec<ParamSpec> {
             ("shatter", "Shatter"),
         ]),
         ParamSpec::new("treat_as_solid", ParamValue::B(true)).label("Treat As Solid"),
+        // hexe default ON (hexe-only convenience); Houdini's boolean::2.0 writes no a_only/b_only/seam groups unless its output toggles are on
+        ParamSpec::new("outputgroups", ParamValue::B(true)).label("Output Piece / Seam Groups"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -911,6 +913,7 @@ impl Node<Detail> for Boolean {
             _ => return Err(bad("`operation`: missing or menu index out of range 0..=4")),
         };
         let solid = p.toggle("treat_as_solid").ok_or_else(|| bad("`treat_as_solid`: missing or not a toggle"))?;
+        let outputgroups = p.toggle("outputgroups").unwrap_or(true);
         let empty = Arc::new(Detail::default());
         let (mut a, mut b) = (inputs.first().unwrap_or(&empty), inputs.get(1).unwrap_or(&empty));
         // B - A = A' - B' with the operands swapped (the a_only / b_only group names are swapped back below)
@@ -928,6 +931,11 @@ impl Node<Detail> for Boolean {
                         _ => {}
                     }
                 }
+            }
+            if !outputgroups {
+                d.groups.retain(|g| {
+                    !matches!(g.name.as_str(), "a_only" | "b_only" | "seam" | "seampts" | "inside" | "outside")
+                });
             }
             d
         };
@@ -1045,9 +1053,31 @@ mod tests {
         let names: Vec<&str> = n.inputs().iter().map(|i| i.name).collect();
         assert_eq!(names, ["input0", "input1"]);
         let got: Vec<(&str, ParamValue)> = n.params().iter().map(|s| (s.name.as_str(), s.default.clone())).collect();
-        assert_eq!(got, [("operation", ParamValue::Menu(OP_UNION)), ("treat_as_solid", ParamValue::B(true))]);
+        assert_eq!(
+            got,
+            [
+                ("operation", ParamValue::Menu(OP_UNION)),
+                ("treat_as_solid", ParamValue::B(true)),
+                ("outputgroups", ParamValue::B(true))
+            ]
+        );
     }
 
+    /// Houdini's boolean::2.0 writes no piece / seam groups by default: `outputgroups` off drops hexe's.
+    #[test]
+    fn outputgroups_off_drops_piece_and_seam_groups() {
+        let (a, b) = (unit([0.0; 3]), unit([0.5, 0.5, 0.5]));
+        let on = bool_(&a, &b, OP_SUBTRACT);
+        assert!(on.group(AttrClass::Prim, "seam").is_some() && on.group(AttrClass::Point, "seampts").is_some());
+        let p = ParamSet::new()
+            .with("operation", ParamValue::Menu(OP_SUBTRACT))
+            .with("treat_as_solid", ParamValue::B(true))
+            .with("outputgroups", ParamValue::B(false));
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+        let off = new().cook(&ctx, &[Arc::new(a), Arc::new(b)]).expect("cooks");
+        assert!(off.groups.is_empty(), "{:?}", off.groups.iter().map(|g| &g.name).collect::<Vec<_>>());
+        assert_eq!((off.point_count, off.prim_count()), (on.point_count, on.prim_count()));
+    }
     #[test]
     fn union_of_cubes_offset_along_x_by_half_is_14_quads_16_points() {
         // A=[-.5,.5]^3, B=[0,1]x[-.5,.5]^2. Hand count: -x cap (A) + +x cap (B) + 4 sides x 3 strips
