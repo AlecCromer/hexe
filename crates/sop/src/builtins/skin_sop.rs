@@ -72,13 +72,14 @@ struct Skin {
 /// splits the `need` LONGEST edges (length^2 summed in f32, ties -> lower edge index first; octagon 8 -> 12 splits edges 6,4,1,3 in
 /// that order); `need` >= edge count splits every edge (edge order) and goes on (3 -> 8 = quarter points; pass order beyond one pass
 /// UNVERIFIED). Returns the ring (position + source-point weights) and the ring indices of the new points in CREATION order.
-fn resample(pos: &[V3], closed: bool, n: usize) -> (Vec<(V3, Vec<(usize, f64)>)>, Vec<usize>) {
+type Blend = Vec<(usize, f64)>;
+type Resampled = (Vec<(V3, Blend)>, Vec<usize>);
+fn resample(pos: &[V3], closed: bool, n: usize) -> Resampled {
     if pos.len() < 2 || n <= pos.len() {
         return (resample_even(pos, closed, n), Vec::new());
     }
     // node = (id, position, weights); id < pos.len() = original, else creation rank + pos.len()
-    let mut ring: Vec<(usize, V3, Vec<(usize, f64)>)> =
-        pos.iter().enumerate().map(|(i, q)| (i, *q, vec![(i, 1.0)])).collect();
+    let mut ring: Vec<(usize, V3, Blend)> = pos.iter().enumerate().map(|(i, q)| (i, *q, vec![(i, 1.0)])).collect();
     let mut next_id = pos.len();
     while ring.len() < n {
         let m = ring.len();
