@@ -2,7 +2,7 @@
 //!
 //! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
 //! * Backbone = every `Poly`/`Polyline` prim of input 0 with >= 2 distinct consecutive points (duplicates dropped; a closed
-//!   backbone wraps). Cross-section = every curve prim of input 1, in ITS local frame: `(x, y, z)` -> `P + s*(x*N + y*B + z*T)`.
+//!   backbone wraps). Cross-section = every curve prim of input 1, in ITS local frame: `(x, y, z)` -> `P + s*(x*(N x T) + y*N + z*T)` (oracle, Houdini 20.5; `N x T` = `-B`). Bent stations are MITRED (offset stretched by 1/cos(half turn) along the bend). `computeuv` B on: off drops the vertex `uv` (Houdini writes none). Side quads wound (i,j)(i,j+1)(i+1,j+1)(i+1,j): only a CLOCKWISE section faces outward; the start cap is the FIRST prim (corners 0,n-1..1).
 //!   Every backbone x every section is swept (cap: allocation cap -> `Failed`).
 //! * Frame: tangent `T` = normalised mean of the adjacent unit segments (one-sided at open ends); `N` starts as `up` made
 //!   orthogonal to `T` (an `up` parallel to `T` falls back to the least-aligned axis) and is carried along by parallel
@@ -70,6 +70,7 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("scaleend", ParamValue::F(1.0)).label("Scale At End").range(0.0, 10.0),
         ParamSpec::new("useptattrs", ParamValue::B(true)).label("Use Point Attributes"),
         ParamSpec::new("carryattrs", ParamValue::B(true)).label("Carry Point Attributes"),
+        ParamSpec::new("computeuv", ParamValue::B(true)).label("Compute UVs"),
         ParamSpec::new("carryprimattrs", ParamValue::B(true)).label("Carry Primitive Attributes"),
     ]
 }
@@ -127,6 +128,35 @@ fn tangents(q: &[V3], closed: bool) -> Vec<V3> {
                 (Some(a), None) | (None, Some(a)) => a,
                 (None, None) => [0.0, 0.0, 1.0],
             }
+        })
+        .collect()
+}
+
+/// Oracle (Houdini 20.5): every bent station is MITRED - the section offset component along the bend direction is stretched by
+/// `1 / cos(half turn)` so the swept wall keeps its width. Returns `(unit bend direction, stretch - 1)`; ends of an open backbone
+/// and straight stations return `None`.
+fn mitres(q: &[V3], closed: bool, t: &[V3]) -> Vec<Option<(V3, f64)>> {
+    let m = q.len();
+    let seg = |a: usize, b: usize| normalize(sub(q[b], q[a]));
+    (0..m)
+        .map(|k| {
+            let inc = if k > 0 {
+                seg(k - 1, k)
+            } else if closed {
+                seg(m - 1, 0)
+            } else {
+                None
+            }?;
+            let out = if k + 1 < m {
+                seg(k, k + 1)
+            } else if closed {
+                seg(k, 0)
+            } else {
+                None
+            }?;
+            let d = normalize(sub(out, inc))?;
+            let c = dot(t[k], inc);
+            (c > 1e-6).then(|| (d, 1.0 / c - 1.0))
         })
         .collect()
 }
@@ -239,13 +269,13 @@ fn generated(shape: u32, radius: f64, width: f64, cols: usize) -> Shape {
     let local: Vec<V3> = match shape {
         SHAPE_TUBE => (0..cols)
             .map(|k| {
-                let a = std::f64::consts::TAU * k as f64 / cols as f64;
+                let a = -std::f64::consts::TAU * k as f64 / cols as f64; // clockwise about T (outward faces, see frame note)
                 [radius * a.cos(), radius * a.sin(), 0.0]
             })
             .collect(),
         SHAPE_SQUARE => {
             let h = width / 2.0;
-            vec![[-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0]]
+            vec![[-h, -h, 0.0], [-h, h, 0.0], [h, h, 0.0], [h, -h, 0.0]]
         }
         _ => vec![[-width / 2.0, 0.0, 0.0], [width / 2.0, 0.0, 0.0]],
     };
@@ -280,6 +310,7 @@ impl Node<Detail> for Sweep {
         };
         let (useps, startcap, endcap) = (toggle(p, "useptscale")?, toggle(p, "startcap")?, toggle(p, "endcap")?);
         let (useattrs, carry) = (toggle(p, "useptattrs")?, toggle(p, "carryattrs")?);
+        let computeuv = p.toggle("computeuv").unwrap_or(true);
         let shape = match p.menu("surfaceshape") {
             Some(v) if v <= SHAPE_RIBBON => v,
             Some(v) => return Err(bad(format!("sweep: `surfaceshape`: menu index {v} out of range 0..=3"))),
@@ -355,6 +386,7 @@ impl Node<Detail> for Sweep {
             let q: Vec<V3> = st.iter().map(|&i| bpos[i]).collect();
             let mut t = tangents(&q, back.closed);
             let mut nrm = normals(&q, &t, up);
+            let mit = mitres(&q, back.closed, &t);
             let vfr = arc_fractions(&q, back.closed);
             let rows = q.len();
             let segs = if back.closed { rows } else { rows - 1 };
@@ -375,7 +407,7 @@ impl Node<Detail> for Sweep {
                         && c.iter().any(|x| *x != 0.0)
                     {
                         t[k] = quat_rot(*c, [0.0, 0.0, 1.0]);
-                        nrm[k] = quat_rot(*c, [1.0, 0.0, 0.0]);
+                        nrm[k] = quat_rot(*c, [0.0, 1.0, 0.0]); // section x -> N x T = quat X
                     }
                 }
             }
@@ -401,13 +433,25 @@ impl Node<Detail> for Sweep {
                         .filter(|o| o.local.len() == cols && o.closed == sec.closed)
                         .unwrap_or(sec);
                     for (l, ls) in shp.local.iter().zip(&sec.src) {
-                        let off = add(add(scale(n, l[0]), scale(b, l[1])), scale(t[k], l[2]));
+                        // oracle (Houdini 20.5): section x -> N x T (= -B, outward at the start of a flat arc), y -> N (up), z -> T
+                        let mut off = add(add(scale(b, -l[0]), scale(n, l[1])), scale(t[k], l[2]));
+                        if let Some((d, f)) = mit[k] {
+                            off = add(off, scale(d, dot(off, d) * f));
+                        }
                         ids.push(m.point(OP, add(q[k], scale(off, s)))?);
                         src_b.push(Some(st[k]));
                         src_s.push(*ls);
                     }
                 }
                 let wrap_cols = sec.closed;
+                if startcap && wrap_cols && cols >= 3 && !back.closed {
+                    // oracle (Houdini 20.5): the start cap comes FIRST (before the side quads), corner order 0, n-1, .. 1
+                    let order: Vec<usize> = std::iter::once(0).chain((1..cols).rev()).collect();
+                    let first: Vec<u32> = order.iter().map(|&c| ids[c]).collect();
+                    let uv: Vec<[f32; 3]> =
+                        order.iter().map(|&c| [sec.local[c][0] as f32, sec.local[c][1] as f32, 0.0]).collect();
+                    m.poly(OP, &first, &uv)?;
+                }
                 let ring_segs = if wrap_cols { cols } else { cols - 1 };
                 for i in 0..segs {
                     let i2 = (i + 1) % rows;
@@ -416,30 +460,29 @@ impl Node<Detail> for Sweep {
                         let j2 = (j + 1) % cols;
                         let (u0, u1) = (ufr[j] as f32, if j + 1 == cols { 1.0 } else { ufr[j + 1] as f32 });
                         let at = |r: usize, c: usize| ids[r * cols + c];
-                        // A=(i,j) B=(i,j2) C=(i2,j2) D=(i2,j); wound A,D,C,B
+                        // A=(i,j) B=(i,j2) C=(i2,j2) D=(i2,j); oracle (Houdini 20.5): wound A,B,C,D
                         m.quad(
                             OP,
-                            [at(i, j), at(i2, j), at(i2, j2), at(i, j2)],
-                            [[u0, v0, 0.0], [u0, v1, 0.0], [u1, v1, 0.0], [u1, v0, 0.0]],
+                            [at(i, j), at(i, j2), at(i2, j2), at(i2, j)],
+                            [[u0, v0, 0.0], [u1, v0, 0.0], [u1, v1, 0.0], [u0, v1, 0.0]],
                             tris,
                         )?;
                     }
                 }
                 if wrap_cols && cols >= 3 && !back.closed {
                     let cap_uv: Vec<[f32; 3]> = sec.local.iter().map(|l| [l[0] as f32, l[1] as f32, 0.0]).collect();
-                    if startcap {
-                        m.poly(OP, &ids[..cols], &cap_uv)?;
-                    }
                     if endcap {
-                        let last: Vec<u32> = ids[(rows - 1) * cols..].iter().rev().copied().collect();
-                        let uv: Vec<[f32; 3]> = cap_uv.iter().rev().copied().collect();
-                        m.poly(OP, &last, &uv)?;
+                        m.poly(OP, &ids[(rows - 1) * cols..], &cap_uv)?;
                     }
                 }
             }
         }
         let prim_src = m.prim_sources();
         let mut out = m.finish();
+        if !computeuv {
+            // oracle: Houdini's sweep writes no uv
+            out.attrs.retain(|a| !(a.name == "uv" && a.class == AttrClass::Vertex));
+        }
         if p.toggle("carryprimattrs").unwrap_or(true) {
             for a in bb.attrs.iter().filter(|a| a.class == AttrClass::Prim) {
                 out.add_attr(Attribute {
@@ -494,7 +537,8 @@ mod tests {
         testkit::defaults(&*new())
     }
     fn square() -> Detail {
-        curve(&[[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.5, 0.5, 0.0], [-0.5, 0.5, 0.0]], true)
+        // clockwise about +Z: Houdini's sweep winds side quads so only a clockwise section faces outward
+        curve(&[[-0.5, -0.5, 0.0], [-0.5, 0.5, 0.0], [0.5, 0.5, 0.0], [0.5, -0.5, 0.0]], true)
     }
     fn zline() -> Detail {
         curve(&[[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 2.0]], false)
@@ -526,12 +570,12 @@ mod tests {
 
     #[test]
     fn frame_follows_up_and_section_is_in_n_b_plane() {
-        // T=+Z, up=+Y -> N=+Y, B=T x N=-X: section point (x,y) -> (-y, x)... (x*N + y*B) = (-y, x, 0)
+        // T=+Z, up=+Y -> N=+Y, B=T x N=-X: oracle mapping section (x,y) -> x*(N x T) + y*N = (x, y, 0)
         let sec = curve(&[[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 0.0]], false);
         let d = run(zline(), sec, defaults()).expect("cooks");
         let p = d.p();
-        assert_eq!(p[0], [0.0, 1.0, 0.0]); // x=1 -> N=+Y
-        assert_eq!(p[1], [-2.0, 0.0, 0.0]); // y=2 -> B=-X
+        assert_eq!(p[0], [1.0, 0.0, 0.0]); // x=1 -> N x T = +X
+        assert_eq!(p[1], [0.0, 2.0, 0.0]); // y=2 -> N=+Y
         // a degenerate up (parallel to T) still builds a frame
         let d = run(zline(), square(), defaults().with("up", ParamValue::V3([0.0, 0.0, 1.0]))).expect("cooks");
         assert!(d.p().iter().flatten().all(|c| c.is_finite()) && d.prim_count() == 8);
@@ -711,15 +755,15 @@ mod tests {
     #[test]
     fn up_and_orient_point_attrs_set_the_frame() {
         let sec = curve(&[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], false);
-        // default frame: x -> N = +Y
+        // default frame: x -> N x T = +X, y -> N = +Y
         let base = run(zline(), sec.clone(), defaults()).expect("cooks");
-        assert_eq!(base.p()[0], [0.0, 1.0, 0.0]);
-        // per-point up = +X -> N = +X
+        assert_eq!(base.p()[0], [1.0, 0.0, 0.0]);
+        // per-point up = +X -> N = +X: x -> N x T = -Y, y -> +X
         let up = with_attr(zline(), "up", AttrData::V3(vec![[1.0, 0.0, 0.0]; 3]));
         let u = run(up, sec.clone(), defaults()).expect("cooks");
-        assert_eq!(u.p()[0], [1.0, 0.0, 0.0]);
-        assert_eq!(u.p()[1], [0.0, 1.0, 0.0]); // y -> B = T x N = Z x X = +Y
-        // orient = 180 deg about Z: N = -X, B = T x N = -Y
+        assert_eq!(u.p()[0], [0.0, -1.0, 0.0]);
+        assert_eq!(u.p()[1], [1.0, 0.0, 0.0]);
+        // orient = 180 deg about Z: local X -> -X, local Y -> -Y
         let o = with_attr(zline(), "orient", AttrData::V4(vec![[0.0, 0.0, 1.0, 0.0]; 3]));
         let r = run(o.clone(), sec.clone(), defaults()).expect("cooks");
         let (a, b) = (r.p()[0], r.p()[1]);
@@ -727,7 +771,7 @@ mod tests {
         assert!(b[0].abs() < 1e-6 && (b[1] + 1.0).abs() < 1e-6, "{b:?}");
         // switched off -> default frame
         let off = run(o, sec, defaults().with("useptattrs", ParamValue::B(false))).expect("cooks");
-        assert_eq!(off.p()[0], [0.0, 1.0, 0.0]);
+        assert_eq!(off.p()[0], [1.0, 0.0, 0.0]);
     }
 
     #[test]
@@ -834,5 +878,32 @@ mod tests {
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prim_count() > 100 && signed_volume(&out) > 0.0);
         assert_eq!(crate::registry().create("sweep").map(|n| n.type_name()), Some("sweep"));
+    }
+
+    /// promote-1: sweep equals real Houdini 20.5 on every recorded case (open arc, closed torus, single-polygon end caps, roll, scale, round tube); point/prim order + winding exact (computeuv off: Houdini writes no uv).
+    #[test]
+    fn sweep_matches_houdini_on_all_recorded_oracle_cases() {
+        use super::super::meshutil::testkit::houdini_twin;
+        macro_rules! case {
+            ($n:literal) => {
+                (
+                    $n,
+                    houdini_twin(
+                        include_str!(concat!("../../../../fixtures/", $n, "/scene.json")),
+                        include_bytes!(concat!("../../../../fixtures/", $n, "/houdini.geo")),
+                    ),
+                )
+            };
+        }
+        for (n, r) in [
+            case!("sop-sweep"),
+            case!("sop-sweep-closed"),
+            case!("sop-sweep-caps"),
+            case!("sop-sweep-roll"),
+            case!("sop-sweep-scale"),
+            case!("sop-sweep-tube"),
+        ] {
+            assert_eq!(r, Ok(()), "{n}");
+        }
     }
 }

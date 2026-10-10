@@ -62,7 +62,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | sort | shipped (sop-sort) | `sort.json` | ok |
 | sphere | shipped (sop-sphere) | via `convert.json` | ok |
 | subdivide | partial (sop-subdivide) | `subdivide.json` | ok |
-| sweep | partial (sop-sweep) | `sweep.json` | ok |
+| sweep | shipped (sop-sweep) | `sweep.json` | ok |
 | switch | shipped (sop-switch) | `switch.json` | ok |
 | twist | shipped (sop-twist) | `twist.json` | ok |
 | uvlayout | partial (sop-uvlayout) | via `uv.json` | ok |
