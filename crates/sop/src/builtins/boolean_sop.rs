@@ -508,7 +508,7 @@ fn bridge_hole(ls: &[Vec<u32>], pos: &[V3]) -> Option<Vec<u32>> {
         }
         for (j, &h) in hole.iter().enumerate() {
             let d = len(sub(*pos.get(o as usize)?, *pos.get(h as usize)?));
-            if best.map_or(true, |b| d < b.0 - 1e-12) {
+            if best.is_none_or(|b| d < b.0 - 1e-12) {
                 best = Some((d, i, j));
             }
         }
