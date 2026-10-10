@@ -30,3 +30,8 @@ sop-motion = { workspace = true }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# scriptable debug door (:9353, HEXE_DEBUG_PORT) — shared crate from gaia-daemon
+tauri-debug-server = { path = "../../../../gaia-daemon/src-tauri/crates/tauri-debug-server" }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }

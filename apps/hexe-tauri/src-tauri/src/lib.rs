@@ -208,6 +208,27 @@ fn parse_size(v: &str) -> Option<(f64, f64)> {
     (w >= 320.0 && h >= 240.0 && w <= 16384.0 && h <= 16384.0).then_some((w, h))
 }
 
+/// Debug-door port: `HEXE_DEBUG_PORT` (default 9353; 0/invalid = off). Drive the UI via `app-eval.js --port 9353`.
+pub fn debug_port() -> u16 {
+    tauri_debug_server::port_from_env("HEXE_DEBUG_PORT", 9353)
+}
+
+/// The app's tauri context; generic over the runtime so tests can build the real conf on `MockRuntime` (no display).
+pub fn context<R: tauri::Runtime>() -> tauri::Context<R> {
+    tauri::generate_context!()
+}
+
+/// Build the conf windows with the debug init script, then start the debug server (setup-time).
+pub fn attach_debug<R: tauri::Runtime>(
+    h: &tauri::AppHandle<R>,
+    windows: &[tauri::utils::config::WindowConfig],
+    port: u16,
+) -> tauri::Result<()> {
+    tauri_debug_server::build_windows(h, windows, port)?;
+    tauri_debug_server::spawn(h.clone(), port);
+    Ok(())
+}
+
 /// Start the app. A failure to start the webview is reported on stderr (exit 1), never a panic.
 pub fn run() {
     let cli = match cli::parse(std::env::args().skip(1)) {
@@ -236,11 +257,16 @@ pub fn run() {
     }
     let render = cli::render_req(&cli);
     let (gate, ready, ack) = shell::gate();
+    // debug door (:9353, HEXE_DEBUG_PORT): off for headless `--render` jobs. Conf windows are built in setup so they carry its init script.
+    let debug_port = if render.is_some() { 0 } else { debug_port() };
+    let mut ctx = context();
+    let windows = tauri_debug_server::defer_windows(ctx.config_mut());
     let built = tauri::Builder::default()
         .manage(App { session: Mutex::new(session), cli, render: render.clone() })
         .manage(gate)
         .setup(move |app| {
             use tauri::Manager;
+            attach_debug(app.handle(), &windows, debug_port)?;
             let size = std::env::var("HEXE_WINDOW_SIZE").ok().and_then(|v| parse_size(&v));
             if let (Some((w, h)), Some(win)) = (size, app.get_webview_window("main")) {
                 let _ = win.set_size(tauri::LogicalSize::new(w, h));
@@ -295,7 +321,7 @@ pub fn run() {
             render_save,
             render_fail,
         ]);
-    if let Err(e) = built.run(tauri::generate_context!()) {
+    if let Err(e) = built.run(ctx) {
         eprintln!("hexe: {e}");
         std::process::exit(1);
     }
