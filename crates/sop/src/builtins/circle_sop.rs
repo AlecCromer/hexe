@@ -231,6 +231,7 @@ mod tests {
 
     /// Bit-exact vs Houdini 20.5 (fixtures/sop-skin-2ring c0: 12 divisions, orient zx, radius 1; Houdini's f32 angle noise).
     #[test]
+    #[allow(clippy::excessive_precision)] // Houdini's printed 9-digit values, verbatim
     fn closed_ring_is_bit_exact_with_houdinis_f32_angle_noise() {
         let d = cook(r#"{"divisions":12,"orient":2,"radius":[1,1,0]}"#).expect("cooks");
         let want: [(f32, f32); 12] = [
