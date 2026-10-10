@@ -1,0 +1,33 @@
+# sphere_lod05 {'fromtype': 'sphere', 'totype': 'poly', 'lodu': 0.5, 'lodv': 0.5} pts=12 prims=20
+P 0 0.00000 0.00000 -1.00000
+P 1 0.00000 0.89443 -0.44721
+P 2 0.85065 0.27639 -0.44721
+P 3 0.52573 -0.72361 -0.44721
+P 4 -0.52573 -0.72361 -0.44721
+P 5 -0.85065 0.27639 -0.44721
+P 6 -0.52573 0.72361 0.44721
+P 7 -0.85065 -0.27639 0.44721
+P 8 0.00000 -0.89443 0.44721
+P 9 0.85065 -0.27639 0.44721
+P 10 0.52573 0.72361 0.44721
+P 11 0.00000 0.00000 1.00000
+F 0 Polygon 2 1 0
+F 1 Polygon 3 2 0
+F 2 Polygon 4 3 0
+F 3 Polygon 5 4 0
+F 4 Polygon 1 5 0
+F 5 Polygon 6 5 1
+F 6 Polygon 7 4 5
+F 7 Polygon 8 3 4
+F 8 Polygon 9 2 3
+F 9 Polygon 10 1 2
+F 10 Polygon 10 6 1
+F 11 Polygon 6 7 5
+F 12 Polygon 7 8 4
+F 13 Polygon 8 9 3
+F 14 Polygon 9 10 2
+F 15 Polygon 6 10 11
+F 16 Polygon 10 9 11
+F 17 Polygon 9 8 11
+F 18 Polygon 8 7 11
+F 19 Polygon 7 6 11
