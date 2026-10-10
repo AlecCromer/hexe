@@ -51,7 +51,7 @@ CAUSE = {
     "sop-twist": "- (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess)",
     "sop-facet": "zero-diff since H33: unique_points keeps the first vertex of each point on its id, later vertices get new ids appended per source point in DESCENDING order (ascending vertex); 3x3 grid also probed",
     "sop-subdivide": "zero-diff since H33: face pts then edge pts (first encounter) were already equal; quad child k ring rotated right by k (box), tri/pentagon children unrotated (probed)",
-    "sop-smooth": "different model: Houdini smooth::2.0 (strength 0.5, quality 2, uniform) shrinks box to +-0.4286; hexe Laplacian x2 shrinks to +-0.2222",
+    "sop-smooth": "H33: twin scene fixed (was unknown params iterations/pin_boundary -> HEXE-ERR); now cooks, P-DIFF: Houdini smooth::2.0 box corner factor f(strength,quality), uniform: q1 = 1/(1+2s/3) exactly; q2 s.5 = 6/7, q3 s.5 = 27/29, q10 s.5 = .98844 (MORE quality = LESS shrink; model not reverse-engineered, see ledger)",
     "sop-fuse": "- (box -> polyextrude -> fuse: both sides 8/6/24, polyextrude connected default now equal)",
     "sop-polybevel": "56/54 match (offset .1 divs 2 round); div 1–4 zero-diff incl. point/prim order",
     "sop-polyextrude": "- (splittype 0 connected components = Houdini default: closed box 8/6/24, corners mitre-displaced +-0.5 -> +-1, point order = first appearance; splittype 1 keeps the per-face path; inset/divisions/connected groups beyond the closed-box case UNVERIFIED)",

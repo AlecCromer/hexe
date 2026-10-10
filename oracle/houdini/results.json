@@ -5269,8 +5269,70 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=1: hexe-cli: scene: node `sm` (smooth): unknown parameter `iterations`"
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p_unmatched_points": 8,
+  "p_maxdev_nearest": 0.178571,
+  "p": "P-DIFF",
+  "flags": [
+   "P-DIFF"
+  ],
+  "verdict": "P-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.428571,
+     -0.428571,
+     -0.428571
+    ],
+    [
+     0.428571,
+     0.428571,
+     0.428571
+    ]
+   ],
+   "hexe": [
+    [
+     -0.25,
+     -0.25,
+     -0.25
+    ],
+    [
+     0.25,
+     0.25,
+     0.25
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-sort",

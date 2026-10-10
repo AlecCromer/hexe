@@ -8,9 +8,9 @@
    "name": "sm",
    "type": "smooth",
    "params": {
-    "iterations": 2,
     "strength": 0.5,
-    "pin_boundary": false
+    "filterquality": 2,
+    "constrainboundary": false
    }
   }
  ],
