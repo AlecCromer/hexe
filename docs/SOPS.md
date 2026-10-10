@@ -24,7 +24,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | clip | shipped (sop-clip) | `clip.json` | ok |
 | color | shipped (sop-color) | `color.json` | ok |
 | connectivity | shipped (sop-connectivity) | `connectivity.json` | ok |
-| convert | partial (sop-convert) | `convert.json` | ok |
+| convert | shipped (sop-convert) | `convert.json` | ok |
 | copytopoints | partial (sop-copytopoints) | `copytopoints.json` | ok |
 | curve | partial (sop-curve) | via `curves.json` | ok |
 | delete | shipped (sop-delete) | `delete.json` | ok |
