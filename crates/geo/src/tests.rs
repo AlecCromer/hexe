@@ -349,3 +349,12 @@ fn bgeo_binary_reads() {
     let d = read_geo(&std::fs::read(p).unwrap()).unwrap();
     assert_eq!(d.point_count, 367);
 }
+
+/// promote-1: Houdini 20.5 ASCII writes a plain per-prim `nvertices` list (not `nvertices_rle`) when counts do not run-length
+/// encode (real hython clip output, mixed 3/5-gons).
+#[test]
+fn polygon_run_accepts_plain_nvertices_list() {
+    let d = read_geo_json(include_bytes!("../../../fixtures/sop-clip-tilt/houdini.geo")).unwrap();
+    let counts: Vec<usize> = d.prims.iter().map(|p| p.verts.len()).collect();
+    assert_eq!((d.point_count, counts), (10, vec![3, 5, 5, 3, 3, 5]));
+}

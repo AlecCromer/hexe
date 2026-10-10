@@ -21,7 +21,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | boolean | partial (sop-boolean) | `boolean.json` | ok |
 | box | shipped (sop-box) | via `attribcreate.json` | ok |
 | circle | shipped (sop-circle) | via `curves.json` | ok |
-| clip | partial (sop-clip) | `clip.json` | ok |
+| clip | shipped (sop-clip) | `clip.json` | ok |
 | color | shipped (sop-color) | `color.json` | ok |
 | connectivity | shipped (sop-connectivity) | `connectivity.json` | ok |
 | convert | partial (sop-convert) | `convert.json` | ok |

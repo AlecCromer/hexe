@@ -1069,7 +1069,7 @@ id = "sop-clip"
 title = "Clip SOP (plane cut, keep above/below/both)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["clip"]
 evidence = [
   "crates/sop/src/builtins/clip_sop.rs::nurbs_curves_and_surfaces_clip_through_their_tessellation",
@@ -1084,8 +1084,9 @@ evidence = [
   "crates/sop/src/builtins/clip_sop.rs::triangle_clipped_to_x_ge_half_has_exact_area",
   "crates/sop/src/builtins/clip_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/clip_sop.rs::example_scene_cooks_and_registry_has_slot",
+"crates/sop/src/builtins/clip_sop.rs::clip_matches_houdini_on_all_recorded_oracle_cases",
 ]
-notes = "C2 (H33 order-twin): origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. H33: slot/cut order = Houdini (below in-place, split above appended; poly cycle starts at first kept corner). houdini_twin testkit for order verification. QB: capclip (boundary loops on the plane -> outward n-gons; half-box volume pinned), group (prim) + ptgroup (prims fully in point group) filters (unselected prims whole), recomputen (point N), keep menu labelled Keep All. NURBS-NOW: spline prims are tessellated (8/span) then clipped as polys (nurbs_curves_and_surfaces_clip_through_their_tessellation: exact circle upper half length pi, cylinder wall half area pi). REMAINING: polysoup, exact (non-tessellated) NURBS clipping. UNVERIFIED vs Houdini (hython blocked): menu order, which side 'above' is when dir flips. Example: examples/clip.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): TOPO-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "C2 (H33 order-twin): origin(0) dir(0,1,0) dist(0) keep menu above|below|both. Plane = origin + n*dist, n=normalize(dir); ON tolerance 1e-7 absolute (ON points belong to both sides, never split). Closed polys Sutherland-Hodgman (concave polys may get zero-width bridges), open polys split into runs, other prim kinds kept whole iff all verts kept. Cut point shared across prims+sides (one per source edge, lerp from lower id). Box y=0: above = 5 prims/8 pts, both = 10 prims/12 pts. Point float attrs lerp by exact t; int/str copy lower id. H33: slot/cut order = Houdini (below in-place, split above appended; poly cycle starts at first kept corner). houdini_twin testkit for order verification. QB: capclip (boundary loops on the plane -> outward n-gons; half-box volume pinned), group (prim) + ptgroup (prims fully in point group) filters (unselected prims whole), recomputen (point N), keep menu labelled Keep All. NURBS-NOW: spline prims are tessellated (8/span) then clipped as polys (nurbs_curves_and_surfaces_clip_through_their_tessellation: exact circle upper half length pi, cylinder wall half area pi). REMAINING: polysoup, exact (non-tessellated) NURBS clipping. PROMOTED (promote-1): zero-diff vs real Houdini 20.5 (hython clip::2.0) on 8 recorded cases, exact point/prim order + cycles (twin test): box above/below/both, tilted plane above/below, polymesh sphere both (294pts/316prims), grid, capclip(dofill, usefillpolygons off). Layout = intact prims first, then each split prim as the piece on its first corner side then the other; cycle starts at first kept corner. Menu order above|below|all verified. NOT oracle-covered: group/ptgroup/recomputen filters, polysoup. Example: examples/clip.json."
 
 [[feature]]
 id = "sop-connectivity"
