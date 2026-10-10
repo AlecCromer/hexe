@@ -13,7 +13,7 @@
 //!   A.Out + A.CoOpp (A trimmed, B contributes nothing); intersect = A.In + A.CoSame (A trimmed to B).
 //! * Cleanup: fragment vertices are welded (1e-5 grid), T-vertices are inserted along edges, fragments of the same source
 //!   face and tag are re-fused when their union is ONE simple loop (so an L-shaped remainder is one hexagon, not 3 quads), then
-//!   vertices collinear in every polygon that uses them are removed. A face with a hole stays as its un-fused fragments.
+//!   vertices collinear in every polygon that uses them are removed. A face with ONE hole is bridged into one polygon (closest outer-corner/hole pair, Houdini layout); more holes stay un-fused.
 //!   Fragments with different tags (e.g. the coplanar overlap and the rest of the same face) are NOT fused.
 //! * QA: `operation` also 3 = B - A (swapped operands, group names swapped back) and 4 = Shatter (A cut by B, all pieces kept, B dropped;
 //!   prim groups `inside` = A.In|CoSame, `outside`). Attribute transfer: prim attrs follow the source prim (other operand = default),
