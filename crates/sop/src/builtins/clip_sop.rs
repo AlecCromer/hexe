@@ -244,6 +244,29 @@ pub(super) fn clip_sel(
     // BELOW piece immediately followed by its ABOVE piece; the KNIFE node keeps the slot/append layout above.
     let clip_layout = op == "clip";
     let mut split: Vec<Slot> = Vec::new();
+    // knife: is the cut on prim `qi`'s closing edge (last -> first corner) minted by that prim (no earlier selected prim cuts the edge)?
+    let mut closing_new = vec![false; src.prims.len()];
+    if !clip_layout {
+        let mut seen: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+        for (qi, pr) in src.prims.iter().enumerate() {
+            let Some(vp) = prim_vpts(src, pr, np) else { continue };
+            if sel.is_some_and(|s| !s.get(qi).copied().unwrap_or(false)) {
+                continue;
+            }
+            let m = vp.len();
+            for k in 0..m {
+                let (a, b) = (vp[(k + m - 1) % m].1, vp[k].1);
+                if matches!((side.get(a), side.get(b)), (Some(&1), Some(&-1)) | (Some(&-1), Some(&1))) {
+                    let fresh = seen.insert((a.min(b), a.max(b)));
+                    if k == 0
+                        && let Some(c) = closing_new.get_mut(qi)
+                    {
+                        *c = fresh;
+                    }
+                }
+            }
+        }
+    }
     for (qi, pr) in src.prims.iter().enumerate() {
         let Some(vp) = prim_vpts(src, pr, np) else { continue };
         if sel.is_some_and(|s| !s.get(qi).copied().unwrap_or(false)) {
@@ -279,9 +302,31 @@ pub(super) fn clip_sel(
         } else if above.is_empty() {
             slots.push((qi, below, false));
         } else {
-            // oracle (knife-grid): the split prim keeps its slot with the piece holding MORE corners, ties -> BELOW; the other is appended
+            // LAST5 oracle (932 split prims, hython random planes on box / sphere / grid, 0 misses): the split prim keeps its slot
+            // with the piece holding its LAST corner, except when the closing edge (last -> first) is itself cut and that cut is
+            // minted by THIS prim (no earlier prim shares the edge): then the piece holding the FIRST corner keeps it. Prims whose
+            // deciding corner sits on the plane fall back to the older rule: the piece with MORE corners, ties -> BELOW.
+            // cycle start of the piece WITHOUT the first corner when the closing edge is cut (oracle, same 932 prims): Houdini starts
+            // it at the closing-edge cut, i.e. rotates it right by one, unless the other piece holds the first corner ALONE.
+            let (mut above, mut below) = (above, below);
+            if let (Some(&(_, p0)), Some(&(_, pl))) = (vp.first(), vp.last())
+                && matches!((side.get(p0), side.get(pl)), (Some(&1), Some(&-1)) | (Some(&-1), Some(&1)))
+                && let (Some((ka, ca)), Some((kb, cb))) = (above.first_mut(), below.first_mut())
+                && *ka == (PrimKind::Poly { closed: true })
+                && *kb == (PrimKind::Poly { closed: true })
+            {
+                let has_first = |c: &[Corner]| c.iter().any(|x| matches!(x.0, PRef::S(p) if p == p0));
+                let n_src = |c: &[Corner]| c.iter().filter(|x| matches!(x.0, PRef::S(_))).count();
+                let (x, y) = if has_first(ca) { (&*ca, cb) } else { (&*cb, ca) };
+                if n_src(x) >= 2 {
+                    y.rotate_right(1);
+                }
+            }
+            let deciding = if closing_new.get(qi).copied().unwrap_or(false) { vp.first() } else { vp.last() };
+            let by_side = deciding.and_then(|&(_, p)| side.get(p).copied()).filter(|&x| x != 0);
             let n = |v: &[(PrimKind, Vec<Corner>)]| v.iter().map(|(_, c)| c.len()).sum::<usize>();
-            if n(&above) > n(&below) {
+            let above_keeps = by_side.map_or(n(&above) > n(&below), |x| x == 1);
+            if above_keeps {
                 slots.push((qi, above, true));
                 appended.push((qi, below, false));
             } else {

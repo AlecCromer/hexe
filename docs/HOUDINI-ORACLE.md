@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 81, STAT-PASS 10, TOPO-DIFF 4, ATTRIB-DIFF 1, ORDER-DIFF 1, HEXE-ERR 1  (N=98)
+Histogram: MATCH 85, STAT-PASS 10, TOPO-DIFF 2, ATTRIB-DIFF 1, ORDER-DIFF 1, HEXE-ERR 1  (N=100)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -51,9 +51,11 @@ Histogram: MATCH 81, STAT-PASS 10, TOPO-DIFF 4, ATTRIB-DIFF 1, ORDER-DIFF 1, HEX
 | sop-grouppromote | 8/6/24 | 8/6/24 | MATCH | MATCH | - (point group toppts both) |
 | sop-knife | 12/10/40 | 12/10/40 | MATCH | MATCH | same cut-point/prim order difference as clip (shared core); 12/10/40 equal, groups blanked in both |
 | sop-knife-below | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
+| sop-knife-box-above | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
 | sop-knife-grid | 17/10/40 | 17/10/40 | MATCH | MATCH |  |
-| sop-knife-sphere | 294/316/1216 | 294/316/1216 | MATCH | TOPO-DIFF |  |
-| sop-knife-tilt | 14/12/48 | 14/12/48 | MATCH | TOPO-DIFF |  |
+| sop-knife-sphere | 294/316/1216 | 294/316/1216 | MATCH | MATCH |  |
+| sop-knife-sphere2 | 306/328/1264 | 306/328/1264 | MATCH | MATCH |  |
+| sop-knife-tilt | 14/12/48 | 14/12/48 | MATCH | MATCH |  |
 | sop-line | 5/1/5 | 5/1/5 | MATCH | MATCH | - |
 | sop-matchsize | 8/6/24 | 8/6/24 | MATCH | MATCH | - (explicit target size/center, P equal) |
 | sop-measure | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim attr area present both (values not compared)) |

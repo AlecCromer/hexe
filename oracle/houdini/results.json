@@ -2834,6 +2834,74 @@
   }
  },
  {
+  "sop": "sop-knife-box-above",
+  "houdini": [
+   8,
+   5,
+   20
+  ],
+  "hexe": [
+   8,
+   5,
+   20
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.340839,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.340839,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
   "sop": "sop-knife-grid",
   "houdini": [
    17,
@@ -2914,11 +2982,76 @@
    1216
   ],
   "p": "MATCH",
-  "topo_bad_prims": 25,
-  "flags": [
-   "TOPO-DIFF"
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-knife-sphere2",
+  "houdini": [
+   306,
+   328,
+   1264
   ],
-  "verdict": "TOPO-DIFF",
+  "hexe": [
+   306,
+   328,
+   1264
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [
@@ -2985,11 +3118,8 @@
    48
   ],
   "p": "MATCH",
-  "topo_bad_prims": 5,
-  "flags": [
-   "TOPO-DIFF"
-  ],
-  "verdict": "TOPO-DIFF",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [

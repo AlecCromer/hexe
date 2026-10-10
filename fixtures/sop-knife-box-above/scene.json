@@ -1,0 +1,38 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "box"
+  },
+  {
+   "name": "op1",
+   "type": "knife",
+   "params": {
+    "origin": [
+     0,
+     0,
+     0
+    ],
+    "dir": [
+     0.2,
+     -1,
+     0.6
+    ],
+    "dist": 0.05,
+    "keep": 0,
+    "seamgroup": "",
+    "abovegroup": "",
+    "belowgroup": ""
+   }
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

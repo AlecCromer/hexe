@@ -391,43 +391,35 @@ mod tests {
         assert_eq!(cook(&*new(), Detail::default(), &defaults(&*new())).expect("cooks").point_count, 0);
     }
 
-    /// promote-1: axis-aligned plane cuts of the box equal real Houdini 20.5 exactly (keep both = slot/append layout, cycles
-    /// unrotated; keep below). KNOWN GAP pinned: tilted plane (box) and sphere differ in cut-point mint order and which half of a
-    /// split prim keeps the original slot (Houdini picks the in-place half by a rule not recoverable from black-box cooks).
+    /// Knife equals real Houdini 20.5 (hython) point-for-point, prim-for-prim on every recorded case: axis-aligned box (keep both /
+    /// below / above), tilted box, grid, polymesh sphere x2. LAST5 closed the slot rule: a split prim keeps its slot with the piece
+    /// holding its LAST corner, except when the closing edge is cut by a point minted by THIS prim (then the FIRST corner's piece);
+    /// the piece without the first corner starts at the closing-edge cut unless the other piece holds the first corner alone.
+    /// (Derived on 932 split prims of 60 random hython planes, then verified 100/100 random cases zero-diff.)
     #[test]
-    fn knife_matches_houdini_on_axis_aligned_box_and_pins_the_tilted_gap() {
-        let twin = |scene: &str, geo: &[u8]| houdini_twin(scene, geo);
-        assert_eq!(
-            twin(
-                include_str!("../../../../fixtures/sop-knife/scene.json"),
-                include_bytes!("../../../../fixtures/sop-knife/houdini.geo")
-            ),
-            Ok(())
-        );
-        assert_eq!(
-            twin(
-                include_str!("../../../../fixtures/sop-knife-below/scene.json"),
-                include_bytes!("../../../../fixtures/sop-knife-below/houdini.geo")
-            ),
-            Ok(())
-        );
-        // trio: grid cut by a tilted plane = zero diff (point order via the closing-edge-first mint pre-pass, slot to the piece with more corners)
-        assert_eq!(
-            twin(
-                include_str!("../../../../fixtures/sop-knife-grid/scene.json"),
-                include_bytes!("../../../../fixtures/sop-knife-grid/houdini.geo")
-            ),
-            Ok(())
-        );
-        // tilt: point order now equals Houdini's; 5 of 12 prims still differ (slot choice of 2 split prims + one cycle start)
-        assert!(
-            twin(
-                include_str!("../../../../fixtures/sop-knife-tilt/scene.json"),
-                include_bytes!("../../../../fixtures/sop-knife-tilt/houdini.geo")
-            )
-            .is_err(),
-            "gap closed? flip the knife row"
-        );
+    fn knife_matches_houdini_exactly_on_all_recorded_oracle_cases() {
+        macro_rules! case {
+            ($n:literal) => {
+                (
+                    $n,
+                    houdini_twin(
+                        include_str!(concat!("../../../../fixtures/", $n, "/scene.json")),
+                        include_bytes!(concat!("../../../../fixtures/", $n, "/houdini.geo")),
+                    ),
+                )
+            };
+        }
+        for (n, r) in [
+            case!("sop-knife"),
+            case!("sop-knife-below"),
+            case!("sop-knife-grid"),
+            case!("sop-knife-tilt"),
+            case!("sop-knife-sphere"),
+            case!("sop-knife-sphere2"),
+            case!("sop-knife-box-above"),
+        ] {
+            assert_eq!(r, Ok(()), "{n}");
+        }
     }
 
     #[test]

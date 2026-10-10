@@ -36,7 +36,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | group | shipped (sop-group) | via `group-blast.json` | ok |
 | groupdelete | shipped (sop-groupdelete) | via `group-blast.json` | ok |
 | grouppromote | shipped (sop-grouppromote) | via `group-blast.json` | ok |
-| knife | partial (sop-knife) | `knife.json` | ok |
+| knife | shipped (sop-knife) | `knife.json` | ok |
 | line | shipped (sop-line) | via `bend.json` | ok |
 | matchsize | shipped (sop-matchsize) | `matchsize.json` | ok |
 | measure | shipped (sop-measure) | `measure.json` | ok |
