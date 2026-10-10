@@ -1,0 +1,103 @@
+{
+ "sop": "sop-curve-nurbs-closed",
+ "houdini": "20.5.487",
+ "note": "5 CVs closed NURBS order 3 (periodic); twin = curve::2.0 savedstashgeo closed NURBSCurve",
+ "points": 5,
+ "prims": 1,
+ "vertices": 5,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "NURBSCurve"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  -1.0,
+  0.0,
+  0.0
+ ],
+ "bbox_max": [
+  3.0,
+  3.0,
+  0.0
+ ],
+ "P": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   3.0,
+   2.0,
+   0.0
+  ],
+  [
+   1.0,
+   3.0,
+   0.0
+  ],
+  [
+   -1.0,
+   2.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   3.0,
+   2.0,
+   0.0
+  ],
+  [
+   1.0,
+   3.0,
+   0.0
+  ],
+  [
+   -1.0,
+   2.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2,
+   3,
+   4
+  ]
+ ],
+ "prim_closed": [
+  true
+ ]
+}

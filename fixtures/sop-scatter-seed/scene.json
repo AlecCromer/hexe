@@ -1,0 +1,26 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "scatter1",
+   "type": "scatter",
+   "params": {
+    "npts": 1500,
+    "seed": 11,
+    "primnumattrib": "sourceprim"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "scatter1",
+   0
+  ]
+ ],
+ "display": "scatter1"
+}

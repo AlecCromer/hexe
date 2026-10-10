@@ -1,0 +1,16 @@
+{
+ "nodes": [
+  {
+   "name": "curve1",
+   "type": "curve",
+   "params": {
+    "coords": "0,0,0 2,0,0 3,2,0 1,3,0 -1,2,0",
+    "type": 2,
+    "order": 3,
+    "close": true
+   }
+  }
+ ],
+ "edges": [],
+ "display": "curve1"
+}

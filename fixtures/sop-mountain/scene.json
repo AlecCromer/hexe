@@ -4,8 +4,8 @@
    "name": "grid1",
    "type": "grid",
    "params": {
-    "rows": 11,
-    "cols": 11
+    "rows": 70,
+    "cols": 70
    }
   },
   {
@@ -13,7 +13,7 @@
    "type": "mountain",
    "params": {
     "height": 0.5,
-    "elementsize": 3,
+    "elementsize": 0.4,
     "seed": 3
    }
   }

@@ -4,9 +4,14 @@
 steps: (1) hexe-cli cook fixtures/<sop>/scene.json -> DIR/<sop>.geo  (2) hython summarize_hexe.py DIR  (3) compare vs fixtures/<sop>/houdini.json
 -> oracle/houdini/results.json + docs/HOUDINI-ORACLE.md
 Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF (same P order + prim cycles, direction reversed) > ORDER-DIFF (same P multiset, other order) > P-DIFF > MATCH.
-Strict: permutation is only CLASSIFIED (ORDER-DIFF), never passed as MATCH. P tolerance 1e-4."""
+Strict: permutation is only CLASSIFIED (ORDER-DIFF), never passed as MATCH. P tolerance 1e-4.
+STAT mode (houdini.json `oracle`="stat", see parity/README.md, metrics in statoracle.py): RNG/noise streams are not reproducible, so distributions are compared instead of P:
+count exact, bbox min/max per axis +-2 % of the Houdini extent, mean nearest-neighbour distance +-5 %, P std per axis +-5 %, attribute names exact
+(kind `disp`: count exact, mean + std of |P - base| +-5 %, attribute names exact). Verdict STAT-PASS | STAT-FAIL, never MATCH."""
 import argparse, glob, json, os, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import statoracle
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 TOL = 1e-4
 ap = argparse.ArgumentParser()
@@ -52,6 +57,10 @@ def cmp_one(s):
         res.update(verdict="HEXE-ERR", detail="hexe .geo not loadable in Houdini: " + X["load_error"])
         return res
     res["hexe"] = [X["points"], X["prims"], X["vertices"]]
+    if H.get("oracle") == "stat":
+        ok, met, bad = statoracle.compare(H, X)
+        res.update(verdict="STAT-PASS" if ok else "STAT-FAIL", p="stat", flags=[], stat=met, detail=(statoracle.fmt(met) + (" | FAIL: " + "; ".join(bad) if bad else "")))
+        return res
     flags = []
     if res["houdini"] != res["hexe"]:
         flags.append("COUNT-DIFF")
@@ -104,7 +113,7 @@ def cmp_one(s):
                 wind += 1
             else:
                 bad += 1
-        if bad or H.get("prim_closed") != X.get("prim_closed") or len(ht) != len(xt):
+        if bad or H.get("prim_closed") != X.get("prim_closed") or len(ht) != len(xt) or H.get("prim_types") != X.get("prim_types"):
             flags.append("TOPO-DIFF")
             res["topo_bad_prims"] = bad
         elif wind:

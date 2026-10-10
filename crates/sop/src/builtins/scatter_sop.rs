@@ -29,12 +29,16 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("relaxpoints", ParamValue::B(false)).label("Relax Points"),
         ParamSpec::new("relaxiterations", ParamValue::I(5)).label("Relax Iterations").range(0.0, 50.0),
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
-        ParamSpec::new("generateby", ParamValue::Menu(0))
-            .label("Generate By")
-            .menu(&[("count", "Count"), ("density", "Density")]),
+        ParamSpec::new("generateby", ParamValue::Menu(0)).label("Generate By").menu(&[
+            ("count", "Count"),
+            ("density", "Density"),
+            ("countperprim", "Count per Primitive"),
+        ]),
+        ParamSpec::new("primcountattrib", ParamValue::S("count".into())).label("Primitive Count Attribute"),
+        ParamSpec::new("outputnormals", ParamValue::B(false)).label("Output Normals"),
         ParamSpec::new("density", ParamValue::F(10.0)).label("Density").range(0.0, 100.0),
         ParamSpec::new("attribs", ParamValue::S(String::new())).label("Attributes to Transfer"),
-        ParamSpec::new("primnumattrib", ParamValue::S("sourceprim".into())).label("Source Prim Attribute"),
+        ParamSpec::new("primnumattrib", ParamValue::S(String::new())).label("Source Prim Attribute"),
         ParamSpec::new("emergencylimit", ParamValue::I(0)).label("Emergency Limit").range(0.0, 1_000_000.0),
         ParamSpec::new("overridedensity", ParamValue::B(false)).label("Override Density"),
         ParamSpec::new("overridedensityattrib", ParamValue::S("density".into())).label("Override Density Attribute"),
@@ -172,6 +176,10 @@ struct Opts {
     group: String,
     /// 0 = Count (`npts`), 1 = Density (`density` points per unit weighted area)
     generateby: u32,
+    /// prim attr holding the per-prim point count (generateby 2: int or float, rounded, < 0 = 0)
+    primcount_attrib: String,
+    /// write point attr `N` (prim `N` if present, else geometric normal); Houdini scatter writes none unless transferred
+    normals: bool,
     density: f64,
     relax: bool,
     relax_iters: usize,
@@ -197,6 +205,8 @@ impl Opts {
             density_attrib: name.to_string(),
             group: String::new(),
             generateby: 0,
+            primcount_attrib: "count".into(),
+            normals: true,
             density: 10.0,
             relax: false,
             relax_iters: 0,
@@ -323,7 +333,47 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
         total += t.area * (t.w[0] + t.w[1] + t.w[2]) / 3.0;
         cdf.push(total);
     }
-    let mut npts = if o.generateby == 1 {
+    // Count per Primitive: slot k belongs to prim group `slots[k]`; each prim places its own count of points on its own triangles
+    let mut groups: Vec<(Vec<usize>, Vec<f64>)> = Vec::new();
+    let mut slots: Vec<usize> = Vec::new();
+    if o.generateby == 2 {
+        let counts: Vec<f64> = match d.attr(AttrClass::Prim, &o.primcount_attrib).map(|a| &a.data) {
+            Some(AttrData::I32(v)) => v.iter().map(|&x| f64::from(x)).collect(),
+            Some(AttrData::F32(v)) => v.iter().map(|&x| f64::from(x).round()).collect(),
+            _ => {
+                return Err(CookError::BadParam(format!(
+                    "scatter: `primcountattrib` `{}` is not an int/float prim attribute",
+                    o.primcount_attrib
+                )));
+            }
+        };
+        let mut by_prim: std::collections::BTreeMap<usize, Vec<usize>> = std::collections::BTreeMap::new();
+        for (ti, t) in tris.iter().enumerate() {
+            by_prim.entry(t.prim).or_default().push(ti);
+        }
+        for (prim, tl) in by_prim {
+            let n = counts.get(prim).copied().unwrap_or(0.0).max(0.0);
+            if !n.is_finite() || slots.len() as f64 + n > f64::from(MAX_POINTS) {
+                return Err(CookError::Failed(format!("scatter: per-prim count total exceeds {MAX_POINTS}")));
+            }
+            let mut acc = 0.0f64;
+            let local: Vec<f64> = tl
+                .iter()
+                .filter_map(|&ti| tris.get(ti))
+                .map(|t| {
+                    acc += t.area * (t.w[0] + t.w[1] + t.w[2]) / 3.0;
+                    acc
+                })
+                .collect();
+            if acc > 0.0 && acc.is_finite() {
+                slots.extend(std::iter::repeat_n(groups.len(), n as usize));
+                groups.push((tl, local));
+            }
+        }
+    }
+    let mut npts = if o.generateby == 2 {
+        slots.len()
+    } else if o.generateby == 1 {
         // override attr = points per unit area itself; otherwise the weight is relative and `density` is the global rate
         let rate = if o.override_on { 1.0 } else { o.density };
         let mut n = (total * rate * o.density_scale).round();
@@ -352,7 +402,15 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
     let mut bary = vec![(0.0f64, 0.0f64); npts];
     for i in 0..npts {
         let pick = |target: f64| cdf.partition_point(|&c| c <= target).min(tris.len() - 1);
-        let ti = pick(rng.unit() * total);
+        let ti = if o.generateby == 2 {
+            let Some((tl, local)) = slots.get(i).and_then(|&g| groups.get(g)) else { continue };
+            let sum = local.last().copied().unwrap_or(0.0);
+            let target = rng.unit() * sum;
+            let k = local.partition_point(|&c| c <= target).min(tl.len().saturating_sub(1));
+            tl.get(k).copied().unwrap_or(0)
+        } else {
+            pick(rng.unit() * total)
+        };
         let Some(t) = tris.get(ti) else { continue };
         let wmax = t.w[0].max(t.w[1]).max(t.w[2]);
         let (mut u, mut v);
@@ -398,12 +456,14 @@ fn scatter_with(d: &Detail, o: &Opts) -> Result<Detail, CookError> {
             type_info: TypeInfo::None,
         });
     }
-    out.add_attr(Attribute {
-        name: "N".into(),
-        class: AttrClass::Point,
-        data: AttrData::V3(nrm),
-        type_info: TypeInfo::Normal,
-    });
+    if o.normals {
+        out.add_attr(Attribute {
+            name: "N".into(),
+            class: AttrClass::Point,
+            data: AttrData::V3(nrm),
+            type_info: TypeInfo::Normal,
+        });
+    }
     // ---- attribute transfer ----
     let primuv = o.output_primuv.then(|| {
         let uv: Vec<[f32; 3]> = (0..npts)
@@ -513,9 +573,11 @@ fn read(p: &ParamSet) -> Result<Opts, CookError> {
     // QA params are optional: absent = default
     o.group = p.string("group").unwrap_or("").to_string();
     o.generateby = p.menu("generateby").unwrap_or(0);
-    if o.generateby > 1 {
+    if o.generateby > 2 {
         return Err(CookError::BadParam(format!("scatter: `generateby` {} out of range", o.generateby)));
     }
+    o.primcount_attrib = p.string("primcountattrib").unwrap_or("count").to_string();
+    o.normals = p.toggle("outputnormals").unwrap_or(false);
     o.density = f64::from(p.float("density").unwrap_or(10.0));
     if !o.density.is_finite() || o.density < 0.0 {
         return Err(CookError::BadParam(format!("scatter: `density` {} must be finite >= 0", o.density)));
@@ -693,6 +755,58 @@ mod tests {
         let [a, b] = counts(&scatter(&d, 40_000, 3, "w").expect("cooks"));
         let r = a as f64 / b as f64;
         assert!((r - 3.0).abs() / 3.0 < 0.05, "ratio {r}");
+    }
+    /// generateby 2: every prim gets exactly its own `count` points, inside itself; negative / zero counts give none; missing attr = error.
+    #[test]
+    fn count_per_primitive_places_exactly_the_prim_attribute_on_each_prim() {
+        let mut d = quads(
+            &[
+                [0.0; 3],
+                [1.0, 0.0, 0.0],
+                [1.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [3.0, 0.0, 0.0],
+                [4.0, 0.0, 0.0],
+                [4.0, 1.0, 0.0],
+                [3.0, 1.0, 0.0],
+            ],
+            &[[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 2, 3]],
+        );
+        let mut o = Opts::basic(1, 4, "");
+        o.generateby = 2;
+        assert!(scatter_with(&d, &o).is_err(), "no `count` attribute");
+        d.add_attr(Attribute {
+            name: "count".into(),
+            class: AttrClass::Prim,
+            data: AttrData::I32(vec![7, 3, -2]),
+            type_info: TypeInfo::None,
+        });
+        let out = scatter_with(&d, &o).expect("cooks");
+        assert_eq!(out.point_count, 10);
+        let Some(AttrData::I32(src)) = out.attr(AttrClass::Point, "sourceprim").map(|a| &a.data) else {
+            panic!("sourceprim")
+        };
+        assert_eq!((src.iter().filter(|&&s| s == 0).count(), src.iter().filter(|&&s| s == 1).count()), (7, 3));
+        assert!(src.iter().zip(out.p()).all(|(&s, p)| if s == 0 { p[0] <= 1.0 } else { p[0] >= 3.0 }));
+    }
+    /// Houdini scatter writes no `N` and no source-prim attribute unless asked: the node defaults produce `P` only.
+    #[test]
+    fn node_defaults_write_p_only_and_outputnormals_adds_n() {
+        let d = a4_b1();
+        let run = |extra: Option<(&str, ParamValue)>| {
+            let mut p = super::super::meshutil::testkit::defaults(&*new()).with("npts", ParamValue::I(50));
+            if let Some((k, v)) = extra {
+                p = p.with(k, v);
+            }
+            let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+            (*new().cook(&ctx, &[Arc::new(d.clone())]).expect("cooks")).clone()
+        };
+        let plain = run(None);
+        assert_eq!(plain.attrs.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["P"]);
+        let n = run(Some(("outputnormals", ParamValue::B(true))));
+        assert!(n.attr(AttrClass::Point, "N").is_some());
+        let s = run(Some(("primnumattrib", ParamValue::S("sourceprim".into()))));
+        assert!(s.attr(AttrClass::Point, "sourceprim").is_some());
     }
     #[test]
     fn point_density_gradient_skews_mean() {

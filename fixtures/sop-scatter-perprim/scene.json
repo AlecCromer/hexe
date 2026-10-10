@@ -1,0 +1,40 @@
+{
+ "nodes": [
+  {
+   "name": "grid1",
+   "type": "grid"
+  },
+  {
+   "name": "w",
+   "type": "wrangle",
+   "params": {
+    "class": "primitive",
+    "snippet": "i@count = (@primnum % 4) * 10 + 10;"
+   }
+  },
+  {
+   "name": "scatter1",
+   "type": "scatter",
+   "params": {
+    "generateby": 2,
+    "primcountattrib": "count",
+    "seed": 2
+   }
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "w",
+   0
+  ],
+  [
+   "w",
+   0,
+   "scatter1",
+   0
+  ]
+ ],
+ "display": "scatter1"
+}
