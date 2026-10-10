@@ -5227,8 +5227,66 @@
    288,
    1152
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 300 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep.geo"
+  "hexe": [
+   300,
+   288,
+   1152
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ],
+   "hexe": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-sweep-caps",
@@ -5237,8 +5295,66 @@
    290,
    1176
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 300 points, 290 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-caps.geo"
+  "hexe": [
+   300,
+   290,
+   1176
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ],
+   "hexe": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-sweep-closed",
@@ -5247,8 +5363,66 @@
    288,
    1152
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 288 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-closed.geo"
+  "hexe": [
+   288,
+   288,
+   1152
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.302589,
+     -0.3,
+     -2.302589
+    ],
+    [
+     2.302589,
+     0.3,
+     2.302589
+    ]
+   ],
+   "hexe": [
+    [
+     -2.302589,
+     -0.3,
+     -2.302589
+    ],
+    [
+     2.302589,
+     0.3,
+     2.302589
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-sweep-roll",
@@ -5257,8 +5431,66 @@
    288,
    1152
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 300 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-roll.geo"
+  "hexe": [
+   300,
+   288,
+   1152
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ],
+   "hexe": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-sweep-scale",
@@ -5267,8 +5499,66 @@
    288,
    1152
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 300 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-scale.geo"
+  "hexe": [
+   300,
+   288,
+   1152
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.602903,
+     -0.6,
+     -2.597111
+    ],
+    [
+     2.597111,
+     0.6,
+     2.602903
+    ]
+   ],
+   "hexe": [
+    [
+     -2.602903,
+     -0.6,
+     -2.597111
+    ],
+    [
+     2.597111,
+     0.6,
+     2.602903
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-sweep-tube",
@@ -5277,8 +5567,66 @@
    194,
    784
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 200 points, 194 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-tube.geo"
+  "hexe": [
+   200,
+   194,
+   784
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ],
+   "hexe": [
+    [
+     -2.301452,
+     -0.3,
+     -2.298555
+    ],
+    [
+     2.298555,
+     0.3,
+     2.301452
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-switch",
@@ -5287,8 +5635,66 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 8 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-switch.geo"
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-transform",
@@ -5297,8 +5703,66 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 8 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-transform.geo"
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.316987,
+     1.0,
+     2.316987
+    ],
+    [
+     1.683013,
+     3.0,
+     3.683013
+    ]
+   ],
+   "hexe": [
+    [
+     0.316987,
+     1.0,
+     2.316987
+    ],
+    [
+     1.683013,
+     3.0,
+     3.683013
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-twist",
@@ -5307,8 +5771,66 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 8 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-twist.geo"
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-uvlayout",
@@ -5317,8 +5839,84 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 8 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-uvlayout.geo"
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "attrib_diff": {
+   "detail": {
+    "houdini_only": [
+     "coverage",
+     "numnonpacked"
+    ],
+    "hexe_only": []
+   }
+  },
+  "p": "MATCH",
+  "flags": [
+   "ATTRIB-DIFF"
+  ],
+  "verdict": "ATTRIB-DIFF",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": [
+     "coverage",
+     "numnonpacked"
+    ]
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-uvproject",
@@ -5327,8 +5925,70 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 8 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-uvproject.geo"
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-uvunwrap",
@@ -5337,8 +5997,70 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 8 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-uvunwrap.geo"
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "sop-wrangle",
@@ -5347,8 +6069,62 @@
    0,
    0
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 121 points, 0 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-wrangle.geo"
+  "hexe": [
+   121,
+   0,
+   0
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     -0.479462,
+     -5.0
+    ],
+    [
+     5.0,
+     0.479462,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     -0.479462,
+     -5.0
+    ],
+    [
+     5.0,
+     0.479462,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [],
+   "hexe": []
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "x-circle-yz",
@@ -5357,8 +6133,66 @@
    1,
    6
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 6 points, 1 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-circle-yz.geo"
+  "hexe": [
+   6,
+   1,
+   6
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     -0.866025,
+     -2.0
+    ],
+    [
+     0.0,
+     0.866025,
+     2.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     -0.866025,
+     -2.0
+    ],
+    [
+     0.0,
+     0.866025,
+     2.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "x-circle-zx",
@@ -5367,8 +6201,66 @@
    1,
    6
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 6 points, 1 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-circle-zx.geo"
+  "hexe": [
+   6,
+   1,
+   6
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -2.0,
+     0.0,
+     -0.866025
+    ],
+    [
+     2.0,
+     0.0,
+     0.866025
+    ]
+   ],
+   "hexe": [
+    [
+     -2.0,
+     0.0,
+     -0.866025
+    ],
+    [
+     2.0,
+     0.0,
+     0.866025
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "x-grid-xy",
@@ -5377,8 +6269,66 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 12 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-grid-xy.geo"
+  "hexe": [
+   12,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -3.0,
+     -2.0,
+     0.0
+    ],
+    [
+     3.0,
+     2.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     -3.0,
+     -2.0,
+     0.0
+    ],
+    [
+     3.0,
+     2.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "x-grid-yz",
@@ -5387,8 +6337,66 @@
    6,
    24
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 12 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-grid-yz.geo"
+  "hexe": [
+   12,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     -2.0,
+     -3.0
+    ],
+    [
+     0.0,
+     2.0,
+     3.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     -2.0,
+     -3.0
+    ],
+    [
+     0.0,
+     2.0,
+     3.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  },
  {
   "sop": "x-sphere-tri0",
@@ -5397,7 +6405,65 @@
    16,
    64
   ],
-  "verdict": "HEXE-ERR",
-  "detail": "cook rc=0: cooked 14 points, 16 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-sphere-tri0.geo"
+  "hexe": [
+   14,
+   16,
+   64
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
  }
 ]
