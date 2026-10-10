@@ -1,7 +1,7 @@
 {
  "sop": "sop-copytopoints",
  "houdini": "20.5.487",
- "note": "box copied onto grid(3x3) points; hexe copynum=true",
+ "note": "box copied onto grid(3x3) points; defaults (promote-1: copynum no longer forced, Houdini 20.5 writes none)",
  "points": 72,
  "prims": 54,
  "vertices": 216,

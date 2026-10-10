@@ -1,0 +1,38 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "sphere",
+   "params": {
+    "type": 2
+   }
+  },
+  {
+   "name": "op1",
+   "type": "clip",
+   "params": {
+    "origin": [
+     0,
+     0,
+     0
+    ],
+    "dir": [
+     0.3,
+     1,
+     0.2
+    ],
+    "dist": 0.1,
+    "keep": 2
+   }
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

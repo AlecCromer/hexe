@@ -1,0 +1,50 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 3,
+    "cols": 3,
+    "type": 4
+   }
+  },
+  {
+   "name": "w",
+   "type": "wrangle",
+   "params": {
+    "snippet": "@N = normalize(set(@P.x, 1.0, @P.z));"
+   }
+  },
+  {
+   "name": "copy1",
+   "type": "copytopoints",
+   "params": {}
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "w",
+   0
+  ],
+  [
+   "box1",
+   0,
+   "copy1",
+   0
+  ],
+  [
+   "w",
+   0,
+   "copy1",
+   1
+  ]
+ ],
+ "display": "copy1"
+}

@@ -1,0 +1,28 @@
+{
+ "nodes": [
+  {
+   "name": "profile",
+   "type": "add",
+   "params": {
+    "points": "1,0,0 1,1,0",
+    "prims": true
+   }
+  },
+  {
+   "name": "revolve1",
+   "type": "revolve",
+   "params": {
+    "divs": 12
+   }
+  }
+ ],
+ "edges": [
+  [
+   "profile",
+   0,
+   "revolve1",
+   0
+  ]
+ ],
+ "display": "revolve1"
+}

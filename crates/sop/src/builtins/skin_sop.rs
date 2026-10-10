@@ -31,7 +31,7 @@ use super::meshutil::{V3, add, bad, failed, positions, scale, sub, toggle};
 use super::splinesurf::{TESS_LOD, point_weight, spline_curves, spline_detail};
 use super::surfutil::{Curve, Mesh, curves, dist};
 use crate::SopNode;
-use hexe_geo::{Detail, PrimKind};
+use hexe_geo::{AttrClass, Detail, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
@@ -58,6 +58,7 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("keepshape", ParamValue::B(true)).label("Keep Shape (Straight Loft)"),
         ParamSpec::new("uniform", ParamValue::B(true)).label("Uniform Knots"),
         ParamSpec::new("carryattrs", ParamValue::B(true)).label("Inherit Attributes"),
+        ParamSpec::new("computeuv", ParamValue::B(true)).label("Compute UVs"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -346,13 +347,19 @@ impl Node<Detail> for Skin {
                 let (u0, u1) = (j as f32 / u_segs as f32, (j + 1) as f32 / u_segs as f32);
                 m.quad(
                     OP,
-                    [ids[k][j], ids[k2][j], ids[k2][j2], ids[k][j2]],
-                    [[u0, v0, 0.0], [u0, v1, 0.0], [u1, v1, 0.0], [u1, v0, 0.0]],
+                    // oracle (Houdini 20.5): cell wound (k,j) (k,j+1) (k+1,j+1) (k+1,j)
+                    [ids[k][j], ids[k][j2], ids[k2][j2], ids[k2][j]],
+                    [[u0, v0, 0.0], [u1, v0, 0.0], [u1, v1, 0.0], [u0, v1, 0.0]],
                     tris,
                 )?;
             }
         }
-        Ok(Arc::new(if carry { m.finish_blended(src, &wts) } else { m.finish() }))
+        let mut out = if carry { m.finish_blended(src, &wts) } else { m.finish() };
+        if !toggle(p, "computeuv")? {
+            // oracle: Houdini's skin writes no uv
+            out.attrs.retain(|a| !(a.name == "uv" && a.class == AttrClass::Vertex));
+        }
+        Ok(Arc::new(out))
     }
 }
 
@@ -490,7 +497,8 @@ mod tests {
 
     #[test]
     fn two_squares_loft_into_four_outward_quads() {
-        let d = run(stack(&[(0.0, 0.5), (1.0, 0.5)]), defaults()).expect("cooks");
+        // sections run top -> bottom: Houdini winds skin cells (k,j)(k,j+1)(k+1,j+1)(k+1,j), outward (clockwise-front) only that way
+        let d = run(stack(&[(1.0, 0.5), (0.0, 0.5)]), defaults()).expect("cooks");
         assert_eq!((d.point_count, d.prim_count()), (8, 4));
         let pos = positions(&d);
         for pr in &d.prims {
@@ -632,5 +640,36 @@ mod tests {
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prim_count() >= 12);
         assert_eq!(crate::registry().create("skin").map(|n| n.type_name()), Some("skin"));
+    }
+
+    /// promote-1: skin equals real Houdini 20.5 on equal-count sections (quads, triangles, closev); point/prim order + winding exact (computeuv off: Houdini writes no uv).
+    #[test]
+    fn skin_matches_houdini_on_recorded_oracle_cases() {
+        use super::super::meshutil::testkit::houdini_twin;
+        macro_rules! case {
+            ($n:literal) => {
+                (
+                    $n,
+                    houdini_twin(
+                        include_str!(concat!("../../../../fixtures/", $n, "/scene.json")),
+                        include_bytes!(concat!("../../../../fixtures/", $n, "/houdini.geo")),
+                    ),
+                )
+            };
+        }
+        for (n, r) in [case!("sop-skin-eq"), case!("sop-skin-tris"), case!("sop-skin-closev")] {
+            assert_eq!(r, Ok(()), "{n}");
+        }
+    }
+
+    /// KNOWN GAP (pinned): resampling 8 -> 12 points. Houdini splits edge MIDPOINTS of the short ring (edges 6,4,1,3 of a regular octagon,
+    /// in that order; tie order of equal edges not reproduced), hexe resamples evenly. Counts equal, `P` differs.
+    #[test]
+    fn resample_of_mismatched_rings_is_a_known_gap_vs_houdini() {
+        let r = super::super::meshutil::testkit::houdini_twin(
+            include_str!("../../../../fixtures/sop-skin/scene.json"),
+            include_bytes!("../../../../fixtures/sop-skin/houdini.geo"),
+        );
+        assert!(r.as_ref().is_err_and(|e| e.starts_with("P[")), "{r:?}");
     }
 }

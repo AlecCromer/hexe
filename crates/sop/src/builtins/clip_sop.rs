@@ -240,6 +240,10 @@ pub(super) fn clip_sel(
     type Slot = (usize, Vec<(PrimKind, Vec<Corner>)>, bool);
     let mut slots: Vec<Slot> = Vec::new();
     let mut appended: Vec<Slot> = Vec::new();
+    // promote-1 (oracle, Houdini 20.5): the CLIP node orders intact prims first (source order), then every split prim as its
+    // BELOW piece immediately followed by its ABOVE piece; the KNIFE node keeps the slot/append layout above.
+    let clip_layout = op == "clip";
+    let mut split: Vec<Slot> = Vec::new();
     for (qi, pr) in src.prims.iter().enumerate() {
         let Some(vp) = prim_vpts(src, pr, np) else { continue };
         if sel.is_some_and(|s| !s.get(qi).copied().unwrap_or(false)) {
@@ -250,6 +254,26 @@ pub(super) fn clip_sel(
         let on_plane = vp.iter().all(|&(_, p)| side.get(p) == Some(&0));
         let above = piece(pr, &vp, 1);
         let below = if keep == Keep::Both && on_plane { Vec::new() } else { piece(pr, &vp, -1) };
+        if clip_layout {
+            if on_plane {
+                slots.push(if keep == Keep::Below { (qi, below, false) } else { (qi, above, true) });
+            } else if below.is_empty() {
+                slots.push((qi, above, true));
+            } else if above.is_empty() {
+                slots.push((qi, below, false));
+            } else {
+                // pair order: the piece on the side of the prim's FIRST corner comes first (oracle: sphere + tilted plane)
+                let first_above = vp.first().is_some_and(|&(_, p)| side.get(p) == Some(&1));
+                if first_above {
+                    split.push((qi, above, true));
+                    split.push((qi, below, false));
+                } else {
+                    split.push((qi, below, false));
+                    split.push((qi, above, true));
+                }
+            }
+            continue;
+        }
         if below.is_empty() {
             slots.push((qi, above, true));
         } else {
@@ -259,6 +283,7 @@ pub(super) fn clip_sel(
             }
         }
     }
+    slots.append(&mut split);
     let mut cuts = Cuts::default();
     let mut emits: Vec<Emit> = Vec::new();
     for (qi, pieces, is_above) in slots.into_iter().chain(appended) {
@@ -272,7 +297,8 @@ pub(super) fn clip_sel(
                     c.0 = cuts.get(a, b);
                 }
             }
-            if kind == (PrimKind::Poly { closed: true })
+            if clip_layout
+                && kind == (PrimKind::Poly { closed: true })
                 && let Some(k) = corners.iter().position(|c| matches!(c.0, PRef::S(_)))
             {
                 corners.rotate_left(k);
@@ -734,6 +760,35 @@ mod tests {
             include_bytes!("../../../../fixtures/sop-clip/houdini.geo"),
         );
         assert_eq!(r, Ok(()));
+    }
+
+    /// promote-1: the clip twin equals real Houdini 20.5 on EVERY recorded clip oracle case: box above/below/both, tilted plane
+    /// above/below, polymesh sphere both (294 pts / 316 prims), grid, and cap (dofill). Point/prim order and prim cycles exact.
+    #[test]
+    fn clip_matches_houdini_on_all_recorded_oracle_cases() {
+        macro_rules! case {
+            ($n:literal) => {
+                (
+                    $n,
+                    houdini_twin(
+                        include_str!(concat!("../../../../fixtures/", $n, "/scene.json")),
+                        include_bytes!(concat!("../../../../fixtures/", $n, "/houdini.geo")),
+                    ),
+                )
+            };
+        }
+        for (n, r) in [
+            case!("sop-clip"),
+            case!("sop-clip-below"),
+            case!("sop-clip-both"),
+            case!("sop-clip-tilt"),
+            case!("sop-clip-tilt-below"),
+            case!("sop-clip-sphere"),
+            case!("sop-clip-grid"),
+            case!("sop-clip-cap"),
+        ] {
+            assert_eq!(r, Ok(()), "{n}");
+        }
     }
 
     /// Spline curves clip as their tessellation: the upper half of the exact NURBS circle has arc length pi, nothing below the

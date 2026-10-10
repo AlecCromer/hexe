@@ -465,7 +465,7 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
         };
         match ty {
             // `Polygon_run`/`PolygonCurve_run` = long names (authored schema); `p_r`/`c_r` + `s_v`/`n_p`/`r_v`/`n_v` = the
-            // abbreviations Houdini 20.5 binary .bgeo files use (seen in the shipped corpus). `n_v` = one vertex count per prim.
+            // abbreviations Houdini 20.5 binary .bgeo files use (seen in the shipped corpus). `n_v` (or the long `nvertices`, written by Houdini 20.5 ASCII when counts do not RLE) = one vertex count per prim.
             "Polygon_run" | "PolygonCurve_run" | "p_r" | "c_r" => {
                 let closed = ty == "Polygon_run" || ty == "p_r";
                 let start = find(&body, "startvertex").or_else(|| find(&body, "s_v")).and_then(Value::as_i64);
@@ -477,7 +477,7 @@ fn read_prims(v: &Value, nverts: u32, nprims: u32) -> Result<Vec<Prim>, GeoError
                 }
                 let rle = if let Some(r) = find(&body, "nvertices_rle").or_else(|| find(&body, "r_v")) {
                     ints(r)?
-                } else if let Some(l) = find(&body, "n_v") {
+                } else if let Some(l) = find(&body, "n_v").or_else(|| find(&body, "nvertices")) {
                     ints(l)?.into_iter().flat_map(|c| [c, 1]).collect()
                 } else {
                     return syn("run without vertex counts");

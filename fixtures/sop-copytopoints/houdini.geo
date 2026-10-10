@@ -5,8 +5,8 @@
 	"vertexcount",216,
 	"primitivecount",54,
 	"info",{
-		"hostname":"macbookpro.fritz.box",
-		"date":"2026-10-08 11:49:49",
+		"hostname":"pascals-macbook-pro.local",
+		"date":"2026-10-10 09:35:15",
 		"artist":"pascaldisse",
 		"software":"Houdini 20.5.487",
 		"bounds":[-5.5,5.5,-0.5,0.5,-5.5,5.5],

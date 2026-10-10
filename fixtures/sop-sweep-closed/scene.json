@@ -1,0 +1,53 @@
+{
+ "nodes": [
+  {
+   "name": "backbone",
+   "type": "circle",
+   "params": {
+    "orient": 2,
+    "radius": [
+     2.0,
+     2.0,
+     0.0
+    ],
+    "divisions": 24
+   }
+  },
+  {
+   "name": "section",
+   "type": "circle",
+   "params": {
+    "orient": 0,
+    "radius": [
+     0.3,
+     0.3,
+     0.0
+    ],
+    "divisions": 12,
+    "reverse": false
+   }
+  },
+  {
+   "name": "sweep1",
+   "type": "sweep",
+   "params": {
+    "computeuv": false
+   }
+  }
+ ],
+ "edges": [
+  [
+   "backbone",
+   0,
+   "sweep1",
+   0
+  ],
+  [
+   "section",
+   0,
+   "sweep1",
+   1
+  ]
+ ],
+ "display": "sweep1"
+}

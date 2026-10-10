@@ -7,8 +7,9 @@
 //! output id `i * src.points + k`. Copy topology is the source's, point ids offset by `i * src.points`.
 //! * `s_i` = target point attr `pscale` (F32) when `use_pscale` (default on) and the attr exists, else 1. Uniform, applied
 //!   about the SOURCE origin (so a source centred on the origin is scaled about `P_i`). Not clamped: 0 collapses, negative flips.
-//! * `R_i` only when `use_orient` (default OFF) and the target has a `N` (V3) point attr: frame with +Z = `N`, +Y = target
-//!   `up` (V3, default world +Y) made perpendicular to `N`: `x = up x n`, `y = n x x`, columns `(x, y, n)`. `N` ~ 0 or
+//! * `R_i` only when `use_orient` (default ON like Houdini; no `N` = identity) and the target has a `N` (V3) point attr: frame with +Z = `N`.
+//!   Houdini oracle (promote-1): `N` WITHOUT `up` = minimal rotation (dihedral) +Z -> `N` (antiparallel = 180 deg about Y); with target
+//!   `up` (V3) made perpendicular to `N`: `x = up x n`, `y = n x x`, columns `(x, y, n)`. `N` ~ 0 or
 //!   non-finite → identity. `up` ~ 0 / parallel to `N` → fallback up = world +Y, or world +X when `N` is parallel to Y.
 //!   `orient` (quaternion) and `scale` target attrs are NOT read.
 //! * Source `N` (point and vertex class, V3) is rotated by `R_i` (length kept; `pscale` is uniform) and never translated.
@@ -44,7 +45,7 @@ const INPUTS: [InputSpec; 2] = [InputSpec { name: "input0" }, InputSpec { name: 
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
-        ParamSpec::new("use_orient", ParamValue::B(false)).label("Orient by N / up"),
+        ParamSpec::new("use_orient", ParamValue::B(true)).label("Orient by N / up"),
         ParamSpec::new("use_pscale", ParamValue::B(true)).label("Scale by pscale"),
         ParamSpec::new("copynum", ParamValue::B(false)).label("Add copynum Attribute"),
         ParamSpec::new("sourcegroup", ParamValue::S(String::new())).label("Source Group"),
@@ -89,6 +90,20 @@ fn norm(a: V3) -> Option<V3> {
 /// Rotation columns `(x, y, z)` with `z = n`, `y` from `up` (see module doc); `None` when `n` is degenerate.
 fn frame(n: V3, up: Option<V3>) -> Option<[V3; 3]> {
     let n = norm(n)?;
+    if up.is_none() {
+        // promote-1 (oracle, Houdini 20.5): N alone = the minimal rotation (dihedral) taking +Z onto N, NOT an up-vector frame.
+        let (v, c) = ([-n[1], n[0], 0.0], n[2]);
+        if c < -1.0 + 1e-9 {
+            return Some([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]]); // oracle: 180 deg about Y
+        }
+        let k = 1.0 / (1.0 + c);
+        let col = |e: V3| {
+            let a = cross(v, e);
+            let b = cross(v, a);
+            [e[0] + a[0] + b[0] * k, e[1] + a[1] + b[1] * k, e[2] + a[2] + b[2] * k]
+        };
+        return Some([col([1.0, 0.0, 0.0]), col([0.0, 1.0, 0.0]), n]);
+    }
     let x_of = |u: V3| norm(cross(u, n));
     let x = up.and_then(norm).and_then(x_of).or_else(|| x_of([0.0, 1.0, 0.0])).or_else(|| x_of([1.0, 0.0, 0.0]))?;
     Some([x, cross(n, x), n])
@@ -644,7 +659,7 @@ mod tests {
         assert_eq!(
             defaults,
             [
-                ("use_orient", ParamValue::B(false)),
+                ("use_orient", ParamValue::B(true)),
                 ("use_pscale", ParamValue::B(true)),
                 ("copynum", ParamValue::B(false)),
                 ("sourcegroup", ParamValue::S(String::new())),
@@ -799,7 +814,7 @@ mod tests {
         let out = run(&hand_box(), &t, &[("use_orient", ParamValue::B(true))]).expect("cooks");
         close(out.p()[7], [10.0 - 0.5, 20.0 + 1.0, 30.0 + 0.5]);
         // without use_orient the quaternion is ignored; scale alone: (1,.5,.5)+t
-        let plain = run(&hand_box(), &t, &[]).expect("cooks");
+        let plain = run(&hand_box(), &t, &[("use_orient", ParamValue::B(false))]).expect("cooks");
         close(plain.p()[7], [11.0, 20.5, 30.5]);
     }
     /// Target with only a VERTEX-class N = +X: source point (0,0,1) (the local +Z) maps to +X.
@@ -864,6 +879,33 @@ mod tests {
         assert_eq!(off.p(), plain.p());
     }
 
+    /// promote-1: the copytopoints twin equals real Houdini 20.5 (`copytopoints::2.0`) EXACTLY (point/prim order, P, attr names) on
+    /// box onto a 3x3 lattice: defaults, per-point pscale, N-only orient (dihedral +Z -> N), N + up, antiparallel N = -Z.
+    #[test]
+    fn copytopoints_matches_houdini_on_all_recorded_oracle_cases() {
+        use super::super::meshutil::testkit::houdini_twin;
+        macro_rules! case {
+            ($n:literal) => {
+                (
+                    $n,
+                    houdini_twin(
+                        include_str!(concat!("../../../../fixtures/", $n, "/scene.json")),
+                        include_bytes!(concat!("../../../../fixtures/", $n, "/houdini.geo")),
+                    ),
+                )
+            };
+        }
+        for (n, r) in [
+            case!("sop-copytopoints"),
+            case!("sop-copytopoints-pscale"),
+            case!("sop-copytopoints-orient"),
+            case!("sop-copytopoints-orient-up"),
+            case!("sop-copytopoints-orient-flip"),
+        ] {
+            assert_eq!(r, Ok(()), "{n}");
+        }
+    }
+
     #[test]
     fn orient_n_maps_source_z_to_n_with_default_up() {
         // N = +X, up = +Y(default): x = up x n = (0,0,-1), y = n x x = (0,1,0), z = n = (1,0,0)
@@ -876,8 +918,8 @@ mod tests {
         close(out.p()[15], [t[0], t[1], t[2] - 1.0]);
         close(out.p()[16], [t[0], t[1] + 1.0, t[2]]);
         close(out.p()[17], [t[0] + 1.0, t[1], t[2]]);
-        // orient off (default): N ignored, plain translation
-        let off = run(&src, &tgt, &[]).expect("cooks");
+        // orient off (explicit; default is ON like Houdini): N ignored, plain translation
+        let off = run(&src, &tgt, &[("use_orient", ParamValue::B(false))]).expect("cooks");
         close(off.p()[17], [t[0], t[1], t[2] + 1.0]);
     }
 

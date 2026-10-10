@@ -1,6 +1,6 @@
 {
   "nodes": [
-    { "name": "profile", "type": "circle", "params": { "orient": 0, "center": [1.5, 0.0, 0.0], "radius": [0.5, 0.5, 0.0], "divisions": 12, "reverse": false } },
+    { "name": "profile", "type": "circle", "params": { "orient": 0, "center": [1.5, 0.0, 0.0], "radius": [0.5, 0.5, 0.0], "divisions": 12, "reverse": true } },
     { "name": "revolve1", "type": "revolve", "params": { "divs": 24 } }
   ],
   "edges": [["profile", 0, "revolve1", 0]],

@@ -16,9 +16,7 @@
   {
    "name": "copy1",
    "type": "copytopoints",
-   "params": {
-    "copynum": true
-   }
+   "params": {}
   }
  ],
  "edges": [

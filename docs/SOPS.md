@@ -21,7 +21,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | boolean | partial (sop-boolean) | `boolean.json` | ok |
 | box | shipped (sop-box) | via `attribcreate.json` | ok |
 | circle | shipped (sop-circle) | via `curves.json` | ok |
-| clip | partial (sop-clip) | `clip.json` | ok |
+| clip | shipped (sop-clip) | `clip.json` | ok |
 | color | shipped (sop-color) | `color.json` | ok |
 | connectivity | shipped (sop-connectivity) | `connectivity.json` | ok |
 | convert | partial (sop-convert) | `convert.json` | ok |
@@ -49,12 +49,12 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | peak | shipped (sop-peak) | `peak.json` | ok |
 | polybevel | partial (sop-polybevel) | `polybevel.json` | ok |
 | polyextrude | shipped (sop-polyextrude) | `polyextrude.json` | ok |
-| polyfill | partial (sop-polyfill) | `polyfill.json` | ok |
+| polyfill | shipped (sop-polyfill) | `polyfill.json` | ok |
 | polyreduce | partial (sop-polyreduce) | `polyreduce.json` | ok |
 | ray | shipped (sop-ray) | `ray.json` | ok |
 | resample | shipped (sop-resample) | via `curves.json` | ok |
 | reverse | shipped (sop-reverse) | `reverse.json` | ok |
-| revolve | partial (sop-revolve) | `revolve.json` | ok |
+| revolve | shipped (sop-revolve) | `revolve.json` | ok |
 | rop_geometry | partial (rop-geometry) | via `file-rop.json` | ok |
 | scatter | partial (sop-scatter) | `scatter.json` | ok |
 | skin | partial (sop-skin) | `skin.json` | ok |
@@ -62,7 +62,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | sort | shipped (sop-sort) | `sort.json` | ok |
 | sphere | shipped (sop-sphere) | via `convert.json` | ok |
 | subdivide | partial (sop-subdivide) | `subdivide.json` | ok |
-| sweep | partial (sop-sweep) | `sweep.json` | ok |
+| sweep | shipped (sop-sweep) | `sweep.json` | ok |
 | switch | shipped (sop-switch) | `switch.json` | ok |
 | twist | shipped (sop-twist) | `twist.json` | ok |
 | uvlayout | partial (sop-uvlayout) | via `uv.json` | ok |

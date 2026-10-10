@@ -199,7 +199,7 @@ impl Node<Detail> for Knife {
 
 #[cfg(test)]
 mod tests {
-    use super::super::meshutil::testkit::{cook, cube, defaults};
+    use super::super::meshutil::testkit::{cook, cube, defaults, houdini_twin};
     use super::*;
     use hexe_graph::ParamSet;
 
@@ -389,6 +389,36 @@ mod tests {
             assert!(matches!(cook(&*new(), cube(), &p), Err(CookError::BadParam(_))));
         }
         assert_eq!(cook(&*new(), Detail::default(), &defaults(&*new())).expect("cooks").point_count, 0);
+    }
+
+    /// promote-1: axis-aligned plane cuts of the box equal real Houdini 20.5 exactly (keep both = slot/append layout, cycles
+    /// unrotated; keep below). KNOWN GAP pinned: tilted plane (box) and sphere differ in cut-point mint order and which half of a
+    /// split prim keeps the original slot (Houdini picks the in-place half by a rule not recoverable from black-box cooks).
+    #[test]
+    fn knife_matches_houdini_on_axis_aligned_box_and_pins_the_tilted_gap() {
+        let twin = |scene: &str, geo: &[u8]| houdini_twin(scene, geo);
+        assert_eq!(
+            twin(
+                include_str!("../../../../fixtures/sop-knife/scene.json"),
+                include_bytes!("../../../../fixtures/sop-knife/houdini.geo")
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            twin(
+                include_str!("../../../../fixtures/sop-knife-below/scene.json"),
+                include_bytes!("../../../../fixtures/sop-knife-below/houdini.geo")
+            ),
+            Ok(())
+        );
+        assert!(
+            twin(
+                include_str!("../../../../fixtures/sop-knife-tilt/scene.json"),
+                include_bytes!("../../../../fixtures/sop-knife-tilt/houdini.geo")
+            )
+            .is_err(),
+            "gap closed? flip the knife row"
+        );
     }
 
     #[test]
