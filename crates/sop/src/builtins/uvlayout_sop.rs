@@ -22,13 +22,14 @@
 //!   (before packing; `fit` then normalises). `useprimscale` B on: prim float attr `uvscale` of the island's FIRST prim
 //!   multiplies the island scale (per-island scale). `group` S: prim group of participating prims (others keep their uv).
 //!   `packmode` maxrects (2, DEFAULT; shelf / ffdh stay selectable): MaxRects best-short-side-fit, islands by area descending
-//!   into a square bin grown x1.05 until all fit (<= 4096 islands, else shelf). `resolution` I (0 = off): texture side in
+//!   into a square bin grown x1.05 until all fit, then the height is bisected down to the tightest rectangle (layout NOT squared, like Houdini: 6 equal islands -> 3x2) (<= 4096 islands, else shelf). `resolution` I (0 = off): texture side in
 //!   texels; then `padding` is a fraction of the texture snapped UP to whole texels (ceil), `margin` likewise, every island
 //!   is a whole-texel rect at a whole-texel origin packed by maxrects into the bin (always maxrects, any packmode); `fit` on
 //!   = largest uniform scale whose rects fit (bisection; texture too small -> `Failed`), off = 1 input unit = the texture.
 //!   NOT modelled: rotation inside the packer (only the pre-pack `rotate`), non-square textures.
 //!
-//! Output = the input with vertex `uv` replaced; everything else untouched. Hostile: negative / non-finite `padding`,
+//! Output = the input with vertex `uv` replaced + detail `coverage` (F, uv polygon area / unit square) and `numnonpacked` (I, 0) like
+//! Houdini; everything else untouched. Hostile: negative / non-finite `padding`,
 //! non-toggle `fit` -> `BadParam`; island count above `MAX_ISLANDS` -> `Failed`.
 use super::meshutil::{bad, failed, float, positions, toggle};
 use crate::SopNode;
@@ -218,20 +219,40 @@ fn area_order(dims: &[(f64, f64)], first: &[usize]) -> Vec<usize> {
     });
     order
 }
-/// Float maxrects (`packmode` maxrects): square bin grown x1.05 until everything fits (gutter `padding` between rects).
+/// Above this island count the square bin is not tightened (24 extra maxrects runs).
+const TIGHTEN_LIMIT: usize = 512;
+/// Float maxrects (`packmode` maxrects): square bin grown x1.05 until everything fits (gutter `padding` between rects), then the
+/// shorter side is bisected down (tightest rectangle, layout not squared).
 fn pack_maxrects(dims: &[(f64, f64)], first: &[usize], padding: f64) -> Packed {
     let items: Vec<(f64, f64)> = dims.iter().map(|d| (d.0 + padding, d.1 + padding)).collect();
     let order = area_order(&items, first);
     let total: f64 = items.iter().map(|d| d.0 * d.1).sum();
     let big = items.iter().fold(0.0f64, |m, d| m.max(d.0).max(d.1));
+    let maxh = items.iter().fold(0.0f64, |m, d| m.max(d.1));
     let mut side = big.max(total.sqrt()).max(1e-12);
     let mut slots = vec![[0.0; 2]; dims.len()];
+    let mut found = false;
     for _ in 0..80 {
         if let Some(sl) = maxrects(&items, &order, side, side) {
             slots = sl;
+            found = true;
             break;
         }
         side *= 1.05;
+    }
+    // Houdini does not square the layout (6 equal islands -> 3x2): the longer side stays `side` (so `fit` keeps its scale),
+    // the other one is bisected down to the tightest bin everything still fits in (landscape).
+    if found && items.len() <= TIGHTEN_LIMIT {
+        let (mut lo, mut hi) = (maxh.min(side), side);
+        for _ in 0..24 {
+            let mid = 0.5 * (lo + hi);
+            if let Some(sl) = maxrects(&items, &order, side, mid) {
+                slots = sl;
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
     }
     let (mut uw, mut uh) = (0.0f64, 0.0f64);
     for (s, d) in slots.iter().zip(dims) {
@@ -584,7 +605,34 @@ impl Node<Detail> for UvLayout {
                 }
             }
         }
+        // Houdini's detail attrs: `coverage` = fraction of the unit square the packed uv polygons cover, `numnonpacked` =
+        // islands left out (hexe always packs every island -> 0)
+        let mut cover = 0.0f64;
+        for &(lo, hi) in ranges.iter().flatten() {
+            let mut a2 = 0.0f64;
+            for k in lo..hi {
+                let k2 = if k + 1 < hi { k + 1 } else { lo };
+                if let (Some(ua), Some(ub)) = (out_uv.get(k), out_uv.get(k2)) {
+                    a2 += f64::from(ua[0]) * f64::from(ub[1]) - f64::from(ub[0]) * f64::from(ua[1]);
+                }
+            }
+            if a2.is_finite() {
+                cover += 0.5 * a2.abs();
+            }
+        }
         let mut out = (**src).clone();
+        out.add_attr(Attribute {
+            name: "coverage".into(),
+            class: AttrClass::Detail,
+            data: AttrData::F32(vec![cover as f32]),
+            type_info: TypeInfo::None,
+        });
+        out.add_attr(Attribute {
+            name: "numnonpacked".into(),
+            class: AttrClass::Detail,
+            data: AttrData::I32(vec![0]),
+            type_info: TypeInfo::None,
+        });
         out.add_attr(Attribute {
             name: "uv".into(),
             class: AttrClass::Vertex,
@@ -599,6 +647,7 @@ impl Node<Detail> for UvLayout {
 mod tests {
     use super::*;
     use crate::load_scene;
+    use hexe_geo::read_geo;
     use hexe_graph::ParamSet;
     fn cook(d: Detail, p: ParamSet) -> Result<Arc<Detail>, CookError> {
         let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
@@ -661,6 +710,70 @@ mod tests {
     }
     fn overlap(a: ([f32; 2], [f32; 2]), b: ([f32; 2], [f32; 2])) -> bool {
         a.0[0] < b.1[0] - 1e-6 && b.0[0] < a.1[0] - 1e-6 && a.0[1] < b.1[1] - 1e-6 && b.0[1] < a.1[1] - 1e-6
+    }
+
+    const HOUDINI_UV: &[u8] = include_bytes!("../../../../fixtures/sop-uvlayout-stat/houdini.geo");
+    const HOUDINI_UV_SCENE: &str = include_str!("../../../../fixtures/sop-uvlayout-stat/scene.json");
+    /// uv islands of `d` = (bbox size) per prim group of 4 (box prims are disjoint cut islands after uvunwrap).
+    fn prim_boxes(d: &Detail) -> Vec<[f32; 2]> {
+        let uv = uvs(d);
+        d.prims
+            .iter()
+            .map(|p| {
+                let b = bbox(&uv[p.verts.start as usize..p.verts.end as usize]);
+                [b.1[0] - b.0[0], b.1[1] - b.0[1]]
+            })
+            .collect()
+    }
+    fn detail_f(d: &Detail, name: &str) -> f32 {
+        match d.attr(AttrClass::Detail, name).map(|a| &a.data) {
+            Some(AttrData::F32(v)) => v[0],
+            Some(AttrData::I32(v)) => v[0] as f32,
+            other => panic!("no detail {name}: {other:?}"),
+        }
+    }
+    /// Real Houdini 20.5 (`fixtures/sop-uvlayout-stat/houdini.geo`, box -> uvunwrap tile 3 -> uvlayout): 6 equal islands are
+    /// packed row-major into the TIGHTEST rect (3x2, layout not squared). Island sizes, coverage, extent aspect +-5 %,
+    /// detail attrs `coverage` / `numnonpacked` present with Houdini's values.
+    #[test]
+    fn box_layout_matches_houdini_tight_3x2_pack_and_detail_attrs() {
+        let h = read_geo(HOUDINI_UV).expect("houdini.geo parses");
+        let (mut g, id) = load_scene(HOUDINI_UV_SCENE).expect("scene loads");
+        let d = g.cook(id, 0.0).expect("cooks");
+        let (hb, db) = (prim_boxes(&h), prim_boxes(&d));
+        assert_eq!((hb.len(), db.len()), (6, 6));
+        for (a, b) in hb.iter().zip(&db) {
+            assert!((a[0] - b[0]).abs() <= 0.05 * a[0] && (a[1] - b[1]).abs() <= 0.05 * a[1], "{a:?} vs {b:?}");
+        }
+        let extent = |d: &Detail| {
+            let b = bbox(&uvs(d));
+            [b.1[0] - b.0[0], b.1[1] - b.0[1]]
+        };
+        let (he, de) = (extent(&h), extent(&d));
+        assert!((he[0] - de[0]).abs() <= 0.05 * he[0] && (he[1] - de[1]).abs() <= 0.05 * he[1], "{he:?} vs {de:?}");
+        assert!(de[0] > 0.99 && de[1] < 0.7, "3x2, not squared: {de:?}");
+        let (hc, dc) = (detail_f(&h, "coverage"), detail_f(&d, "coverage"));
+        assert!((hc - dc).abs() <= 0.05 * hc, "coverage {hc} vs {dc}");
+        assert_eq!(detail_f(&d, "numnonpacked"), detail_f(&h, "numnonpacked"));
+        // no overlaps
+        let uv = uvs(&d);
+        let bx: Vec<_> = d.prims.iter().map(|p| bbox(&uv[p.verts.start as usize..p.verts.end as usize])).collect();
+        for i in 0..6 {
+            for j in i + 1..6 {
+                assert!(!overlap(bx[i], bx[j]), "{i} {j}");
+            }
+        }
+    }
+    /// Six equal unit islands, no padding, fit: 3 columns x 2 rows (extent 1 x 2/3); coverage 2/3; four -> still 2x2.
+    #[test]
+    fn equal_islands_pack_into_the_tightest_rectangle_not_a_square() {
+        let mr = fresh().with("padding", ParamValue::F(0.0));
+        let o = cook(islands(&[(1.0, 1.0); 6]), mr.clone()).expect("cooks");
+        let b = bbox(&uvs(&o));
+        assert!((b.1[0] - b.0[0] - 1.0).abs() < 1e-6 && (b.1[1] - b.0[1] - 2.0 / 3.0).abs() < 1e-6, "{b:?}");
+        assert!((detail_f(&o, "coverage") - 2.0 / 3.0).abs() < 1e-6);
+        let q = bbox(&uvs(&cook(islands(&[(1.0, 1.0); 4]), mr).expect("cooks")));
+        assert!((q.1[0] - q.0[0] - 1.0).abs() < 1e-6 && (q.1[1] - q.0[1] - 1.0).abs() < 1e-6);
     }
 
     #[test]

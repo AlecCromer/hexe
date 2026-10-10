@@ -65,7 +65,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | sweep | shipped (sop-sweep) | `sweep.json` | ok |
 | switch | shipped (sop-switch) | `switch.json` | ok |
 | twist | shipped (sop-twist) | `twist.json` | ok |
-| uvlayout | partial (sop-uvlayout) | via `uv.json` | ok |
+| uvlayout | shipped (sop-uvlayout) | via `uv.json` | ok |
 | uvproject | shipped (sop-uvproject) | `uvproject.json` | ok |
 | uvunwrap | shipped (sop-uvunwrap) | via `uv.json` | ok |
 | wrangle | shipped (sop-wrangle) | `wrangle.json` | ok |

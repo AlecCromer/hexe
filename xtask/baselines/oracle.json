@@ -24,6 +24,7 @@
   "sop-scatter-density": 1.0,
   "sop-scatter-perprim": 1.0,
   "sop-scatter-seed": 1.0,
+  "sop-uvlayout-stat": 1.0,
   "sphere-poly-f2": 1.0,
   "sphere-polymesh-default": 1.0,
   "sphere-prim": 1.0,
