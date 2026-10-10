@@ -14,7 +14,10 @@
 //! closed loop of beveled edge ends gets a CAP polygon (>= 3 distinct points) closing the hole; fewer sectors (1-2) need
 //! none (strip ends meet / taper to a triangle).
 //! Cube, all edges, `divisions = 1`: 24 pts = 8 x 3 sectors; 6 shrunk quads + 12 strip quads + 8 corner tris = 26 prims.
-//! `divisions = n`: + 12 x 2 x (n-1) profile pts, 12 n strip quads, 8 caps of 3n corners (n = 2: 48 pts / 38 prims).
+//! `divisions = n`: + 12 x 2 x (n-1) profile pts, 12 n strip quads, 8 caps of 3n corners.
+//!
+//! HOUDINI PATH (`layout.rs`): closed valence-3 solid, round, n <= 4 -> kept-centre quad patches in Houdini point/prim
+//! order (n = 2: 56 pts / 54 quads).
 //!
 //! Profile (cross-section from tangent point T1 on face 1 to T2 on face 2, apex = the original edge point shifted along
 //! the edge to the mean of T1/T2): `round` = conic arc, weight `w = sin(theta/2)`, `theta` = angle T1-apex-T2 (exact
@@ -48,6 +51,8 @@ use hexe_geo::{AttrClass, AttrData, Detail, Prim, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+
+mod layout;
 
 const OP: &str = "polybevel";
 const MAX_DIVISIONS: i32 = 64;
@@ -211,16 +216,28 @@ fn profile(x: V3, th: V3, t1: V3, t2: V3, div: usize, round: bool) -> Vec<V3> {
         (Some(u1), Some(u2)) => ((1.0 - dot(u1, u2)) / 2.0).max(0.0).sqrt(),
         _ => 1.0,
     };
+    // Houdini samples the conic as a polyline of N = max(4, next_pow2(div-1)) vertices (t = k/N), then resamples it
+    // linearly in t at k/div (so div 3 / 5 / 6.. points sit on chords, inside the circle): measured div 2..17.
+    let conic = |t: f64| -> V3 {
+        let (b0, b1, b2) = ((1.0 - t) * (1.0 - t), 2.0 * w * t * (1.0 - t), t * t);
+        scale(add(add(scale(t1, b0), scale(apex, b1)), scale(t2, b2)), 1.0 / (b0 + b1 + b2))
+    };
+    let n = (div.saturating_sub(1)).next_power_of_two().max(4);
     (1..div)
         .map(|k| {
             let t = k as f64 / div as f64;
             if !round {
                 return add(scale(t1, 1.0 - t), scale(t2, t));
             }
-            let (b0, b1, b2) = ((1.0 - t) * (1.0 - t), 2.0 * w * t * (1.0 - t), t * t);
-            scale(add(add(scale(t1, b0), scale(apex, b1)), scale(t2, b2)), 1.0 / (b0 + b1 + b2))
+            let u = t * n as f64;
+            let lo = (u.floor() as usize).min(n - 1);
+            let f = u - lo as f64;
+            lerp3(conic(lo as f64 / n as f64), conic((lo + 1) as f64 / n as f64), f)
         })
         .collect()
+}
+fn lerp3(a: V3, b: V3, t: f64) -> V3 {
+    add(scale(a, 1.0 - t), scale(b, t))
 }
 
 /// Polygon corners with consecutive (cyclic) duplicate points removed; `None` below 3 corners.
@@ -500,6 +517,24 @@ fn bevel(
         .zip(&point_src)
         .map(|((a, &c), s)| if c > 0.0 { scale(*a, 1.0 / c) } else { at(&pos, at(s, 0, 0), ZERO) })
         .collect();
+    // Houdini-ordered patches for closed valence-3 solids (divisions 1..=4)
+    if lone.is_empty() && round {
+        let sec: Vec<V3> = (0..ncorners).map(|c| at(&pt_pos, at(&corner_pt, c, 0), ZERO)).collect();
+        let inp = layout::Input {
+            src,
+            faces: &faces,
+            pos: &pos,
+            sec: &sec,
+            off: &off,
+            div,
+            round,
+            n_bevel_edges: bedges.len(),
+        };
+        if let Some(mut out) = layout::build(&inp)? {
+            renormal(&mut out);
+            return Ok(Some(out));
+        }
+    }
     // ---- strips: profile points, paths for caps ----
     struct Strip {
         a: Vec<usize>,
@@ -905,6 +940,71 @@ mod tests {
     }
     /// Cube (8 pts / 6 quads), all 12 edges, chamfer: each vertex -> 3 face-corner points = 24 pts; 6 shrunk quads +
     /// 12 edge quads + 8 corner tris = 26 prims. Euler: 24 - 48 + 26 = 2.
+    /// Houdini `box` (unit): points (-,-,-),(+,-,-),(+,-,+),(-,-,+),(-,+,-),(+,+,-),(+,+,+),(-,+,+); prim 0 = [1,5,4,0].
+    fn houdini_box() -> Detail {
+        let mut d = Detail::default();
+        d.add_points(8);
+        let h = [-0.5f32, 0.5];
+        let s = [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]];
+        *d.p_mut() = s.iter().map(|b| [h[b[0]], h[b[1]], h[b[2]]]).collect();
+        for f in [[1, 5, 4, 0], [2, 6, 5, 1], [3, 7, 6, 2], [0, 4, 7, 3], [2, 1, 0, 3], [5, 6, 7, 4]] {
+            d.add_poly(&f, true);
+        }
+        d
+    }
+    /// Zero-diff vs `parity/ref/polybevel/<case>.topo` (hython polybevel::3.0): point count, prim point lists in ORDER,
+    /// boundary/profile points exactly; returns the max error of the approximated interior patch points.
+    fn diff_vs_houdini(topo: &str, offset: f32, div: i32) -> f64 {
+        let out = cook(&*new(), houdini_box(), &with(offset, div, 0, "")).expect("cooks");
+        let mut pts: Vec<[f64; 3]> = Vec::new();
+        let mut faces: Vec<Vec<u32>> = Vec::new();
+        for l in topo.lines() {
+            let t: Vec<&str> = l.split_whitespace().collect();
+            match t.first() {
+                Some(&"P") => pts.push([t[2].parse().unwrap(), t[3].parse().unwrap(), t[4].parse().unwrap()]),
+                Some(&"F") => faces.push(t[2..].iter().map(|x| x.parse().unwrap()).collect()),
+                _ => {}
+            }
+        }
+        assert_eq!(out.point_count as usize, pts.len(), "point count");
+        assert_eq!(out.prim_count() as usize, faces.len(), "prim count");
+        for (i, f) in faces.iter().enumerate() {
+            assert_eq!(&prim_pts_ids(&out, i), f, "prim {i}");
+        }
+        let (edge, mut worst) = (0.5 - f64::from(offset), 0.0f64);
+        for (idx, (p, h)) in out.p().iter().zip(&pts).enumerate() {
+            let err = (0..3).map(|k| (f64::from(p[k]) - h[k]).abs()).fold(0.0, f64::max);
+            let boundary = h.iter().any(|c| (c.abs() - 0.5).abs() < 1e-4 || (c.abs() - edge).abs() < 1e-4);
+            if boundary {
+                assert!(err < 2e-5, "boundary point {p:?} vs {h:?}");
+            } else {
+                assert!(err < 2e-5, "interior pt {idx}: ours {p:?} houdini {h:?}");
+                worst = worst.max(err);
+            }
+        }
+        worst
+    }
+    fn prim_pts_ids(d: &Detail, i: usize) -> Vec<u32> {
+        let pr = &d.prims[i];
+        d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].to_vec()
+    }
+    #[test]
+    fn houdini_order_zero_diff_on_box_divisions_1_to_4_and_offsets() {
+        let cases = [
+            (include_str!("../../../../parity/ref/polybevel/d1_o10.topo"), 0.1, 1),
+            (include_str!("../../../../parity/ref/polybevel/d2_o10.topo"), 0.1, 2),
+            (include_str!("../../../../parity/ref/polybevel/d2_o20.topo"), 0.2, 2),
+            (include_str!("../../../../parity/ref/polybevel/d2_o05.topo"), 0.05, 2),
+            (include_str!("../../../../parity/ref/polybevel/d3_o10.topo"), 0.1, 3),
+            (include_str!("../../../../parity/ref/polybevel/d3_o25.topo"), 0.25, 3),
+            (include_str!("../../../../parity/ref/polybevel/d4_o10.topo"), 0.1, 4),
+        ];
+        for (topo, o, d) in cases {
+            let worst = diff_vs_houdini(topo, o, d);
+            eprintln!("div {d} off {o}: interior max err {worst:.5} (= {:.3} offsets)", worst / f64::from(o));
+            assert!(worst < 2e-5, "interior patch err {worst}");
+        }
+    }
     #[test]
     fn cube_all_edges_chamfer_is_24_points_6_quads_12_edge_quads_8_corner_tris() {
         let out = cook(&*new(), cube(), &with(0.1, 1, 0, "")).expect("cooks");
@@ -941,13 +1041,13 @@ mod tests {
             assert!(f0.iter().any(|&q| near3(q, w)), "{f0:?} lacks {w:?}");
         }
     }
-    /// divisions = 2: +1 profile point per edge end = 24 more (48), +12 strip quads (24), 8 hexagon caps (3 sectors x 2).
-    /// Euler: V=48, E=(6*4 + 24*4 + 8*6)/2 = 84, F=38: 48 - 84 + 38 = 2.
+    /// divisions = 2 (Houdini): 8 kept centre points + 24 sector + 24 mid = 56 pts; 6 faces + 24 half strips + 24 corner
+    /// quads = 54 prims, ALL quads. Euler: 56 - 108 + 54 = 2.
     #[test]
-    fn cube_divisions_2_is_48_points_38_prims_with_hexagon_caps() {
+    fn cube_divisions_2_is_56_points_54_quads_with_centre_patches() {
         let out = cook(&*new(), cube(), &with(0.1, 2, 0, "")).expect("cooks");
-        assert_eq!((out.point_count, out.prim_count()), (48, 38));
-        assert_eq!((count(&out, 4), count(&out, 6), count(&out, 3)), (30, 8, 0));
+        assert_eq!((out.point_count, out.prim_count()), (56, 54));
+        assert_eq!((count(&out, 4), count(&out, 6), count(&out, 3)), (54, 0, 0));
         assert_watertight_sphere(&out);
         assert_outward(&out);
     }
@@ -958,10 +1058,10 @@ mod tests {
     fn divisions_2_round_profile_point_is_on_the_circle_solid_is_the_chord_midpoint() {
         let r = cook(&*new(), cube(), &with(0.1, 2, SHAPE_ROUND, "")).expect("cooks");
         let s = 0.1 * (1.0 - 1.0 / 2f64.sqrt());
-        let mid = [-0.5 + s, -0.4, -0.5 + s]; // first profile edge = Houdini-wound cube's first edge
-        assert!(near3(r.p()[24], mid), "{:?}", r.p()[24]);
-        // all 24 profile points: 0.1 from their cross-section circle centre (+-.4 on all three axes)
-        for p in &r.p()[24..] {
+        let mid = [-0.5 + s, -0.4, -0.5 + s];
+        assert!(has_pt(&r, mid));
+        // all 24 mid profile points (ids 32.., after 8 centres + 24 sectors): 0.1 from their cross-section circle centre
+        for p in &r.p()[32..] {
             let c = p.map(|x| if x < 0.0 { -0.4 } else { 0.4 });
             // the along-edge axis has |coord| = .4 exactly; the other two lie on the circle about the centre
             let off: Vec<f64> = (0..3).map(|k| f64::from(p[k]) - c[k]).collect();
@@ -1149,7 +1249,7 @@ mod tests {
         });
         let out = cook(&*new(), d, &with(0.1, 2, 0, "")).expect("cooks");
         let Some(AttrData::F32(w)) = out.attr(AttrClass::Point, "w").map(|a| &a.data) else { panic!("w lost") };
-        assert_eq!(w.len(), 48);
+        assert_eq!(w.len(), 56);
         // each point carries the weight of the source vertex it grew from: positions coincide with its 3x3 neighbourhood
         for (i, p) in out.p().iter().enumerate() {
             let src = (0..8).min_by(|&a, &b| {
@@ -1162,7 +1262,7 @@ mod tests {
             assert_eq!(w[i], src.unwrap_or(99) as f32, "point {i} {p:?}");
         }
         let Some(AttrData::V3(n)) = out.attr(AttrClass::Point, "N").map(|a| &a.data) else { panic!("N lost") };
-        assert_eq!(n.len(), 48);
+        assert_eq!(n.len(), 56);
         for (nn, p) in n.iter().zip(out.p()) {
             let l = nn.iter().map(|c| c * c).sum::<f32>().sqrt();
             assert!((l - 1.0).abs() < 1e-5, "N not unit: {nn:?}");
@@ -1170,9 +1270,9 @@ mod tests {
             assert!(nn.iter().zip(p).map(|(a, b)| a * b).sum::<f32>() > 0.0);
         }
         let Some(AttrData::I32(id)) = out.attr(AttrClass::Prim, "id").map(|a| &a.data) else { panic!("id lost") };
-        assert_eq!(id.len(), 38);
+        assert_eq!(id.len(), 54);
         assert_eq!(id[0], 0);
-        assert_eq!(out.group(AttrClass::Prim, "g").map(|g| g.mask.len()), Some(38));
+        assert_eq!(out.group(AttrClass::Prim, "g").map(|g| g.mask.len()), Some(54));
         // face 0 keeps membership; the strips of its edges (first face = face 0 for edges 0-1, 0-2 ...) inherit it
         assert!(
             out.group(AttrClass::Prim, "g").is_some_and(|g| g.mask[0] && g.mask.iter().filter(|m| **m).count() > 1)
@@ -1242,7 +1342,7 @@ mod tests {
             .expect("example present");
         let (mut g, id) = crate::load_scene(&ex).expect("example loads");
         let out = g.cook(id, 0.0).expect("example cooks");
-        assert_eq!((out.point_count, out.prim_count()), (48, 38));
+        assert_eq!((out.point_count, out.prim_count()), (56, 54));
         assert_eq!(crate::registry().create("polybevel").map(|n| n.type_name()), Some("polybevel"));
     }
 }
