@@ -58,7 +58,7 @@ Histogram: MATCH 72, ATTRIB-DIFF 3, ORDER-DIFF 3, P-DIFF 3, TOPO-DIFF 2, HEXE-ER
 | sop-normal | 8/6/24 | 8/6/24 | MATCH | MATCH | - (vertex N present both; N VALUES not compared) |
 | sop-output | 8/6/24 | 8/6/24 | MATCH | MATCH | - |
 | sop-peak | 8/6/24 | 8/6/24 | MATCH | MATCH | - (displaced P equal Houdini index-for-index (outward)) |
-| sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | hexe 48/38 vs Houdini 56/54 (offset .1 divs 2 round): hexe bevels fewer elements / emits fewer fillet faces than Houdini polybevel::3.0 |
+| sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | 56/54 match (offset .1 divs 2 round); div 1–4 zero-diff incl. point/prim order |
 | sop-polyextrude | 8/6/24 | 8/6/24 | MATCH | MATCH | - (splittype 0 connected components = Houdini default: closed box 8/6/24, corners mitre-displaced +-0.5 -> +-1, point order = first appearance; splittype 1 keeps the per-face path; inset/divisions/connected groups beyond the closed-box case UNVERIFIED) |
 | sop-polyfill | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-polyfill-ears | 8/7/26 | 8/7/26 | MATCH | MATCH |  |
