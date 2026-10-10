@@ -3,6 +3,9 @@
 //! `<cache>/<hash>/geo/frame.%04d.geo` (default cache `~/.gaia/cache/hexe/motion`), then read the `.geo` frame for the
 //! current time (`round(time * fps)`, clamped to the clip) as the output `Detail`. Python failures surface their stderr.
 //! Flags are the real ones of `~/projects/gaia-motion/gaia_motion/cli.py` (lines 20-38); output layout `export.py:48-54`.
+//! `mode = chain`: the Endorphin chain (shove -> protect reflex -> limp -> settle -> get-up, ONE MuJoCo run) via
+//! `python -m gaia_motion.cli chain` -> `<cache>/<hash>/{geo/frame.%04d.geo, chain.npz (qpos), chain.json}`; the frame is cooked as a
+//! skeleton: 24 joint points (`P`, `name`), 23 bone polylines, detail attr `pelvis_z` (m, = `P.y` of the pelvis, Y-up geo).
 #![deny(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -11,7 +14,7 @@
     clippy::todo,
     clippy::unreachable
 )]
-use hexe_geo::Detail;
+use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -23,6 +26,34 @@ pub const SCENES: [&str; 4] = ["stand", "push", "leg_hit", "fall_from_height"];
 /// Hard cap on `frames` (clip size / run time bound).
 pub const MAX_FRAMES: i32 = 100_000;
 const DEFAULT_PYTHON: &str = "~/projects/gaia-motion/.venv/bin/python";
+/// Used when the default `python_bin` does not exist (the cached venv the gaia-motion setup creates).
+const FALLBACK_PYTHON: &str = "~/.gaia/cache/gaia-motion/venv/bin/python";
+/// Bones of the 24-point SMPL body cloud as `(child, parent)` joint names; mirror of `PAR` in `gaia-motion/scripts/houdini_chain.py`.
+pub const BONES: [(&str, &str); 23] = [
+    ("L_Hip", "Pelvis"),
+    ("L_Knee", "L_Hip"),
+    ("L_Ankle", "L_Knee"),
+    ("L_Toe", "L_Ankle"),
+    ("R_Hip", "Pelvis"),
+    ("R_Knee", "R_Hip"),
+    ("R_Ankle", "R_Knee"),
+    ("R_Toe", "R_Ankle"),
+    ("Torso", "Pelvis"),
+    ("Spine", "Torso"),
+    ("Chest", "Spine"),
+    ("Neck", "Chest"),
+    ("Head", "Neck"),
+    ("L_Thorax", "Chest"),
+    ("L_Shoulder", "L_Thorax"),
+    ("L_Elbow", "L_Shoulder"),
+    ("L_Wrist", "L_Elbow"),
+    ("L_Hand", "L_Wrist"),
+    ("R_Thorax", "Chest"),
+    ("R_Shoulder", "R_Thorax"),
+    ("R_Elbow", "R_Shoulder"),
+    ("R_Wrist", "R_Elbow"),
+    ("R_Hand", "R_Wrist"),
+];
 const DEFAULT_ROOT: &str = "~/projects/gaia-motion";
 const STDERR_TAIL: usize = 2000;
 
@@ -31,16 +62,26 @@ pub const TYPE_NAME: &str = "motion";
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
+        ParamSpec::new("mode", ParamValue::Menu(0))
+            .label("Mode")
+            .menu(&[("push", "Push (scene)"), ("chain", "Endorphin Chain")]),
         ParamSpec::new("scene", ParamValue::Menu(1)).label("Scene").menu(&[
             ("stand", "Stand"),
             ("push", "Push"),
             ("leg_hit", "Leg Hit"),
             ("fall_from_height", "Fall From Height"),
         ]),
-        ParamSpec::new("impulse_ns", ParamValue::F(90.0)).label("Impulse (N*s)").range(0.0, 300.0),
+        ParamSpec::new("impulse_ns", ParamValue::F(90.0)).label("Impulse (N*s; chain: base shove)").range(0.0, 300.0),
         ParamSpec::new("impulse_dir", ParamValue::V3([1.0, 0.0, 0.0])).label("Impulse Direction (world Z-up)"),
         ParamSpec::new("impulse_body", ParamValue::S("Chest".into())).label("Impulse Body"),
-        ParamSpec::new("frames", ParamValue::I(120)).label("Frames").range(1.0, 600.0),
+        ParamSpec::new("seed", ParamValue::I(-1))
+            .label("Chain Shove Seed (-1 = none: +X at 0.5 s)")
+            .range(-1.0, 1_000_000.0),
+        ParamSpec::new("duration_s", ParamValue::F(12.0)).label("Chain Duration (s)").range(1.0, 60.0),
+        ParamSpec::new("frame", ParamValue::I(0))
+            .label("Frame (0 = follow time; else 1-based)")
+            .range(0.0, MAX_FRAMES as f32),
+        ParamSpec::new("frames", ParamValue::I(120)).label("Frames (push)").range(1.0, 600.0),
         ParamSpec::new("fps", ParamValue::F(30.0)).label("Clip FPS").range(1.0, 120.0),
         ParamSpec::new("python_bin", ParamValue::S(DEFAULT_PYTHON.into())).label("Python"),
         ParamSpec::new("motion_root", ParamValue::S(DEFAULT_ROOT.into())).label("gaia-motion Checkout"),
@@ -60,6 +101,11 @@ struct Motion {
 /// Validated parameters.
 #[derive(Debug, Clone, PartialEq)]
 struct Cfg {
+    chain: bool,
+    ns: f32,
+    seed: i32,
+    duration: f32,
+    frame: i32,
     scene: &'static str,
     impulse: [f32; 3],
     body: String,
@@ -90,6 +136,10 @@ fn string<'a>(p: &'a ParamSet, name: &str) -> Result<&'a str, CookError> {
 }
 
 fn read_cfg(p: &ParamSet) -> Result<Cfg, CookError> {
+    let Some(mode_i) = p.menu("mode") else { return bad("missing menu param `mode`") };
+    if mode_i > 1 {
+        return bad(format!("mode menu index {mode_i} out of range (0..2)"));
+    }
     let Some(scene_i) = p.menu("scene") else { return bad("missing menu param `scene`") };
     let Some(scene) = SCENES.get(scene_i as usize).copied() else {
         return bad(format!("scene menu index {scene_i} out of range (0..{})", SCENES.len()));
@@ -108,6 +158,18 @@ fn read_cfg(p: &ParamSet) -> Result<Cfg, CookError> {
     let body = string(p, "impulse_body")?.trim().to_string();
     if body.is_empty() || body.starts_with('-') || body.contains('\0') {
         return bad(format!("impulse_body {body:?} must be a body name (non-empty, not starting with '-')"));
+    }
+    let Some(seed) = p.int("seed") else { return bad("missing `seed`") };
+    if !(-1..=1_000_000).contains(&seed) {
+        return bad(format!("seed {seed} outside -1..=1000000"));
+    }
+    let Some(duration) = p.float("duration_s") else { return bad("missing `duration_s`") };
+    if !duration.is_finite() || !(1.0..=60.0).contains(&duration) {
+        return bad(format!("duration_s {duration} must be in 1..=60"));
+    }
+    let Some(frame) = p.int("frame") else { return bad("missing `frame`") };
+    if !(0..=MAX_FRAMES).contains(&frame) {
+        return bad(format!("frame {frame} outside 0..={MAX_FRAMES}"));
     }
     let Some(frames) = p.int("frames") else { return bad("missing `frames`") };
     if !(1..=MAX_FRAMES).contains(&frames) {
@@ -130,13 +192,22 @@ fn read_cfg(p: &ParamSet) -> Result<Cfg, CookError> {
     if !(1..=86_400).contains(&t) {
         return bad(format!("timeout_s {t} outside 1..=86400"));
     }
+    let mut python = expand(python);
+    if python == expand(DEFAULT_PYTHON) && !python.is_file() {
+        python = expand(FALLBACK_PYTHON);
+    }
     Ok(Cfg {
+        chain: mode_i == 1,
+        ns,
+        seed,
+        duration,
+        frame,
         scene,
         impulse,
         body,
         frames,
         fps,
-        python: expand(python),
+        python,
         root: expand(root),
         cache,
         timeout: Duration::from_secs(t.unsigned_abs().into()),
@@ -155,7 +226,16 @@ fn fnv64(seed: u64, bytes: &[u8]) -> u64 {
 /// Cache key: 32 hex chars over everything that changes the clip. `python_bin` / `motion_root` / `fps` / `timeout` /
 /// `cache_dir` are location or playback choices, not simulation inputs, so they are NOT part of it.
 fn param_hash(c: &Cfg) -> String {
-    let key = format!(
+    // chain: the sim inputs are base shove, seed, duration; `fps` too because the .geo sequence is resampled at it
+    let key = if c.chain {
+        format!("chain-v1|{:08x}|{}|{:08x}|{:08x}", c.ns.to_bits(), c.seed, c.duration.to_bits(), c.fps.to_bits())
+    } else {
+        push_key(c)
+    };
+    format!("{:016x}{:016x}", fnv64(0, key.as_bytes()), fnv64(0x9e37_79b9_7f4a_7c15, key.as_bytes()))
+}
+fn push_key(c: &Cfg) -> String {
+    format!(
         "v1|{}|{:08x},{:08x},{:08x}|{}|{}",
         c.scene,
         c.impulse[0].to_bits(),
@@ -163,10 +243,52 @@ fn param_hash(c: &Cfg) -> String {
         c.impulse[2].to_bits(),
         c.body,
         c.frames
-    );
-    format!("{:016x}{:016x}", fnv64(0, key.as_bytes()), fnv64(0x9e37_79b9_7f4a_7c15, key.as_bytes()))
+    )
 }
 
+/// Number of `frame.NNNN.geo` files of a finished clip (frames are contiguous from 1).
+fn count_frames(geo_dir: &Path) -> Result<i32, CookError> {
+    let rd = std::fs::read_dir(geo_dir).map_err(|e| CookError::Failed(format!("ls {}: {e}", geo_dir.display())))?;
+    let n = rd
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .filter(|n| n.starts_with("frame.") && n.ends_with(".geo"))
+        .count();
+    i32::try_from(n)
+        .ok()
+        .filter(|n| *n > 0)
+        .map_or_else(|| Err(CookError::Failed(format!("{}: no frames", geo_dir.display()))), Ok)
+}
+/// 24-point body cloud -> skeleton: bones (`BONES`, by joint `name`) as 2-point open polylines + detail `pelvis_z` (= `P.y` of Pelvis).
+fn skeleton(mut d: Detail) -> Result<Detail, CookError> {
+    let names: Vec<String> = match d.attr(AttrClass::Point, "name").map(|a| &a.data) {
+        Some(AttrData::Str { idx, table }) => idx
+            .iter()
+            .map(|i| usize::try_from(*i).ok().and_then(|i| table.get(i)).cloned().unwrap_or_default())
+            .collect(),
+        _ => return Err(CookError::Failed("chain frame has no string point attribute `name`".into())),
+    };
+    let find = |n: &str| -> Result<u32, CookError> {
+        names
+            .iter()
+            .position(|x| x == n)
+            .and_then(|i| u32::try_from(i).ok())
+            .map_or_else(|| Err(CookError::Failed(format!("chain frame has no joint `{n}`"))), Ok)
+    };
+    for (child, parent) in BONES {
+        d.add_poly(&[find(child)?, find(parent)?], false);
+    }
+    let pelvis = usize::try_from(find("Pelvis")?).unwrap_or(0);
+    let Some(p) = d.p().get(pelvis).copied() else {
+        return Err(CookError::Failed("chain frame has no P for Pelvis".into()));
+    };
+    d.add_attr(Attribute {
+        name: "pelvis_z".into(),
+        class: AttrClass::Detail,
+        data: AttrData::F32(vec![p[1]]),
+        type_info: TypeInfo::None,
+    });
+    Ok(d)
+}
 fn frame_path(geo_dir: &Path, one_based: i64) -> PathBuf {
     geo_dir.join(format!("frame.{one_based:04}.geo"))
 }
@@ -229,19 +351,31 @@ fn run_python(c: &Cfg, run: &Path) -> Result<(), CookError> {
     let open =
         |p: &Path| std::fs::File::create(p).map_err(|e| CookError::Failed(format!("create {}: {e}", p.display())));
     let mut cmd = Command::new(&c.python);
-    cmd.current_dir(&c.root)
-        .args(["-m", "gaia_motion.cli", "run", "--scene", c.scene, "--frames"])
-        .arg(c.frames.to_string())
-        .arg("--out")
-        .arg(run)
-        .arg("--push-body")
-        .arg(&c.body)
-        .arg("--push-impulse")
-        .args(c.impulse.iter().map(|v| v.to_string()))
-        .args(["--up-axis", "y"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::from(open(&out_log)?))
-        .stderr(Stdio::from(open(&err_log)?));
+    cmd.current_dir(&c.root);
+    if c.chain {
+        cmd.args(["-m", "gaia_motion.cli", "chain", "--out"])
+            .arg(run)
+            .arg("--ns")
+            .arg(c.ns.to_string())
+            .arg("--run-s")
+            .arg(c.duration.to_string())
+            .arg("--fps")
+            .arg(c.fps.to_string());
+        if c.seed >= 0 {
+            cmd.arg("--seed").arg(c.seed.to_string());
+        }
+    } else {
+        cmd.args(["-m", "gaia_motion.cli", "run", "--scene", c.scene, "--frames"])
+            .arg(c.frames.to_string())
+            .arg("--out")
+            .arg(run)
+            .arg("--push-body")
+            .arg(&c.body)
+            .arg("--push-impulse")
+            .args(c.impulse.iter().map(|v| v.to_string()))
+            .args(["--up-axis", "y"]);
+    }
+    cmd.stdin(Stdio::null()).stdout(Stdio::from(open(&out_log)?)).stderr(Stdio::from(open(&err_log)?));
     let mut child = cmd.spawn().map_err(|e| CookError::Failed(format!("spawn {}: {e}", c.python.display())))?;
     let start = Instant::now();
     let status = loop {
@@ -264,7 +398,7 @@ fn run_python(c: &Cfg, run: &Path) -> Result<(), CookError> {
         let code = status.code().map_or_else(|| "signal".to_string(), |c| c.to_string());
         return Err(CookError::Failed(format!("gaia-motion exited {code}: {}", tail(&err_log))));
     }
-    let last = frame_path(&run.join("geo"), i64::from(c.frames));
+    let last = frame_path(&run.join("geo"), if c.chain { 1 } else { i64::from(c.frames) });
     if !last.is_file() {
         return Err(CookError::Failed(format!(
             "gaia-motion exited 0 but {} is missing; stderr: {}",
@@ -291,10 +425,14 @@ impl Node<Detail> for Motion {
     fn cook(&self, ctx: &CookCtx, _inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let cfg = read_cfg(ctx.params)?;
         let geo_dir = ensure_clip(&cfg)?;
-        let idx = frame_index(ctx.time, cfg.fps, cfg.frames);
+        let frames = if cfg.chain { count_frames(&geo_dir)? } else { cfg.frames };
+        let idx =
+            if cfg.frame > 0 { i64::from(cfg.frame.min(frames) - 1) } else { frame_index(ctx.time, cfg.fps, frames) };
         let path = frame_path(&geo_dir, idx + 1);
-        (ctx.log)(&format!("motion: {} frame {} of {}", cfg.scene, idx + 1, cfg.frames));
-        hexe_geo::read_any(&path).map(Arc::new).map_err(|e| CookError::Failed(format!("read {}: {e}", path.display())))
+        let what = if cfg.chain { "chain" } else { cfg.scene };
+        (ctx.log)(&format!("motion: {what} frame {} of {frames}", idx + 1));
+        let d = hexe_geo::read_any(&path).map_err(|e| CookError::Failed(format!("read {}: {e}", path.display())))?;
+        if cfg.chain { skeleton(d).map(Arc::new) } else { Ok(Arc::new(d)) }
     }
 }
 
