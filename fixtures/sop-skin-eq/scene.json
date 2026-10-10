@@ -1,0 +1,96 @@
+{
+ "nodes": [
+  {
+   "name": "c0",
+   "type": "circle",
+   "params": {
+    "orient": 2,
+    "center": [
+     0.0,
+     0,
+     0.0
+    ],
+    "radius": [
+     1.0,
+     1.0,
+     0.0
+    ],
+    "divisions": 12
+   }
+  },
+  {
+   "name": "c1",
+   "type": "circle",
+   "params": {
+    "orient": 2,
+    "center": [
+     0.0,
+     1,
+     0.0
+    ],
+    "radius": [
+     0.5,
+     0.5,
+     0.0
+    ],
+    "divisions": 12
+   }
+  },
+  {
+   "name": "c2",
+   "type": "circle",
+   "params": {
+    "orient": 2,
+    "center": [
+     0.0,
+     2,
+     0.0
+    ],
+    "radius": [
+     1.0,
+     1.0,
+     0.0
+    ],
+    "divisions": 12
+   }
+  },
+  {
+   "name": "merge1",
+   "type": "merge"
+  },
+  {
+   "name": "skin1",
+   "type": "skin",
+   "params": {
+    "computeuv": false
+   }
+  }
+ ],
+ "edges": [
+  [
+   "c0",
+   0,
+   "merge1",
+   0
+  ],
+  [
+   "c1",
+   0,
+   "merge1",
+   1
+  ],
+  [
+   "c2",
+   0,
+   "merge1",
+   2
+  ],
+  [
+   "merge1",
+   0,
+   "skin1",
+   0
+  ]
+ ],
+ "display": "skin1"
+}

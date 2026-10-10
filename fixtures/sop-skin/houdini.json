@@ -1,7 +1,7 @@
 {
  "sop": "sop-skin",
  "houdini": "20.5.487",
- "note": "3 polygon circles (12 / 8 / 12 pts) at y 0,1,2 in XZ merged -> skin quads (hexe examples/skin.json)",
+ "note": "3 polygon circles (12 / 8 / 12 pts) at y 0,1,2 merged -> skin quads (resample 8 -> 12: Houdini splits edge midpoints, tie order not reproduced = KNOWN GAP)",
  "points": 36,
  "prims": 24,
  "vertices": 96,

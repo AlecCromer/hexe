@@ -1,10 +1,15 @@
 {
  "nodes": [
   {
-   "name": "low",
+   "name": "c0",
    "type": "circle",
    "params": {
     "orient": 2,
+    "center": [
+     0.0,
+     0,
+     0.0
+    ],
     "radius": [
      1.0,
      1.0,
@@ -14,13 +19,13 @@
    }
   },
   {
-   "name": "mid",
+   "name": "c1",
    "type": "circle",
    "params": {
     "orient": 2,
     "center": [
      0.0,
-     1.0,
+     1,
      0.0
     ],
     "radius": [
@@ -32,13 +37,13 @@
    }
   },
   {
-   "name": "high",
+   "name": "c2",
    "type": "circle",
    "params": {
     "orient": 2,
     "center": [
      0.0,
-     2.0,
+     2,
      0.0
     ],
     "radius": [
@@ -55,24 +60,27 @@
   },
   {
    "name": "skin1",
-   "type": "skin"
+   "type": "skin",
+   "params": {
+    "computeuv": false
+   }
   }
  ],
  "edges": [
   [
-   "low",
+   "c0",
    0,
    "merge1",
    0
   ],
   [
-   "mid",
+   "c1",
    0,
    "merge1",
    1
   ],
   [
-   "high",
+   "c2",
    0,
    "merge1",
    2
