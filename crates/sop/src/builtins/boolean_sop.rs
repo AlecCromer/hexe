@@ -496,7 +496,8 @@ fn bridge_hole(ls: &[Vec<u32>], pos: &[V3]) -> Option<Vec<u32>> {
     let (outer, hole) = if len(n0) >= len(n1) { (ls.first()?, ls.get(1)?) } else { (ls.get(1)?, ls.first()?) };
     let corner = |l: &Vec<u32>, i: usize| -> Option<bool> {
         let m = l.len();
-        let (a, b, c) = (*pos.get(l[(i + m - 1) % m] as usize)?, *pos.get(l[i] as usize)?, *pos.get(l[(i + 1) % m] as usize)?);
+        let (a, b, c) =
+            (*pos.get(l[(i + m - 1) % m] as usize)?, *pos.get(l[i] as usize)?, *pos.get(l[(i + 1) % m] as usize)?);
         let (u, v) = (sub(b, a), sub(c, b));
         Some(len(cross(u, v)) > 1e-7 * len(u) * len(v))
     };
@@ -1555,7 +1556,9 @@ mod tests {
         for (name, topo) in refs {
             let (b, op) = name.split_once('_').expect("name");
             let bsrc = match b {
-                "sph" => r#"{"name":"b","type":"sphere","params":{"type":2,"rad":[0.65,0.65,0.65],"rows":9,"cols":12}},{"name":"xf","type":"xform"}"#,
+                "sph" => {
+                    r#"{"name":"b","type":"sphere","params":{"type":2,"rad":[0.65,0.65,0.65],"rows":9,"cols":12}},{"name":"xf","type":"xform"}"#
+                }
                 "off" => r#"{"name":"b","type":"box"},{"name":"xf","type":"xform","params":{"t":[0.5,0.5,0.5]}}"#,
                 _ => r#"{"name":"b","type":"box"},{"name":"xf","type":"xform","params":{"t":[0.5,0,0]}}"#,
             };
@@ -1575,14 +1578,17 @@ mod tests {
             for l in topo.lines() {
                 let t: Vec<&str> = l.split_whitespace().collect();
                 match t.first() {
-                    Some(&"P") => rp.push([t[2].parse().expect("x"), t[3].parse().expect("y"), t[4].parse().expect("z")]),
+                    Some(&"P") => {
+                        rp.push([t[2].parse().expect("x"), t[3].parse().expect("y"), t[4].parse().expect("z")])
+                    }
                     Some(&"F") => rf.push(t[2..].iter().map(|s| s.parse().expect("i")).collect()),
                     _ => {}
                 }
             }
             assert_eq!((out.point_count as usize, out.prim_count() as usize), (rp.len(), rf.len()), "{name} counts");
             let xp: Vec<[f64; 3]> = out.p().iter().map(|p| [p[0] as f64, p[1] as f64, p[2] as f64]).collect();
-            let key = |p: &[f64; 3]| [(p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64, (p[2] * 1e4).round() as i64];
+            let key =
+                |p: &[f64; 3]| [(p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64, (p[2] * 1e4).round() as i64];
             let (mut ka, mut kb): (Vec<_>, Vec<_>) = (rp.iter().map(key).collect(), xp.iter().map(key).collect());
             ka.sort_unstable();
             kb.sort_unstable();
@@ -1594,8 +1600,21 @@ mod tests {
                 }
                 h
             };
-            let xf: Vec<Vec<usize>> = out.prims.iter().map(|pr| out.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| p as usize).collect()).collect();
-            assert_eq!(hist(rf.iter().map(Vec::len).collect()), hist(xf.iter().map(Vec::len).collect()), "{name} valence");
+            let xf: Vec<Vec<usize>> = out
+                .prims
+                .iter()
+                .map(|pr| {
+                    out.vertex_point[pr.verts.start as usize..pr.verts.end as usize]
+                        .iter()
+                        .map(|&p| p as usize)
+                        .collect()
+                })
+                .collect();
+            assert_eq!(
+                hist(rf.iter().map(Vec::len).collect()),
+                hist(xf.iter().map(Vec::len).collect()),
+                "{name} valence"
+            );
             let area = |pts: &[[f64; 3]], f: &[Vec<usize>]| -> f64 {
                 f.iter()
                     .map(|q| {
