@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-DIFF 1, HEXE-ERR 1  (N=95)
+Histogram: MATCH 64, HEXE-ERR 14, STAT-PASS 10, ORDER-DIFF 3, TOPO-DIFF 2, ATTRIB-DIFF 1, P-DIFF 1  (N=95)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -66,7 +66,7 @@ Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-D
 | sop-normal | 8/6/24 | 8/6/24 | MATCH | MATCH | - (vertex N present both; N VALUES not compared) |
 | sop-output | 8/6/24 | 8/6/24 | MATCH | MATCH | - |
 | sop-peak | 8/6/24 | 8/6/24 | MATCH | MATCH | - (displaced P equal Houdini index-for-index (outward)) |
-| sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | hexe 48/38 vs Houdini 56/54 (offset .1 divs 2 round): hexe bevels fewer elements / emits fewer fillet faces than Houdini polybevel::3.0 |
+| sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | 56/54 match (offset .1 divs 2 round); div 1–4 zero-diff incl. point/prim order |
 | sop-polyextrude | 8/6/24 | 8/6/24 | MATCH | MATCH | - (splittype 0 connected components = Houdini default: closed box 8/6/24, corners mitre-displaced +-0.5 -> +-1, point order = first appearance; splittype 1 keeps the per-face path; inset/divisions/connected groups beyond the closed-box case UNVERIFIED) |
 | sop-polyfill | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-polyfill-ears | 8/7/26 | 8/7/26 | MATCH | MATCH |  |
@@ -92,29 +92,29 @@ Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-D
 | sop-sort | 9/4/16 | 9/4/16 | MATCH | MATCH | - (reverse permutation itself consistent) |
 | sop-sphere | 266/288/1104 | 266/288/1104 | MATCH | MATCH | - (poles 0/1, ring +X toward -Z now equal) |
 | sop-subdivide | 26/24/96 | 26/24/96 | MATCH | TOPO-DIFF | Catmull-Clark counts 26/24/96 match Houdini osdcc; new face/edge/vertex point ORDER differs |
-| sop-sweep | 300/288/1152 | 300/288/1152 | MATCH | MATCH |  |
-| sop-sweep-caps | 300/290/1176 | 300/290/1176 | MATCH | MATCH |  |
-| sop-sweep-closed | 288/288/1152 | 288/288/1152 | MATCH | MATCH |  |
-| sop-sweep-roll | 300/288/1152 | 300/288/1152 | MATCH | MATCH |  |
-| sop-sweep-scale | 300/288/1152 | 300/288/1152 | MATCH | MATCH |  |
-| sop-sweep-tube | 200/194/784 | 200/194/784 | MATCH | MATCH |  |
-| sop-switch | 8/6/24 | 8/6/24 | MATCH | MATCH | - (box branch) |
-| sop-transform | 8/6/24 | 8/6/24 | MATCH | MATCH | - (SRT math verified (t/r/s)) |
-| sop-twist | 8/6/24 | 8/6/24 | MATCH | MATCH | - (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess) |
-| sop-uvlayout | 8/6/24 | 8/6/24 | MATCH | ATTRIB-DIFF | - (Houdini adds detail attrs coverage + numnonpacked; uv values not compared) |
-| sop-uvproject | 8/6/24 | 8/6/24 | MATCH | MATCH | - (vertex uv present both (uv VALUES not compared)) |
-| sop-uvunwrap | 8/6/24 | 8/6/24 | MATCH | MATCH | - (uv present both (values not compared; algorithms differ by design)) |
-| sop-wrangle | 121/0/0 | 121/0/0 | MATCH | MATCH | - (grid order now equal; sin() math matches; point-only geometry so no winding) |
+| sop-sweep | 300/288/1152 | - | - | HEXE-ERR | cook rc=0: cooked 300 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep.geo |
+| sop-sweep-caps | 300/290/1176 | - | - | HEXE-ERR | cook rc=0: cooked 300 points, 290 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-caps.geo |
+| sop-sweep-closed | 288/288/1152 | - | - | HEXE-ERR | cook rc=0: cooked 288 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-closed.geo |
+| sop-sweep-roll | 300/288/1152 | - | - | HEXE-ERR | cook rc=0: cooked 300 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-roll.geo |
+| sop-sweep-scale | 300/288/1152 | - | - | HEXE-ERR | cook rc=0: cooked 300 points, 288 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-scale.geo |
+| sop-sweep-tube | 200/194/784 | - | - | HEXE-ERR | cook rc=0: cooked 200 points, 194 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/sop-sweep-tube.geo |
+| sop-switch | 8/6/24 | - | - | HEXE-ERR | - (box branch) |
+| sop-transform | 8/6/24 | - | - | HEXE-ERR | - (SRT math verified (t/r/s)) |
+| sop-twist | 8/6/24 | - | - | HEXE-ERR | - (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess) |
+| sop-uvlayout | 8/6/24 | - | - | HEXE-ERR | - (Houdini adds detail attrs coverage + numnonpacked; uv values not compared) |
+| sop-uvproject | 8/6/24 | - | - | HEXE-ERR | - (vertex uv present both (uv VALUES not compared)) |
+| sop-uvunwrap | 8/6/24 | - | - | HEXE-ERR | - (uv present both (values not compared; algorithms differ by design)) |
+| sop-wrangle | 121/0/0 | - | - | HEXE-ERR | - (grid order now equal; sin() math matches; point-only geometry so no winding) |
 
 ## Extra generator cases (not ledger rows; orient / reverse / pole variants)
 
 | case | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict |
 |---|---|---|---|---|
-| x-circle-yz | 6/1/6 | 6/1/6 | MATCH | MATCH |
-| x-circle-zx | 6/1/6 | 6/1/6 | MATCH | MATCH |
-| x-grid-xy | 12/6/24 | 12/6/24 | MATCH | MATCH |
-| x-grid-yz | 12/6/24 | 12/6/24 | MATCH | MATCH |
-| x-sphere-tri0 | 14/16/64 | 14/16/64 | MATCH | MATCH |
+| x-circle-yz | 6/1/6 | - | - | HEXE-ERR cook rc=0: cooked 6 points, 1 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-circle-yz.geo |
+| x-circle-zx | 6/1/6 | - | - | HEXE-ERR cook rc=0: cooked 6 points, 1 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-circle-zx.geo |
+| x-grid-xy | 12/6/24 | - | - | HEXE-ERR cook rc=0: cooked 12 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-grid-xy.geo |
+| x-grid-yz | 12/6/24 | - | - | HEXE-ERR cook rc=0: cooked 12 points, 6 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-grid-yz.geo |
+| x-sphere-tri0 | 14/16/64 | - | - | HEXE-ERR cook rc=0: cooked 14 points, 16 prims -> /Users/pascaldisse/.gaia/cache/hexe/scratch/h31/hexe-out/x-sphere-tri0.geo |
 
 ## Not covered / caveats
 

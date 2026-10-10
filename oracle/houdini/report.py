@@ -53,7 +53,7 @@ CAUSE = {
     "sop-subdivide": "Catmull-Clark counts 26/24/96 match Houdini osdcc; new face/edge/vertex point ORDER differs",
     "sop-smooth": "different model: Houdini smooth::2.0 (strength 0.5, quality 2, uniform) shrinks box to +-0.4286; hexe Laplacian x2 shrinks to +-0.2222",
     "sop-fuse": "- (box -> polyextrude -> fuse: both sides 8/6/24, polyextrude connected default now equal)",
-    "sop-polybevel": "hexe 48/38 vs Houdini 56/54 (offset .1 divs 2 round): hexe bevels fewer elements / emits fewer fillet faces than Houdini polybevel::3.0",
+    "sop-polybevel": "56/54 match (offset .1 divs 2 round); div 1–4 zero-diff incl. point/prim order",
     "sop-polyextrude": "- (splittype 0 connected components = Houdini default: closed box 8/6/24, corners mitre-displaced +-0.5 -> +-1, point order = first appearance; splittype 1 keeps the per-face path; inset/divisions/connected groups beyond the closed-box case UNVERIFIED)",
 }
 RALL = json.load(open(os.path.join(HERE, "results.json")))
