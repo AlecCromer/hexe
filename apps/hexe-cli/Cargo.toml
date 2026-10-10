@@ -18,3 +18,4 @@ hexe-core = { workspace = true }
 hexe-geo = { workspace = true }
 hexe-graph = { workspace = true }
 hexe-sop = { workspace = true }
+sop-motion = { workspace = true }

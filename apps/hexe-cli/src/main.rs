@@ -72,6 +72,13 @@ fn oracle(case: &str, input: Option<&str>) -> Result<String, String> {
     }
 }
 
+/// Built-in SOPs + the hexe-native `motion` node (same set as the desktop app's palette, `hexe-tauri` `app_registry`).
+fn registry() -> hexe_sop::Registry {
+    let mut r = hexe_sop::registry();
+    r.register(sop_motion::TYPE_NAME, sop_motion::spec, sop_motion::new);
+    r
+}
+
 /// Scene JSON text → cooked display node as `.geo` JSON bytes + `(points, prims)`.
 #[cfg(test)]
 fn cook_scene(json: &str, time: f32) -> Result<(Vec<u8>, u32, u32), String> {
@@ -92,7 +99,8 @@ fn cook_scene_range(
     base: Option<&std::path::Path>,
     frames: Option<(i64, i64, i64)>,
 ) -> Result<(Vec<u8>, u32, u32), String> {
-    let (mut graph, display) = hexe_sop::load_scene_in(json, base).map_err(|e| e.to_string())?;
+    let hexe_sop::Loaded { mut graph, display, .. } =
+        hexe_sop::load_scene_with_base(json, &registry(), base).map_err(|e| e.to_string())?;
     if let Some((a, b, s)) = frames {
         hexe_sop::render_frames(&mut graph, display, a, b, s)?;
     }
@@ -194,7 +202,7 @@ fn show_param(p: &ParamSpec) -> String {
 
 /// `nodes`: every registered SOP type with its inputs and `token  Type default` param table.
 fn nodes() -> String {
-    let reg = hexe_sop::registry();
+    let reg = registry();
     let mut out = String::new();
     for name in reg.type_names() {
         let inputs = reg
