@@ -77,14 +77,19 @@ def setp(n, k, v):
     t.set(tuple(v) if isinstance(v, (list, tuple)) else (v,))
 
 
-def finish(sop, scene, build, note=""):
-    """Write scene.json (hexe twin), cook the Houdini twin, save houdini.geo + houdini.json."""
+def finish(sop, scene, build, note="", oracle=None, stat=None):
+    """Write scene.json (hexe twin), cook the Houdini twin, save houdini.geo + houdini.json.
+    oracle="stat": statistical oracle (parity/README.md): houdini.json gets `oracle`="stat" + `stat` (kind points|disp);
+    kind=disp also saves base.geo = the first input of the twin (displacement magnitude is |P_out - P_base|)."""
     d = os.path.join(FIX, sop)
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "scene.json"), "w") as f:
         json.dump(scene, f, indent=1)
         f.write("\n")
     out = {"sop": sop, "houdini": "%s" % hou.applicationVersionString(), "note": note}
+    if oracle:
+        out["oracle"] = oracle
+        out["stat"] = stat or "points"
     try:
         net = scratch_net()
         node = build(net)
@@ -99,6 +104,10 @@ def finish(sop, scene, build, note=""):
         else:
             geo.saveToFile(os.path.join(d, "houdini.geo"))
             out.update(summarize(geo))
+            if oracle == "stat" and out["stat"] == "disp":
+                bg = node.inputs()[0].geometry()
+                bg.saveToFile(os.path.join(d, "base.geo"))
+                out["base_P_all"] = [[r6(c) for c in p.position()] for p in bg.points()[:CAP]]
         if warns:
             out["warnings"] = list(warns)
     except Exception as e:  # recorded verbatim, run continues

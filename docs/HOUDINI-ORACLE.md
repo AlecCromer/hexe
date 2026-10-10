@@ -4,9 +4,9 @@ Real Houdini 20.5.487 (hython, Commercial) twin of every `sop-*` ledger row vs `
 
 Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in one process, ~20 s) then `cargo xtask oracle --houdini` (= build hexe-cli, `compare.py`, `report.py`).
 
-Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
+Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 72, ATTRIB-DIFF 3, ORDER-DIFF 3, P-DIFF 3, TOPO-DIFF 2, HEXE-ERR 1  (N=84)
+Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-DIFF 1, HEXE-ERR 1  (N=95)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -34,7 +34,11 @@ Histogram: MATCH 72, ATTRIB-DIFF 3, ORDER-DIFF 3, P-DIFF 3, TOPO-DIFF 2, HEXE-ER
 | sop-copytopoints-orient-flip | 72/54/216 | 72/54/216 | MATCH | MATCH |  |
 | sop-copytopoints-orient-up | 72/54/216 | 72/54/216 | MATCH | MATCH |  |
 | sop-copytopoints-pscale | 72/54/216 | 72/54/216 | MATCH | MATCH |  |
-| sop-curve | 3/1/3 | 3/1/3 | MATCH | MATCH | - (Houdini 20.5 curve::2.0 has no coords parm; twin = Add SOP closed polygon, so this checks the data model not the Curve SOP itself) |
+| sop-curve | 3/1/3 | 3/1/3 | MATCH | MATCH | - (real curve::2.0 twin: scriptable authoring parm is the Data/Geometry parm savedstashgeo, Houdini passes the stash through, so this checks data model + prim kind + P, not coords parsing) |
+| sop-curve-bezier | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
+| sop-curve-nurbs | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
+| sop-curve-nurbs-closed | 5/1/5 | 5/1/5 | MATCH | MATCH |  |
+| sop-curve-poly-open | 5/1/5 | 5/1/5 | MATCH | MATCH |  |
 | sop-delete | 9/2/8 | 9/2/8 | MATCH | MATCH | - (9 pts kept, 2 prims left both) |
 | sop-divide | 8/12/36 | 8/12/36 | MATCH | TOPO-DIFF | triangulation order/diagonal: Houdini [1,5,4],[2,6,5],[3,7,6],[0,4,7].. (one tri per quad first); hexe [1,0,4],[1,4,5],[2,1,5].. (fan per quad). Counts 8/12/36 equal, P equal |
 | sop-facet | 24/6/24 | 24/6/24 | ORDER-DIFF | ORDER-DIFF | unique_points: Houdini keeps the original 8 ids on prim 0 and appends the other corners ([1,5,4,0],[2,6,12,20]..); hexe renumbers 4 fresh points per prim |
@@ -53,12 +57,16 @@ Histogram: MATCH 72, ATTRIB-DIFF 3, ORDER-DIFF 3, P-DIFF 3, TOPO-DIFF 2, HEXE-ER
 | sop-matchsize | 8/6/24 | 8/6/24 | MATCH | MATCH | - (explicit target size/center, P equal) |
 | sop-measure | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim attr area present both (values not compared)) |
 | sop-merge | 17/10/40 | 17/10/40 | MATCH | MATCH | - |
-| sop-mountain | 121/100/400 | 121/100/400 | P-DIFF | P-DIFF | noise stream: hexe perlin(seed) vs Houdini perlin basis (no seed twin); Houdini y[-0.15,0.12] vs hexe different. Counts equal |
-| sop-noise | 121/0/0 | 121/0/0 | P-DIFF | P-DIFF | noise basis/seed not Houdini's perlin (ledger: UNVERIFIED); Houdini displacement bbox y[0.39,0.77] vs hexe y[-0.28,0.30]; Houdini noiserange default positive |
+| sop-mountain | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03882/0.04032(+3.9%) disp_std 0.03039/0.02925(-3.8%) |
+| sop-mountain-freq | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03881/0.03936(+1.4%) disp_std 0.03024/0.02902(-4.0%) |
+| sop-mountain-oct | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03635/0.03666(+0.9%) disp_std 0.02779/0.02749(-1.1%) |
+| sop-noise | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.2997/0.3092(+3.2%) disp_std 0.1438/0.1387(-3.5%) |
+| sop-noise-freq | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.2952/0.3076(+4.2%) disp_std 0.1417/0.136(-4.0%) |
+| sop-noise-oct | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.2733/0.2783(+1.8%) disp_std 0.1258/0.1219(-3.1%) |
 | sop-normal | 8/6/24 | 8/6/24 | MATCH | MATCH | - (vertex N present both; N VALUES not compared) |
 | sop-output | 8/6/24 | 8/6/24 | MATCH | MATCH | - |
 | sop-peak | 8/6/24 | 8/6/24 | MATCH | MATCH | - (displaced P equal Houdini index-for-index (outward)) |
-| sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | 56/54 match (offset .1 divs 2 round); div 1–4 zero-diff incl. point/prim order |
+| sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | hexe 48/38 vs Houdini 56/54 (offset .1 divs 2 round): hexe bevels fewer elements / emits fewer fillet faces than Houdini polybevel::3.0 |
 | sop-polyextrude | 8/6/24 | 8/6/24 | MATCH | MATCH | - (splittype 0 connected components = Houdini default: closed box 8/6/24, corners mitre-displaced +-0.5 -> +-1, point order = first appearance; splittype 1 keeps the per-face path; inset/divisions/connected groups beyond the closed-box case UNVERIFIED) |
 | sop-polyfill | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-polyfill-ears | 8/7/26 | 8/7/26 | MATCH | MATCH |  |
@@ -72,7 +80,10 @@ Histogram: MATCH 72, ATTRIB-DIFF 3, ORDER-DIFF 3, P-DIFF 3, TOPO-DIFF 2, HEXE-ER
 | sop-revolve-arc | 84/72/288 | 84/72/288 | MATCH | MATCH |  |
 | sop-revolve-tris | 96/192/576 | 96/192/576 | MATCH | MATCH |  |
 | sop-revolve-wall | 24/12/48 | 24/12/48 | MATCH | MATCH |  |
-| sop-scatter | 500/0/0 | 500/0/0 | P-DIFF | ATTRIB-DIFF (+P-DIFF) | RNG stream differs (expected, ledger says UNVERIFIED); hexe also writes point attrs N + sourceprim that Houdini scatter does not by default. Count 500 matches |
+| sop-scatter | 2000/0/0 | 2000/0/0 | stat | STAT-PASS | stdx 2.877/2.912(+1.2%) stdy 0/0(+0.0%) stdz 2.884/2.839(-1.5%) nn 0.1128/0.1138(+0.9%) |
+| sop-scatter-density | 2000/0/0 | 2000/0/0 | stat | STAT-PASS | stdx 2.367/2.363(-0.2%) stdy 0/0(+0.0%) stdz 2.901/2.94(+1.4%) nn 0.106/0.1057(-0.2%) |
+| sop-scatter-perprim | 2010/0/0 | 2010/0/0 | stat | STAT-PASS | stdx 2.847/2.863(+0.5%) stdy 0/0(+0.0%) stdz 2.865/2.861(-0.1%) nn 0.11/0.1105(+0.5%) |
+| sop-scatter-seed | 1500/0/0 | 1500/0/0 | stat | STAT-PASS | stdx 0.3682/0.3751(+1.9%) stdy 0.3725/0.3751(+0.7%) stdz 0.3705/0.3686(-0.5%) nn 0.031/0.03204(+3.4%) |
 | sop-skin | 36/24/96 | 36/24/96 | P-DIFF | P-DIFF |  |
 | sop-skin-closev | 24/24/96 | 24/24/96 | MATCH | MATCH |  |
 | sop-skin-eq | 36/24/96 | 36/24/96 | MATCH | MATCH |  |
@@ -107,7 +118,8 @@ Histogram: MATCH 72, ATTRIB-DIFF 3, ORDER-DIFF 3, P-DIFF 3, TOPO-DIFF 2, HEXE-ER
 
 ## Not covered / caveats
 
-- `sop-curve`: Houdini 20.5 has no scriptable coords parm on `curve::2.0`; the twin is an Add SOP closed polygon through the same 3 points (MATCH there does NOT verify the Curve SOP: row stays partial).
+- `sop-curve*`: twin = real `curve::2.0` fed through `savedstashgeo` (no coords parm exists); a pass-through, so coords PARSING / tessellation have no Houdini twin.
+- `STAT-PASS|STAT-FAIL` rows (sop-scatter*, sop-noise*, sop-mountain*): statistical oracle, P is NOT compared (streams differ by construction); rules + tolerances in parity/README.md; the `cause` column shows metric houdini/hexe (deviation).
 - MATCH/WINDING-DIFF rows compare P (index order) + topology + attribute NAMES; attribute VALUES (N, uv, class, area, ...) are never compared.
 - `sop-uvproject` axis mapping (hexe axis y -> Houdini inittype zx), `sop-smooth`/`sop-noise`/`sop-mountain`/`sop-twist`/`sop-bend`/`sop-matchsize` parameter mappings are best guesses (different parm models).
 - `sop-registry` = null passthrough only; `rop-geometry` is not a `sop-*` row and is out of scope.

@@ -1,0 +1,92 @@
+{
+ "sop": "sop-curve-nurbs",
+ "houdini": "20.5.487",
+ "note": "4 CVs open NURBS order 4; twin = curve::2.0 outputtype nurbs savedstashgeo NURBSCurve",
+ "points": 4,
+ "prims": 1,
+ "vertices": 4,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "NURBSCurve"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "bbox_max": [
+  4.0,
+  2.0,
+  0.0
+ ],
+ "P": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   2.0,
+   0.0
+  ],
+  [
+   3.0,
+   2.0,
+   0.0
+  ],
+  [
+   4.0,
+   0.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   2.0,
+   0.0
+  ],
+  [
+   3.0,
+   2.0,
+   0.0
+  ],
+  [
+   4.0,
+   0.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2,
+   3
+  ]
+ ],
+ "prim_closed": [
+  false
+ ]
+}

@@ -1,10 +1,10 @@
 from _common import *
 SOP = "sop-noise"
-NOTE = "grid 11x11 points -> attribnoise P add amplitude 0.5 freq 0.7 seed 3 (examples/attribnoise.json); Houdini twin: attribs P, elementsize 1/0.7, offset 3 -> P values not expected to match (noise streams)"
-SCENE = {"nodes": [{"name": "grid1", "type": "grid", "params": {"rows": 11, "cols": 11, "type": 4}}, {"name": "noise1", "type": "attribnoise", "params": {"amplitude": 0.5, "frequency": [0.7, 0.7, 0.7], "seed": 3}}], "edges": [["grid1", 0, "noise1", 0]], "display": "noise1"}
+NOTE = "STAT oracle (noise streams differ): 70x70 grid, attribnoise amplitude 0.5 freq 3.0; metric = mean/std of |P-base| +-5 %; Houdini twin perlin basis, noise range zero-centered, offset 3 for seed"
+SCENE = {"nodes": [{"name": "grid1", "type": "grid", "params": {"rows": 70, "cols": 70, "type": 4}}, {"name": "noise1", "type": "attribnoise", "params": {"amplitude": 0.5, "frequency": [3.0, 3.0, 3.0], "seed": 3}}], "edges": [["grid1", 0, "noise1", 0]], "display": "noise1"}
 def build(net):
-    g = mk(net, "grid", "grid1", rows=11, cols=11, type=4)
-    n = mk(net, "attribnoise::2.0", "noise1", attribs="P", attribtype="vec", operation="add", amplitude=0.5, elementsize=1 / 0.7, offset=3, basis="perlin")
+    g = mk(net, "grid", "grid1", rows=70, cols=70, type=4)
+    n = mk(net, "attribnoise::2.0", "noise1", attribs="P", attribtype="vec", operation="add", noiserange="zcentered", basis="perlin", amplitude=0.5, elementsize=1 / 3.0, offset=3, fractal="none")
     n.setInput(0, g)
     return n
-finish(SOP, SCENE, build, NOTE)
+finish(SOP, SCENE, build, NOTE, oracle="stat", stat="disp")

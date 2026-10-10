@@ -1735,6 +1735,278 @@
   }
  },
  {
+  "sop": "sop-curve-bezier",
+  "houdini": [
+   4,
+   1,
+   4
+  ],
+  "hexe": [
+   4,
+   1,
+   4
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     4.0,
+     2.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     4.0,
+     2.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "BezierCurve"
+   ],
+   "hexe": [
+    "BezierCurve"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-curve-nurbs",
+  "houdini": [
+   4,
+   1,
+   4
+  ],
+  "hexe": [
+   4,
+   1,
+   4
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     4.0,
+     2.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     4.0,
+     2.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "NURBSCurve"
+   ],
+   "hexe": [
+    "NURBSCurve"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-curve-nurbs-closed",
+  "houdini": [
+   5,
+   1,
+   5
+  ],
+  "hexe": [
+   5,
+   1,
+   5
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     0.0,
+     0.0
+    ],
+    [
+     3.0,
+     3.0,
+     0.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     0.0,
+     0.0
+    ],
+    [
+     3.0,
+     3.0,
+     0.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "NURBSCurve"
+   ],
+   "hexe": [
+    "NURBSCurve"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-curve-poly-open",
+  "houdini": [
+   5,
+   1,
+   5
+  ],
+  "hexe": [
+   5,
+   1,
+   5
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     5.0,
+     2.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     5.0,
+     2.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
   "sop": "sop-delete",
   "houdini": [
    9,
@@ -2980,142 +3252,164 @@
  {
   "sop": "sop-mountain",
   "houdini": [
-   121,
-   100,
-   400
+   4900,
+   4761,
+   19044
   ],
   "hexe": [
-   121,
-   100,
-   400
+   4900,
+   4761,
+   19044
   ],
-  "p_unmatched_points": 121,
-  "p_maxdev_nearest": 0.360163,
-  "p": "P-DIFF",
-  "flags": [
-   "P-DIFF"
-  ],
-  "verdict": "P-DIFF",
-  "bbox": {
-   "houdini": [
-    [
-     -5.0,
-     -0.150509,
-     -5.0
-    ],
-    [
-     5.0,
-     0.118003,
-     5.0
-    ]
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "disp_mean": [
+    0.038817009591836676,
+    0.040323835924068616
    ],
-   "hexe": [
-    [
-     -5.0,
-     -0.222781,
-     -5.0
-    ],
-    [
-     5.0,
-     0.333333,
-     5.0
-    ]
+   "disp_std": [
+    0.03038957432531743,
+    0.029246976687870418
    ]
   },
-  "prim_types": {
-   "houdini": [
-    "Polygon"
+  "detail": "disp_mean 0.03882/0.04032(+3.9%) disp_std 0.03039/0.02925(-3.8%)"
+ },
+ {
+  "sop": "sop-mountain-freq",
+  "houdini": [
+   4900,
+   4761,
+   19044
+  ],
+  "hexe": [
+   4900,
+   4761,
+   19044
+  ],
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "disp_mean": [
+    0.03880814714285724,
+    0.03936294781074833
    ],
-   "hexe": [
-    "Polygon"
+   "disp_std": [
+    0.03024452565896341,
+    0.029019726916065178
    ]
   },
-  "attribs": {
-   "houdini": {
-    "point": [
-     "P"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": []
-   },
-   "hexe": {
-    "point": [
-     "P"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": []
-   }
-  }
+  "detail": "disp_mean 0.03881/0.03936(+1.4%) disp_std 0.03024/0.02902(-4.0%)"
+ },
+ {
+  "sop": "sop-mountain-oct",
+  "houdini": [
+   4900,
+   4761,
+   19044
+  ],
+  "hexe": [
+   4900,
+   4761,
+   19044
+  ],
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "disp_mean": [
+    0.0363454453061225,
+    0.036657537968699784
+   ],
+   "disp_std": [
+    0.027792212482189518,
+    0.027490801417629548
+   ]
+  },
+  "detail": "disp_mean 0.03635/0.03666(+0.9%) disp_std 0.02779/0.02749(-1.1%)"
  },
  {
   "sop": "sop-noise",
   "houdini": [
-   121,
+   4900,
    0,
    0
   ],
   "hexe": [
-   121,
+   4900,
    0,
    0
   ],
-  "p_unmatched_points": 121,
-  "p_maxdev_nearest": 10.75974,
-  "p": "P-DIFF",
-  "flags": [
-   "P-DIFF"
-  ],
-  "verdict": "P-DIFF",
-  "bbox": {
-   "houdini": [
-    [
-     -4.609555,
-     0.39509,
-     -4.528774
-    ],
-    [
-     5.70772,
-     0.766918,
-     5.75868
-    ]
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "disp_mean": [
+    0.29971961708234013,
+    0.30922605332601943
    ],
-   "hexe": [
-    [
-     -5.188845,
-     -0.283293,
-     -5.149786
-    ],
-    [
-     5.267472,
-     0.299358,
-     5.275408
-    ]
+   "disp_std": [
+    0.14380550060773203,
+    0.1387429015289063
    ]
   },
-  "prim_types": {
-   "houdini": [],
-   "hexe": []
+  "detail": "disp_mean 0.2997/0.3092(+3.2%) disp_std 0.1438/0.1387(-3.5%)"
+ },
+ {
+  "sop": "sop-noise-freq",
+  "houdini": [
+   4900,
+   0,
+   0
+  ],
+  "hexe": [
+   4900,
+   0,
+   0
+  ],
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "disp_mean": [
+    0.2952352519967471,
+    0.3075843484085024
+   ],
+   "disp_std": [
+    0.14166094927536382,
+    0.13597354875052362
+   ]
   },
-  "attribs": {
-   "houdini": {
-    "point": [
-     "P"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": []
-   },
-   "hexe": {
-    "point": [
-     "P"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": []
-   }
-  }
+  "detail": "disp_mean 0.2952/0.3076(+4.2%) disp_std 0.1417/0.136(-4.0%)"
+ },
+ {
+  "sop": "sop-noise-oct",
+  "houdini": [
+   4900,
+   0,
+   0
+  ],
+  "hexe": [
+   4900,
+   0,
+   0
+  ],
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "disp_mean": [
+    0.2732947849178823,
+    0.2782539635454351
+   ],
+   "disp_std": [
+    0.1257949557429957,
+    0.12187424241413118
+   ]
+  },
+  "detail": "disp_mean 0.2733/0.2783(+1.8%) disp_std 0.1258/0.1219(-3.1%)"
  },
  {
   "sop": "sop-normal",
@@ -4296,82 +4590,142 @@
  {
   "sop": "sop-scatter",
   "houdini": [
-   500,
+   2000,
    0,
    0
   ],
   "hexe": [
-   500,
+   2000,
    0,
    0
   ],
-  "attrib_diff": {
-   "point": {
-    "houdini_only": [],
-    "hexe_only": [
-     "N",
-     "sourceprim"
-    ]
-   }
-  },
-  "p_unmatched_points": 500,
-  "p_maxdev_nearest": 9.691529,
-  "p": "P-DIFF",
-  "flags": [
-   "ATTRIB-DIFF",
-   "P-DIFF"
-  ],
-  "verdict": "ATTRIB-DIFF",
-  "bbox": {
-   "houdini": [
-    [
-     -4.966263,
-     0.0,
-     -4.958756
-    ],
-    [
-     4.941212,
-     0.0,
-     4.945692
-    ]
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "stdx": [
+    2.8766970471997686,
+    2.9118769197792846
    ],
-   "hexe": [
-    [
-     -4.978752,
-     0.0,
-     -4.994955
-    ],
-    [
-     4.992688,
-     0.0,
-     4.993153
-    ]
+   "stdy": [
+    0.0,
+    0.0
+   ],
+   "stdz": [
+    2.8840701164090867,
+    2.8393908155852796
+   ],
+   "nn": [
+    0.11276354561861578,
+    0.11377753813140468
    ]
   },
-  "prim_types": {
-   "houdini": [],
-   "hexe": []
+  "detail": "stdx 2.877/2.912(+1.2%) stdy 0/0(+0.0%) stdz 2.884/2.839(-1.5%) nn 0.1128/0.1138(+0.9%)"
+ },
+ {
+  "sop": "sop-scatter-density",
+  "houdini": [
+   2000,
+   0,
+   0
+  ],
+  "hexe": [
+   2000,
+   0,
+   0
+  ],
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "stdx": [
+    2.3665064885470053,
+    2.362794037825691
+   ],
+   "stdy": [
+    0.0,
+    0.0
+   ],
+   "stdz": [
+    2.9007551166146937,
+    2.9401745648966537
+   ],
+   "nn": [
+    0.10596457700962762,
+    0.10570720553031013
+   ]
   },
-  "attribs": {
-   "houdini": {
-    "point": [
-     "P"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": []
-   },
-   "hexe": {
-    "point": [
-     "N",
-     "P",
-     "sourceprim"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": []
-   }
-  }
+  "detail": "stdx 2.367/2.363(-0.2%) stdy 0/0(+0.0%) stdz 2.901/2.94(+1.4%) nn 0.106/0.1057(-0.2%)"
+ },
+ {
+  "sop": "sop-scatter-perprim",
+  "houdini": [
+   2010,
+   0,
+   0
+  ],
+  "hexe": [
+   2010,
+   0,
+   0
+  ],
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "stdx": [
+    2.8473421489812987,
+    2.8626833440492763
+   ],
+   "stdy": [
+    0.0,
+    0.0
+   ],
+   "stdz": [
+    2.864649121238029,
+    2.861445107725628
+   ],
+   "nn": [
+    0.11002422020585513,
+    0.11052182802672665
+   ]
+  },
+  "detail": "stdx 2.847/2.863(+0.5%) stdy 0/0(+0.0%) stdz 2.865/2.861(-0.1%) nn 0.11/0.1105(+0.5%)"
+ },
+ {
+  "sop": "sop-scatter-seed",
+  "houdini": [
+   1500,
+   0,
+   0
+  ],
+  "hexe": [
+   1500,
+   0,
+   0
+  ],
+  "verdict": "STAT-PASS",
+  "p": "stat",
+  "flags": [],
+  "stat": {
+   "stdx": [
+    0.3681855298324796,
+    0.37508061142797844
+   ],
+   "stdy": [
+    0.3724644158500623,
+    0.3750761532224942
+   ],
+   "stdz": [
+    0.37053165315221537,
+    0.3686404123214226
+   ],
+   "nn": [
+    0.031003189574440378,
+    0.03204425986674085
+   ]
+  },
+  "detail": "stdx 0.3682/0.3751(+1.9%) stdy 0.3725/0.3751(+0.7%) stdz 0.3705/0.3686(-0.5%) nn 0.031/0.03204(+3.4%)"
  },
  {
   "sop": "sop-skin",

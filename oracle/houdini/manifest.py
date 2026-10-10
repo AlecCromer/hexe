@@ -10,12 +10,12 @@ rows = [b for b in rows if not re.search(r'(?m)^case = "(sop|x)-', b)]
 out = []
 for d in sorted(glob.glob(os.path.join(ROOT, "fixtures", "sop-*")) + glob.glob(os.path.join(ROOT, "fixtures", "x-*"))):
     case = os.path.basename(d)
-    for f in ("houdini.geo", "houdini.json", "scene.json"):
+    for f in ("houdini.geo", "houdini.json", "scene.json", "base.geo", "case.toml"):
         p = os.path.join(d, f)
         if not os.path.exists(p):
             continue
         h = hashlib.sha256(open(p, "rb").read()).hexdigest()
-        if f == "scene.json":
+        if f in ("scene.json", "case.toml"):
             by, ver = "authored by oracle/houdini/%s.py (hexe twin of the Houdini canonical case)" % case, "n/a"
         else:
             by, ver = "original headless: hython oracle/houdini/%s.py (hou.Geometry.saveToFile / summarize)" % case, "20.5.487"

@@ -8,6 +8,8 @@
 #   commands  CLI/registry ids that exist in the code (checked for shipped rows)
 #   evidence  ["path/to/file.rs::test_fn"] (checked for shipped rows)
 #   notes     what is still missing
+#   notes     tags: `stat-oracle` = shipped on a STATISTICAL oracle (distributions vs real Houdini, RNG/noise streams not reproducible; P never equal);
+#             `hython exact` = zero diff vs a real-Houdini twin. Oracle modes, tolerances, how to add a case: parity/README.md.
 [schema]
 version = 1
 areas = { A = "core", B = "io", C = "ui", D = "misc" }
@@ -365,7 +367,7 @@ id = "sop-scatter"
 title = "Scatter SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["scatter"]
 evidence = [
   "crates/sop/src/builtins/scatter_sop.rs::unit_quad_10000_inside_and_mean_centered",
@@ -379,8 +381,10 @@ evidence = [
   "crates/sop/src/builtins/scatter_sop.rs::emergency_limit_caps_count_and_density_modes",
   "crates/sop/src/builtins/scatter_sop.rs::override_density_attr_and_scale_drive_count_and_split",
   "crates/sop/src/builtins/scatter_sop.rs::output_primuv_is_the_parametric_position_in_the_source_prim",
+  "crates/sop/src/builtins/scatter_sop.rs::count_per_primitive_places_exactly_the_prim_attribute_on_each_prim",
+  "crates/sop/src/builtins/scatter_sop.rs::node_defaults_write_p_only_and_outputnormals_adds_n",
 ]
-notes = "promote-1 GAP (re-measured): 500 pts count equal, P-DIFF (Houdini RNG stream not reproducible), hexe adds point attrs N + sourceprim that Houdini scatter does not write by default. Not promotable without Houdini's RNG. H6: params npts(1000) seed(0, i32 sign-extended to u64) density_attrib(empty). Area-weighted CDF + sqrt-barycentric, fan n-gons, SplitMix64; density = area*mean corner weight + in-tri rejection; out = P + sourceprim + N. QA adds: group (prim group), generateby Count|Density (n=round(sum area*meanw*density), density F 10 = OUR name), relaxpoints+relaxiterations (repulsion r=1.2*sqrt(A/n), grid-hashed, projected back into own tri), attribs (globs; point F/V attrs barycentric-interpolated, int/str nearest corner, prim attrs copied), primnumattrib (name, ''=skip). Oracles: all pts in group prim, density 10*area counts, relax min-NN x2, w=x interpolates exactly. DEPTH: emergencylimit I (0 = off; hard max point count in both modes, also rescues a density count above the 4M cap), overridedensity B + overridedensityattrib S ('density'; prim wins over point) + densityscale F 1 (attr REPLACES density_attrib as weight and, in Density mode, the global `density`: n = round(sum(area*meanattr)*densityscale); Count mode: placement weight only, scale ignored), outputprimuv B (point attrs `primnum` I32 + `uv` V3 z=0: tri = barycentrics, quad = bilinear (exact for parallelograms; general quads approximate), n-gon>4 = fan-tri barycentrics). REMAINING: volume scatter modes, other doc params. UNVERIFIED vs Houdini (hython blocked): attr names/semantics of overridedensity + outputprimuv, quad uv for non-parallelograms, RNG stream, N when no prim N (we compute geometric), density attr lookup order (prim wins). Statistical parity only. Houdini-oracle (H32, real Houdini 20.5): ATTRIB-DIFF (+P-DIFF), see docs/HOUDINI-ORACLE.md."
+notes = "stat-oracle (promote-2): fixtures sop-scatter / -density / -perprim / -seed (4 hython cases: count, point density attr, Count per Primitive, seed on a box) pass `cargo xtask oracle` compare=stat: point count exact, bbox min/max +-2 % of extent, mean nearest-neighbour distance +-5 %, P std per axis +-5 %, attribute names exact (parity/README.md; values in docs/HOUDINI-ORACLE.md). RNG stream stays NOT reproducible: statistical parity only, P never equal. Parity changes: no N by default (outputnormals B, false), no source-prim attr by default (primnumattrib '' = skip; Houdini useprimnumattrib off), generateby countperprim + primcountattrib 'count' (int/float prim attr rounded, < 0 = 0, each prim places its own count on its own triangles). H6: params npts(1000) seed(0, i32 sign-extended to u64) density_attrib(empty). Area-weighted CDF + sqrt-barycentric, fan n-gons, SplitMix64; density = area*mean corner weight + in-tri rejection; out = P (+ N when outputnormals, + primnumattrib when named). QA adds: group (prim group), generateby Count|Density (n=round(sum area*meanw*density), density F 10 = OUR name), relaxpoints+relaxiterations (repulsion r=1.2*sqrt(A/n), grid-hashed, projected back into own tri), attribs (globs; point F/V attrs barycentric-interpolated, int/str nearest corner, prim attrs copied), primnumattrib (name, ''=skip). Oracles: all pts in group prim, density 10*area counts, relax min-NN x2, w=x interpolates exactly. DEPTH: emergencylimit I (0 = off; hard max point count in both modes, also rescues a density count above the 4M cap), overridedensity B + overridedensityattrib S ('density'; prim wins over point) + densityscale F 1 (attr REPLACES density_attrib as weight and, in Density mode, the global `density`: n = round(sum(area*meanattr)*densityscale); Count mode: placement weight only, scale ignored), outputprimuv B (point attrs `primnum` I32 + `uv` V3 z=0: tri = barycentrics, quad = bilinear (exact for parallelograms; general quads approximate), n-gon>4 = fan-tri barycentrics). REMAINING: volume scatter modes, other doc params. UNVERIFIED vs Houdini (hython blocked): attr names/semantics of overridedensity + outputprimuv, quad uv for non-parallelograms, RNG stream, N when no prim N (we compute geometric), density attr lookup order (prim wins). Statistical parity only."
 
 [[feature]]
 id = "sop-copytopoints"
@@ -443,7 +447,7 @@ id = "sop-curve"
 title = "Curve SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["curve"]
 evidence = [
   "crates/sop/src/builtins/curve_sop.rs::type_1_2_emit_real_prims_over_the_cvs_matching_the_reference_samplers",
@@ -459,7 +463,7 @@ evidence = [
   "crates/sop/src/builtins/curve_sop.rs::user_knots_are_validated_and_reproduce_clamped_default",
   "crates/sop/src/builtins/curve_sop.rs::semicolon_makes_multiple_curves",
 ]
-notes = "promote-1 GAP: Houdini curve::2.0 has no scriptable coords parm (edit-stash only) so no hython twin of the Curve SOP can be cooked; Add-SOP open polygon twin MATCHes (data model only). H17: coords S = whitespace-separated x,y,z triples, close B -> one Poly (open/closed), point i = i-th triple (generator-defined). QA adds (TESSELLATED to polylines, no NURBS/Bezier prim kind in hexe-geo): type poly|bezier|nurbs; bezier piecewise degree order-1 (shared joint CVs) else whole-curve; nurbs = de Boor B-spline unit weights, clamped uniform knots or user `knots` (n+order, validated), periodic when close (n*div pts); divisions = samples/span; method cvs|breakpoints (breakpoints = uniform Catmull-Rom through every point); `;` in coords = multiple curves (one prim each). Oracles: nurbs order4/4CV == de Casteljau, order2 == polyline, counts spans*div+1, joint CV hit, breakpoints pass through all pts. NURBS-NOW: type bezier|nurbs with method cvs emit ONE real BezierCurve/NurbsCurve prim per curve over the CVs (points = CVs; tessellation = old sampler, pinned vs the test-only reference samplers; crates/sop/src/builtins/curve_sop.rs::type_1_2_emit_real_prims_over_the_cvs_matching_the_reference_samplers, bezier_whole_curve_fallback_is_one_prim_matching_the_reference); method breakpoints stays a tessellated polyline. REMAINING: interactive draw (UI-only), rational weights authoring (Pw is read, not authored by this SOP). Analytical oracle only. Houdini-oracle (H31): MATCH but the twin is an Add SOP (curve::2.0 has no scriptable coords parm) so the Curve SOP itself is NOT verified; stays partial."
+notes = "hython exact (promote-2): REAL curve::2.0 twin. Scriptable authoring parm = savedstashgeo (Data/Geometry; siblings parmpoints + stashgeo are Data/Geometry too but only savedstashgeo survives a cook; no coords/points string parm: addpts is an opaque Operation-Data string); outputtype menu polygon|nurbs|bezier, order int. Houdini passes the stash through, so the twin proves data model: prim kind, closedness, point order, P. 5 fixtures sop-curve (closed poly), -poly-open, -bezier, -nurbs, -nurbs-closed: zero diff vs hexe (compare.py MATCH + prim kinds equal; xtask oracle compare=geo pass). Coords PARSING / tessellation / interactive draw have no Houdini twin. H17: coords S = whitespace-separated x,y,z triples, close B -> one Poly (open/closed), point i = i-th triple (generator-defined). QA adds (TESSELLATED to polylines, no NURBS/Bezier prim kind in hexe-geo): type poly|bezier|nurbs; bezier piecewise degree order-1 (shared joint CVs) else whole-curve; nurbs = de Boor B-spline unit weights, clamped uniform knots or user `knots` (n+order, validated), periodic when close (n*div pts); divisions = samples/span; method cvs|breakpoints (breakpoints = uniform Catmull-Rom through every point); `;` in coords = multiple curves (one prim each). Oracles: nurbs order4/4CV == de Casteljau, order2 == polyline, counts spans*div+1, joint CV hit, breakpoints pass through all pts. NURBS-NOW: type bezier|nurbs with method cvs emit ONE real BezierCurve/NurbsCurve prim per curve over the CVs (points = CVs; tessellation = old sampler, pinned vs the test-only reference samplers; crates/sop/src/builtins/curve_sop.rs::type_1_2_emit_real_prims_over_the_cvs_matching_the_reference_samplers, bezier_whole_curve_fallback_is_one_prim_matching_the_reference); method breakpoints stays a tessellated polyline. REMAINING: interactive draw (UI-only), rational weights authoring (Pw is read, not authored by this SOP)."
 
 [[feature]]
 id = "sop-resample"
@@ -510,7 +514,7 @@ id = "sop-noise"
 title = "Attribute Noise SOP"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["attribnoise"]
 evidence = [
   "crates/sop/src/builtins/attribnoise_sop.rs::perlin_is_zero_at_integer_lattice_points",
@@ -526,8 +530,9 @@ evidence = [
   "crates/sop/src/builtins/attribnoise_sop.rs::group_limits_noise_to_members",
   "crates/sop/src/builtins/attribnoise_sop.rs::rest_attribute_drives_the_sample_position",
   "crates/sop/src/builtins/attribnoise_sop.rs::updatenormals_recomputes_point_and_existing_prim_normals",
+  "crates/sop/src/builtins/attribnoise_sop.rs::perlin_displacement_rms_is_calibrated_to_the_houdini_oracle",
 ]
-notes = "promote-1 GAP (re-measured): 121 pts count equal, P-DIFF (Houdini displacement bbox y[0.39,0.77] vs hexe y[-0.28,0.30]); noise basis/seed stream is not Houdini's perlin. H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). QA: fractal (none|fbm|turbulence|ridged, octaves, rough) already present; ADDS noise value (lattice value at integer pts, bounded, continuous) + worley/cellular (F1, -1 at the feature point), group (members only), rest (V3 point attr as sample pos; missing = Failed), updatenormals (point N + existing prim N). REMAINING: Houdini's other pattern types (sparse convolution, alligator, curl, flow) + their params. UNVERIFIED vs Houdini (hython blocked): noise streams, remap/amp semantics, default ranges. Example: examples/attribnoise.json. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "stat-oracle (promote-2): fixtures sop-noise / -freq / -oct (70x70 point grid, attribnoise P add vec, perlin; amplitude 0.5 at freq 3 / 5, 4-octave fBm at freq 2) pass `cargo xtask oracle` compare=stat-disp: point count exact, mean + std of |P - base| +-5 % (measured +3.2/-3.5, +4.2/-4.0, +1.8/-3.1 %), attribute names exact. Calibration: perlin output x GAIN_PLAIN 1.58, fBm (octaves > 1) re-normalised to the octave RMS x GAIN_FRACTAL 1.41 (fitted constants, UNVERIFIED outside the 3 cases); Houdini fBm DC offset (+0.1846/component) NOT modelled (twin recentres: noiserange midplusminusrange, midvaluev). Noise streams stay non-reproducible: statistical parity only. Other bases / remap / turbulence / ridged uncalibrated. promote-1 GAP (re-measured): 121 pts count equal, P-DIFF (Houdini displacement bbox y[0.39,0.77] vs hexe y[-0.28,0.30]); noise basis/seed stream is not Houdini's perlin. H7: params attrib(P) class(point) noise(perlin|simplex|white) amplitude(1) frequency(1,1,1) offset(0) seed(0) operation(add|set|multiply) remap(off)+remap_min/max (DEVIATION: no V2 param). Own hash gradient noise, sample at P*freq+offset; prim=centroid, vertex=owning P, detail=mean P; tuple channels = independent streams. Analytical oracle only (lattice==0, amp linear, add<=amp*sqrt3, white byte-equal, missing attrib Failed). QA: fractal (none|fbm|turbulence|ridged, octaves, rough) already present; ADDS noise value (lattice value at integer pts, bounded, continuous) + worley/cellular (F1, -1 at the feature point), group (members only), rest (V3 point attr as sample pos; missing = Failed), updatenormals (point N + existing prim N). REMAINING: Houdini's other pattern types (sparse convolution, alligator, curl, flow) + their params. UNVERIFIED: remap semantics, default ranges. Example: examples/attribnoise.json."
 
 
 [[feature]]
@@ -1178,7 +1183,7 @@ id = "sop-mountain"
 title = "Mountain SOP (Perlin displacement along direction or N)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["mountain"]
 evidence = [
   "crates/sop/src/builtins/mountain_sop.rs::amplitude_zero_is_identity_sharing_the_arc",
@@ -1189,14 +1194,15 @@ evidence = [
   "crates/sop/src/builtins/mountain_sop.rs::direction_param_overrides_n_attribute",
   "crates/sop/src/builtins/mountain_sop.rs::hostile_params_and_inputs",
   "crates/sop/src/builtins/mountain_sop.rs::example_scene_cooks_and_registry_has_slot",
-  "crates/sop/src/builtins/mountain_sop.rs::fractal_octaves_combine_normalised_by_the_amplitude_sum",
+  "crates/sop/src/builtins/mountain_sop.rs::fractal_octaves_combine_normalised_by_the_octave_rms",
   "crates/sop/src/builtins/mountain_sop.rs::turbulence_is_abs_noise_and_attenuation_is_a_signed_power",
   "crates/sop/src/builtins/mountain_sop.rs::noise_types_match_the_shared_noise_functions",
   "crates/sop/src/builtins/mountain_sop.rs::animate_scrolls_the_noise_with_time",
   "crates/sop/src/builtins/mountain_sop.rs::group_limits_displacement",
   "crates/sop/src/builtins/mountain_sop.rs::updatenormals_writes_unit_normals",
+  "crates/sop/src/builtins/mountain_sop.rs::displacement_rms_is_calibrated_to_the_houdini_oracle",
 ]
-notes = "promote-1 GAP (re-measured): 121/100/400 counts equal, P-DIFF (Houdini y[-0.15,0.12]); noise basis not Houdini's perlin. C2: height(1) elementsize(1, >0) seed(0) offset(0) direction(0,0,0 = use N). P' = P + dir*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. dir = direction param if nonzero (normalized), else point N attr, else Newell point normals (as peak). height 0 = Arc shared. QA adds (OUR names): noisetype perlin|simplex|value|worley (shared attribnoise fns); octaves(1..16)+roughness(.5)+lacunarity(2): n = sum(a_k n_k)/sum(a_k), octave seed = seed+7919k; turbulence (|n_k|); attenuation (sign*|n|^att); animate+animspeed (q += time*speed); group (point); updatenormals (point N). Oracles: 2-octave hand formula, turbulence = |plain|, att2 = signed square, dz == noise_named, scroll == shifted lattice, group members only, unit N. REMAINING: slope (+slope dir), sparse-convolution/alligator noise types, exact Houdini attenuation/amplitude curves. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize, direction param semantics. Example: examples/mountain.json. Analytical oracle only. Houdini-oracle (H32, real Houdini 20.5): P-DIFF, see docs/HOUDINI-ORACLE.md."
+notes = "stat-oracle (promote-2): fixtures sop-mountain / -freq / -oct (70x70 grid, height 0.5; elementsize 0.4 / 0.25, 4-octave fBm at 0.5; Houdini mountain::2.0 perlin, centernoise) pass `cargo xtask oracle` compare=stat-disp: point count exact, mean + std of |P - base| +-5 % (measured +3.9/-3.8, +1.4/-4.0, +0.9/-1.1 %), attribute names exact. Calibration: perlin x GAIN_PLAIN 0.395; octaves > 1 now divide by the octave RMS (was the amplitude sum) x GAIN_FRACTAL 0.371 (Houdini's fractal is variance-preserving); fitted constants, UNVERIFIED outside the 3 cases. Noise stream non-reproducible: statistical parity only. promote-1 GAP (re-measured): 121/100/400 counts equal, P-DIFF (Houdini y[-0.15,0.12]); noise basis not Houdini's perlin. C2: height(1) elementsize(1, >0) seed(0) offset(0) direction(0,0,0 = use N). P' = P + dir*height*perlin((P+offset)/elementsize, seed) reusing attribnoise's Perlin (now pub(super)): |noise|<=1 so |dP|<=|height|, EXACTLY 0 at integer lattice points (pinned), deterministic per seed. dir = direction param if nonzero (normalized), else point N attr, else Newell point normals (as peak). height 0 = Arc shared. QA adds (OUR names): noisetype perlin|simplex|value|worley (shared attribnoise fns); octaves(1..16)+roughness(.5)+lacunarity(2): n = sum(a_k n_k)/sqrt(sum a_k^2) (octave RMS), octave seed = seed+7919k; turbulence (|n_k|); attenuation (sign*|n|^att); animate+animspeed (q += time*speed); group (point); updatenormals (point N). Oracles: 2-octave hand formula, turbulence = |plain|, att2 = signed square, dz == noise_named, scroll == shifted lattice, group members only, unit N. REMAINING: slope (+slope dir), sparse-convolution/alligator noise types, exact Houdini attenuation/amplitude curves. UNVERIFIED vs Houdini (hython blocked): the noise function itself (ours is Perlin, Houdini default is 'sparse convolution'-ish), parm set, units of elementsize, direction param semantics. Example: examples/mountain.json."
 
 [[feature]]
 id = "sop-ray"

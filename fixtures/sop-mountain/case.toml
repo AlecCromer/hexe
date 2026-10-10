@@ -1,0 +1,6 @@
+cmd = ["cook", "{input}", "--out", "{out}", "--time", "0"]
+input = "scene.json"
+expected = "houdini.geo"
+compare = "stat-disp"
+feature = "sop-mountain"
+base = "base.geo"

@@ -6,7 +6,7 @@
 	"primitivecount",1,
 	"info",{
 		"hostname":"macbookpro.fritz.box",
-		"date":"2026-10-08 11:50:27",
+		"date":"2026-10-10 11:29:56",
 		"artist":"pascaldisse",
 		"software":"Houdini 20.5.487",
 		"bounds":[0,1,1,2,0,0],

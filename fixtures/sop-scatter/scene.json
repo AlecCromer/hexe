@@ -8,8 +8,8 @@
    "name": "scatter1",
    "type": "scatter",
    "params": {
-    "npts": 500,
-    "seed": 7
+    "npts": 2000,
+    "seed": 3
    }
   }
  ],

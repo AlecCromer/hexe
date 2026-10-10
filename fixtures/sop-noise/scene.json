@@ -4,8 +4,8 @@
    "name": "grid1",
    "type": "grid",
    "params": {
-    "rows": 11,
-    "cols": 11,
+    "rows": 70,
+    "cols": 70,
     "type": 4
    }
   },
@@ -15,9 +15,9 @@
    "params": {
     "amplitude": 0.5,
     "frequency": [
-     0.7,
-     0.7,
-     0.7
+     3.0,
+     3.0,
+     3.0
     ],
     "seed": 3
    }

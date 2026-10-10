@@ -23,6 +23,13 @@ use std::sync::Arc;
 /// Cap on tuple size of `FN` attributes we are willing to noise (AGENTS.md §4).
 const MAX_TUPLE: usize = 64;
 
+/// STAT-ORACLE calibration (Houdini 20.5 `attribnoise::2.0`, perlin, zero-centred range, vec P add, 70x70 point grid, amp 0.5; fixtures sop-noise*):
+/// Houdini's per-component spread is 0.388 x amplitude (plain; gain 1.58 balances mean/std error) / 0.350 x amplitude (fBm, any octave count 1..6: variance-preserving, DC offset
+/// of its fBm not modelled) against our unit-range perlin 0.250; fBm is re-normalised from the raw sum to the RMS of the octave weights.
+/// Fitted constants, UNVERIFIED outside the recorded cases; only the perlin basis is calibrated: `remap`, turbulence, ridged and the other bases keep the raw unit-range definition.
+pub(super) const GAIN_PLAIN: f64 = 1.58;
+pub(super) const GAIN_FRACTAL: f64 = 1.41;
+
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("attrib", ParamValue::S("P".into())).label("Attribute"),
@@ -120,6 +127,10 @@ fn need_str<'a>(p: &'a ParamSet, name: &str) -> Result<&'a str, CookError> {
 }
 
 impl Config {
+    /// RMS of the fBm octave weights `rough^k` (k < octaves): the divisor that keeps the summed octaves at the variance of one.
+    fn fbm_rms(&self) -> f64 {
+        (0..self.octaves).map(|o| self.rough.powi(2 * o as i32)).sum::<f64>().sqrt().max(f64::MIN_POSITIVE)
+    }
     fn read(p: &ParamSet) -> Result<Config, CookError> {
         let attrib = need_str(p, "attrib")?.trim().to_string();
         if attrib.is_empty() {
@@ -408,7 +419,13 @@ fn sample(cfg: &Config, p: [f64; 3], chan: usize) -> f64 {
     };
     match cfg.remap {
         Some((lo, hi)) => lo + (n.clamp(-1.0, 1.0) + 1.0) * 0.5 * (hi - lo),
-        None => n,
+        None if cfg.kind != Kind::Perlin => n,
+        None => match cfg.fractal {
+            Fractal::None => n * GAIN_PLAIN,
+            Fractal::Fbm if cfg.octaves == 1 => n * GAIN_PLAIN,
+            Fractal::Fbm => n / cfg.fbm_rms() * GAIN_FRACTAL,
+            Fractal::Turbulence | Fractal::Ridged => n,
+        },
     }
 }
 
@@ -658,7 +675,7 @@ mod tests {
         let off = with_attr(cloud(200), "n", AttrClass::Point, AttrData::F32(vec![0.0; 200]));
         let o = cook(&off, &[("attrib", s("n")), ("operation", s("set"))]).expect("cooks");
         let v = f32s(&o, "n");
-        assert!(v.iter().any(|x| x.abs() > 0.05) && v.iter().all(|x| x.abs() <= 1.0));
+        assert!(v.iter().any(|x| x.abs() > 0.05) && v.iter().all(|x| x.abs() <= GAIN_PLAIN as f32));
     }
     #[test]
     fn amplitude_scales_linearly_all_noise_kinds() {
@@ -692,7 +709,8 @@ mod tests {
         for kind in KINDS {
             for amp in [0.25f32, 1.0, 3.0] {
                 let o = cook(&src, &[("noise", s(kind)), ("amplitude", ParamValue::F(amp))]).expect("cooks");
-                let bound = amp * 3.0f32.sqrt() + 1e-5;
+                let gain = if kind == "perlin" { GAIN_PLAIN as f32 } else { 1.0 };
+                let bound = amp * gain * 3.0f32.sqrt() + 1e-5;
                 let mut moved = 0;
                 for (a, b) in src.p().iter().zip(o.p()) {
                     let dist = ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
@@ -933,6 +951,27 @@ mod tests {
         assert_eq!(d.point_count, 121);
         assert!(d.p().iter().all(|p| p[1].abs() <= 0.5 * 3.0f32.sqrt() + 1e-5));
         assert!(d.p().iter().any(|p| p[1].abs() > 0.01));
+    }
+    /// Calibration pin (stat-oracle): per-component RMS of perlin displacement = GAIN_PLAIN x the unit-range field's (0.25) = Houdini's 0.388 x amp
+    /// within 6 %; fBm (4 octaves) is variance-normalised x GAIN_FRACTAL = 0.350 x amp within 8 %.
+    #[test]
+    fn perlin_displacement_rms_is_calibrated_to_the_houdini_oracle() {
+        // the oracle's arrangement: a flat 70 x 70 point grid, 10 x 10 wide, at freq 3
+        let pts: Vec<[f32; 3]> =
+            (0..4900).map(|i| [(i / 70) as f32 * 0.145 - 5.0, 0.0, (i % 70) as f32 * 0.145 - 5.0]).collect();
+        let d = points(&pts);
+        let rms = |extra: &[(&str, ParamValue)]| {
+            let mut kv = vec![("amplitude", ParamValue::F(1.0)), ("frequency", ParamValue::V3([3.0; 3]))];
+            kv.extend(extra.iter().cloned());
+            let o = cook(&d, &kv).expect("cooks");
+            let sq: f64 =
+                o.p().iter().zip(d.p()).flat_map(|(a, b)| (0..3).map(move |k| f64::from(a[k] - b[k]).powi(2))).sum();
+            (sq / (3.0 * d.p().len() as f64)).sqrt()
+        };
+        let plain = rms(&[]);
+        assert!((plain / 0.388 - 1.0).abs() < 0.06, "plain rms {plain}");
+        let fbm = rms(&[("fractal", ParamValue::Menu(1)), ("octaves", ParamValue::I(4))]);
+        assert!((fbm / 0.350 - 1.0).abs() < 0.08, "fbm rms {fbm}");
     }
     #[test]
     fn fractal_octaves_one_equals_plain_noise() {

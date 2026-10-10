@@ -6,6 +6,10 @@
 //! absolute input path is appended (legacy form). `geo` = both parsed with `hexe_geo::read_geo`: point/vertex/prim counts
 //! equal, `P` within 1e-5, same (class, name) attribute set; score 1.0 or 0.0. Fails on: a case of a `shipped` ledger row under its threshold; any score under its floor in
 //! xtask/baselines/oracle.json. `--raise` ratchets floors up (never down).
+//! `stat` / `stat-disp` = STATISTICAL oracle (parity/README.md) for generators whose RNG / noise stream cannot be reproduced; score 1.0 or 0.0:
+//! `stat`: point count exact, bbox min/max per axis within 2 % of the expected extent, mean nearest-neighbour distance +-5 %, `P` std per axis +-5 %,
+//! (class, name) attribute set exact. `stat-disp` (needs `base = "<file>"`, the cook's input): point count exact, mean and std of |P - base| +-5 %,
+//! attribute set exact. Mirror of `oracle/houdini/statoracle.py`; keep both tolerance sets in sync.
 //! `cargo xtask oracle --houdini [compare.py args]`: the REAL-Houdini comparison instead (AGENTS section 2 python exception):
 //! builds the debug `hexe-cli`, runs `oracle/houdini/compare.py --hexe-cli <it> [args]` (hexe cook of every
 //! `fixtures/sop-*/scene.json` vs the committed `houdini.json`; hython only loads hexe's `.geo` back) then
@@ -25,6 +29,8 @@ pub struct Case {
     pub compare: String,
     pub feature: Option<String>,
     pub threshold: Option<f64>,
+    /// `stat-disp` only: file in the case dir holding the cook's input geometry
+    pub base: Option<String>,
 }
 
 impl Case {
@@ -109,7 +115,116 @@ pub fn geo_mismatch(actual: &[u8], expected: &[u8]) -> Result<Option<String>, St
     }
     Ok(None)
 }
+/// Statistical oracle tolerances (relative; `STAT_ABS` is the absolute floor for degenerate axes). Keep in sync with oracle/houdini/statoracle.py.
+pub const STAT_BBOX_TOL: f64 = 0.02;
+pub const STAT_NN_TOL: f64 = 0.05;
+pub const STAT_STD_TOL: f64 = 0.05;
+pub const STAT_ABS: f64 = 1e-4;
+const STAT_MAX_POINTS: usize = 200_000;
+fn mean_std(v: &[f64]) -> (f64, f64) {
+    if v.is_empty() {
+        return (0.0, 0.0);
+    }
+    let n = v.len() as f64;
+    let m = v.iter().sum::<f64>() / n;
+    (m, (v.iter().map(|x| (x - m).powi(2)).sum::<f64>() / n).sqrt())
+}
+/// Mean nearest-neighbour distance (exact): x-sorted sweep, each side stops once the x gap alone exceeds the best distance.
+pub fn mean_nn(p: &[[f32; 3]]) -> f64 {
+    if p.len() < 2 {
+        return 0.0;
+    }
+    let mut s: Vec<[f64; 3]> = p.iter().map(|q| q.map(f64::from)).collect();
+    s.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    let mut tot = 0.0;
+    for (i, a) in s.iter().enumerate() {
+        let mut best = f64::INFINITY;
+        let (above, below) = (s.get(i + 1..).unwrap_or(&[]), s.get(..i).unwrap_or(&[]));
+        for side in [above.iter().collect::<Vec<_>>(), below.iter().rev().collect::<Vec<_>>()] {
+            for b in side {
+                let dx = b[0] - a[0];
+                if dx * dx >= best {
+                    break;
+                }
+                best = best.min(dx * dx + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2));
+            }
+        }
+        tot += best.sqrt();
+    }
+    tot / s.len() as f64
+}
+fn rel_ok(h: f64, x: f64, tol: f64) -> bool {
+    (x - h).abs() <= tol * h.abs() + STAT_ABS
+}
+fn attr_names(d: &hexe_geo::Detail) -> Vec<String> {
+    let mut v: Vec<String> = d.attrs.iter().map(|x| format!("{:?}:{}", x.class, x.name)).collect();
+    v.sort();
+    v
+}
+/// `None` = statistically the same per the `stat` (base `None`) / `stat-disp` (base = the cook input) mode, `Some(failures)` otherwise.
+pub fn stat_mismatch(actual: &[u8], expected: &[u8], base: Option<&[u8]>) -> Result<Option<String>, String> {
+    let parse = |who: &str, b: &[u8]| hexe_geo::read_geo(b).map_err(|e| format!("{who}: {e}"));
+    let (a, e) = (parse("actual", actual)?, parse("expected", expected)?);
+    if a.p().len() > STAT_MAX_POINTS || e.p().len() > STAT_MAX_POINTS {
+        return Err(format!("stat: more than {STAT_MAX_POINTS} points"));
+    }
+    let mut bad: Vec<String> = Vec::new();
+    if a.point_count != e.point_count {
+        bad.push(format!("point count {} != {}", a.point_count, e.point_count));
+    }
+    if attr_names(&a) != attr_names(&e) {
+        bad.push(format!("attribute sets differ: {:?} vs {:?}", attr_names(&a), attr_names(&e)));
+    }
+    let (pa, pe) = (a.p(), e.p());
+    if pa.len() != pe.len() || pe.is_empty() {
+        bad.push("P length".into());
+        return Ok(Some(bad.join("; ")));
+    }
+    if let Some(bb) = base {
+        let b = parse("base", bb)?;
+        if b.p().len() != pe.len() {
+            return Err(format!("base has {} points, expected {}", b.p().len(), pe.len()));
+        }
+        let mag = |p: &[[f32; 3]]| -> Vec<f64> {
+            p.iter()
+                .zip(b.p())
+                .map(|(q, r)| (0..3).map(|k| f64::from(q[k] - r[k]).powi(2)).sum::<f64>().sqrt())
+                .collect()
+        };
+        let ((mh, sh), (mx, sx)) = (mean_std(&mag(pe)), mean_std(&mag(pa)));
+        if !rel_ok(mh, mx, STAT_STD_TOL) {
+            bad.push(format!("disp mean {mx:.5} vs {mh:.5}"));
+        }
+        if !rel_ok(sh, sx, STAT_STD_TOL) {
+            bad.push(format!("disp std {sx:.5} vs {sh:.5}"));
+        }
+        return Ok((!bad.is_empty()).then(|| bad.join("; ")));
+    }
+    for ax in 0..3 {
+        let ch: Vec<f64> = pe.iter().map(|p| f64::from(p[ax])).collect();
+        let cx: Vec<f64> = pa.iter().map(|p| f64::from(p[ax])).collect();
+        let range = |v: &[f64]| v.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), &x| (l.min(x), h.max(x)));
+        let ((lo_h, hi_h), (lo_x, hi_x)) = (range(&ch), range(&cx));
+        let tol = STAT_BBOX_TOL * (hi_h - lo_h) + STAT_ABS;
+        if (lo_x - lo_h).abs() > tol || (hi_x - hi_h).abs() > tol {
+            bad.push(format!("bbox[{ax}] [{lo_x:.4},{hi_x:.4}] vs [{lo_h:.4},{hi_h:.4}]"));
+        }
+        let (sh, sx) = (mean_std(&ch).1, mean_std(&cx).1);
+        if !rel_ok(sh, sx, STAT_STD_TOL) {
+            bad.push(format!("std[{ax}] {sx:.4} vs {sh:.4}"));
+        }
+    }
+    let (nh, nx) = (mean_nn(pe), mean_nn(pa));
+    if !rel_ok(nh, nx, STAT_NN_TOL) {
+        bad.push(format!("mean NN {nx:.5} vs {nh:.5}"));
+    }
+    Ok((!bad.is_empty()).then(|| bad.join("; ")))
+}
+#[cfg(test)]
 pub fn score(compare: &str, actual: &[u8], expected: &[u8]) -> Result<f64, String> {
+    score_base(compare, actual, expected, None)
+}
+pub fn score_base(compare: &str, actual: &[u8], expected: &[u8], base: Option<&[u8]>) -> Result<f64, String> {
     match compare {
         "bytes" => Ok(f64::from(u8::from(actual == expected))),
         "json" => {
@@ -125,7 +240,22 @@ pub fn score(compare: &str, actual: &[u8], expected: &[u8]) -> Result<f64, Strin
                 Ok(0.0)
             }
         },
-        other => Err(format!("unknown compare `{other}` (bytes|json|text-f1|png-psnr|geo)")),
+        "stat" | "stat-disp" => {
+            if (compare == "stat-disp") != base.is_some() {
+                return Err(format!(
+                    "`{compare}` {} a `base` file",
+                    if compare == "stat" { "takes no" } else { "needs" }
+                ));
+            }
+            match stat_mismatch(actual, expected, base)? {
+                None => Ok(1.0),
+                Some(why) => {
+                    eprintln!("oracle {compare}: {why}");
+                    Ok(0.0)
+                }
+            }
+        }
+        other => Err(format!("unknown compare `{other}` (bytes|json|text-f1|png-psnr|geo|stat|stat-disp)")),
     }
 }
 
@@ -161,7 +291,9 @@ fn run_case(bin: &Path, dir: &Path, c: &Case) -> Result<f64, String> {
     } else {
         out.stdout
     };
-    score(&c.compare, &actual, &expected)
+    let base =
+        c.base.as_ref().map(|f| std::fs::read(dir.join(f)).map_err(|e| format!("read base: {e}"))).transpose()?;
+    score_base(&c.compare, &actual, &expected, base.as_deref())
 }
 /// `cargo xtask oracle --houdini [compare.py args...]`: compare.py then report.py (see module docs).
 fn run_houdini(args: &[String]) -> Res {
@@ -309,6 +441,59 @@ mod tests {
             c(&["cook", "/c/in", "--out", "/t/out"])
         );
         assert_eq!(expand_cmd(&c(&["--ref={expected}", "{input}"]), i, e, o), c(&["--ref=/c/exp", "/c/in"]));
+    }
+    #[test]
+    fn stat_compare_distributions_not_streams() {
+        let grid = |off: f32, n: usize, extra: Option<&str>| {
+            let mut d = hexe_geo::Detail::default();
+            let pts: Vec<[f32; 3]> = (0..n * n).map(|i| [(i / n) as f32 + off, 0.0, (i % n) as f32 - off]).collect();
+            d.add_points(pts.len() as u32);
+            *d.p_mut() = pts;
+            if let Some(x) = extra {
+                d.add_attr(hexe_geo::Attribute {
+                    name: x.into(),
+                    class: hexe_geo::AttrClass::Point,
+                    data: hexe_geo::AttrData::F32(vec![0.0; n * n]),
+                    type_info: hexe_geo::TypeInfo::None,
+                });
+            }
+            hexe_geo::write_geo_json(&d)
+        };
+        let base = grid(0.0, 20, None);
+        // same lattice nudged by 0.01: P differs everywhere (geo would fail) but every statistic is inside tolerance
+        let near = grid(0.01, 20, None);
+        assert!(geo_mismatch(&near, &base).unwrap().is_some());
+        assert_eq!(score("stat", &near, &base).unwrap(), 1.0);
+        assert_eq!(score("stat", &base, &base).unwrap(), 1.0);
+        assert_eq!(score("stat", &grid(0.0, 19, None), &base).unwrap(), 0.0, "count is exact");
+        assert_eq!(score("stat", &grid(0.0, 20, Some("foo")), &base).unwrap(), 0.0, "attribute names are exact");
+        let wide = {
+            let mut d = hexe_geo::read_geo(&base).unwrap();
+            for p in d.p_mut() {
+                p[0] *= 1.1;
+            }
+            hexe_geo::write_geo_json(&d)
+        };
+        let why = stat_mismatch(&wide, &base, None).unwrap().unwrap();
+        assert!(why.contains("bbox[0]") && why.contains("std[0]"), "{why}");
+        assert!(score("stat", b"junk", &base).is_err());
+        assert!(score("stat-disp", &base, &base).is_err(), "stat-disp needs a base");
+        // stat-disp: |P - base| mean/std
+        let moved = |k: f32| {
+            let mut d = hexe_geo::read_geo(&base).unwrap();
+            for (i, p) in d.p_mut().iter_mut().enumerate() {
+                p[1] = k * ((i % 7) as f32 - 3.0);
+            }
+            hexe_geo::write_geo_json(&d)
+        };
+        assert_eq!(score_base("stat-disp", &moved(1.02), &moved(1.0), Some(&base)).unwrap(), 1.0);
+        assert_eq!(score_base("stat-disp", &moved(1.2), &moved(1.0), Some(&base)).unwrap(), 0.0);
+    }
+    #[test]
+    fn mean_nn_of_a_unit_lattice_is_one() {
+        let p: Vec<[f32; 3]> = (0..25).map(|i| [(i / 5) as f32, (i % 5) as f32, 0.0]).collect();
+        assert!((mean_nn(&p) - 1.0).abs() < 1e-9);
+        assert_eq!(mean_nn(&p[..1]), 0.0);
     }
     #[test]
     fn geo_compare_counts_p_and_attr_names() {

@@ -20,6 +20,11 @@ use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::Arc;
 
+/// STAT-ORACLE calibration (Houdini 20.5 `mountain::2.0`, perlin basis, centernoise on, 70x70 grid, height 0.5; fixtures sop-mountain*):
+/// Houdini's displacement spread per unit height is 0.098 (plain) / 0.090 (fBm, any octave count 1..6: its fractal is variance-preserving)
+/// against our unit-range perlin 0.252 / 0.252 (octave-RMS-normalised). Fitted constants, UNVERIFIED outside the recorded cases.
+const GAIN_PLAIN: f64 = 0.395;
+const GAIN_FRACTAL: f64 = 0.371;
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 
 pub fn spec() -> Vec<ParamSpec> {
@@ -136,6 +141,8 @@ impl Node<Detail> for Mountain {
                 Some(m)
             }
         };
+        // RMS amplitude of the octave weights r^k: sqrt(sum r^2k)
+        let var_norm = (0..octaves).map(|o| rough.powi(2 * o as i32)).sum::<f64>().sqrt().max(f64::MIN_POSITIVE);
         let field = |q: V3| -> f64 {
             let (mut sum, mut amp, mut norm, mut f) = (0.0, 1.0, 0.0, 1.0);
             for o in 0..octaves {
@@ -146,7 +153,15 @@ impl Node<Detail> for Mountain {
                 f *= lac;
             }
             let n = if norm > 0.0 { sum / norm } else { 0.0 };
-            if att == 1.0 { n } else { n.signum() * n.abs().powf(att) }
+            let n = if att == 1.0 { n } else { n.signum() * n.abs().powf(att) };
+            // stat-oracle calibration (see GAIN_* docs): single octave x GAIN_PLAIN; fractal re-normalised from the amplitude sum to the RMS (variance-preserving) x GAIN_FRACTAL
+            if kind != "perlin" || turb {
+                n
+            } else if octaves == 1 {
+                n * GAIN_PLAIN
+            } else {
+                n * norm / var_norm * GAIN_FRACTAL
+            }
         };
         let moved: Vec<V3> = pos
             .iter()
@@ -224,9 +239,9 @@ mod tests {
         let ctx = CookCtx { time, fps: 24.0, params: p, log: &|_| {} };
         (*new().cook(&ctx, &[Arc::new(d)]).expect("cooks")).clone()
     }
-    /// Two octaves: dz = (n0 + r n1) / (1 + r), n0 = perlin(q), n1 = perlin(lac q, seed + 7919) (exact, hand-evaluated).
+    /// Two octaves: dz = GAIN_FRACTAL (n0 + r n1) / sqrt(1 + r^2), n0 = perlin(q), n1 = perlin(lac q, seed + 7919) (exact, hand-evaluated).
     #[test]
-    fn fractal_octaves_combine_normalised_by_the_amplitude_sum() {
+    fn fractal_octaves_combine_normalised_by_the_octave_rms() {
         let p = with(1.0)
             .with("octaves", ParamValue::I(2))
             .with("roughness", ParamValue::F(0.5))
@@ -234,12 +249,36 @@ mod tests {
         let out = cook(&*new(), field_up(), &p).expect("cooks");
         for (src, z) in field_up().p().iter().zip(dz(&out)) {
             let q = qof(*src, 1.0);
-            let want = (perlin(q, 0, 0) + 0.5 * perlin(q.map(|c| c * 3.0), 7919, 0)) / 1.5;
+            let want = (perlin(q, 0, 0) + 0.5 * perlin(q.map(|c| c * 3.0), 7919, 0)) / 1.25f64.sqrt() * GAIN_FRACTAL;
             assert!((z - want).abs() < 1e-6, "{z} vs {want}");
             assert!(z.abs() <= 1.0 + 1e-6);
         }
         let one = cook(&*new(), field_up(), &with(1.0).with("octaves", ParamValue::I(1))).expect("cooks");
         assert_eq!(one, cook(&*new(), field_up(), &with(1.0)).expect("cooks"), "octaves 1 = plain noise");
+    }
+    /// Calibration pin (stat-oracle): displacement RMS per unit height of a flat grid = Houdini mountain::2.0's 0.098 (plain, perlin) within 8 %;
+    /// a 4-octave fractal stays variance-preserving at 0.090 within 10 %.
+    #[test]
+    fn displacement_rms_is_calibrated_to_the_houdini_oracle() {
+        let mut pts = Vec::new();
+        for i in 0..70 {
+            for j in 0..70 {
+                pts.push([i as f32 * 0.145 - 5.0, 0.0, j as f32 * 0.145 - 5.0]);
+            }
+        }
+        let mut d = Detail::default();
+        d.add_points(pts.len() as u32);
+        *d.p_mut() = pts;
+        let rms = |p: &ParamSet| {
+            let o = cook_at(d.clone(), p, 0.0);
+            let sq: f64 = o.p().iter().map(|q| f64::from(q[1]).powi(2)).sum();
+            (sq / o.p().len() as f64).sqrt()
+        };
+        let base = with(1.0).with("direction", ParamValue::V3([0.0, 1.0, 0.0])).with("elementsize", ParamValue::F(0.4));
+        let plain = rms(&base);
+        assert!((plain / 0.098 - 1.0).abs() < 0.08, "plain rms {plain}");
+        let fr = rms(&base.clone().with("octaves", ParamValue::I(4)));
+        assert!((fr / 0.090 - 1.0).abs() < 0.10, "fractal rms {fr}");
     }
     /// Turbulence = |n| per octave (>= 0); attenuation 2 squares the magnitude keeping the sign.
     #[test]
@@ -247,11 +286,12 @@ mod tests {
         let plain = dz(&cook(&*new(), field_up(), &with(1.0)).expect("cooks"));
         let turb = dz(&cook(&*new(), field_up(), &with(1.0).with("turbulence", ParamValue::B(true))).expect("cooks"));
         for (a, t) in plain.iter().zip(&turb) {
-            assert!((t - a.abs()).abs() < 1e-6 && *t >= 0.0);
+            assert!((t - a.abs() / GAIN_PLAIN).abs() < 1e-6 && *t >= 0.0);
         }
         let att = dz(&cook(&*new(), field_up(), &with(1.0).with("attenuation", ParamValue::F(2.0))).expect("cooks"));
         for (a, t) in plain.iter().zip(&att) {
-            assert!((t - a.signum() * a * a).abs() < 1e-6, "{a} -> {t}");
+            let raw = a / GAIN_PLAIN;
+            assert!((t - a.signum() * raw * raw * GAIN_PLAIN).abs() < 1e-6, "{a} -> {t}");
         }
     }
     /// Noise types: dz == noise_named(type, q) exactly; distinct fields, all bounded.
@@ -261,7 +301,8 @@ mod tests {
         for (menu, name) in [(0u32, "perlin"), (1, "simplex"), (2, "value"), (3, "worley")] {
             let out = cook(&*new(), field_up(), &with(1.0).with("noisetype", ParamValue::Menu(menu))).expect("cooks");
             for (src, z) in field().p().iter().zip(dz(&out)) {
-                let want = noise_named(name, qof(*src, 1.0), 0, 0).expect("known noise");
+                let want = noise_named(name, qof(*src, 1.0), 0, 0).expect("known noise")
+                    * if name == "perlin" { GAIN_PLAIN } else { 1.0 };
                 assert!((z - want).abs() < 1e-6 && z.abs() <= 1.0 + 1e-6, "{name}: {z} vs {want}");
             }
             fields.push(dz(&out));
