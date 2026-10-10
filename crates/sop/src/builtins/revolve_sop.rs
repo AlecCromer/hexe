@@ -162,8 +162,9 @@ impl Node<Detail> for Revolve {
                     let (u0, u1) = (j as f32 / divs as f32, (j + 1) as f32 / divs as f32);
                     m.quad(
                         OP,
-                        [ids[i][j], ids[i2][j], ids[i2][j2], ids[i][j2]],
-                        [[u0, v0, 0.0], [u0, v1, 0.0], [u1, v1, 0.0], [u1, v0, 0.0]],
+                        // oracle (Houdini 20.5): cell wound (i,j) (i,j+1) (i+1,j+1) (i+1,j)
+                        [ids[i][j], ids[i][j2], ids[i2][j2], ids[i2][j]],
+                        [[u0, v0, 0.0], [u1, v0, 0.0], [u1, v1, 0.0], [u0, v1, 0.0]],
                         tris,
                     )?;
                 }
@@ -240,10 +241,14 @@ mod tests {
     fn wall() -> Detail {
         curve(&[[1.0, 0.0, 0.0], [1.0, 1.0, 0.0]], false)
     }
+    /// profile runs top -> bottom: Houdini winds revolve cells (i,j)(i,j+1)(i+1,j+1)(i+1,j), outward (clockwise-front) only that way
+    fn wall_down() -> Detail {
+        curve(&[[1.0, 1.0, 0.0], [1.0, 0.0, 0.0]], false)
+    }
     fn half_circle() -> Detail {
         let pts: Vec<[f32; 3]> = (0..=6)
             .map(|k| {
-                let phi = std::f32::consts::PI * (1.0 - k as f32 / 6.0);
+                let phi = std::f32::consts::PI * (k as f32 / 6.0);
                 [phi.sin(), phi.cos(), 0.0]
             })
             .collect();
@@ -252,7 +257,7 @@ mod tests {
 
     #[test]
     fn full_revolve_of_a_wall_is_an_outward_cylinder_wall_with_a_wrapped_seam() {
-        let d = run(wall(), defaults()).expect("cooks");
+        let d = run(wall_down(), defaults()).expect("cooks");
         assert_eq!((d.point_count, d.prim_count()), (24, 12));
         let pos = positions(&d);
         for pr in &d.prims {
@@ -356,7 +361,7 @@ mod tests {
     #[test]
     fn caps_close_a_partial_sweep_of_a_closed_profile_into_a_pappus_volume() {
         // unit square profile at x in [1,2], y in [0,1]: area 1, centroid radius 1.5 -> V(90deg) = 1.5 * pi/2 (Pappus)
-        let prof = curve(&[[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 1.0, 0.0], [1.0, 1.0, 0.0]], true);
+        let prof = curve(&[[1.0, 1.0, 0.0], [2.0, 1.0, 0.0], [2.0, 0.0, 0.0], [1.0, 0.0, 0.0]], true);
         let p = defaults().with("endangle", ParamValue::F(90.0)).with("divs", ParamValue::I(16));
         let open = run(prof.clone(), p.clone()).expect("cooks");
         let capped = run(prof.clone(), p.clone().with("caps", ParamValue::B(true))).expect("cooks");
@@ -521,5 +526,27 @@ mod tests {
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.prim_count() > 50 && signed_volume(&out) > 0.0);
         assert_eq!(crate::registry().create("revolve").map(|n| n.type_name()), Some("revolve"));
+    }
+
+    /// promote-1: revolve equals real Houdini 20.5 on every recorded case (closed circle full sweep, open arc partial sweep, triangles, open wall); point/prim order + winding exact. GAP: vertex uv VALUES differ (names only compared).
+    #[test]
+    fn revolve_matches_houdini_on_all_recorded_oracle_cases() {
+        use super::super::meshutil::testkit::houdini_twin;
+        macro_rules! case {
+            ($n:literal) => {
+                (
+                    $n,
+                    houdini_twin(
+                        include_str!(concat!("../../../../fixtures/", $n, "/scene.json")),
+                        include_bytes!(concat!("../../../../fixtures/", $n, "/houdini.geo")),
+                    ),
+                )
+            };
+        }
+        for (n, r) in
+            [case!("sop-revolve"), case!("sop-revolve-arc"), case!("sop-revolve-tris"), case!("sop-revolve-wall")]
+        {
+            assert_eq!(r, Ok(()), "{n}");
+        }
     }
 }
