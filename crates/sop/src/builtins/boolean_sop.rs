@@ -422,8 +422,8 @@ fn insert_t_vertices(loops: &mut [Vec<u32>], pos: &[V3]) {
     }
 }
 
-/// Union of loops (same plane, same winding) as one simple loop, or `None` when it is not exactly one loop.
-fn fuse_loops(group: &[Vec<u32>]) -> Option<Vec<u32>> {
+/// Boundary of the union of loops as 1..=2 closed loops (outer + at most one hole), each starting at its lowest id.
+fn boundary_loops(group: &[Vec<u32>]) -> Option<Vec<Vec<u32>>> {
     let mut edges: HashMap<(u32, u32), u32> = HashMap::new();
     for l in group {
         for i in 0..l.len() {
@@ -447,17 +447,81 @@ fn fuse_loops(group: &[Vec<u32>]) -> Option<Vec<u32>> {
             return None;
         }
     }
-    let start = keep.iter().map(|e| e.0).min()?;
-    let mut lp = vec![start];
-    let mut cur = *next.get(&start)?;
-    while cur != start {
-        lp.push(cur);
-        if lp.len() > keep.len() {
+    let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let mut starts: Vec<u32> = keep.iter().map(|e| e.0).collect();
+    starts.sort_unstable();
+    let mut out: Vec<Vec<u32>> = Vec::new();
+    for st in starts {
+        if seen.contains(&st) {
+            continue;
+        }
+        let mut lp = vec![st];
+        seen.insert(st);
+        let mut cur = *next.get(&st)?;
+        while cur != st {
+            lp.push(cur);
+            seen.insert(cur);
+            if lp.len() > keep.len() {
+                return None;
+            }
+            cur = *next.get(&cur)?;
+        }
+        if lp.len() < 3 {
             return None;
         }
-        cur = *next.get(&cur)?;
+        out.push(lp);
+        if out.len() > 2 {
+            return None;
+        }
     }
-    (lp.len() == keep.len() && lp.len() >= 3).then_some(lp)
+    (!out.is_empty() && out.iter().map(Vec::len).sum::<usize>() == keep.len()).then_some(out)
+}
+
+/// Houdini bridges a hole into ONE polygon: closest (outer, hole) vertex pair; cycle h0, o0, o1.., o0, h0, h1..h(m-1).
+fn bridge_hole(ls: &[Vec<u32>], pos: &[V3]) -> Option<Vec<u32>> {
+    let newell = |l: &Vec<u32>| -> Option<V3> {
+        let mut n = [0.0f64; 3];
+        for i in 0..l.len() {
+            let (a, b) = (*pos.get(l[i] as usize)?, *pos.get(l[(i + 1) % l.len()] as usize)?);
+            let c = cross(a, b);
+            n = [n[0] + c[0], n[1] + c[1], n[2] + c[2]];
+        }
+        Some(n)
+    };
+    let (n0, n1) = (newell(ls.first()?)?, newell(ls.get(1)?)?);
+    // a hole winds opposite to its outer loop; two same-wound loops are disjoint pieces, not a hole
+    if dot(n0, n1) >= 0.0 {
+        return None;
+    }
+    let (outer, hole) = if len(n0) >= len(n1) { (ls.first()?, ls.get(1)?) } else { (ls.get(1)?, ls.first()?) };
+    let corner = |l: &Vec<u32>, i: usize| -> Option<bool> {
+        let m = l.len();
+        let (a, b, c) = (*pos.get(l[(i + m - 1) % m] as usize)?, *pos.get(l[i] as usize)?, *pos.get(l[(i + 1) % m] as usize)?);
+        let (u, v) = (sub(b, a), sub(c, b));
+        Some(len(cross(u, v)) > 1e-7 * len(u) * len(v))
+    };
+    let mut best: Option<(f64, usize, usize)> = None;
+    for (i, &o) in outer.iter().enumerate() {
+        if !corner(outer, i)? {
+            continue;
+        }
+        for (j, &h) in hole.iter().enumerate() {
+            let d = len(sub(*pos.get(o as usize)?, *pos.get(h as usize)?));
+            if best.map_or(true, |b| d < b.0 - 1e-12) {
+                best = Some((d, i, j));
+            }
+        }
+    }
+    let (_, i, j) = best?;
+    let (n, m) = (outer.len(), hole.len());
+    let mut out: Vec<u32> = vec![hole[j]];
+    for k in 0..=n {
+        out.push(outer[(i + k) % n]);
+    }
+    for k in 0..m {
+        out.push(hole[(j + k) % m]);
+    }
+    Some(out)
 }
 
 /// Drop vertices that are collinear in EVERY loop that uses them; loops left with < 3 corners vanish.
@@ -576,16 +640,29 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
     let mut fused: Vec<(Vec<u32>, usize)> = Vec::new();
     for (m, g) in groups.iter().enumerate() {
         let ls: Vec<Vec<u32>> = g.iter().filter_map(|&i| loops.get(i).map(|l| l.0.clone())).collect();
-        match (ls.len() > 1).then(|| fuse_loops(&ls)).flatten() {
+        let one = (ls.len() > 1).then(|| boundary_loops(&ls)).flatten().and_then(|b| match b.len() {
+            1 => b.into_iter().next(),
+            _ => bridge_hole(&b, &w.pos),
+        });
+        match one {
             Some(l) => fused.push((l, m)),
             None => fused.extend(ls.into_iter().map(|l| (l, m))),
         }
     }
     drop_collinear(&mut fused, &w.pos);
     // emit
-    let mut used: Vec<u32> = fused.iter().flat_map(|(l, _)| l.iter().copied()).collect();
-    used.sort_unstable();
-    used.dedup();
+    // Houdini numbers points by first appearance over the prim order
+    let mut used: Vec<u32> = Vec::new();
+    {
+        let mut seen_pt: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for (l, _) in &fused {
+            for &v in l {
+                if seen_pt.insert(v) {
+                    used.push(v);
+                }
+            }
+        }
+    }
     let remap: HashMap<u32, u32> = used.iter().enumerate().map(|(k, &o)| (o, k as u32)).collect();
     let mut d = Detail::default();
     d.add_points(u32::try_from(used.len()).map_err(|_| failed("point id overflow"))?);
@@ -1458,5 +1535,82 @@ mod tests {
         let out = g.cook(id, 0.0).expect("example cooks");
         assert_eq!((out.point_count, out.prim_count()), (14, 9), "box - offset box (diagonal)");
         assert_eq!(crate::registry().create("boolean").map(|n| n.type_name()), Some("boolean"));
+    }
+
+    /// stat-oracle vs `parity/ref/boolean/*.topo` (hython boolean::2.0 solid/solid): prim/point counts, prim valence histogram, bbox,
+    /// surface area and the P multiset equal (1e-4). Prim ORDER / polygon start vertex are NOT compared (see ledger sop-boolean).
+    #[test]
+    fn houdini_stat_oracle_box_sphere_and_offset_boxes() {
+        let refs: [(&str, &str); 9] = [
+            ("sph_union", include_str!("../../../../parity/ref/boolean/sph_union.topo")),
+            ("sph_sub", include_str!("../../../../parity/ref/boolean/sph_sub.topo")),
+            ("sph_int", include_str!("../../../../parity/ref/boolean/sph_int.topo")),
+            ("off_union", include_str!("../../../../parity/ref/boolean/off_union.topo")),
+            ("off_sub", include_str!("../../../../parity/ref/boolean/off_sub.topo")),
+            ("off_int", include_str!("../../../../parity/ref/boolean/off_int.topo")),
+            ("offx_union", include_str!("../../../../parity/ref/boolean/offx_union.topo")),
+            ("offx_sub", include_str!("../../../../parity/ref/boolean/offx_sub.topo")),
+            ("offx_int", include_str!("../../../../parity/ref/boolean/offx_int.topo")),
+        ];
+        for (name, topo) in refs {
+            let (b, op) = name.split_once('_').expect("name");
+            let bsrc = match b {
+                "sph" => r#"{"name":"b","type":"sphere","params":{"type":2,"rad":[0.65,0.65,0.65],"rows":9,"cols":12}},{"name":"xf","type":"xform"}"#,
+                "off" => r#"{"name":"b","type":"box"},{"name":"xf","type":"xform","params":{"t":[0.5,0.5,0.5]}}"#,
+                _ => r#"{"name":"b","type":"box"},{"name":"xf","type":"xform","params":{"t":[0.5,0,0]}}"#,
+            };
+            let opn = match op {
+                "union" => 0,
+                "sub" => 1,
+                _ => 2,
+            };
+            let scene = format!(
+                r#"{{"nodes":[{{"name":"a","type":"box"}},{bsrc},{{"name":"bool1","type":"boolean","params":{{"operation":{opn}}}}}],"edges":[["b",0,"xf",0],["a",0,"bool1",0],["xf",0,"bool1",1]],"display":"bool1"}}"#
+            );
+            let (mut g, id) = load_scene(&scene).expect("scene loads");
+            let out = g.cook(id, 0.0).expect("cooks");
+            // reference: P lines + F lines
+            let mut rp: Vec<[f64; 3]> = Vec::new();
+            let mut rf: Vec<Vec<usize>> = Vec::new();
+            for l in topo.lines() {
+                let t: Vec<&str> = l.split_whitespace().collect();
+                match t.first() {
+                    Some(&"P") => rp.push([t[2].parse().expect("x"), t[3].parse().expect("y"), t[4].parse().expect("z")]),
+                    Some(&"F") => rf.push(t[2..].iter().map(|s| s.parse().expect("i")).collect()),
+                    _ => {}
+                }
+            }
+            assert_eq!((out.point_count as usize, out.prim_count() as usize), (rp.len(), rf.len()), "{name} counts");
+            let xp: Vec<[f64; 3]> = out.p().iter().map(|p| [p[0] as f64, p[1] as f64, p[2] as f64]).collect();
+            let key = |p: &[f64; 3]| [(p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64, (p[2] * 1e4).round() as i64];
+            let (mut ka, mut kb): (Vec<_>, Vec<_>) = (rp.iter().map(key).collect(), xp.iter().map(key).collect());
+            ka.sort_unstable();
+            kb.sort_unstable();
+            assert_eq!(ka, kb, "{name} P multiset");
+            let hist = |v: Vec<usize>| {
+                let mut h = std::collections::BTreeMap::new();
+                for n in v {
+                    *h.entry(n).or_insert(0usize) += 1;
+                }
+                h
+            };
+            let xf: Vec<Vec<usize>> = out.prims.iter().map(|pr| out.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| p as usize).collect()).collect();
+            assert_eq!(hist(rf.iter().map(Vec::len).collect()), hist(xf.iter().map(Vec::len).collect()), "{name} valence");
+            let area = |pts: &[[f64; 3]], f: &[Vec<usize>]| -> f64 {
+                f.iter()
+                    .map(|q| {
+                        let mut n = [0.0f64; 3];
+                        for i in 0..q.len() {
+                            let (a, b) = (pts[q[i]], pts[q[(i + 1) % q.len()]]);
+                            let c = cross(a, b);
+                            n = [n[0] + c[0], n[1] + c[1], n[2] + c[2]];
+                        }
+                        len(n) / 2.0
+                    })
+                    .sum()
+            };
+            let (a0, a1) = (area(&rp, &rf), area(&xp, &xf));
+            assert!((a0 - a1).abs() < 1e-3 * a0.max(1.0), "{name} area {a0} vs {a1}");
+        }
     }
 }
