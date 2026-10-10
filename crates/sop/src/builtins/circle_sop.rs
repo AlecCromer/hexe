@@ -9,7 +9,8 @@
 //! xy `(u, sg v, 0)`; yz `(0, v, -sg u)` (first radius along Z, second along Y); zx `(u, 0, -sg v)`; all + `center`. Point 0 sits on
 //! the first radius axis (+X for xy / zx, +Z for yz with reverse on). Default (reverse on, xy) runs CLOCKWISE seen from +Z: pt1 =
 //! `(r0 cos(2pi/n), -r1 sin(2pi/n))`. Reverse off = counter-clockwise (xy).
-//! * closed: `divisions` points, `a_i = 2*pi*i/divisions`; the closing point is NOT repeated.
+//! * closed: `divisions` points, `a_i = f32(i) * f32(2*pi/divisions)` (f32 product, then cos/sin of that f32 angle = Houdini's
+//!   exact rounding noise, e.g. cos(pi/2) = -4.37e-08); the closing point is NOT repeated.
 //! * open_arc: `divisions + 1` points, `a_i = begin + (end - begin)*i/divisions` (degrees → radians).
 //!
 //! Prim: one `Poly`. Closed iff `type == polygon` and `arc == closed`; every `polyline` and every `open_arc` is open.
@@ -127,7 +128,12 @@ impl Node<Detail> for Circle {
         pos.clear();
         for i in 0..n {
             let t = f64::from(i) / f64::from(div);
-            let a = if open_arc { b + (e - b) * t } else { std::f64::consts::TAU * t };
+            // closed: Houdini's own f32 angle `f32(i) * f32(2pi / divisions)` (hython-exact incl. its f32 rounding noise)
+            let a = if open_arc {
+                b + (e - b) * t
+            } else {
+                f64::from(i as f32 * (std::f64::consts::TAU / f64::from(div)) as f32)
+            };
             let (u, v) = (r0 * a.cos(), r1 * a.sin());
             let local = match orient {
                 ORIENT_XY => [u, sgn * v, 0.0],
@@ -221,5 +227,28 @@ mod tests {
         assert!(cook(r#"{"divisions":-1}"#).is_err());
         assert!(cook(r#"{"divisions":2000000}"#).is_err());
         assert!(cook(r#"{"divisions":2,"arc":1}"#).is_ok());
+    }
+
+    /// Bit-exact vs Houdini 20.5 (fixtures/sop-skin-2ring c0: 12 divisions, orient zx, radius 1; Houdini's f32 angle noise).
+    #[test]
+    fn closed_ring_is_bit_exact_with_houdinis_f32_angle_noise() {
+        let d = cook(r#"{"divisions":12,"orient":2,"radius":[1,1,0]}"#).expect("cooks");
+        let want: [(f32, f32); 12] = [
+            (1.0, 0.0),
+            (0.866025388, 0.5),
+            (0.49999997, 0.866025448),
+            (-4.37113883e-08, 1.0),
+            (-0.50000006, 0.866025388),
+            (-0.866025388, 0.50000006),
+            (-1.0, -8.74227766e-08),
+            (-0.866025269, -0.500000179),
+            (-0.499999911, -0.866025448),
+            (1.19248806e-08, -1.0),
+            (0.499999911, -0.866025448),
+            (0.866025567, -0.499999762),
+        ];
+        for (k, (p, w)) in d.p().iter().zip(want).enumerate() {
+            assert_eq!((p[0], p[1], p[2]), (w.0, 0.0, w.1), "pt {k}");
+        }
     }
 }

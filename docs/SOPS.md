@@ -57,7 +57,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | revolve | shipped (sop-revolve) | `revolve.json` | ok |
 | rop_geometry | partial (rop-geometry) | via `file-rop.json` | ok |
 | scatter | partial (sop-scatter) | `scatter.json` | ok |
-| skin | partial (sop-skin) | `skin.json` | ok |
+| skin | shipped (sop-skin) | `skin.json` | ok |
 | smooth | partial (sop-smooth) | `smooth.json` | ok |
 | sort | shipped (sop-sort) | `sort.json` | ok |
 | sphere | shipped (sop-sphere) | via `convert.json` | ok |

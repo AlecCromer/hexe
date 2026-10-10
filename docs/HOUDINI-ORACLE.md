@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-DIFF 1, HEXE-ERR 1  (N=95)
+Histogram: MATCH 81, STAT-PASS 10, TOPO-DIFF 4, ATTRIB-DIFF 1, ORDER-DIFF 1, HEXE-ERR 1  (N=98)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -51,8 +51,9 @@ Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-D
 | sop-grouppromote | 8/6/24 | 8/6/24 | MATCH | MATCH | - (point group toppts both) |
 | sop-knife | 12/10/40 | 12/10/40 | MATCH | MATCH | same cut-point/prim order difference as clip (shared core); 12/10/40 equal, groups blanked in both |
 | sop-knife-below | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
-| sop-knife-sphere | 294/316/1216 | 294/316/1216 | ORDER-DIFF | ORDER-DIFF |  |
-| sop-knife-tilt | 14/12/48 | 14/12/48 | ORDER-DIFF | ORDER-DIFF |  |
+| sop-knife-grid | 17/10/40 | 17/10/40 | MATCH | MATCH |  |
+| sop-knife-sphere | 294/316/1216 | 294/316/1216 | MATCH | TOPO-DIFF |  |
+| sop-knife-tilt | 14/12/48 | 14/12/48 | MATCH | TOPO-DIFF |  |
 | sop-line | 5/1/5 | 5/1/5 | MATCH | MATCH | - |
 | sop-matchsize | 8/6/24 | 8/6/24 | MATCH | MATCH | - (explicit target size/center, P equal) |
 | sop-measure | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim attr area present both (values not compared)) |
@@ -84,7 +85,8 @@ Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-D
 | sop-scatter-density | 2000/0/0 | 2000/0/0 | stat | STAT-PASS | stdx 2.367/2.363(-0.2%) stdy 0/0(+0.0%) stdz 2.901/2.94(+1.4%) nn 0.106/0.1057(-0.2%) |
 | sop-scatter-perprim | 2010/0/0 | 2010/0/0 | stat | STAT-PASS | stdx 2.847/2.863(+0.5%) stdy 0/0(+0.0%) stdz 2.865/2.861(-0.1%) nn 0.11/0.1105(+0.5%) |
 | sop-scatter-seed | 1500/0/0 | 1500/0/0 | stat | STAT-PASS | stdx 0.3682/0.3751(+1.9%) stdy 0.3725/0.3751(+0.7%) stdz 0.3705/0.3686(-0.5%) nn 0.031/0.03204(+3.4%) |
-| sop-skin | 36/24/96 | 36/24/96 | P-DIFF | P-DIFF |  |
+| sop-skin | 36/24/96 | 36/24/96 | MATCH | MATCH |  |
+| sop-skin-2ring | 24/12/48 | 24/12/48 | MATCH | MATCH |  |
 | sop-skin-closev | 24/24/96 | 24/24/96 | MATCH | MATCH |  |
 | sop-skin-eq | 36/24/96 | 36/24/96 | MATCH | MATCH |  |
 | sop-skin-tris | 12/12/36 | 12/12/36 | MATCH | MATCH |  |
@@ -101,7 +103,8 @@ Histogram: MATCH 76, STAT-PASS 10, ORDER-DIFF 3, ATTRIB-DIFF 2, TOPO-DIFF 2, P-D
 | sop-switch | 8/6/24 | 8/6/24 | MATCH | MATCH | - (box branch) |
 | sop-transform | 8/6/24 | 8/6/24 | MATCH | MATCH | - (SRT math verified (t/r/s)) |
 | sop-twist | 8/6/24 | 8/6/24 | MATCH | MATCH | - (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess) |
-| sop-uvlayout | 8/6/24 | 8/6/24 | MATCH | ATTRIB-DIFF | - (Houdini adds detail attrs coverage + numnonpacked; uv values not compared) |
+| sop-uvlayout | 8/6/24 | 8/6/24 | MATCH | MATCH | - (Houdini adds detail attrs coverage + numnonpacked; uv values not compared) |
+| sop-uvlayout-stat | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-uvproject | 8/6/24 | 8/6/24 | MATCH | MATCH | - (vertex uv present both (uv VALUES not compared)) |
 | sop-uvunwrap | 8/6/24 | 8/6/24 | MATCH | MATCH | - (uv present both (values not compared; algorithms differ by design)) |
 | sop-wrangle | 121/0/0 | 121/0/0 | MATCH | MATCH | - (grid order now equal; sin() math matches; point-only geometry so no winding) |

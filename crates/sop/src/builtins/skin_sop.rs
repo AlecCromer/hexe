@@ -768,16 +768,25 @@ mod tests {
         assert_eq!(out[2].1.len(), 2);
     }
 
-    /// KNOWN GAP (pinned): resampling 8 -> 12 points. RULE implemented (edge midpoints, longest f32 edge first, originals kept, added points appended)
-    /// and proven on Houdini's own ring (test above); the residual P-DIFF is ONLY the tie order: Houdini's circle SOP points carry f32 noise from its
-    /// rotation arithmetic (e.g. x = -2.1855694e-8 where hexe has 3.06e-17), hexe's circle is f64-exact, so the 8 equal octagon edges tie differently.
-    /// 2-ring case: prims + 21 of 24 points equal.
+    /// Resampling 8 -> 12 points is now hython-exact (LAST5): the rule (edge midpoints, longest f32 edge first, originals kept, added points
+    /// appended) was already proven on Houdini's own ring; the residual P order diff was only the circle SOP's f32 angle noise
+    /// (`f32(i) * f32(2pi/n)`), now reproduced. Counts, P (1e-5, index order), prim point lists, attr names equal on both fixtures.
     #[test]
-    fn resample_of_mismatched_rings_is_a_known_gap_vs_houdini() {
-        let r = super::super::meshutil::testkit::houdini_twin(
-            include_str!("../../../../fixtures/sop-skin/scene.json"),
-            include_bytes!("../../../../fixtures/sop-skin/houdini.geo"),
+    fn resample_of_mismatched_rings_matches_houdini_exactly() {
+        use super::super::meshutil::testkit::houdini_twin;
+        assert_eq!(
+            houdini_twin(
+                include_str!("../../../../fixtures/sop-skin/scene.json"),
+                include_bytes!("../../../../fixtures/sop-skin/houdini.geo"),
+            ),
+            Ok(())
         );
-        assert!(r.as_ref().is_err_and(|e| e.starts_with("P[")), "{r:?}");
+        assert_eq!(
+            houdini_twin(
+                include_str!("../../../../fixtures/sop-skin-2ring/scene.json"),
+                include_bytes!("../../../../fixtures/sop-skin-2ring/houdini.geo"),
+            ),
+            Ok(())
+        );
     }
 }

@@ -2834,6 +2834,74 @@
   }
  },
  {
+  "sop": "sop-knife-grid",
+  "houdini": [
+   17,
+   10,
+   40
+  ],
+  "hexe": [
+   17,
+   10,
+   40
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -3.0,
+     0.0,
+     -2.0
+    ],
+    [
+     3.0,
+     0.0,
+     2.0
+    ]
+   ],
+   "hexe": [
+    [
+     -3.0,
+     0.0,
+     -2.0
+    ],
+    [
+     3.0,
+     0.0,
+     2.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
   "sop": "sop-knife-sphere",
   "houdini": [
    294,
@@ -2845,11 +2913,12 @@
    316,
    1216
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "topo_bad_prims": 25,
   "flags": [
-   "ORDER-DIFF"
+   "TOPO-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "TOPO-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -2915,11 +2984,12 @@
    12,
    48
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "topo_bad_prims": 5,
   "flags": [
-   "ORDER-DIFF"
+   "TOPO-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "TOPO-DIFF",
   "bbox": {
    "houdini": [
     [
@@ -4739,13 +4809,9 @@
    24,
    96
   ],
-  "p_unmatched_points": 8,
-  "p_maxdev_nearest": 0.225592,
-  "p": "P-DIFF",
-  "flags": [
-   "P-DIFF"
-  ],
-  "verdict": "P-DIFF",
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [
@@ -4768,6 +4834,74 @@
     [
      1.0,
      2.0,
+     1.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-skin-2ring",
+  "houdini": [
+   24,
+   12,
+   48
+  ],
+  "hexe": [
+   24,
+   12,
+   48
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -1.0,
+     0.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "hexe": [
+    [
+     -1.0,
+     0.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
      1.0
     ]
    ]
@@ -5844,20 +5978,9 @@
    6,
    24
   ],
-  "attrib_diff": {
-   "detail": {
-    "houdini_only": [
-     "coverage",
-     "numnonpacked"
-    ],
-    "hexe_only": []
-   }
-  },
   "p": "MATCH",
-  "flags": [
-   "ATTRIB-DIFF"
-  ],
-  "verdict": "ATTRIB-DIFF",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [
@@ -5914,7 +6037,88 @@
     "vertex": [
      "uv"
     ],
-    "detail": []
+    "detail": [
+     "coverage",
+     "numnonpacked"
+    ]
+   }
+  }
+ },
+ {
+  "sop": "sop-uvlayout-stat",
+  "houdini": [
+   8,
+   6,
+   24
+  ],
+  "hexe": [
+   8,
+   6,
+   24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": [
+     "coverage",
+     "numnonpacked"
+    ]
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [
+     "uv"
+    ],
+    "detail": [
+     "coverage",
+     "numnonpacked"
+    ]
    }
   }
  },
