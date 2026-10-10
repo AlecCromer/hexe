@@ -1216,6 +1216,7 @@ dependencies = [
  "hexe-geo",
  "hexe-graph",
  "hexe-sop",
+ "sop-motion",
 ]
 
 [[package]]
