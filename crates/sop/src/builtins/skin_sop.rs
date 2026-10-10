@@ -68,9 +68,62 @@ struct Skin {
     specs: Vec<ParamSpec>,
 }
 
+/// Houdini 20.5 (oracle sop-skin, sop-skin-2ring): a section short of points keeps ALL its points and gains EDGE MIDPOINTS. Each pass
+/// splits the `need` LONGEST edges (length^2 summed in f32, ties -> lower edge index first; octagon 8 -> 12 splits edges 6,4,1,3 in
+/// that order); `need` >= edge count splits every edge (edge order) and goes on (3 -> 8 = quarter points; pass order beyond one pass
+/// UNVERIFIED). Returns the ring (position + source-point weights) and the ring indices of the new points in CREATION order.
+fn resample(pos: &[V3], closed: bool, n: usize) -> (Vec<(V3, Vec<(usize, f64)>)>, Vec<usize>) {
+    if pos.len() < 2 || n <= pos.len() {
+        return (resample_even(pos, closed, n), Vec::new());
+    }
+    // node = (id, position, weights); id < pos.len() = original, else creation rank + pos.len()
+    let mut ring: Vec<(usize, V3, Vec<(usize, f64)>)> =
+        pos.iter().enumerate().map(|(i, q)| (i, *q, vec![(i, 1.0)])).collect();
+    let mut next_id = pos.len();
+    while ring.len() < n {
+        let m = ring.len();
+        let edges = if closed { m } else { m - 1 };
+        let need = n - m;
+        let f = |q: V3| [q[0] as f32, q[1] as f32, q[2] as f32];
+        let l2 = |e: usize| {
+            let (a, b) = (f(ring[e].1), f(ring[(e + 1) % m].1));
+            let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+        };
+        let mut pick: Vec<usize> = (0..edges).collect();
+        if need < edges {
+            pick.sort_by(|&x, &y| l2(y).total_cmp(&l2(x)).then(x.cmp(&y)));
+            pick.truncate(need);
+        }
+        let mut ids = std::collections::HashMap::new();
+        for &e in &pick {
+            ids.insert(e, next_id);
+            next_id += 1;
+        }
+        let mut out = Vec::with_capacity(m + pick.len());
+        for e in 0..m {
+            out.push(ring[e].clone());
+            if let Some(&id) = ids.get(&e) {
+                let (a, b) = (&ring[e], &ring[(e + 1) % m]);
+                let mut w: Vec<(usize, f64)> = Vec::new();
+                for &(i, v) in a.2.iter().chain(&b.2) {
+                    match w.iter_mut().find(|c| c.0 == i) {
+                        Some(c) => c.1 += v * 0.5,
+                        None => w.push((i, v * 0.5)),
+                    }
+                }
+                out.push((id, scale(add(a.1, b.1), 0.5), w));
+            }
+        }
+        ring = out;
+    }
+    let mut order: Vec<usize> = (0..ring.len()).filter(|&k| ring[k].0 >= pos.len()).collect();
+    order.sort_by_key(|&k| ring[k].0);
+    (ring.into_iter().map(|(_, q, w)| (q, w)).collect(), order)
+}
 /// `n` points evenly spaced by arclength along `pos` (closed: loop, last point NOT repeated; open: end points kept). Each
 /// result carries its position and the two source indices (into `pos`) with linear weights.
-fn resample(pos: &[V3], closed: bool, n: usize) -> Vec<(V3, Vec<(usize, f64)>)> {
+fn resample_even(pos: &[V3], closed: bool, n: usize) -> Vec<(V3, Vec<(usize, f64)>)> {
     let mut path = pos.to_vec();
     if closed {
         path.push(pos[0]);
@@ -249,12 +302,15 @@ impl Node<Detail> for Skin {
             return Err(failed(OP, "sections have different point counts and `resample` is off"));
         }
         let mut rows: Vec<Row> = Vec::with_capacity(secs.len());
+        // ring indices of the points a resampled section ADDED, in creation order (Houdini appends them after every original point)
+        let mut news: Vec<Vec<usize>> = vec![Vec::new(); secs.len()];
         for c in &secs {
             let q: Vec<V3> = c.pts.iter().map(|&i| pos[i as usize]).collect();
             let row = if q.len() == n {
                 Row { p: q, w: c.pts.iter().map(|&i| vec![(i as usize, 1.0)]).collect() }
             } else {
-                let r = resample(&q, c.closed, n);
+                let (r, order) = resample(&q, c.closed, n);
+                news[rows.len()] = order;
                 Row {
                     p: r.iter().map(|x| x.0).collect(),
                     w: r.iter().map(|x| x.1.iter().map(|&(l, f)| (c.pts[l] as usize, f)).collect()).collect(),
@@ -327,13 +383,33 @@ impl Node<Detail> for Skin {
         let mut m = Mesh::default();
         let mut ids: Vec<Vec<u32>> = Vec::with_capacity(stations.len());
         let mut wts: Vec<Vec<(usize, f64)>> = Vec::new();
-        for st in &stations {
-            let mut row = Vec::with_capacity(n);
-            for (pt, w) in st.p.iter().zip(&st.w) {
-                row.push(m.point(OP, *pt)?);
-                wts.push(w.clone());
+        // oracle (Houdini 20.5, divs 1): original points first (section-major), then each resampled section's added points in creation order
+        let defer = divs == 1;
+        let mut ids_sparse: Vec<Vec<Option<u32>>> = Vec::with_capacity(stations.len());
+        for (k, st) in stations.iter().enumerate() {
+            let late: &[usize] = if defer { news.get(k).map_or(&[][..], |v| v.as_slice()) } else { &[] };
+            let mut row = vec![None; n];
+            for (j, (pt, w)) in st.p.iter().zip(&st.w).enumerate() {
+                if !late.contains(&j) {
+                    row[j] = Some(m.point(OP, *pt)?);
+                    wts.push(w.clone());
+                }
             }
-            ids.push(row);
+            ids_sparse.push(row);
+        }
+        for (k, st) in stations.iter().enumerate() {
+            let late: &[usize] = if defer { news.get(k).map_or(&[][..], |v| v.as_slice()) } else { &[] };
+            for &j in late {
+                if let (Some(pt), Some(w), Some(slot)) =
+                    (st.p.get(j), st.w.get(j), ids_sparse.get_mut(k).and_then(|r| r.get_mut(j)))
+                {
+                    *slot = Some(m.point(OP, *pt)?);
+                    wts.push(w.clone());
+                }
+            }
+        }
+        for row in ids_sparse {
+            ids.push(row.into_iter().map(|x| x.unwrap_or(0)).collect());
         }
         let r_count = ids.len();
         let quads = if wrap_v { r_count } else { r_count - 1 };
@@ -472,9 +548,10 @@ mod tests {
         assert_eq!(r.point_count, 6);
         assert_eq!(
             r.attr(AttrClass::Point, "t").map(|a| a.data.clone()),
-            Some(AttrData::F32(vec![0.0, 10.0, 20.0, 0.0, 10.0, 20.0]))
+            Some(AttrData::F32(vec![0.0, 10.0, 20.0, 0.0, 20.0, 10.0]))
         );
-        assert!((r.p()[4][0] - 1.0).abs() < 1e-6);
+        // Houdini order: originals first, the added midpoint last
+        assert!((r.p()[5][0] - 1.0).abs() < 1e-6);
         // carry off
         let n = run(b, defaults().with("carryattrs", ParamValue::B(false))).expect("cooks");
         assert!(n.attr(AttrClass::Point, "t").is_none());
@@ -662,8 +739,38 @@ mod tests {
         }
     }
 
-    /// KNOWN GAP (pinned): resampling 8 -> 12 points. Houdini splits edge MIDPOINTS of the short ring (edges 6,4,1,3 of a regular octagon,
-    /// in that order; tie order of equal edges not reproduced), hexe resamples evenly. Counts equal, `P` differs.
+    /// Houdini 20.5 resample rule on Houdini's OWN f32 ring (raw points 12..19 of fixtures/sop-skin-2ring/houdini.geo, noise included): the 4 added
+    /// midpoints are created on edges 6,4,1,3 in that order (longest f32 length^2 first, ties -> lower edge), appended after the originals.
+    #[test]
+    fn resample_splits_longest_f32_edges_first_on_houdinis_own_ring() {
+        let ring: [V3; 8] = [
+            [0.5, 1.0, 0.0],
+            [0.353553385, 1.0, 0.353553385],
+            [-2.18556941e-08, 1.0, 0.5],
+            [-0.353553385, 1.0, 0.353553385],
+            [-0.5, 1.0, -4.37113883e-08],
+            [-0.353553325, 1.0, -0.353553444],
+            [5.96244032e-09, 1.0, -0.5],
+            [0.353553504, 1.0, -0.353553265],
+        ];
+        let ring: Vec<V3> = ring.iter().map(|q| q.map(|c| f64::from(c as f32))).collect();
+        let (out, order) = resample(&ring, true, 12);
+        assert_eq!(out.len(), 12);
+        let made: Vec<V3> = order.iter().map(|&k| out[k].0).collect();
+        let mid = |e: usize| scale(add(ring[e], ring[(e + 1) % 8]), 0.5);
+        for (got, e) in made.iter().zip([6usize, 4, 1, 3]) {
+            assert!(dist(*got, mid(e)) < 1e-9, "edge {e}: {got:?}");
+        }
+        // originals keep their relative ring order; added points sit between their edge ends
+        assert_eq!(out[0].1, vec![(0, 1.0)]);
+        assert_eq!(out[1].1, vec![(1, 1.0)]);
+        assert_eq!(out[2].1.len(), 2);
+    }
+
+    /// KNOWN GAP (pinned): resampling 8 -> 12 points. RULE implemented (edge midpoints, longest f32 edge first, originals kept, added points appended)
+    /// and proven on Houdini's own ring (test above); the residual P-DIFF is ONLY the tie order: Houdini's circle SOP points carry f32 noise from its
+    /// rotation arithmetic (e.g. x = -2.1855694e-8 where hexe has 3.06e-17), hexe's circle is f64-exact, so the 8 equal octagon edges tie differently.
+    /// 2-ring case: prims + 21 of 24 points equal.
     #[test]
     fn resample_of_mismatched_rings_is_a_known_gap_vs_houdini() {
         let r = super::super::meshutil::testkit::houdini_twin(
