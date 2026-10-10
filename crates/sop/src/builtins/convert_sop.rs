@@ -192,7 +192,7 @@ fn unit_shape(
 /// the 20 base triangles in the table order; each lattice point `(r, c)` (row `r` from the apex = last base corner, `c` from the
 /// corner-1 side) is numbered on FIRST VISIT in (r, c) row-major order, base triangle by base triangle; per triangle all
 /// "up" tris (row-major, `[(r+1,c+1), (r+1,c), (r,c)]`) then all "down" tris (rows 1.., `[(r,c+1), (r+1,c+1), (r,c)]`).
-/// Edge points = slerp of the two base corners; interior points = normalised barycentric sum.
+/// Edge points = slerp of the two base corners (exact); interior points = normalised mean of the 3 lattice-line slerps (exact for f<=3, <=7e-3 at f=6: Houdini's interior law is not a plain slerp/barycentric blend).
 fn icosphere(f: usize) -> (Vec<V3>, Vec<Vec<usize>>) {
     const FACES: [[usize; 3]; 20] = [
         [2, 1, 0], [3, 2, 0], [4, 3, 0], [5, 4, 0], [1, 5, 0], [6, 5, 1], [7, 4, 5], [8, 3, 4], [9, 2, 3], [10, 1, 2],
@@ -233,13 +233,21 @@ fn icosphere(f: usize) -> (Vec<V3>, Vec<Vec<usize>>) {
                             let s = w.sin();
                             [0, 1, 2].map(|i| (sa * pa[i] + sb * pb[i]) / s)
                         }
-                        ks => {
-                            let mut s = [0.0; 3];
-                            for (a, w) in ks {
-                                for i in 0..3 {
-                                    s[i] += *w as f64 * base[*a][i];
-                                }
-                            }
+                        _ => {
+                            // interior: normalised mean of the slerps along the 3 lattice lines through the point
+                            // (measured: exact at the centroid, <= 7e-3 off at f = 6; true rule unknown)
+                            let (pa, p1, p0) = (base[ap], base[v1], base[v0]);
+                            let fl = f as f64;
+                            let sl = |a: V3, b: V3, t: f64| -> V3 {
+                                let w = dot(&a, &b).clamp(-1.0, 1.0).acos();
+                                [0, 1, 2].map(|i| (((1.0 - t) * w).sin() * a[i] + (t * w).sin() * b[i]) / w.sin())
+                            };
+                            let (rf, cf) = (r as f64, c as f64);
+                            let d1 = sl(sl(pa, p1, rf / fl), sl(pa, p0, rf / fl), cf / rf);
+                            let d2 = sl(sl(pa, p0, cf / fl), sl(p1, p0, cf / fl), (rf - cf) / (fl - cf));
+                            let q = rf - cf;
+                            let d3 = sl(sl(pa, p1, q / fl), sl(p1, p0, (fl - q) / fl), cf / (fl - q));
+                            let s = [0, 1, 2].map(|i| d1[i] + d2[i] + d3[i]);
                             let l = dot(&s, &s).sqrt();
                             s.map(|x| x / l)
                         }
@@ -565,7 +573,7 @@ mod tests {
         ico_case(include_str!("../../../../parity/ref/convert/sphere_lod075.topo"), 0.75, [1.0; 3], [0.0; 3], t);
         ico_case(include_str!("../../../../parity/ref/convert/sphere_lod1.topo"), 1.0, [1.0; 3], [0.0; 3], t);
         ico_case(include_str!("../../../../parity/ref/convert/sphere_xf_lod05.topo"), 0.5, [2.0, 3.0, 4.0], [1.0, 2.0, 3.0], t);
-        let w = ico_case(include_str!("../../../../parity/ref/convert/sphere_lod2.topo"), 2.0, [1.0; 3], [0.0; 3], 1.0);
+        let w = ico_case(include_str!("../../../../parity/ref/convert/sphere_lod2.topo"), 2.0, [1.0; 3], [0.0; 3], 0.01);
         eprintln!("lod2 worst pos err {w}");
     }
 
