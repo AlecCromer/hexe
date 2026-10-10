@@ -437,13 +437,17 @@ fn step(src: &Detail, sel: Option<&[bool]>, catmull: bool, boundary_crease: bool
             for k in 0..n {
                 let (nx, pv) = (fe.get(k).copied().unwrap_or(0), fe.get((k + n - 1) % n).copied().unwrap_or(0));
                 let s = u32::try_from(vertex_point.len()).map_err(|_| failed(OP, "vertex id overflow"))?;
-                vertex_point.extend([
-                    id(pts.get(k).copied().unwrap_or(0))?,
-                    id(ebase + nx)?,
-                    id(fbase + fi)?,
-                    id(ebase + pv)?,
-                ]);
-                rm.vert_src.extend([Some(lo + k), None, None, None]);
+                let mut quad =
+                    [id(pts.get(k).copied().unwrap_or(0))?, id(ebase + nx)?, id(fbase + fi)?, id(ebase + pv)?];
+                let mut vs = [Some(lo + k), None, None, None];
+                // hython 20.5 (box, osdcc): child k of a QUAD face starts k corners later (ring rotated right by k);
+                // tri / pentagon children are unrotated (probed).
+                if n == 4 {
+                    quad.rotate_right(k % 4);
+                    vs.rotate_right(k % 4);
+                }
+                vertex_point.extend(quad);
+                rm.vert_src.extend(vs);
                 prims.push(Prim { kind: PrimKind::Poly { closed: true }, verts: s..s + 4 });
                 rm.prim_src.push(Some(pi));
             }
@@ -594,6 +598,20 @@ mod tests {
                 ("group", ParamValue::S(String::new())),
                 ("treatboundaryascrease", ParamValue::B(true))
             ]
+        );
+    }
+    /// hython 20.5 box osdcc: quad children are the (vertex, next-edge, face, prev-edge) ring rotated right by k.
+    #[test]
+    fn quad_children_ring_is_rotated_by_child_index() {
+        let mut d = Detail::default();
+        d.add_points(4);
+        d.add_poly(&[0, 1, 2, 3], true);
+        let out = cook(&*new(), d, &with(1, 0)).expect("cooks");
+        let ids =
+            |q: usize| out.vertex_point[out.prims[q].verts.start as usize..out.prims[q].verts.end as usize].to_vec();
+        assert_eq!(
+            (ids(0), ids(1), ids(2), ids(3)),
+            (vec![0, 5, 4, 8], vec![5, 1, 6, 4], vec![4, 6, 2, 7], vec![8, 4, 7, 3])
         );
     }
     #[test]

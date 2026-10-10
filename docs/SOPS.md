@@ -61,7 +61,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | smooth | partial (sop-smooth) | `smooth.json` | ok |
 | sort | shipped (sop-sort) | `sort.json` | ok |
 | sphere | shipped (sop-sphere) | via `convert.json` | ok |
-| subdivide | partial (sop-subdivide) | `subdivide.json` | ok |
+| subdivide | shipped (sop-subdivide) | `subdivide.json` | ok |
 | sweep | shipped (sop-sweep) | `sweep.json` | ok |
 | switch | shipped (sop-switch) | `switch.json` | ok |
 | twist | shipped (sop-twist) | `twist.json` | ok |
@@ -71,5 +71,5 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | wrangle | shipped (sop-wrangle) | `wrangle.json` | ok |
 | xform | shipped (sop-transform) | via `boolean.json` | ok |
 
-Totals: 63 SOPs · 63 covered (37 dedicated + 26 via) · parity 52 shipped / 11 partial / 0 planned / 0 no-row · renders 44/44 exit 0.
+Totals: 63 SOPs · 63 covered (37 dedicated + 26 via) · parity 53 shipped / 10 partial / 0 planned / 0 no-row · renders 44/44 exit 0.
 Gaps: 0 SOP w/o example. Partial = ledger `status=partial`, see `notes` in ledger.
