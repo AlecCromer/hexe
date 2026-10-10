@@ -21,6 +21,7 @@ def src_nsphere(net):
 # name: (source builder, convert parms)
 CASES = {
     "sphere_lod05": (src_sphere, {"fromtype": "sphere", "totype": "poly", "lodu": 0.5, "lodv": 0.5}),
+    "sphere_lod075": (src_sphere, {"fromtype": "sphere", "totype": "poly", "lodu": 0.75, "lodv": 0.75}),
     "sphere_lod1": (src_sphere, {"fromtype": "sphere", "totype": "poly", "lodu": 1, "lodv": 1}),
     "sphere_lod2": (src_sphere, {"fromtype": "sphere", "totype": "poly", "lodu": 2, "lodv": 2}),
     "sphere_xf_lod05": (lambda n: src_sphere(n, (2, 3, 4), (1, 2, 3)), {"fromtype": "sphere", "totype": "poly", "lodu": 0.5, "lodv": 0.5}),

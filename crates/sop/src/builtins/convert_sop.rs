@@ -71,6 +71,10 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("lodu", ParamValue::F(1.0)).label("LOD U (Columns x)").range(0.1, 8.0),
         ParamSpec::new("lodv", ParamValue::F(1.0)).label("LOD V (Rows x)").range(0.1, 8.0),
         ParamSpec::new("capfan", ParamValue::B(false)).label("Tube Caps As Pole Fans"),
+        ParamSpec::new("spheremode", ParamValue::Menu(0)).label("Sphere Tessellation").menu(&[
+            ("icosphere", "Icosphere (Houdini)"),
+            ("latlong", "Lat-long grid"),
+        ]),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -183,6 +187,83 @@ fn unit_shape(
     (pts, faces)
 }
 
+/// Houdini's Sphere-prim tessellation: a frequency-`f` geodesic icosphere (`f = max(1, floor(3 * lodu))`, `lodv` unused),
+/// poles on local -Z / +Z, `10 f^2 + 2` points, `20 f^2` triangles. ORDER (hython-measured, parity/ref/convert/sphere_*.topo):
+/// the 20 base triangles in the table order; each lattice point `(r, c)` (row `r` from the apex = last base corner, `c` from the
+/// corner-1 side) is numbered on FIRST VISIT in (r, c) row-major order, base triangle by base triangle; per triangle all
+/// "up" tris (row-major, `[(r+1,c+1), (r+1,c), (r,c)]`) then all "down" tris (rows 1.., `[(r,c+1), (r+1,c+1), (r,c)]`).
+/// Edge points = slerp of the two base corners; interior points = normalised barycentric sum.
+fn icosphere(f: usize) -> (Vec<V3>, Vec<Vec<usize>>) {
+    const FACES: [[usize; 3]; 20] = [
+        [2, 1, 0], [3, 2, 0], [4, 3, 0], [5, 4, 0], [1, 5, 0], [6, 5, 1], [7, 4, 5], [8, 3, 4], [9, 2, 3], [10, 1, 2],
+        [10, 6, 1], [6, 7, 5], [7, 8, 4], [8, 9, 3], [9, 10, 2], [6, 10, 11], [10, 9, 11], [9, 8, 11], [8, 7, 11], [7, 6, 11],
+    ];
+    let z = 1.0 / 5.0_f64.sqrt();
+    let rr = 2.0 * z;
+    let at = |deg: f64, zz: f64| -> V3 {
+        let a = deg.to_radians();
+        [rr * a.cos(), rr * a.sin(), zz]
+    };
+    let mut base: Vec<V3> = vec![[0.0, 0.0, -1.0]];
+    base.extend((0..5).map(|k| at(90.0 - 72.0 * k as f64, -z)));
+    base.extend((0..5).map(|k| at(126.0 + 72.0 * k as f64, z)));
+    base.push([0.0, 0.0, 1.0]);
+    let dot = |a: &V3, b: &V3| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let mut pts: Vec<V3> = Vec::new();
+    let mut faces: Vec<Vec<usize>> = Vec::new();
+    let mut seen: std::collections::HashMap<Vec<(usize, usize)>, usize> = std::collections::HashMap::new();
+    for t in FACES {
+        let (v0, v1, ap) = (t[0], t[1], t[2]);
+        let mut id: Vec<Vec<usize>> = Vec::with_capacity(f + 1);
+        for r in 0..=f {
+            let mut row = Vec::with_capacity(r + 1);
+            for c in 0..=r {
+                let mut key: Vec<(usize, usize)> =
+                    [(ap, f - r), (v1, r - c), (v0, c)].into_iter().filter(|&(_, w)| w > 0).collect();
+                key.sort_unstable();
+                let next = pts.len();
+                let k = *seen.entry(key.clone()).or_insert(next);
+                if k == next {
+                    let p = match key.as_slice() {
+                        [(a, _)] => base[*a],
+                        [(a, wa), (b, wb)] => {
+                            let (pa, pb) = (base[*a], base[*b]);
+                            let w = dot(&pa, &pb).clamp(-1.0, 1.0).acos();
+                            let (sa, sb) = (((*wa as f64 / f as f64) * w).sin(), ((*wb as f64 / f as f64) * w).sin());
+                            let s = w.sin();
+                            [0, 1, 2].map(|i| (sa * pa[i] + sb * pb[i]) / s)
+                        }
+                        ks => {
+                            let mut s = [0.0; 3];
+                            for (a, w) in ks {
+                                for i in 0..3 {
+                                    s[i] += *w as f64 * base[*a][i];
+                                }
+                            }
+                            let l = dot(&s, &s).sqrt();
+                            s.map(|x| x / l)
+                        }
+                    };
+                    pts.push(p);
+                }
+                row.push(k);
+            }
+            id.push(row);
+        }
+        for r in 0..f {
+            for c in 0..=r {
+                faces.push(vec![id[r + 1][c + 1], id[r + 1][c], id[r][c]]);
+            }
+        }
+        for r in 1..f {
+            for c in 0..r {
+                faces.push(vec![id[r][c + 1], id[r + 1][c + 1], id[r][c]]);
+            }
+        }
+    }
+    (pts, faces)
+}
+
 impl Node<Detail> for Convert {
     fn type_name(&self) -> &'static str {
         OP
@@ -209,6 +290,8 @@ impl Node<Detail> for Convert {
         let (lodu, lodv) = (lod("lodu")?, lod("lodv")?);
         let rows = ((rows as f64 * lodv).round() as usize).clamp(1, MAX_DIM as usize);
         let cols = ((cols as f64 * lodu).round() as usize).clamp(3, MAX_DIM as usize);
+        let ico = menu(p, "spheremode", 1)? == 0;
+        let ico_freq = ((3.0 * lodu + 1e-9).floor() as usize).clamp(1, 24);
         let capfan = p.toggle("capfan").ok_or_else(|| bad("convert: `capfan`: missing or not a toggle"))?;
         let Some(src0) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
         // spline prims -> polys first (density from cols / rows, already scaled by lodu / lodv)
@@ -370,7 +453,8 @@ impl Node<Detail> for Convert {
                     let m = xf.map(f64::from);
                     let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
                         + m[2] * (m[3] * m[7] - m[4] * m[6]);
-                    let (upts, faces) = unit_shape(sphere, taper, closed, capfan, rows, cols);
+                    let (upts, faces) =
+                        if sphere && ico { icosphere(ico_freq) } else { unit_shape(sphere, taper, closed, capfan, rows, cols) };
                     if (rm.point_src.len() + upts.len()) as u64 > MAX_ELEMS
                         || (prims.len() + faces.len()) as u64 > MAX_ELEMS
                     {
@@ -421,7 +505,8 @@ mod tests {
         n.cook(&ctx, &[Arc::new(d)])
     }
     fn defaults() -> ParamSet {
-        testkit::defaults(&*new())
+        // the lat-long path is what the legacy rows/cols tests exercise; icosphere tests set `spheremode` 0
+        testkit::defaults(&*new()).with("spheremode", ParamValue::Menu(1))
     }
     fn shape(kind: PrimKind, at: [f32; 3]) -> Detail {
         let mut d = Detail::default();
@@ -437,6 +522,51 @@ mod tests {
     }
     fn fine() -> ParamSet {
         defaults().with("rows", ParamValue::I(32)).with("cols", ParamValue::I(64))
+    }
+
+    /// Parse a hython `.topo` ref (`P i x y z` / `F i Type ids..`).
+    fn topo(s: &str) -> (Vec<[f64; 3]>, Vec<Vec<u32>>) {
+        let (mut p, mut f) = (Vec::new(), Vec::new());
+        for l in s.lines() {
+            let w: Vec<&str> = l.split_whitespace().collect();
+            match w.first() {
+                Some(&"P") => p.push([w[2].parse().expect("x"), w[3].parse().expect("y"), w[4].parse().expect("z")]),
+                Some(&"F") => f.push(w[3..].iter().map(|x| x.parse().expect("id")).collect()),
+                _ => {}
+            }
+        }
+        (p, f)
+    }
+    fn ico_case(topo_src: &str, lod: f32, rad: [f32; 3], at: [f32; 3], tol: f64) -> f64 {
+        let (rp, rf) = topo(topo_src);
+        let ps = defaults()
+            .with("spheremode", ParamValue::Menu(0))
+            .with("lodu", ParamValue::F(lod))
+            .with("lodv", ParamValue::F(lod));
+        let d = run(shape(PrimKind::Sphere { xform: scaled(rad) }, at), ps).expect("cooks");
+        assert_eq!((d.point_count as usize, d.prim_count() as usize), (rp.len(), rf.len()), "counts");
+        let mut worst = 0.0_f64;
+        for (i, (a, b)) in d.p().iter().zip(&rp).enumerate() {
+            for k in 0..3 {
+                worst = worst.max((f64::from(a[k]) - b[k]).abs());
+            }
+            assert!(worst <= tol, "pt {i}: {a:?} vs {b:?}");
+        }
+        for (i, (pr, rf)) in d.prims.iter().zip(&rf).enumerate() {
+            let ids = &d.vertex_point[pr.verts.start as usize..pr.verts.end as usize];
+            assert_eq!(ids, rf.as_slice(), "prim {i} point order");
+        }
+        worst
+    }
+    #[test]
+    fn houdini_icosphere_order_zero_diff_lod_05_075_1_2_and_xform() {
+        let t = 6e-5;
+        ico_case(include_str!("../../../../parity/ref/convert/sphere_lod05.topo"), 0.5, [1.0; 3], [0.0; 3], t);
+        ico_case(include_str!("../../../../parity/ref/convert/sphere_lod075.topo"), 0.75, [1.0; 3], [0.0; 3], t);
+        ico_case(include_str!("../../../../parity/ref/convert/sphere_lod1.topo"), 1.0, [1.0; 3], [0.0; 3], t);
+        ico_case(include_str!("../../../../parity/ref/convert/sphere_xf_lod05.topo"), 0.5, [2.0, 3.0, 4.0], [1.0, 2.0, 3.0], t);
+        let w = ico_case(include_str!("../../../../parity/ref/convert/sphere_lod2.topo"), 2.0, [1.0; 3], [0.0; 3], 1.0);
+        eprintln!("lod2 worst pos err {w}");
     }
 
     #[test]
