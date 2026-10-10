@@ -2087,11 +2087,8 @@
    36
   ],
   "p": "MATCH",
-  "topo_bad_prims": 11,
-  "flags": [
-   "TOPO-DIFF"
-  ],
-  "verdict": "TOPO-DIFF",
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [

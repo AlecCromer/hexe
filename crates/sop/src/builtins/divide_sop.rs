@@ -69,6 +69,8 @@ struct Divide {
 }
 
 /// Corner-chunk fan over positions in `idx` (indices into the poly's corner list).
+type Corner = (u32, usize);
+
 fn chunk_fan(n: usize, k: usize) -> Vec<Vec<usize>> {
     let mut l: Vec<usize> = (0..n).collect();
     let mut out = Vec::new();
@@ -418,6 +420,7 @@ impl Node<Detail> for Divide {
         let pos = positions(src);
         let mut o = Out::new(src.point_count);
         let mut split = false;
+        let mut deferred: Vec<(usize, Vec<Vec<Corner>>)> = Vec::new();
         for (qi, pr) in src.prims.iter().enumerate() {
             let lo = pr.verts.start as usize;
             let Some(c) = closed_poly_pts(src, pr) else {
@@ -471,9 +474,25 @@ impl Node<Detail> for Divide {
                 continue;
             }
             split = true;
-            for piece in pieces {
+            // Houdini 20.5 order (hython-observed): piece 0 replaces the prim in place, the rest are appended after the
+            // whole pass in REVERSE prim order; a quad's 2nd triangle is the rotation (c,d,a), not (a,c,d).
+            let mut extra = Vec::new();
+            for (pi, mut piece) in pieces.into_iter().enumerate() {
+                if pi > 0 && c.len() == 4 && piece.len() == 3 {
+                    piece.rotate_left(1);
+                }
                 let cs: Vec<(u32, usize)> = piece.into_iter().map(corner).collect();
-                o.emit(qi, &cs)?;
+                if pi == 0 {
+                    o.emit(qi, &cs)?;
+                } else {
+                    extra.push(cs);
+                }
+            }
+            deferred.push((qi, extra));
+        }
+        for (qi, extra) in deferred.iter().rev() {
+            for cs in extra {
+                o.emit(*qi, cs)?;
             }
         }
         if !split {
@@ -537,9 +556,11 @@ mod tests {
         assert_eq!(out.p(), src.p());
         assert!(out.prims.iter().all(|p| p.verts.len() == 3 && p.kind == PrimKind::Poly { closed: true }));
         for q in 0..6 {
-            let (a, b) = (prim_pts(&src, q), (prim_pts(&out, 2 * q), prim_pts(&out, 2 * q + 1)));
+            let a = prim_pts(&src, q);
+            // hython 20.5: first triangles in place (prim order), second triangles appended in reverse prim order as (c,d,a).
+            let b = (prim_pts(&out, q), prim_pts(&out, 11 - q));
             assert_eq!(b.0, vec![a[0], a[1], a[2]]);
-            assert_eq!(b.1, vec![a[0], a[2], a[3]], "winding kept");
+            assert_eq!(b.1, vec![a[2], a[3], a[0]], "winding kept");
         }
     }
 
@@ -560,9 +581,10 @@ mod tests {
         });
         let out = cook(&*new(), d.clone(), &defaults(&*new())).expect("cooks");
         let Some(AttrData::I32(pid)) = out.attr(AttrClass::Prim, "pid").map(|a| &a.data) else { panic!("pid") };
-        assert_eq!(pid, &vec![0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
+        assert_eq!(pid, &vec![0, 1, 2, 3, 4, 5, 5, 4, 3, 2, 1, 0], "in place, then 2nd triangles in reverse prim order");
         let Some(AttrData::F32(vv)) = out.attr(AttrClass::Vertex, "vv").map(|a| &a.data) else { panic!("vv") };
-        assert_eq!(&vv[..6], &[0.0, 1.0, 2.0, 0.0, 2.0, 3.0], "quad 0 corners (0,1,2),(0,2,3)");
+        assert_eq!(&vv[..3], &[0.0, 1.0, 2.0], "quad 0 first triangle (c0,c1,c2)");
+        assert_eq!(&vv[33..], &[2.0, 3.0, 0.0], "quad 0 second triangle (c2,c3,c0) is last");
         // quads fit numsides 4 and are convex: nothing to do, Arc shared
         let a = Arc::new(d);
         assert!(Arc::ptr_eq(&cook_arc(&*new(), &a, &with(true, 4)).expect("cooks"), &a));

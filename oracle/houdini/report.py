@@ -45,7 +45,7 @@ CAUSE = {
     "sop-copytopoints": W("hexe writes copynum (point+prim) when param on, Houdini copytopoints::2.0 writes none"),
     "sop-boolean": "hexe emits prim groups a_only/b_only/seam unconditionally, Houdini only when output toggles on; point/prim ORDER of the result still differs (counts 14/9/42 match)",
     "sop-reverse": "- (Houdini keeps the first vertex of a closed polygon: [1,5,4,0] -> [1,0,4,5]; hexe identical since H32)",
-    "sop-divide": "triangulation order/diagonal: Houdini [1,5,4],[2,6,5],[3,7,6],[0,4,7].. (one tri per quad first); hexe [1,0,4],[1,4,5],[2,1,5].. (fan per quad). Counts 8/12/36 equal, P equal",
+    "sop-divide": "zero-diff since H33: piece 0 replaces the prim in place, later pieces appended in REVERSE prim order, quad 2nd tri = (c,d,a). n>4 polys: Houdini ear order (observed, regular polys) NOT reproduced - hexe still fans",
     "sop-clip": "cut-point order + prim order: Houdini appends the cut points (+x,-z) first, prims start [1,2,3,0]; hexe cut points (-x,-z) first. Point SET equal, counts 8/5/20 equal; no cap (dofill 0 vs capclip DEFERRED); winding now equal (H32)",
     "sop-knife": "same cut-point/prim order difference as clip (shared core); 12/10/40 equal, groups blanked in both",
     "sop-twist": "- (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess)",

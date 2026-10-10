@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 85, STAT-PASS 10, TOPO-DIFF 2, ATTRIB-DIFF 1, ORDER-DIFF 1, HEXE-ERR 1  (N=100)
+Histogram: MATCH 86, STAT-PASS 10, ATTRIB-DIFF 1, ORDER-DIFF 1, HEXE-ERR 1, TOPO-DIFF 1  (N=100)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -40,7 +40,7 @@ Histogram: MATCH 85, STAT-PASS 10, TOPO-DIFF 2, ATTRIB-DIFF 1, ORDER-DIFF 1, HEX
 | sop-curve-nurbs-closed | 5/1/5 | 5/1/5 | MATCH | MATCH |  |
 | sop-curve-poly-open | 5/1/5 | 5/1/5 | MATCH | MATCH |  |
 | sop-delete | 9/2/8 | 9/2/8 | MATCH | MATCH | - (9 pts kept, 2 prims left both) |
-| sop-divide | 8/12/36 | 8/12/36 | MATCH | TOPO-DIFF | triangulation order/diagonal: Houdini [1,5,4],[2,6,5],[3,7,6],[0,4,7].. (one tri per quad first); hexe [1,0,4],[1,4,5],[2,1,5].. (fan per quad). Counts 8/12/36 equal, P equal |
+| sop-divide | 8/12/36 | 8/12/36 | MATCH | MATCH | zero-diff since H33: piece 0 replaces the prim in place, later pieces appended in REVERSE prim order, quad 2nd tri = (c,d,a). n>4 polys: Houdini ear order (observed, regular polys) NOT reproduced - hexe still fans |
 | sop-facet | 24/6/24 | 24/6/24 | ORDER-DIFF | ORDER-DIFF | unique_points: Houdini keeps the original 8 ids on prim 0 and appends the other corners ([1,5,4,0],[2,6,12,20]..); hexe renumbers 4 fresh points per prim |
 | sop-file | 6/8/24 | 6/8/24 | MATCH | MATCH | - |
 | sop-foreach | 6/0/0 | 6/0/0 | MATCH | MATCH | -  (piece order a,b,c merge gives P x=0,3,1,4,2,5 in both) |
