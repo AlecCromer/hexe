@@ -239,6 +239,32 @@ impl<T: Payload> Graph<T> {
         self.live(id).is_some_and(|s| s.cache.is_none())
     }
 
+    /// Houdini `needsToCook()` at `time`: no cache, or the cache is time-sensitive (the node or anything upstream is time dependent)
+    /// and was cooked at another time. `false` for unknown ids.
+    pub fn needs_to_cook(&self, id: NodeId, time: f32) -> bool {
+        self.live(id)
+            .is_some_and(|s| s.cache.as_ref().is_none_or(|c| c.sensitive && c.time.to_bits() != time.to_bits()))
+    }
+
+    /// Houdini `isTimeDependent()`: the node or any node upstream of it is time dependent (known before the first cook).
+    /// Iterative, terminates on cycles. `false` for unknown ids.
+    pub fn is_time_dependent(&self, id: NodeId) -> bool {
+        let mut seen = vec![false; self.slots.len()];
+        let mut stack = vec![id];
+        while let Some(n) = stack.pop() {
+            let Some(flag) = seen.get_mut(n.slot()) else { continue };
+            if std::mem::replace(flag, true) {
+                continue;
+            }
+            let Some(s) = self.live(n) else { continue };
+            if s.node.time_dependent() {
+                return true;
+            }
+            stack.extend(s.inputs.iter().flatten().copied());
+        }
+        false
+    }
+
     fn live(&self, id: NodeId) -> Option<&Slot<T>> {
         self.slots.get(id.slot()).filter(|s| !s.removed)
     }

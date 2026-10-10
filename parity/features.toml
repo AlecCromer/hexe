@@ -639,8 +639,16 @@ id = "core.cook-model"
 title = "SOP cook model (lazy, dirty flags, time dependence)"
 area = "A"
 tier = "P0"
-status = "planned"
-notes = "spec/behaviour/cook-model.md; recalled not observed (hython blocked); observed_in 20.5.487 (docs only)"
+status = "shipped"
+commands = ["cook"]
+evidence = [
+  "crates/sop/src/cook_model_oracle.rs::engine_follows_houdinis_recorded_cook_model_step_by_step",
+  "crates/sop/src/cook_model_oracle.rs::time_dependence_propagates_downstream_and_frame_change_dirties_only_that_cone",
+  "crates/sop/src/cook_model_oracle.rs::needs_to_cook_and_is_time_dependent_hostile_ids",
+  "crates/graph/src/graph.rs::cook_once_then_cached_and_lazy",
+]
+notes = "LAST5: OBSERVED in Houdini 20.5.487 (hython probe oracle/houdini/probe-cook-model.py -> fixtures/core-cook-model/houdini.json, spec/behaviour/cook-model.md Observed table). hexe engine follows every recorded step: pull cook of the whole chain, 2nd cook = no work, edit dirties node + downstream only, upstream edit dirties the cone, frame change leaves static chains alone, time dependence propagates DOWNSTREAM (new Graph::is_time_dependent / Graph::needs_to_cook = hou isTimeDependent / needsToCook), frame change dirties only the time-dependent cone, rewire dirties downstream, cycle refused at connect. DEVIATIONS (measured, pinned): (1) Houdini dirties x+n when a parm is set to the value it already has, hexe keeps the cache (Graph::set_param same value = no-op); (2) Houdini cook(force=True) cooks just that node, hexe has no force cook (demand-driven only); (3) time dependence is a node-type property here (Node::time_dependent), no per-parm expressions. UNVERIFIED: error-node output (empty vs last good), bypass flag, unflagged-subgraph cooking, cookCount absolute values."
+
 # --- wave2/sop-scaffold: SOP registry + scene JSON + hexe-cli cook (serial prerequisite of the SOP lanes)
 [[feature]]
 id = "sop-registry"

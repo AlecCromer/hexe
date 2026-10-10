@@ -1,6 +1,6 @@
 # Behaviour: SOP cook model
 
-feature ids: core.cook · observed_in: Houdini 20.5.487 (NOT observed; hython blocked, no license)
+feature ids: core.cook · observed_in: Houdini 20.5.487 (hython probe `oracle/houdini/probe-cook-model.py` -> `fixtures/core-cook-model/houdini.json`, 2026-10-10)
 
 ## Provenance
 `[R]` = recalled from public Houdini docs/knowledge, UNVERIFIED. `[?]` = to probe. Probe recipe: `PROBE.md` (`n.cook()`, `n.needsToCook()`, `n.isTimeDependent()`).
@@ -43,3 +43,20 @@ DESIGN §Graph: `Graph::cook(id,time)` cached unless dirty or time-dependent; `s
 
 ## Open questions
 - [ ] [?] value of `needsToCook()` after param set to identical value; error-node output; unflagged-node cooking in hython.
+
+
+## Observed (hython 20.5.487, chain box -> xform(tx) -> null)
+| step | needsToCook b/x/n | note |
+|---|---|---|
+| fresh | T/T/T | cookCount 0 |
+| cook tail | F/F/F | whole chain cooked once (pull); 2nd cook = no work |
+| parm set to SAME value | F/T/T | [O] dirties node + downstream (hexe: no-op, DEVIATION) |
+| parm set new value | F/T/T | upstream stays clean |
+| `cook(force=True)` on tail | - | cooks ONLY that node (x count unchanged) |
+| frame change, static chain | F/F/F | cache reused |
+| `$F` on x | F/T/T | isTimeDependent b F, x T, n T (propagates DOWNSTREAM, known before cook) |
+| frame change, time-dep | F/T/T | box stays clean |
+| upstream parm set | T/T/T | whole cone below dirtied |
+| input disconnect / reconnect | F/T/T | downstream dirtied |
+| connect forming a cycle | - | raises `hou.OperationFailed` at connect |
+Test: `crates/sop/src/cook_model_oracle.rs::engine_follows_houdinis_recorded_cook_model_step_by_step` (+ `time_dependence_propagates_downstream_and_frame_change_dirties_only_that_cone`).

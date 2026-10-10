@@ -1,0 +1,359 @@
+{
+ "case": "core-cook-model",
+ "houdini": "20.5.487",
+ "chain": "box b -> xform x (tx) -> null n",
+ "observations": [
+  {
+   "step": "fresh",
+   "b": {
+    "needs": true,
+    "count": 0,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 0,
+    "timedep": false
+   },
+   "n": {
+    "needs": true,
+    "count": 0,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cook_tail",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cook_tail_again",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   }
+  },
+  {
+   "step": "set_same_value",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 1,
+    "timedep": false
+   },
+   "n": {
+    "needs": true,
+    "count": 1,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cook_after_same_value",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 2,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 2,
+    "timedep": false
+   }
+  },
+  {
+   "step": "set_new_value",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 2,
+    "timedep": false
+   },
+   "n": {
+    "needs": true,
+    "count": 2,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cook_after_new_value",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 3,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 3,
+    "timedep": false
+   }
+  },
+  {
+   "step": "force_cook_tail",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 3,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 4,
+    "timedep": false
+   }
+  },
+  {
+   "step": "frame_change_static_chain",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 3,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 4,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cook_after_frame_change",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 3,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 4,
+    "timedep": false
+   }
+  },
+  {
+   "step": "expr_F_set",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 3,
+    "timedep": true
+   },
+   "n": {
+    "needs": true,
+    "count": 4,
+    "timedep": true
+   }
+  },
+  {
+   "step": "cook_with_expr",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 4,
+    "timedep": true
+   },
+   "n": {
+    "needs": false,
+    "count": 5,
+    "timedep": true
+   }
+  },
+  {
+   "step": "frame_change_timedep",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 4,
+    "timedep": true
+   },
+   "n": {
+    "needs": true,
+    "count": 5,
+    "timedep": true
+   }
+  },
+  {
+   "step": "cook_after_timedep_frame",
+   "b": {
+    "needs": false,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 5,
+    "timedep": true
+   },
+   "n": {
+    "needs": false,
+    "count": 6,
+    "timedep": true
+   }
+  },
+  {
+   "step": "timedep_values",
+   "x_frame6": 5.5,
+   "x_frame7": 6.5
+  },
+  {
+   "step": "upstream_parm_set",
+   "b": {
+    "needs": true,
+    "count": 1,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 7,
+    "timedep": false
+   },
+   "n": {
+    "needs": true,
+    "count": 8,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cook_after_upstream",
+   "b": {
+    "needs": false,
+    "count": 2,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 8,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 9,
+    "timedep": false
+   }
+  },
+  {
+   "step": "disconnect_input",
+   "b": {
+    "needs": false,
+    "count": 2,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 8,
+    "timedep": false
+   },
+   "n": {
+    "needs": true,
+    "count": 9,
+    "timedep": false
+   }
+  },
+  {
+   "step": "reconnect_input",
+   "b": {
+    "needs": false,
+    "count": 2,
+    "timedep": false
+   },
+   "x": {
+    "needs": true,
+    "count": 10,
+    "timedep": false
+   },
+   "n": {
+    "needs": true,
+    "count": 10,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cook_after_reconnect",
+   "b": {
+    "needs": false,
+    "count": 2,
+    "timedep": false
+   },
+   "x": {
+    "needs": false,
+    "count": 11,
+    "timedep": false
+   },
+   "n": {
+    "needs": false,
+    "count": 11,
+    "timedep": false
+   }
+  },
+  {
+   "step": "cycle_connect",
+   "raised": true,
+   "type": "OperationFailed"
+  }
+ ]
+}

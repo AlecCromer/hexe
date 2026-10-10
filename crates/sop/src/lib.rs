@@ -10,6 +10,8 @@
     clippy::unreachable
 )]
 mod builtins;
+#[cfg(test)]
+mod cook_model_oracle;
 mod registry;
 mod scene;
 pub use builtins::render_frames;
