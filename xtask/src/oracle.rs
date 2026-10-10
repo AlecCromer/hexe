@@ -10,6 +10,7 @@
 //! `stat`: point count exact, bbox min/max per axis within 2 % of the expected extent, mean nearest-neighbour distance +-5 %, `P` std per axis +-5 %,
 //! (class, name) attribute set exact. `stat-disp` (needs `base = "<file>"`, the cook's input): point count exact, mean and std of |P - base| +-5 %,
 //! attribute set exact. Mirror of `oracle/houdini/statoracle.py`; keep both tolerance sets in sync.
+//! `stat-uv` (UV layout, parity/README.md): island count exact, per-island uv bbox size and total uv area (coverage) +-5 %, layout extent +-5 %; packing order not compared.
 //! `cargo xtask oracle --houdini [compare.py args]`: the REAL-Houdini comparison instead (AGENTS section 2 python exception):
 //! builds the debug `hexe-cli`, runs `oracle/houdini/compare.py --hexe-cli <it> [args]` (hexe cook of every
 //! `fixtures/sop-*/scene.json` vs the committed `houdini.json`; hython only loads hexe's `.geo` back) then
@@ -220,6 +221,96 @@ pub fn stat_mismatch(actual: &[u8], expected: &[u8], base: Option<&[u8]>) -> Res
     }
     Ok((!bad.is_empty()).then(|| bad.join("; ")))
 }
+/// `stat-uv` tolerance (relative, per island size / coverage). Keep in sync with parity/README.md.
+pub const STAT_UV_TOL: f64 = 0.05;
+fn uv_islands(d: &hexe_geo::Detail) -> Result<(Vec<[f64; 4]>, f64), String> {
+    use hexe_geo::{AttrClass, AttrData};
+    let uv: Vec<[f32; 2]> = match d.attr(AttrClass::Vertex, "uv").map(|a| &a.data) {
+        Some(AttrData::V3(v)) => v.iter().map(|q| [q[0], q[1]]).collect(),
+        Some(AttrData::V2(v)) => v.clone(),
+        _ => return Err("stat-uv: no vertex uv".into()),
+    };
+    let n = d.prims.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    fn find(p: &mut [usize], mut i: usize) -> usize {
+        while p[i] != i {
+            p[i] = p[p[i]];
+            i = p[i];
+        }
+        i
+    }
+    let mut seen: std::collections::HashMap<(u32, [u32; 2]), usize> = std::collections::HashMap::new();
+    let mut corners: Vec<Vec<[f64; 2]>> = Vec::with_capacity(n);
+    for (qi, pr) in d.prims.iter().enumerate() {
+        let mut c = Vec::new();
+        for v in pr.verts.start..pr.verts.end {
+            let (Some(&pt), Some(u)) = (d.vertex_point.get(v as usize), uv.get(v as usize)) else { continue };
+            c.push([f64::from(u[0]), f64::from(u[1])]);
+            let key = (pt, [u[0].to_bits(), u[1].to_bits()]);
+            match seen.get(&key) {
+                Some(&o) => {
+                    let (a, b) = (find(&mut parent, o), find(&mut parent, qi));
+                    parent[a.max(b)] = a.min(b);
+                }
+                None => {
+                    seen.insert(key, qi);
+                }
+            }
+        }
+        corners.push(c);
+    }
+    let mut boxes: std::collections::BTreeMap<usize, [f64; 4]> = std::collections::BTreeMap::new();
+    let mut area = 0.0;
+    for (qi, c) in corners.iter().enumerate() {
+        if c.is_empty() {
+            continue;
+        }
+        let r = find(&mut parent, qi);
+        let b = boxes.entry(r).or_insert([f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY]);
+        for q in c {
+            *b = [b[0].min(q[0]), b[1].min(q[1]), b[2].max(q[0]), b[3].max(q[1])];
+        }
+        let m = c.len();
+        area += (0..m).map(|k| c[k][0] * c[(k + 1) % m][1] - c[(k + 1) % m][0] * c[k][1]).sum::<f64>().abs() / 2.0;
+    }
+    Ok((boxes.into_values().collect(), area))
+}
+/// `None` = same UV layout statistics: island count exact, every island's bbox width and height (islands in first-prim order) within `STAT_UV_TOL`,
+/// layout extent likewise, total uv area (coverage) within `STAT_UV_TOL`. Placement itself (packing order) is NOT compared.
+pub fn stat_uv_mismatch(actual: &[u8], expected: &[u8]) -> Result<Option<String>, String> {
+    let parse = |who: &str, b: &[u8]| hexe_geo::read_geo(b).map_err(|e| format!("{who}: {e}"));
+    let ((ba, ca), (be, ce)) = (uv_islands(&parse("actual", actual)?)?, uv_islands(&parse("expected", expected)?)?);
+    let mut bad: Vec<String> = Vec::new();
+    if ba.len() != be.len() {
+        bad.push(format!("island count {} != {}", ba.len(), be.len()));
+        return Ok(Some(bad.join("; ")));
+    }
+    for (i, (a, e)) in ba.iter().zip(&be).enumerate() {
+        let (wa, ha, we, he) = (a[2] - a[0], a[3] - a[1], e[2] - e[0], e[3] - e[1]);
+        if !rel_ok(we, wa, STAT_UV_TOL) || !rel_ok(he, ha, STAT_UV_TOL) {
+            bad.push(format!("island {i} size {wa:.4}x{ha:.4} vs {we:.4}x{he:.4}"));
+        }
+    }
+    let ext = |b: &[[f64; 4]]| {
+        b.iter().fold([f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY], |m, q| {
+            [m[0].min(q[0]), m[1].min(q[1]), m[2].max(q[2]), m[3].max(q[3])]
+        })
+    };
+    let (xa, xe) = (ext(&ba), ext(&be));
+    if !rel_ok(xe[2] - xe[0], xa[2] - xa[0], STAT_UV_TOL) || !rel_ok(xe[3] - xe[1], xa[3] - xa[1], STAT_UV_TOL) {
+        bad.push(format!(
+            "layout extent {:.4}x{:.4} vs {:.4}x{:.4}",
+            xa[2] - xa[0],
+            xa[3] - xa[1],
+            xe[2] - xe[0],
+            xe[3] - xe[1]
+        ));
+    }
+    if !rel_ok(ce, ca, STAT_UV_TOL) {
+        bad.push(format!("coverage {ca:.4} vs {ce:.4}"));
+    }
+    Ok((!bad.is_empty()).then(|| bad.join("; ")))
+}
 #[cfg(test)]
 pub fn score(compare: &str, actual: &[u8], expected: &[u8]) -> Result<f64, String> {
     score_base(compare, actual, expected, None)
@@ -255,7 +346,14 @@ pub fn score_base(compare: &str, actual: &[u8], expected: &[u8], base: Option<&[
                 }
             }
         }
-        other => Err(format!("unknown compare `{other}` (bytes|json|text-f1|png-psnr|geo|stat|stat-disp)")),
+        "stat-uv" => match stat_uv_mismatch(actual, expected)? {
+            None => Ok(1.0),
+            Some(why) => {
+                eprintln!("oracle stat-uv: {why}");
+                Ok(0.0)
+            }
+        },
+        other => Err(format!("unknown compare `{other}` (bytes|json|text-f1|png-psnr|geo|stat|stat-disp|stat-uv)")),
     }
 }
 
@@ -441,6 +539,34 @@ mod tests {
             c(&["cook", "/c/in", "--out", "/t/out"])
         );
         assert_eq!(expand_cmd(&c(&["--ref={expected}", "{input}"]), i, e, o), c(&["--ref=/c/exp", "/c/in"]));
+    }
+    #[test]
+    fn stat_uv_compares_layout_statistics_not_placement() {
+        // two unit-square polygons on 4 shared-nothing points each = two islands; uv = square scaled by `k`, island 2 placed at x offset `off`
+        let mk = |k: f32, off: f32| {
+            let mut d = hexe_geo::Detail::default();
+            d.add_points(8);
+            *d.p_mut() = (0..8).map(|i| [i as f32, 0.0, 0.0]).collect();
+            d.add_poly(&[0, 1, 2, 3], true);
+            d.add_poly(&[4, 5, 6, 7], true);
+            let uv: Vec<[f32; 3]> = (0..8)
+                .map(|i| {
+                    let (x, y) = ([0.0, 1.0, 1.0, 0.0][i % 4], [0.0, 0.0, 1.0, 1.0][i % 4]);
+                    [x * k + if i >= 4 { off } else { 0.0 }, y * k, 0.0]
+                })
+                .collect();
+            d.add_attr(hexe_geo::Attribute {
+                name: "uv".into(),
+                class: hexe_geo::AttrClass::Vertex,
+                data: hexe_geo::AttrData::V3(uv),
+                type_info: hexe_geo::TypeInfo::None,
+            });
+            hexe_geo::write_geo_json(&d)
+        };
+        let base = mk(0.4, 0.5);
+        assert_eq!(score("stat-uv", &mk(0.4, 0.51), &base).unwrap(), 1.0, "small placement drift is free");
+        assert_eq!(score("stat-uv", &mk(0.405, 0.5), &base).unwrap(), 1.0, "1.25 % size is inside the band");
+        assert_eq!(score("stat-uv", &mk(0.5, 0.5), &base).unwrap(), 0.0, "25 % size fails");
     }
     #[test]
     fn stat_compare_distributions_not_streams() {

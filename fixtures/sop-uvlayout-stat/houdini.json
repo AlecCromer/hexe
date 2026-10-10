@@ -1,0 +1,184 @@
+{
+ "sop": "sop-uvlayout-stat",
+ "houdini": "20.5.487",
+ "note": "box -> uvunwrap tile 3 -> uvlayout padding 0.05 fit. stat-uv oracle: island count, uv bbox per island, coverage +-5 % (layout/packing is not reproduced exactly; detail attrs coverage/numnonpacked are Houdini-only)",
+ "points": 8,
+ "prims": 6,
+ "vertices": 24,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [
+   "uv"
+  ],
+  "detail": [
+   "coverage",
+   "numnonpacked"
+  ]
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ],
+  "vertex:uv": [
+   "Float",
+   3
+  ],
+  "detail:numnonpacked": [
+   "Int",
+   1
+  ],
+  "detail:coverage": [
+   "Float",
+   1
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  -0.5,
+  -0.5,
+  -0.5
+ ],
+ "bbox_max": [
+  0.5,
+  0.5,
+  0.5
+ ],
+ "P": [
+  [
+   -0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "P_all": [
+  [
+   -0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "prim_pts": [
+  [
+   1,
+   5,
+   4,
+   0
+  ],
+  [
+   2,
+   6,
+   5,
+   1
+  ],
+  [
+   3,
+   7,
+   6,
+   2
+  ],
+  [
+   0,
+   4,
+   7,
+   3
+  ],
+  [
+   2,
+   1,
+   0,
+   3
+  ],
+  [
+   5,
+   6,
+   7,
+   4
+  ]
+ ],
+ "prim_closed": [
+  true,
+  true,
+  true,
+  true,
+  true,
+  true
+ ]
+}
