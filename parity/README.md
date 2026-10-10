@@ -14,6 +14,9 @@ Ledger `features.toml` (legend = its header). Oracle = real Houdini 20.5 (hython
 - mean nearest-neighbour distance ±5 %
 - `P` std per axis ±5 % (degenerate axis: ±1e-4 abs)
 - attribute names exact: (class,name) set
+### `stat-uv` (xtask only; no python mirror)
+- uv islands = prims joined by a shared point with bit-identical vertex `uv`; island count exact
+- per-island uv bbox width/height ±5 % (first-prim order), total uv polygon area (coverage) ±5 %, layout extent ±5 %; placement/packing order not compared
 ### `stat-disp`
 - point count exact; mean and std of |P − base| ±5 %; attribute names exact
 
