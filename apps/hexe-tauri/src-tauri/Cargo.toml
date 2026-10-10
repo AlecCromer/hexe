@@ -26,6 +26,7 @@ hexe-core = { workspace = true }
 hexe-geo = { workspace = true }
 hexe-graph = { workspace = true }
 hexe-sop = { workspace = true }
+sop-motion = { workspace = true }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

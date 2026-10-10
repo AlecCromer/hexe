@@ -1390,3 +1390,21 @@ evidence = [
   "crates/sop/src/builtins/polyreduce_sop.rs::example_scene_cooks_and_registry_has_slot",
 ]
 notes = "P1: Garland-Heckbert quadric error metric (per-vertex 4×4 Q from face planes, edge cost = v^T(Q1+Q2)v at optimal v = (Q1+Q2)^{-1}[0,0,0,1], fallback midpoint if singular). Min-heap w/ lazy invalidation. target menu percentage(0, default)|finalcount(1); percentage F 50 (0..=100) OR finalcount I target prim count. preserveboundary B on (default): boundary edges never collapsed, boundary quadric penalty. Normal-flip rejection: skip collapse if any incident face normal flips > 90°. Degenerate faces (<3 distinct corners) removed. Link-condition guard. Attrs: merged points blend (meshutil::rebuild); surviving vertices/prims copy; groups follow. Non-poly prims pass through. NOT modelled (DEFERRED): attribute-seam/UV preservation, symmetry. UNVERIFIED-vs-Houdini: quadric algorithm vs Houdini's (same family, implementation details differ), parm naming, optimal collapse position formula. Example: examples/polyreduce.json. Analytical oracle only (no Houdini oracle: quadric-based, not shortest-edge)."
+
+[[feature]]
+id = "sop-motion"
+title = "Motion SOP [hexe-native]: GAIA Motion physics character clip as a node (no Houdini counterpart)"
+area = "A"
+tier = "N/A"
+status = "shipped"
+commands = ["motion"]
+evidence = [
+  "crates/sop-motion/src/tests.rs::stub_clip_cooks_the_frame_at_time_and_clamps",
+  "crates/sop-motion/src/tests.rs::passes_the_real_cli_flags",
+  "crates/sop-motion/src/tests.rs::cache_hit_skips_python_and_params_change_the_hash",
+  "crates/sop-motion/src/tests.rs::python_failure_surfaces_stderr_and_caches_nothing",
+  "crates/sop-motion/src/tests.rs::hostile_params_are_bad_param_not_panic",
+  "crates/sop-motion/src/tests.rs::integration_real_gaia_motion_push",
+  "apps/hexe-tauri/src-tauri/src/model.rs::palette_lists_the_native_motion_node",
+]
+notes = "hexe-native (tag): Hexe-only node, not parity; no Houdini oracle. Crate sop-motion (not a hexe-sop builtin: registered by the Tauri app via model.rs::app_registry; hexe-cli/hexe_sop::registry() do NOT know `motion` yet). Params scene menu stand|push|leg_hit|fall_from_height (gaia_motion/scenes.py:57), impulse_ns F + impulse_dir V3 (world Z-up, normalised, -> --push-impulse x y z), impulse_body, frames, fps (clip fps for time->frame, default 30), python_bin, motion_root (cwd of the spawn), cache_dir, timeout_s. Cook = python -m gaia_motion.cli run --scene --frames --out --push-body --push-impulse --up-axis y (cli.py:20-38), clip cached by hash(scene, impulse vec, body, frames) in ~/.gaia/cache/hexe/motion/<hash>/ (tmp run dir + atomic rename, .ok marker), output = geo/frame.%04d.geo at round(time*fps) clamped (export.py:48-54), 24-point body cloud. Python non-zero exit / timeout / missing frame -> CookError::Failed with stderr tail. Unit tests use fixtures/motion/stub.sh (AGENTS.md section 2: no .py in repo, so the fake python is a POSIX sh script). NOT modelled: push_t0/push_duration/drop_height/physics flags, BVH output, skinned mesh (only the point cloud exists upstream). UNVERIFIED: default python_bin ~/projects/gaia-motion/.venv/bin/python does not exist on this box (integration test falls back to ~/.gaia/cache/gaia-motion/venv/bin/python); behaviour quality of the sim is gaia-motion's own caveat (sim2sim marginal)."

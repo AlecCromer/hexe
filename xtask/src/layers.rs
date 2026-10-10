@@ -40,6 +40,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("graph", Class::Layer(1)),
     ("vex", Class::Standalone(0)),
     ("sop", Class::Layer(2)),
+    ("sop-motion", Class::Layer(2)),
     // L1 formats · L2 model · L3 services · L4 features · L5 interaction · L6 engine · L7 platform/ui: add rows here
     // ("testkit", Class::Testkit),
     ("cli", Class::Exempt),

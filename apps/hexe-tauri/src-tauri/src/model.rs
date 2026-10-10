@@ -158,6 +158,13 @@ struct ClipNode {
     pos: [f32; 2],
 }
 
+/// Built-in SOPs + the hexe-native node crates (`sop-motion`). The node palette (`list_node_types`) is this registry.
+pub fn app_registry() -> Registry {
+    let mut r = hexe_sop::registry();
+    r.register(sop_motion::TYPE_NAME, sop_motion::spec, sop_motion::new);
+    r
+}
+
 /// Copied nodes: type, original name, param values, position; edges are index pairs `(from, to, input)` inside the set.
 #[derive(Clone, Debug)]
 struct Clip {
@@ -169,7 +176,7 @@ impl Default for Session {
     fn default() -> Self {
         Session {
             graph: Graph::new(),
-            reg: hexe_sop::registry(),
+            reg: app_registry(),
             pos: BTreeMap::new(),
             last: None,
             sets: Vec::new(),
@@ -979,7 +986,20 @@ mod tests {
         assert_eq!(labels, ["Connected Components", "Individual Elements", "Groups"]);
         assert_eq!(split.menu[1].value, 1);
         assert!(t.iter().flat_map(|n| &n.params).filter(|p| p.kind == "menu").all(|p| !p.menu.is_empty()));
-        assert_eq!(t.iter().map(|n| n.ty.as_str()).collect::<Vec<_>>().len(), hexe_sop::registry().type_names().len());
+        assert_eq!(t.iter().map(|n| n.ty.as_str()).collect::<Vec<_>>().len(), app_registry().type_names().len());
+    }
+
+    /// hexe-native `motion` (sop-motion) is in the palette with its scene menu, though it is not a `hexe_sop` builtin.
+    #[test]
+    fn palette_lists_the_native_motion_node() {
+        assert!(!hexe_sop::registry().type_names().contains(&"motion"));
+        let t = Session::default().list_node_types();
+        let m = t.iter().find(|n| n.ty == "motion").expect("motion in palette");
+        assert!(m.inputs.is_empty());
+        let scene = m.params.iter().find(|p| p.name == "scene").expect("scene param");
+        assert_eq!(scene.kind, "menu");
+        let labels: Vec<&str> = scene.menu.iter().map(|e| e.label.as_str()).collect();
+        assert_eq!(labels, ["Stand", "Push", "Leg Hit", "Fall From Height"]);
     }
 
     #[test]

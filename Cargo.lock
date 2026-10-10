@@ -1256,6 +1256,7 @@ dependencies = [
  "hexe-sop",
  "serde",
  "serde_json",
+ "sop-motion",
  "tauri",
  "tauri-build",
 ]
@@ -2892,6 +2893,14 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "sop-motion"
+version = "0.1.0"
+dependencies = [
+ "hexe-geo",
+ "hexe-graph",
 ]
 
 [[package]]
