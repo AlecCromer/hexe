@@ -71,10 +71,9 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("lodu", ParamValue::F(1.0)).label("LOD U (Columns x)").range(0.1, 8.0),
         ParamSpec::new("lodv", ParamValue::F(1.0)).label("LOD V (Rows x)").range(0.1, 8.0),
         ParamSpec::new("capfan", ParamValue::B(false)).label("Tube Caps As Pole Fans"),
-        ParamSpec::new("spheremode", ParamValue::Menu(0)).label("Sphere Tessellation").menu(&[
-            ("icosphere", "Icosphere (Houdini)"),
-            ("latlong", "Lat-long grid"),
-        ]),
+        ParamSpec::new("spheremode", ParamValue::Menu(0))
+            .label("Sphere Tessellation")
+            .menu(&[("icosphere", "Icosphere (Houdini)"), ("latlong", "Lat-long grid")]),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -195,8 +194,26 @@ fn unit_shape(
 /// Edge points = slerp of the two base corners (exact); interior points = normalised mean of the 3 lattice-line slerps (exact for f<=3, <=7e-3 at f=6: Houdini's interior law is not a plain slerp/barycentric blend).
 fn icosphere(f: usize) -> (Vec<V3>, Vec<Vec<usize>>) {
     const FACES: [[usize; 3]; 20] = [
-        [2, 1, 0], [3, 2, 0], [4, 3, 0], [5, 4, 0], [1, 5, 0], [6, 5, 1], [7, 4, 5], [8, 3, 4], [9, 2, 3], [10, 1, 2],
-        [10, 6, 1], [6, 7, 5], [7, 8, 4], [8, 9, 3], [9, 10, 2], [6, 10, 11], [10, 9, 11], [9, 8, 11], [8, 7, 11], [7, 6, 11],
+        [2, 1, 0],
+        [3, 2, 0],
+        [4, 3, 0],
+        [5, 4, 0],
+        [1, 5, 0],
+        [6, 5, 1],
+        [7, 4, 5],
+        [8, 3, 4],
+        [9, 2, 3],
+        [10, 1, 2],
+        [10, 6, 1],
+        [6, 7, 5],
+        [7, 8, 4],
+        [8, 9, 3],
+        [9, 10, 2],
+        [6, 10, 11],
+        [10, 9, 11],
+        [9, 8, 11],
+        [8, 7, 11],
+        [7, 6, 11],
     ];
     let z = 1.0 / 5.0_f64.sqrt();
     let rr = 2.0 * z;
@@ -461,8 +478,11 @@ impl Node<Detail> for Convert {
                     let m = xf.map(f64::from);
                     let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
                         + m[2] * (m[3] * m[7] - m[4] * m[6]);
-                    let (upts, faces) =
-                        if sphere && ico { icosphere(ico_freq) } else { unit_shape(sphere, taper, closed, capfan, rows, cols) };
+                    let (upts, faces) = if sphere && ico {
+                        icosphere(ico_freq)
+                    } else {
+                        unit_shape(sphere, taper, closed, capfan, rows, cols)
+                    };
                     if (rm.point_src.len() + upts.len()) as u64 > MAX_ELEMS
                         || (prims.len() + faces.len()) as u64 > MAX_ELEMS
                     {
@@ -572,8 +592,15 @@ mod tests {
         ico_case(include_str!("../../../../parity/ref/convert/sphere_lod05.topo"), 0.5, [1.0; 3], [0.0; 3], t);
         ico_case(include_str!("../../../../parity/ref/convert/sphere_lod075.topo"), 0.75, [1.0; 3], [0.0; 3], t);
         ico_case(include_str!("../../../../parity/ref/convert/sphere_lod1.topo"), 1.0, [1.0; 3], [0.0; 3], t);
-        ico_case(include_str!("../../../../parity/ref/convert/sphere_xf_lod05.topo"), 0.5, [2.0, 3.0, 4.0], [1.0, 2.0, 3.0], t);
-        let w = ico_case(include_str!("../../../../parity/ref/convert/sphere_lod2.topo"), 2.0, [1.0; 3], [0.0; 3], 0.01);
+        ico_case(
+            include_str!("../../../../parity/ref/convert/sphere_xf_lod05.topo"),
+            0.5,
+            [2.0, 3.0, 4.0],
+            [1.0, 2.0, 3.0],
+            t,
+        );
+        let w =
+            ico_case(include_str!("../../../../parity/ref/convert/sphere_lod2.topo"), 2.0, [1.0; 3], [0.0; 3], 0.01);
         eprintln!("lod2 worst pos err {w}");
     }
 
