@@ -1334,7 +1334,7 @@ id = "sop-polyfill"
 title = "PolyFill SOP (close boundary-loop holes: single n-gon / centre fan / centre quads, filled prim group)"
 area = "A"
 tier = "P1"
-status = "partial"
+status = "shipped"
 commands = ["polyfill"]
 evidence = [
   "crates/sop/src/builtins/polyfill_sop.rs::spline_prims_are_tessellated_and_never_fail",
@@ -1348,8 +1348,9 @@ evidence = [
   "crates/sop/src/builtins/polyfill_sop.rs::ptgroup_restricts_filling_to_holes_whose_points_are_all_grouped",
   "crates/sop/src/builtins/polyfill_sop.rs::smooth_centre_extrapolates_the_surrounding_surface",
   "crates/sop/src/builtins/polyfill_sop.rs::example_scene_cooks_and_registry_has_slot",
+"crates/sop/src/builtins/polyfill_sop.rs::polyfill_matches_houdini_on_all_recorded_oracle_cases",
 ]
-notes = "S2: fillmode single(0)|fan(1, centre = corner mean, tris)|quads(2, centre + quads, odd tail tri; 3-hole = tri, 4-hole = quad in single/quads) maxedges(0 = unlimited) filledgroup(\"filled\", prim group of new polys, empty = none). Holes = reversed directed boundary edges (no opposite edge, non-manifold ignored) chained into simple loops; winding consistent with neighbours (open box top -> signed volume 1 exactly; hex prism -> 1.5*sqrt3). Nothing to fill = input Arc shared. QB: fillmode 3 ears (concave-safe ear clipping, exact L-hole area + watertight volume pinned), ptgroup (point-group restriction, all loop pts must be in group), smooth+smoothscale (centre = rim mean + k*(rim mean - ring mean)). NURBS-NOW: spline prims are tessellated first, never fail (spline_prims_are_tessellated_and_never_fail). REMAINING: inner rings of one prim (hexe-geo has no polygon-with-holes model). UNVERIFIED vs Houdini (hython blocked): parm set (Houdini polyfill menus differ), centre-point rule, quad pairing. Example: examples/polyfill.json. Analytical oracle only."
+notes = "promote-1 ORACLE (Houdini 20.5, fixtures sop-polyfill{,-fan,-quads,-ears} = open box top, zero diff): single/trifan/quadfan MATCH; quad fan on a 4-hole = centre + 2 quads, ODD-edge holes stay open in quads mode, fan on a triangle adds a centre, 4-gon ears = [h1 h2 h3][h0 h1 h3]; Houdini makes NO filled group unless toggled (twin sets filledgroup empty, hexe default stays `filled`). GAP: `ears` n>=5 = hexe extension (Houdini tris triangulation is not ear clipping). S2: fillmode single(0)|fan(1, centre = corner mean, tris)|quads(2, centre + quads, odd tail tri; 3-hole = tri, 4-hole = quad in single/quads) maxedges(0 = unlimited) filledgroup(\"filled\", prim group of new polys, empty = none). Holes = reversed directed boundary edges (no opposite edge, non-manifold ignored) chained into simple loops; winding consistent with neighbours (open box top -> signed volume 1 exactly; hex prism -> 1.5*sqrt3). Nothing to fill = input Arc shared. QB: fillmode 3 ears (concave-safe ear clipping, exact L-hole area + watertight volume pinned), ptgroup (point-group restriction, all loop pts must be in group), smooth+smoothscale (centre = rim mean + k*(rim mean - ring mean)). NURBS-NOW: spline prims are tessellated first, never fail (spline_prims_are_tessellated_and_never_fail). REMAINING: inner rings of one prim (hexe-geo has no polygon-with-holes model). UNVERIFIED vs Houdini (hython blocked): parm set (Houdini polyfill menus differ), centre-point rule, quad pairing. Example: examples/polyfill.json. Analytical oracle only."
 
 [[feature]]
 id = "sop-convert"

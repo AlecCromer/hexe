@@ -49,7 +49,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | peak | shipped (sop-peak) | `peak.json` | ok |
 | polybevel | partial (sop-polybevel) | `polybevel.json` | ok |
 | polyextrude | shipped (sop-polyextrude) | `polyextrude.json` | ok |
-| polyfill | partial (sop-polyfill) | `polyfill.json` | ok |
+| polyfill | shipped (sop-polyfill) | `polyfill.json` | ok |
 | polyreduce | partial (sop-polyreduce) | `polyreduce.json` | ok |
 | ray | shipped (sop-ray) | `ray.json` | ok |
 | resample | shipped (sop-resample) | via `curves.json` | ok |

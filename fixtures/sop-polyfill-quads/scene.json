@@ -1,0 +1,60 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "top",
+   "type": "group",
+   "params": {
+    "groupname": "top",
+    "grouptype": 1,
+    "normal": true,
+    "dir": [
+     0,
+     1,
+     0
+    ],
+    "angle": 10
+   }
+  },
+  {
+   "name": "hole",
+   "type": "blast",
+   "params": {
+    "group": "top",
+    "grouptype": 1
+   }
+  },
+  {
+   "name": "polyfill1",
+   "type": "polyfill",
+   "params": {
+    "fillmode": 2,
+    "filledgroup": ""
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "top",
+   0
+  ],
+  [
+   "top",
+   0,
+   "hole",
+   0
+  ],
+  [
+   "hole",
+   0,
+   "polyfill1",
+   0
+  ]
+ ],
+ "display": "polyfill1"
+}

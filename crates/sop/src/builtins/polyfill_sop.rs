@@ -7,8 +7,8 @@
 //!   left open. Each loop is a hole, filled with the winding that is consistent with its neighbours (the filled mesh keeps
 //!   one orientation, a watertight outward shell stays outward).
 //! * `fillmode` menu `single` (0, default: one n-gon per hole) | `fan` (1: new centre point = corner mean, triangles
-//!   `[c, v_i, v_i+1]`) | `quads` (2: new centre, quads `[c, v_2k, v_2k+1, v_2k+2]`, odd tail = one triangle). A 3-corner hole is
-//!   always one triangle; a 4-corner hole is one quad in `single` / `quads`.
+//!   `[c, v_i, v_i+1]`) | `quads` (2: new centre, quads `[c, v_2k, v_2k+1, v_2k+2]`; odd-edge holes stay open = Houdini quad fan). A
+//!   3-corner hole is one triangle in `single` / `ears` (fan adds a centre, quads leaves it open).
 //! * `maxedges` I 0: holes with more boundary edges than this are skipped (0 = no limit). `filledgroup` S `filled`: PRIM group of
 //!   the new polys (empty = none; no whitespace). Nothing to fill = the input `Arc` is shared.
 //! * Everything else untouched; new points and vertices default-fill their attributes (the centre point gets only `P`).
@@ -126,7 +126,9 @@ fn ear_clip(h: &[u32], pos: &[V3]) -> Vec<[u32; 3]> {
     let mut out = Vec::with_capacity(h.len().saturating_sub(2));
     while rest.len() > 3 {
         let m = rest.len();
-        let ear = (0..m).find(|&i| {
+        // oracle: Houdini splits a 4-gon h0..h3 as [h1 h2 h3] then [h0 h1 h3] (ear search starts at corner 2)
+        let start = if m == 4 { 2 } else { 0 };
+        let ear = (0..m).map(|j| (j + start) % m).find(|&i| {
             let (a, b, c) = (rest[(i + m - 1) % m], rest[i], rest[(i + 1) % m]);
             if dot(cross(sub(q(b), q(a)), sub(q(c), q(b))), nrm) <= 0.0 {
                 return false; // reflex or flat corner
@@ -215,7 +217,11 @@ impl Node<Detail> for PolyFill {
         let pos = super::meshutil::positions(&g);
         for h in &todo {
             let n = h.len();
-            let single = n == 3 || mode == MODE_SINGLE || (n == 4 && mode == MODE_QUADS);
+            // oracle (Houdini 20.5): triangles are only filled flat in single/ears modes (fan adds a centre point); quad fan has no odd-edge patches
+            if mode == MODE_QUADS && n % 2 == 1 {
+                continue;
+            }
+            let single = mode == MODE_SINGLE || (n == 3 && mode == MODE_EARS);
             if single {
                 g.add_poly(h, true);
                 continue;
@@ -266,14 +272,8 @@ impl Node<Detail> for PolyFill {
                     g.add_poly(&[c, h[k], h[(k + 1) % n]], true);
                 }
             } else {
-                let mut k = 0;
-                while k < n {
-                    if k + 2 <= n {
-                        g.add_poly(&[c, h[k], h[(k + 1) % n], h[(k + 2) % n]], true);
-                    } else {
-                        g.add_poly(&[c, h[k], h[(k + 1) % n]], true);
-                    }
-                    k += 2;
+                for k in (0..n).step_by(2) {
+                    g.add_poly(&[c, h[k], h[(k + 1) % n], h[(k + 2) % n]], true);
                 }
             }
         }
@@ -438,17 +438,16 @@ mod tests {
         assert!(f.prims[5..].iter().all(|p| p.verts.len() == 3));
         assert_eq!(f.p()[8], [0.0, 0.5, 0.0]);
         assert!((signed_volume(&f) - 1.0).abs() < 1e-9);
-        // a 4-hole is one quad in quads mode
+        // a 4-hole is centre + 2 quads in quads mode (Houdini quad fan)
         let q = run(open_box(), defaults().with("fillmode", ParamValue::Menu(MODE_QUADS))).expect("cooks");
-        assert_eq!((q.point_count, q.prim_count()), (8, 6));
-        // hexagon: centre + 3 quads; pentagon: centre + 2 quads + 1 tri
+        assert_eq!((q.point_count, q.prim_count()), (9, 7));
+        assert_eq!(q.prims[5..].iter().map(|p| p.verts.len()).collect::<Vec<_>>(), vec![4, 4]);
+        // hexagon: centre + 3 quads; pentagon (odd edge count): left open like Houdini
         let hex = run(prism(6), defaults().with("fillmode", ParamValue::Menu(MODE_QUADS))).expect("cooks");
         assert_eq!((hex.point_count, hex.prim_count()), (12 + 2, 6 + 2 * 3));
         assert!(hex.prims[6..].iter().all(|p| p.verts.len() == 4));
         let pent = run(prism(5), defaults().with("fillmode", ParamValue::Menu(MODE_QUADS))).expect("cooks");
-        let sizes: Vec<usize> = pent.prims[5..].iter().map(|p| p.verts.len()).collect();
-        assert_eq!(sizes, vec![4, 4, 3, 4, 4, 3]);
-        assert!(signed_volume(&pent) > 0.0);
+        assert_eq!((pent.point_count, pent.prim_count()), (10, 5));
     }
 
     #[test]
@@ -568,5 +567,28 @@ mod tests {
         let out = g.cook(id, 0.0).expect("example cooks");
         assert!(out.group(AttrClass::Prim, "filled").is_some());
         assert_eq!(crate::registry().create("polyfill").map(|n| n.type_name()), Some("polyfill"));
+    }
+
+    /// promote-1: polyfill equals real Houdini 20.5 on every recorded oracle case (open box top: single, tri fan, quad fan, 4-gon tris);
+    /// point/prim order and prim cycles exact. GAP (not a Houdini twin): `ears` on n>=5 loops (Houdini's tris triangulation is not ear clipping).
+    #[test]
+    fn polyfill_matches_houdini_on_all_recorded_oracle_cases() {
+        use super::super::meshutil::testkit::houdini_twin;
+        macro_rules! case {
+            ($n:literal) => {
+                (
+                    $n,
+                    houdini_twin(
+                        include_str!(concat!("../../../../fixtures/", $n, "/scene.json")),
+                        include_bytes!(concat!("../../../../fixtures/", $n, "/houdini.geo")),
+                    ),
+                )
+            };
+        }
+        for (n, r) in
+            [case!("sop-polyfill"), case!("sop-polyfill-fan"), case!("sop-polyfill-quads"), case!("sop-polyfill-ears")]
+        {
+            assert_eq!(r, Ok(()), "{n}");
+        }
     }
 }
