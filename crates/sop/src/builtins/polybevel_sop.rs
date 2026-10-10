@@ -988,6 +988,28 @@ mod tests {
         let pr = &d.prims[i];
         d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].to_vec()
     }
+    /// KNOWN GAP: layout.rs covers divisions 1..=4 only; 5..=17 refs captured, generic path gives other pt counts.
+    #[test]
+    #[ignore = "polybevel divisions >= 5 not yet Houdini-ordered"]
+    fn houdini_order_zero_diff_on_box_divisions_5_to_17() {
+        let cases = [
+            (include_str!("../../../../parity/ref/polybevel/d5_o10.topo"), 0.1, 5),
+            (include_str!("../../../../parity/ref/polybevel/d6_o10.topo"), 0.1, 6),
+            (include_str!("../../../../parity/ref/polybevel/d7_o10.topo"), 0.1, 7),
+            (include_str!("../../../../parity/ref/polybevel/d8_o10.topo"), 0.1, 8),
+            (include_str!("../../../../parity/ref/polybevel/d9_o10.topo"), 0.1, 9),
+            (include_str!("../../../../parity/ref/polybevel/d10_o10.topo"), 0.1, 10),
+            (include_str!("../../../../parity/ref/polybevel/d11_o10.topo"), 0.1, 11),
+            (include_str!("../../../../parity/ref/polybevel/d12_o10.topo"), 0.1, 12),
+            (include_str!("../../../../parity/ref/polybevel/d13_o10.topo"), 0.1, 13),
+            (include_str!("../../../../parity/ref/polybevel/d16_o10.topo"), 0.1, 16),
+            (include_str!("../../../../parity/ref/polybevel/d17_o10.topo"), 0.1, 17),
+        ];
+        for (topo, o, d) in cases {
+            let worst = diff_vs_houdini(topo, o, d);
+            assert!(worst < 2e-5, "div {d} interior patch err {worst}");
+        }
+    }
     #[test]
     fn houdini_order_zero_diff_on_box_divisions_1_to_4_and_offsets() {
         let cases = [
@@ -998,6 +1020,7 @@ mod tests {
             (include_str!("../../../../parity/ref/polybevel/d3_o10.topo"), 0.1, 3),
             (include_str!("../../../../parity/ref/polybevel/d3_o25.topo"), 0.25, 3),
             (include_str!("../../../../parity/ref/polybevel/d4_o10.topo"), 0.1, 4),
+            (include_str!("../../../../parity/ref/polybevel/d2_o40.topo"), 0.4, 2),
         ];
         for (topo, o, d) in cases {
             let worst = diff_vs_houdini(topo, o, d);
