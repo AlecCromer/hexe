@@ -1,0 +1,47 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "grid",
+   "params": {
+    "size": [
+     6,
+     4,
+     0
+    ],
+    "rows": 4,
+    "cols": 3
+   }
+  },
+  {
+   "name": "op1",
+   "type": "knife",
+   "params": {
+    "origin": [
+     0,
+     0,
+     0
+    ],
+    "dir": [
+     1,
+     0,
+     0.4
+    ],
+    "dist": 0.3,
+    "keep": 2,
+    "seamgroup": "",
+    "abovegroup": "",
+    "belowgroup": ""
+   }
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

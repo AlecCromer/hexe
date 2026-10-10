@@ -411,6 +411,15 @@ mod tests {
             ),
             Ok(())
         );
+        // trio: grid cut by a tilted plane = zero diff (point order via the closing-edge-first mint pre-pass, slot to the piece with more corners)
+        assert_eq!(
+            twin(
+                include_str!("../../../../fixtures/sop-knife-grid/scene.json"),
+                include_bytes!("../../../../fixtures/sop-knife-grid/houdini.geo")
+            ),
+            Ok(())
+        );
+        // tilt: point order now equals Houdini's; 5 of 12 prims still differ (slot choice of 2 split prims + one cycle start)
         assert!(
             twin(
                 include_str!("../../../../fixtures/sop-knife-tilt/scene.json"),

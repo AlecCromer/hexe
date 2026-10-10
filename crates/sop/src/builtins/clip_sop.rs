@@ -276,15 +276,39 @@ pub(super) fn clip_sel(
         }
         if below.is_empty() {
             slots.push((qi, above, true));
-        } else {
+        } else if above.is_empty() {
             slots.push((qi, below, false));
-            if !above.is_empty() {
+        } else {
+            // oracle (knife-grid): the split prim keeps its slot with the piece holding MORE corners, ties -> BELOW; the other is appended
+            let n = |v: &[(PrimKind, Vec<Corner>)]| v.iter().map(|(_, c)| c.len()).sum::<usize>();
+            if n(&above) > n(&below) {
+                slots.push((qi, above, true));
+                appended.push((qi, below, false));
+            } else {
+                slots.push((qi, below, false));
                 appended.push((qi, above, true));
             }
         }
     }
     slots.append(&mut split);
     let mut cuts = Cuts::default();
+    if !clip_layout {
+        // oracle (knife-tilt): cut points are minted in a pre-pass over the source prims, each prim's edges walked CLOSING EDGE FIRST
+        // ((n-1,0), (0,1), ..., (n-2,n-1)), instead of while emitting
+        for (qi, pr) in src.prims.iter().enumerate() {
+            let Some(vp) = prim_vpts(src, pr, np) else { continue };
+            if sel.is_some_and(|s| !s.get(qi).copied().unwrap_or(false)) {
+                continue;
+            }
+            let m = vp.len();
+            for k in 0..m {
+                let (a, b) = (vp[(k + m - 1) % m].1, vp[k].1);
+                if matches!((side.get(a), side.get(b)), (Some(&1), Some(&-1)) | (Some(&-1), Some(&1))) {
+                    cuts.get(a, b);
+                }
+            }
+        }
+    }
     let mut emits: Vec<Emit> = Vec::new();
     for (qi, pieces, is_above) in slots.into_iter().chain(appended) {
         if (is_above && !want_above) || (!is_above && !want_below) {
