@@ -1,15 +1,15 @@
 //! Smooth SOP (token `smooth`): implicit Laplacian smoothing of point positions.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: analytical oracle only)
-//! Solves (I + λL)P' = P for each coordinate independently using conjugate gradient,
-//! where L = weighted Laplacian matrix (CSR), λ = strength, iterations = filter quality.
-//! Methods: uniform (equal weights), scale-dominant (edge-length inverse), curvature-dominant
-//! (cotangent weights approximation). `constrainboundary`: boundary points (edges used by
-//! exactly one closed poly) kept at their original positions (rows zeroed, diagonal = 1).
+//! # Semantics (Houdini smooth::2.0 model, fitted vs hython 20.5; see `parity/ref/smooth-probes/`)
+//! `W = D^-1 A` (uniform: 1 per distinct edge; scale/curvature weight the edges, UNVERIFIED vs Houdini),
+//! `M = I - W` with the rows of pinned points zeroed, `q = min(filterquality, 5)`,
+//! `K = diag(M^q)^-1 M^q` (rows scaled so the diagonal is 1), result solves `(I + strength*K) x = P` per channel
+//! (BiCGSTAB, rel tol 1e-12; Houdini's own solve stops ~1e-5 relative residual). `constrainboundary`: boundary points
+//! (edges used by exactly one closed poly) keep their positions (= Houdini `unsharededges`; default `none`).
 //!
-//! Params: `method` M 0 (uniform=0, scale=1, curv=2), `strength` F 0.5, `filterquality` I 10
-//! (CG iterations, 0 = input Arc shared, max 1000), `constrainboundary` B false.
-//! Work bound `filterquality * (edges + points) <= 2^31`, else `Failed`.
+//! Params: `method` M 0 (uniform=0, scale=1, curv=2, volume=3), `strength` F 0.5, `filterquality` I 10
+//! (0 = input Arc shared, max 1000, effective cap 5 like Houdini), `constrainboundary` B false.
+//! Work bound `min(filterquality,5) * (edges + points) <= 2^31`, else `Failed`.
 use super::meshutil::{V3, bad, failed, float, int, menu, point_normals, positions, sub, to_f32, toggle};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, Prim, PrimKind, TypeInfo};
@@ -20,6 +20,8 @@ use std::sync::Arc;
 const OP: &str = "smooth";
 const MAX_QUALITY: i32 = 1000;
 const MAX_WORK: u64 = 1 << 31;
+/// Houdini smooth::2.0 clamps `filterquality` at 5 (probed: q=5..20 give bit-identical P).
+const HOUDINI_MAX_Q: usize = 5;
 const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
 
 pub fn spec() -> Vec<ParamSpec> {
@@ -228,156 +230,159 @@ fn find_boundary(d: &Detail) -> Vec<bool> {
     boundary
 }
 
-/// CSR representation: (row_ptr, col_ind, values) for matrix L.
-/// L_ii = -sum(weights of edges from i), L_ij = weight(i,j).
-fn build_laplacian_csr(np: usize, edges: &[(usize, usize, f64)]) -> (Vec<usize>, Vec<usize>, Vec<f64>) {
-    let mut row_ptr = vec![0; np + 1];
-    let mut col_ind = Vec::new();
-    let mut values = Vec::new();
-
-    // Count entries per row
-    for &(a, _, _) in edges {
-        if a < np {
-            row_ptr[a + 1] += 1;
-        }
-    }
-    // Each row also has a diagonal entry
-    for i in 0..np {
-        row_ptr[i + 1] += 1;
-    }
-
-    // Prefix sum
-    for i in 0..np {
-        row_ptr[i + 1] += row_ptr[i];
-    }
-
-    col_ind.resize(row_ptr[np], 0);
-    values.resize(row_ptr[np], 0.0);
-
-    let mut temp_ptr = row_ptr[..np].to_vec();
-
-    // Fill off-diagonal entries
-    for &(a, b, w) in edges {
-        if a < np && b < np {
-            let idx = temp_ptr[a];
-            col_ind[idx] = b;
-            values[idx] = w;
-            temp_ptr[a] += 1;
-        }
-    }
-
-    // Sort each row and compute diagonal
-    for i in 0..np {
-        let lo = row_ptr[i];
-        let hi = temp_ptr[i];
-
-        // Sort the off-diagonal entries in this row
-        let mut row_data: Vec<(usize, f64)> = (lo..hi).map(|k| (col_ind[k], values[k])).collect();
-        row_data.sort_unstable_by_key(|&(j, _)| j);
-
-        // Sum off-diagonal weights for diagonal entry
-        let diag_val: f64 = row_data.iter().map(|&(_, w)| w).sum::<f64>();
-
-        // Insert diagonal at the start (positive: sum of weights)
-        col_ind[lo] = i;
-        values[lo] = diag_val;
-
-        // Insert sorted off-diagonal entries (negative)
-        for (k, &(j, w)) in row_data.iter().enumerate() {
-            col_ind[lo + 1 + k] = j;
-            values[lo + 1 + k] = -w;
-        }
-
-        // Update row_ptr to include diagonal
-        temp_ptr[i] = hi + 1;
-    }
-
-    (row_ptr, col_ind, values)
+/// Houdini smooth::2.0 operator (fitted vs real Houdini 20.5, `parity/ref/smooth-probes/`).
+///
+/// `W = D_w^-1 A_w` (row-normalised edge weights; uniform = 1 per distinct edge), `M = I - W` with the rows of
+/// pinned points zeroed, `K = diag(M^q)^-1 M^q` (each row scaled so its diagonal entry is 1), `q = min(filterquality, 5)`;
+/// the result solves `(I + strength * K) x = P` per channel.
+struct Operator {
+    /// Per row: `(neighbour, W_ij)`.
+    rows: Vec<Vec<(usize, f64)>>,
+    /// Row participates in `M` (not pinned, has weight).
+    active: Vec<bool>,
+    /// `1 / (M^q)_ii` (1 for inactive rows).
+    inv_diag: Vec<f64>,
+    q: usize,
 }
 
-/// Sparse matrix-vector product: y = A * x.
-fn spmv(row_ptr: &[usize], col_ind: &[usize], vals: &[f64], x: &[f64], y: &mut [f64]) {
-    for (i, yi) in y.iter_mut().enumerate() {
-        let (lo, hi) = match (row_ptr.get(i), row_ptr.get(i + 1)) {
-            (Some(&a), Some(&b)) => (a, b),
-            _ => continue,
-        };
-        *yi = (lo..hi)
-            .filter_map(|k| {
-                let j = *col_ind.get(k)?;
-                let v = *vals.get(k)?;
-                let xj = *x.get(j)?;
-                Some(v * xj)
-            })
-            .sum();
+impl Operator {
+    fn new(np: usize, edges: &[(usize, usize, f64)], pinned: &dyn Fn(usize) -> bool, q: usize) -> Self {
+        let mut rows: Vec<Vec<(usize, f64)>> = vec![Vec::new(); np];
+        for &(a, b, w) in edges {
+            if a < np && b < np {
+                rows[a].push((b, w));
+            }
+        }
+        let mut active = vec![false; np];
+        for (i, row) in rows.iter_mut().enumerate() {
+            let ws: f64 = row.iter().map(|e| e.1).sum();
+            if ws > 1e-300 && !pinned(i) {
+                active[i] = true;
+                for e in row.iter_mut() {
+                    e.1 /= ws;
+                }
+            } else {
+                // inactive row: zero row of M (pinned points still appear as columns of active rows)
+                row.iter_mut().for_each(|e| e.1 = 0.0);
+            }
+        }
+        let mut op = Operator { rows, active, inv_diag: vec![1.0; np], q };
+        op.compute_diag();
+        op
     }
-}
 
-/// Compute (I + λL) * x.
-fn apply_system(row_ptr: &[usize], col_ind: &[usize], vals: &[f64], lambda: f64, x: &[f64], y: &mut [f64]) {
-    spmv(row_ptr, col_ind, vals, x, y);
-    for (i, yi) in y.iter_mut().enumerate() {
-        *yi = x.get(i).copied().unwrap_or(0.0) + lambda * (*yi);
+    /// `(M^q)_ii` by pushing the sparse row vector `e_i` through `M` q times (row-vector convention: `r <- r M`).
+    fn compute_diag(&mut self) {
+        let np = self.rows.len();
+        for i in 0..np {
+            if !self.active[i] {
+                continue;
+            }
+            let mut r: HashMap<usize, f64> = HashMap::new();
+            r.insert(i, 1.0);
+            for _ in 0..self.q {
+                let mut next: HashMap<usize, f64> = HashMap::with_capacity(r.len() * 4);
+                for (&k, &v) in &r {
+                    if !self.active[k] {
+                        continue; // M row k is zero
+                    }
+                    *next.entry(k).or_insert(0.0) += v;
+                    for &(j, w) in &self.rows[k] {
+                        *next.entry(j).or_insert(0.0) -= v * w;
+                    }
+                }
+                r = next;
+            }
+            let d = r.get(&i).copied().unwrap_or(0.0);
+            self.inv_diag[i] = if d.abs() > 1e-12 { 1.0 / d } else { 1.0 };
+        }
+    }
+
+    /// `y = M x`.
+    fn apply_m(&self, x: &[f64], y: &mut [f64]) {
+        for (i, yi) in y.iter_mut().enumerate() {
+            *yi = if self.active[i] { x[i] - self.rows[i].iter().map(|&(j, w)| w * x[j]).sum::<f64>() } else { 0.0 };
+        }
+    }
+
+    /// `y = (I + lambda K) x`, `K = diag^-1 M^q`.
+    fn apply_system(&self, lambda: f64, x: &[f64], y: &mut [f64]) {
+        let n = x.len();
+        let mut cur = x.to_vec();
+        let mut tmp = vec![0.0; n];
+        for _ in 0..self.q {
+            self.apply_m(&cur, &mut tmp);
+            std::mem::swap(&mut cur, &mut tmp);
+        }
+        for i in 0..n {
+            y[i] = x[i] + lambda * self.inv_diag[i] * cur[i];
+        }
     }
 }
 
-/// Dot product.
 fn dot(a: &[f64], b: &[f64]) -> f64 {
     a.iter().zip(b).map(|(x, y)| x * y).sum()
 }
 
-/// Conjugate gradient solver for (I + λL)x = b.
-/// Returns solution in x. max_iter iterations, tolerance tol.
-#[allow(clippy::too_many_arguments)]
-fn cg_solve(
-    row_ptr: &[usize],
-    col_ind: &[usize],
-    vals: &[f64],
-    lambda: f64,
-    b: &[f64],
-    x: &mut [f64],
-    max_iter: usize,
-    tol: f64,
-) {
+/// BiCGSTAB for the (non-symmetric) system `(I + lambda K) x = b`; `x` holds the start guess and the best iterate.
+fn bicgstab_solve(op: &Operator, lambda: f64, b: &[f64], x: &mut [f64], max_iter: usize, tol: f64) {
     let n = b.len();
-    let mut r = vec![0.0; n];
-    let mut p = vec![0.0; n];
-    let mut ap = vec![0.0; n];
-
-    // r = b - A*x
-    apply_system(row_ptr, col_ind, vals, lambda, x, &mut ap);
-    for i in 0..n {
-        r[i] = b[i] - ap[i];
-    }
-    p.copy_from_slice(&r);
-
-    let mut rs_old = dot(&r, &r);
-    if rs_old < tol * tol {
+    let bn = dot(b, b).sqrt();
+    if bn < 1e-300 {
         return;
     }
-
+    let mut ax = vec![0.0; n];
+    op.apply_system(lambda, x, &mut ax);
+    let mut r: Vec<f64> = (0..n).map(|i| b[i] - ax[i]).collect();
+    let r0 = r.clone();
+    let (mut rho, mut alpha, mut omega) = (1.0, 1.0, 1.0);
+    let mut v = vec![0.0; n];
+    let mut p = vec![0.0; n];
+    let mut s = vec![0.0; n];
+    let mut t = vec![0.0; n];
     for _ in 0..max_iter {
-        apply_system(row_ptr, col_ind, vals, lambda, &p, &mut ap);
-        let alpha = rs_old / dot(&p, &ap).max(1e-30);
-
+        if dot(&r, &r).sqrt() <= tol * bn {
+            return;
+        }
+        let rho_new = dot(&r0, &r);
+        if rho_new.abs() < 1e-300 {
+            return;
+        }
+        let beta = (rho_new / rho) * (alpha / omega);
+        rho = rho_new;
         for i in 0..n {
-            x[i] += alpha * p[i];
-            r[i] -= alpha * ap[i];
+            p[i] = r[i] + beta * (p[i] - omega * v[i]);
         }
-
-        let rs_new = dot(&r, &r);
-        if rs_new < tol * tol {
-            break;
+        op.apply_system(lambda, &p, &mut v);
+        let denom = dot(&r0, &v);
+        if denom.abs() < 1e-300 {
+            return;
         }
-
-        let beta = rs_new / rs_old;
+        alpha = rho / denom;
         for i in 0..n {
-            p[i] = r[i] + beta * p[i];
+            s[i] = r[i] - alpha * v[i];
         }
-        rs_old = rs_new;
+        if dot(&s, &s).sqrt() <= tol * bn {
+            for i in 0..n {
+                x[i] += alpha * p[i];
+            }
+            return;
+        }
+        op.apply_system(lambda, &s, &mut t);
+        let tt = dot(&t, &t);
+        if tt < 1e-300 {
+            return;
+        }
+        omega = dot(&t, &s) / tt;
+        for i in 0..n {
+            x[i] += alpha * p[i] + omega * s[i];
+            r[i] = s[i] - omega * t[i];
+        }
+        if omega.abs() < 1e-300 {
+            return;
+        }
     }
 }
-
 impl Node<Detail> for Smooth {
     fn type_name(&self) -> &'static str {
         "smooth"
@@ -411,23 +416,22 @@ impl Node<Detail> for Smooth {
         let pts = positions(src);
         let edges = build_edges(src, &pts, method);
 
-        let work = u64::from(quality as u32).saturating_mul((edges.len() + np) as u64);
+        let work = (quality as u64).min(HOUDINI_MAX_Q as u64).saturating_mul((edges.len() + np) as u64);
         if work > MAX_WORK {
             return Err(failed(OP, "filterquality * edges exceeds the work cap"));
         }
 
-        let (row_ptr, col_ind, vals) = build_laplacian_csr(np, &edges);
         let boundary = if constrain { find_boundary(src) } else { vec![false; np] };
-
         // Point-group selection: unselected points are left untouched (they still take part in the Laplacian).
         let sel = point_selection(src, p.string("group").unwrap_or(""))?;
         let pinned = |i: usize| {
             (constrain && boundary.get(i).copied().unwrap_or(false))
                 || sel.as_ref().is_some_and(|s| !s.get(i).copied().unwrap_or(false))
         };
+        let op = Operator::new(np, &edges, &pinned, (quality as usize).min(HOUDINI_MAX_Q));
         let solve = |b: &[f64]| -> Vec<f64> {
             let mut x = b.to_vec();
-            cg_solve(&row_ptr, &col_ind, &vals, strength, b, &mut x, quality as usize, 1e-9);
+            bicgstab_solve(&op, strength, b, &mut x, 2000, 1e-12);
             for (i, xi) in x.iter_mut().enumerate() {
                 if pinned(i) {
                     *xi = b.get(i).copied().unwrap_or(0.0);
@@ -435,7 +439,6 @@ impl Node<Detail> for Smooth {
             }
             x
         };
-
         // Solve for each coordinate independently
         let mut result = vec![[0.0; 3]; np];
         for axis in 0..3 {
@@ -554,17 +557,23 @@ mod tests {
         }
     }
 
+    /// Recorded hython 20.5 smooth::2.0 box corner factors f(s,q) = 1/(1+nu): q1 nu=2s/3, q2 nu=s/3, q3 nu=4s/27.
     #[test]
-    fn implicit_smooth_converges() {
-        // Simple test: box should converge towards centroid with enough iterations
-        let src = cube();
-        let out = cook(&*new(), src.clone(), &with(0, 0.8, 50)).expect("cooks");
-        // All points should be close to origin (centroid of box)
-        for p in out.p() {
-            assert!(p[0].abs() < 0.2, "x coord should be near 0: {}", p[0]);
-            assert!(p[1].abs() < 0.2, "y coord should be near 0: {}", p[1]);
-            assert!(p[2].abs() < 0.2, "z coord should be near 0: {}", p[2]);
+    fn box_matches_recorded_houdini_factors() {
+        for (s, q, f) in
+            [(0.5, 1, 0.75), (1.0, 1, 0.6), (0.25, 2, 12.0 / 13.0), (2.0, 3, 27.0 / 35.0), (0.5, 2, 6.0 / 7.0)]
+        {
+            let out = cook(&*new(), cube(), &with(0, s, q)).expect("cooks");
+            for p in out.p() {
+                for c in p {
+                    assert!((c.abs() as f64 - 0.5 * f).abs() < 1e-6, "s{s} q{q}: {c} vs {}", 0.5 * f);
+                }
+            }
         }
+        // quality above 5 is clamped like Houdini
+        let a = cook(&*new(), cube(), &with(0, 1.0, 5)).expect("cooks");
+        let b = cook(&*new(), cube(), &with(0, 1.0, 50)).expect("cooks");
+        assert_eq!(a.p(), b.p());
     }
 
     #[test]
@@ -598,9 +607,9 @@ mod tests {
         assert!(matches!(bad, Err(CookError::Failed(_))));
     }
 
-    /// Attribute `w` (F32, 0 everywhere but one spike) smooths: spike drops, total stays ~conserved (Laplacian rows sum 0 -> mean preserved).
+    /// Attribute `w` (F32, 0 everywhere but one spike) smooths: spike drops, values stay bounded.
     #[test]
-    fn extra_attribute_is_smoothed_and_mean_preserved_unlisted_untouched() {
+    fn extra_attribute_is_smoothed_and_bounded_unlisted_untouched() {
         let mut src = grid3();
         let mut w = vec![0.0f32; 9];
         w[4] = 9.0;
@@ -620,8 +629,8 @@ mod tests {
             cook(&*new(), src.clone(), &with(0, 1.0, 100).with("attribs", ParamValue::S("w".into()))).expect("cooks");
         let Some(AttrData::F32(ow)) = out.attr(AttrClass::Point, "w").map(|a| &a.data) else { panic!("w lost") };
         assert!(ow[4] < 9.0 && ow[4] > 0.0, "spike must drop: {}", ow[4]);
-        let sum: f32 = ow.iter().sum();
-        assert!((sum - 9.0).abs() < 1e-3, "mean preserved, sum {sum}");
+        // the Houdini operator is a row-normalised order-q filter: not mean-conserving, may ring negative
+        assert!(ow.iter().all(|v| v.is_finite()), "{ow:?}");
         assert_eq!(out.attr(AttrClass::Point, "u"), src.attr(AttrClass::Point, "u"));
         let missing = cook(&*new(), src, &with(0, 1.0, 5).with("attribs", ParamValue::S("zz".into())));
         assert!(matches!(missing, Err(CookError::Failed(_))));
@@ -672,11 +681,51 @@ mod tests {
         let c = cube();
         let v0 = signed_volume(&c, &positions(&c));
         assert!(v0.abs() > 0.99, "{v0}");
-        let shrunk = cook(&*new(), c.clone(), &with(0, 0.5, 20)).expect("cooks");
+        let shrunk = cook(&*new(), c.clone(), &with(0, 2.0, 1)).expect("cooks");
         assert!(signed_volume(&shrunk, &positions(&shrunk)).abs() < v0.abs() * 0.9);
-        let kept = cook(&*new(), c, &with(3, 0.5, 20)).expect("cooks");
+        let kept = cook(&*new(), c, &with(3, 2.0, 1)).expect("cooks");
         let v1 = signed_volume(&kept, &positions(&kept));
         assert!((v1 - v0).abs() < 1e-4, "{v0} -> {v1}");
+    }
+
+    /// Replays every hython 20.5 probe (box/grid5/sphere/fan/perturbed grid x none|unsharededges x q 1..10 x strength) from
+    /// `parity/ref/smooth-probes/probes.json`; max|dP| <= 1e-4 (Houdini's own solve stops at ~1e-5 relative residual).
+    #[test]
+    fn replays_houdini_probes() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../parity/ref/smooth-probes/probes.json");
+        let doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("probes.json")).expect("json");
+        let mut worst = 0.0f64;
+        let mut n = 0;
+        for (name, g) in doc.as_object().expect("obj") {
+            let v3 = |v: &serde_json::Value| -> V3 {
+                [v[0].as_f64().unwrap(), v[1].as_f64().unwrap(), v[2].as_f64().unwrap()]
+            };
+            let src: Vec<V3> = g["src"].as_array().unwrap().iter().map(v3).collect();
+            let mut d = Detail::default();
+            d.add_points(src.len() as u32);
+            *d.p_mut() = src.iter().map(|p| [p[0] as f32, p[1] as f32, p[2] as f32]).collect();
+            for pr in g["prims"].as_array().unwrap() {
+                let ids: Vec<u32> = pr.as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as u32).collect();
+                d.add_poly(&ids, true);
+            }
+            for r in g["runs"].as_array().unwrap() {
+                let cb = r["cb"].as_i64().unwrap();
+                let params = with(0, r["s"].as_f64().unwrap() as f32, r["q"].as_i64().unwrap() as i32)
+                    .with("constrainboundary", ParamValue::B(cb == 1));
+                let out = cook(&*new(), d.clone(), &params).expect("cooks");
+                for (o, h) in out.p().iter().zip(r["P"].as_array().unwrap()) {
+                    let h = v3(h);
+                    for c in 0..3 {
+                        worst = worst.max((f64::from(o[c]) - h[c]).abs());
+                    }
+                }
+                n += 1;
+            }
+            assert!(worst < 1e-4, "{name}: max|dP| {worst}");
+        }
+        assert_eq!(n, 200);
+        eprintln!("probe replay: {n} runs, max|dP| {worst:.3e}");
     }
 
     #[test]
