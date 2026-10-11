@@ -1,0 +1,29 @@
+{
+ "nodes": [
+  {
+   "name": "sph",
+   "type": "sphere",
+   "params": {
+    "type": 2,
+    "rows": 5,
+    "cols": 6
+   }
+  },
+  {
+   "name": "op1",
+   "type": "polyframe",
+   "params": {
+    "tangentvon": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "sph",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

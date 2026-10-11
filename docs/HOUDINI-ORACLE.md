@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 104, STAT-PASS 10, TOPO-DIFF 1  (N=115)
+Histogram: MATCH 125, STAT-PASS 10, TOPO-DIFF 1  (N=136)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -22,7 +22,15 @@ Histogram: MATCH 104, STAT-PASS 10, TOPO-DIFF 1  (N=115)
 | sop-bound-keep | 16/12/48 | 16/12/48 | MATCH | MATCH |  |
 | sop-bound-pad | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-box | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim0 [1,5,4,0] verbatim, clockwise from outside) |
+| sop-carve | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
+| sop-carve-closed | 5/1/5 | 5/1/5 | MATCH | MATCH |  |
+| sop-carve-divs | 13/5/13 | 13/5/13 | MATCH | MATCH |  |
+| sop-carve-grid | 13/4/20 | 13/4/20 | MATCH | MATCH |  |
 | sop-circle | 6/1/6 | 6/1/6 | MATCH | MATCH | - (default reverse=1 now ON in hexe: clockwise; one prim, identical point cycle) |
+| sop-clean | 12/4/12 | 12/4/12 | MATCH | MATCH |  |
+| sop-clean-manifold | 14/4/16 | 14/4/16 | MATCH | MATCH |  |
+| sop-clean-small | 6/2/8 | 6/2/8 | MATCH | MATCH |  |
+| sop-clean-unused | 7/2/7 | 7/2/7 | MATCH | MATCH |  |
 | sop-clip | 8/5/20 | 8/5/20 | MATCH | MATCH | cut-point order + prim order: Houdini appends the cut points (+x,-z) first, prims start [1,2,3,0]; hexe cut points (-x,-z) first. Point SET equal, counts 8/5/20 equal; no cap (dofill 0 vs capclip DEFERRED); winding now equal (H32) |
 | sop-clip-below | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
 | sop-clip-both | 12/10/40 | 12/10/40 | MATCH | MATCH |  |
@@ -43,6 +51,11 @@ Histogram: MATCH 104, STAT-PASS 10, TOPO-DIFF 1  (N=115)
 | sop-curve-nurbs-closed | 5/1/5 | 5/1/5 | MATCH | MATCH |  |
 | sop-curve-poly-open | 5/1/5 | 5/1/5 | MATCH | MATCH |  |
 | sop-delete | 9/2/8 | 9/2/8 | MATCH | MATCH | - (9 pts kept, 2 prims left both) |
+| sop-dissolve | 14/7/30 | 14/7/30 | MATCH | MATCH |  |
+| sop-dissolve-all | 0/0/0 | 0/0/0 | MATCH | MATCH |  |
+| sop-dissolve-boundary | 15/7/30 | 15/7/30 | MATCH | MATCH |  |
+| sop-dissolve-box | 8/4/20 | 8/4/20 | MATCH | MATCH |  |
+| sop-dissolve-regions | 16/6/30 | 16/6/30 | MATCH | MATCH |  |
 | sop-divide | 8/12/36 | 8/12/36 | MATCH | MATCH | zero-diff since H33: piece 0 replaces the prim in place, later pieces appended in REVERSE prim order, quad 2nd tri = (c,d,a). n>4 polys: Houdini ear order (observed, regular polys) NOT reproduced - hexe still fans |
 | sop-facet | 24/6/24 | 24/6/24 | MATCH | MATCH | zero-diff since H33: unique_points keeps the first vertex of each point on its id, later vertices get new ids appended per source point in DESCENDING order (ascending vertex); 3x3 grid also probed |
 | sop-file | 6/8/24 | 6/8/24 | MATCH | MATCH | - |
@@ -59,6 +72,9 @@ Histogram: MATCH 104, STAT-PASS 10, TOPO-DIFF 1  (N=115)
 | sop-knife-sphere | 294/316/1216 | 294/316/1216 | MATCH | MATCH |  |
 | sop-knife-sphere2 | 306/328/1264 | 306/328/1264 | MATCH | MATCH |  |
 | sop-knife-tilt | 14/12/48 | 14/12/48 | MATCH | MATCH |  |
+| sop-lattice | 10/1/10 | 10/1/10 | MATCH | MATCH |  |
+| sop-lattice-group | 10/1/10 | 10/1/10 | MATCH | MATCH |  |
+| sop-lattice-linear | 10/1/10 | 10/1/10 | MATCH | MATCH |  |
 | sop-line | 5/1/5 | 5/1/5 | MATCH | MATCH | - |
 | sop-matchsize | 8/6/24 | 8/6/24 | MATCH | MATCH | - (explicit target size/center, P equal) |
 | sop-measure | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim attr area present both (values not compared)) |
@@ -84,6 +100,11 @@ Histogram: MATCH 104, STAT-PASS 10, TOPO-DIFF 1  (N=115)
 | sop-polyfill-ears | 8/7/26 | 8/7/26 | MATCH | MATCH |  |
 | sop-polyfill-fan | 9/9/32 | 9/9/32 | MATCH | MATCH |  |
 | sop-polyfill-quads | 9/7/28 | 9/7/28 | MATCH | MATCH |  |
+| sop-polyframe | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
+| sop-polyframe-edge1 | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
+| sop-polyframe-primc | 7/2/7 | 7/2/7 | MATCH | MATCH |  |
+| sop-polyframe-quad | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
+| sop-polyframe-sphere | 20/24/84 | 20/24/84 | MATCH | MATCH |  |
 | sop-ray | 9/4/16 | 9/4/16 | MATCH | MATCH | - (projected P equal Houdini index-for-index) |
 | sop-registry | 8/6/24 | 8/6/24 | MATCH | MATCH | - (null passthrough of box) |
 | sop-resample | 24/1/24 | 24/1/24 | MATCH | MATCH | - (inherits the circle order; sample points equal) |

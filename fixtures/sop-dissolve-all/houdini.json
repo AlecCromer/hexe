@@ -1,0 +1,31 @@
+{
+ "sop": "sop-dissolve-all",
+ "houdini": "20.5.487",
+ "note": "dissolve with an empty group: every polygon (and point) goes",
+ "points": 0,
+ "prims": 0,
+ "vertices": 0,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": null,
+ "bbox_max": null,
+ "P": [],
+ "P_all": [],
+ "prim_pts": [],
+ "prim_closed": []
+}

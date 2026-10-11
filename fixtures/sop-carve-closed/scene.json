@@ -1,0 +1,32 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "curve",
+   "params": {
+    "coords": "0,0,0 1,2,0 3,2,0 4,0,0 5,1,1",
+    "close": true
+   }
+  },
+  {
+   "name": "op1",
+   "type": "carve",
+   "params": {
+    "secondu": true,
+    "domainu1": 0.2,
+    "domainu2": 0.7,
+    "keepin": false,
+    "keepout": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

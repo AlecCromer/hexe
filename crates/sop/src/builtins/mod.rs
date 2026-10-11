@@ -39,7 +39,11 @@ mod torus_sop;
 //
 mod tube_sop;
 //
+mod carve_sop;
+//
 mod circle_sop;
+//
+mod clean_sop;
 //
 mod clip_sop;
 //
@@ -52,6 +56,8 @@ mod copytopoints_sop;
 mod curve_sop;
 //
 mod delete_sop;
+//
+mod dissolve_sop;
 //
 mod divide_sop;
 //
@@ -70,6 +76,8 @@ mod groupdelete_sop;
 mod grouppromote_sop;
 //
 mod knife_sop;
+//
+mod lattice_sop;
 //
 mod line_sop;
 //
@@ -96,6 +104,8 @@ mod peak_sop;
 mod platonic_sop;
 //
 mod polybevel_sop;
+//
+mod polyframe_sop;
 //
 mod polyextrude_sop;
 //
@@ -175,7 +185,11 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("tube", tube_sop::spec, tube_sop::new);
     //
+    r.register("carve", carve_sop::spec, carve_sop::new);
+    //
     r.register("circle", circle_sop::spec, circle_sop::new);
+    //
+    r.register("clean", clean_sop::spec, clean_sop::new);
     //
     r.register("clip", clip_sop::spec, clip_sop::new);
     //
@@ -188,6 +202,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("curve", curve_sop::spec, curve_sop::new);
     //
     r.register("delete", delete_sop::spec, delete_sop::new);
+    //
+    r.register("dissolve", dissolve_sop::spec, dissolve_sop::new);
     //
     r.register("divide", divide_sop::spec, divide_sop::new);
     //
@@ -206,6 +222,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("grouppromote", grouppromote_sop::spec, grouppromote_sop::new);
     //
     r.register("knife", knife_sop::spec, knife_sop::new);
+    //
+    r.register("lattice", lattice_sop::spec, lattice_sop::new);
     //
     r.register("line", line_sop::spec, line_sop::new);
     //
@@ -228,6 +246,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("platonic", platonic_sop::spec, platonic_sop::new);
     //
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
+    //
+    r.register("polyframe", polyframe_sop::spec, polyframe_sop::new);
     //
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
     //

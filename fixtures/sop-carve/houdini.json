@@ -1,0 +1,92 @@
+{
+ "sop": "sop-carve",
+ "houdini": "20.5.487",
+ "note": "carve defaults (firstu 1 at u=0.25, secondu off) on an open 5-point polygon",
+ "points": 4,
+ "prims": 1,
+ "vertices": 4,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  1.0,
+  0.0,
+  0.0
+ ],
+ "bbox_max": [
+  5.0,
+  2.0,
+  1.0
+ ],
+ "P": [
+  [
+   1.0,
+   2.0,
+   0.0
+  ],
+  [
+   3.0,
+   2.0,
+   0.0
+  ],
+  [
+   4.0,
+   0.0,
+   0.0
+  ],
+  [
+   5.0,
+   1.0,
+   1.0
+  ]
+ ],
+ "P_all": [
+  [
+   1.0,
+   2.0,
+   0.0
+  ],
+  [
+   3.0,
+   2.0,
+   0.0
+  ],
+  [
+   4.0,
+   0.0,
+   0.0
+  ],
+  [
+   5.0,
+   1.0,
+   1.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2,
+   3
+  ]
+ ],
+ "prim_closed": [
+  false
+ ]
+}

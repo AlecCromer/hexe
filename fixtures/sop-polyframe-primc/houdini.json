@@ -1,0 +1,143 @@
+{
+ "sop": "sop-polyframe-primc",
+ "houdini": "20.5.487",
+ "note": "polyframe primitive-centroid style on a closed quad merged with an open 3-point polyline",
+ "points": 7,
+ "prims": 2,
+ "vertices": 7,
+ "attribs": {
+  "point": [
+   "N",
+   "P",
+   "tangentu",
+   "tangentv"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ],
+  "point:tangentu": [
+   "Float",
+   3
+  ],
+  "point:tangentv": [
+   "Float",
+   3
+  ],
+  "point:N": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "bbox_max": [
+  2.5,
+  1.5,
+  0.5
+ ],
+ "P": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.5,
+   1.5,
+   0.5
+  ],
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.5,
+   1.5,
+   0.5
+  ],
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2,
+   3
+  ],
+  [
+   4,
+   5,
+   6
+  ]
+ ],
+ "prim_closed": [
+  true,
+  false
+ ]
+}

@@ -1,0 +1,29 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "grid",
+   "params": {
+    "rows": 4,
+    "cols": 4
+   }
+  },
+  {
+   "name": "op1",
+   "type": "dissolve",
+   "params": {
+    "group": "p1-5 p9-10 p10-14",
+    "reminlinepts": false
+   }
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

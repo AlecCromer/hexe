@@ -1,0 +1,75 @@
+[
+	"fileversion","20.5.487",
+	"hasindex",false,
+	"pointcount",12,
+	"vertexcount",12,
+	"primitivecount",4,
+	"info",{
+		"hostname":"macbookpro.fritz.box",
+		"date":"2026-10-11 11:36:06",
+		"artist":"pascaldisse",
+		"software":"Houdini 20.5.487",
+		"bounds":[0,9,0,3,0,0],
+		"primcount_summary":"          4 Polygons\n",
+		"attribute_summary":"     1 point attributes:\tP\n"
+	},
+	"topology",[
+		"pointref",[
+			"indices",[0,1,2,3,4,5,6,7,8,9,10,11]
+		]
+	],
+	"attributes",[
+		"pointattributes",[
+			[
+				[
+					"scope","public",
+					"type","numeric",
+					"name","P",
+					"options",{
+						"type":{
+							"type":"string",
+							"value":"point"
+						}
+					}
+				],
+				[
+					"size",3,
+					"storage","fpreal32",
+					"defaults",[
+						"size",1,
+						"storage","fpreal64",
+						"values",[0]
+					],
+					"values",[
+						"size",3,
+						"storage","fpreal32",
+						"tuples",[[0,0,0],[1,0,0],[1,1,0],[0,1,0],[3,2,0],[4,2,0],[3,3,0],[6,0,0],[7,0,0],[6.5,0.000500000024,0],[8,0,0],[9,0,0]
+						]
+					]
+				]
+			]
+		]
+	],
+	"primitives",[
+		[
+			[
+				"type","Polygon_run"
+			],
+			[
+				"startvertex",0,
+				"nprimitives",3,
+				"nvertices",[4,3,3]
+			]
+		],
+		[
+			[
+				"type","PolygonCurve_run"
+			],
+			[
+				"startvertex",10,
+				"nprimitives",1,
+				"nvertices",[2]
+			]
+		]
+	]
+]

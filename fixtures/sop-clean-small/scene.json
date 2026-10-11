@@ -1,0 +1,81 @@
+{
+ "nodes": [
+  {
+   "name": "q1",
+   "type": "curve",
+   "params": {
+    "coords": "0.0,0.0,0.0 1.0,0.0,0.0 1.0,1.0,0.0 0.0,1.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "q3",
+   "type": "curve",
+   "params": {
+    "coords": "1.0,0.0,0.0 2.0,0.0,0.0 2.0,1.0,0.0 1.0,1.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "tr",
+   "type": "curve",
+   "params": {
+    "coords": "5.0,0.0,0.0 6.0,0.0,0.0 5.0,1.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "m",
+   "type": "merge"
+  },
+  {
+   "name": "f",
+   "type": "fuse",
+   "params": {
+    "distance": 0.001
+   }
+  },
+  {
+   "name": "op1",
+   "type": "clean",
+   "params": {
+    "make_manifold": true,
+    "delete_small": true,
+    "prim_count": 1
+   }
+  }
+ ],
+ "edges": [
+  [
+   "q1",
+   0,
+   "m",
+   0
+  ],
+  [
+   "q3",
+   0,
+   "m",
+   1
+  ],
+  [
+   "tr",
+   0,
+   "m",
+   2
+  ],
+  [
+   "m",
+   0,
+   "f",
+   0
+  ],
+  [
+   "f",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

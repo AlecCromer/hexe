@@ -304,6 +304,50 @@ pub(super) fn rebuild(
     Ok(out)
 }
 
+/// Like `rebuild` but each output point blends its sources with explicit weights (`blend_weighted`; a single `(i, 1.0)`
+/// source is an exact copy) and vertices / prims copy `vert_src` / `prim_src` directly.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn rebuild_w(
+    op: &str,
+    src: &Detail,
+    vertex_point: Vec<u32>,
+    prims: Vec<Prim>,
+    point_w: &[Vec<(usize, f64)>],
+    vert_src: &[Option<usize>],
+    prim_src: &[Option<usize>],
+    p: Vec<[f32; 3]>,
+) -> Result<Detail, CookError> {
+    let point_count = u32::try_from(point_w.len()).map_err(|_| failed(op, "point id overflow"))?;
+    let mut out = Detail {
+        point_count,
+        vertex_point,
+        prims,
+        attrs: Vec::with_capacity(src.attrs.len()),
+        groups: Vec::with_capacity(src.groups.len()),
+        skipped_attribs: src.skipped_attribs.clone(),
+    };
+    for a in &src.attrs {
+        let data = match a.class {
+            AttrClass::Point => blend_weighted(&a.data, point_w),
+            AttrClass::Vertex => gather(&a.data, vert_src),
+            AttrClass::Prim => gather(&a.data, prim_src),
+            AttrClass::Detail => a.data.clone(),
+        };
+        out.attrs.push(Attribute { name: a.name.clone(), class: a.class, data, type_info: a.type_info });
+    }
+    for g in &src.groups {
+        let at = |i: Option<usize>| i.and_then(|i| g.mask.get(i).copied()).unwrap_or(false);
+        let mask: Vec<bool> = match g.class {
+            AttrClass::Point => point_w.iter().map(|s| !s.is_empty() && s.iter().all(|&(i, _)| at(Some(i)))).collect(),
+            AttrClass::Vertex => vert_src.iter().map(|&i| at(i)).collect(),
+            AttrClass::Prim => prim_src.iter().map(|&i| at(i)).collect(),
+            AttrClass::Detail => continue,
+        };
+        out.groups.push(Group { name: g.name.clone(), class: g.class, mask });
+    }
+    *out.p_mut() = p;
+    Ok(out)
+}
 #[cfg(test)]
 pub(super) mod testkit {
     use crate::SopNode;
@@ -427,6 +471,41 @@ pub(super) mod testkit {
             };
             if groups(&d) != groups(&h) {
                 return Err(format!("{class:?} groups hexe {:?} vs houdini {:?}", groups(&d), groups(&h)));
+            }
+        }
+        Ok(())
+    }
+    /// Attribute VALUE evidence on top of `houdini_twin`: every Point / Vertex / Prim float attribute of the REAL Houdini `.geo`
+    /// (except `P`) must equal hexe's same-named attribute within `tol` per component (int / string attributes: exact).
+    pub fn houdini_values(scene: &str, houdini_geo: &[u8], tol: f32) -> Result<(), String> {
+        use hexe_geo::{AttrClass, AttrData, read_geo};
+        let h = read_geo(houdini_geo).map_err(|e| format!("houdini.geo: {e:?}"))?;
+        let (mut g, id) = crate::load_scene(scene).map_err(|e| format!("scene: {e:?}"))?;
+        let d = g.cook(id, 0.0).map_err(|e| format!("cook: {e:?}"))?;
+        for a in h.attrs.iter().filter(|a| a.class != AttrClass::Detail && a.name != "P") {
+            let m =
+                d.attr(a.class, &a.name).ok_or_else(|| format!("{:?} attr `{}` missing in hexe", a.class, a.name))?;
+            let flat = |x: &AttrData| -> Option<Vec<f32>> {
+                match x {
+                    AttrData::F32(v) => Some(v.clone()),
+                    AttrData::V2(v) => Some(v.iter().flatten().copied().collect()),
+                    AttrData::V3(v) => Some(v.iter().flatten().copied().collect()),
+                    AttrData::V4(v) => Some(v.iter().flatten().copied().collect()),
+                    AttrData::FN { data, .. } => Some(data.clone()),
+                    _ => None,
+                }
+            };
+            match (flat(&a.data), flat(&m.data)) {
+                (Some(x), Some(y)) => {
+                    if x.len() != y.len() {
+                        return Err(format!("{:?} `{}`: {} vs {} floats", a.class, a.name, y.len(), x.len()));
+                    }
+                    if let Some(k) = x.iter().zip(&y).position(|(p, q)| (p - q).abs() > tol) {
+                        return Err(format!("{:?} `{}`[{k}] hexe {} vs houdini {}", a.class, a.name, y[k], x[k]));
+                    }
+                }
+                _ if a.data != m.data => return Err(format!("{:?} `{}` differs", a.class, a.name)),
+                _ => {}
             }
         }
         Ok(())

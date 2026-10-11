@@ -1500,3 +1500,80 @@ evidence = [
   "crates/sop/src/builtins/platonic_sop.rs::platonic_matches_houdini_fixtures",
 ]
 notes = "h36 census SOP. Tetra/cube/octa/icosa/dodeca from Houdini's own hard-coded f32 tables (read back from hython 20.5, incl. its rounding noise; cube edge 1, dodeca circumradius 0.99332), orient x/y/z, radius, t, r (xyz order). NOT modelled: type 5 soccer ball (60 pts / 32 prims + prim Cd; Unsupported); Houdini clamps negative type to 0 (hexe range-checks). Houdini-oracle (real 20.5, h36): sop-platonic (+ -cube/-octa/-icosa/-dodeca/-xform) MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-carve"
+title = "Carve SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["carve"]
+evidence = [
+  "crates/sop/src/builtins/carve_sop.rs::default_cuts_from_quarter_to_end",
+  "crates/sop/src/builtins/carve_sop.rs::domain_divisions_and_outside_pieces",
+  "crates/sop/src/builtins/carve_sop.rs::hostile_params",
+  "crates/sop/src/builtins/carve_sop.rs::carve_matches_houdini_fixtures",
+]
+notes = "h37 census SOP. Poly path only (polylines + polygon boundaries): U domain firstu/domainu1 (default 0.25) + secondu/domainu2, arclen, divsu (divs-1 equal pieces of the keepin span), keepin/keepout (order out-first, in, out-last), prim group; reversed domain swaps, clamps to 0..1; open output = all-new points in prim order, unselected prims first with their original points; CLOSED polys: secondu on = same pieces (keepout = one wrapped prim with the seam point twice), secondu off = loop re-opened at lo (original points kept, new start (if not on a vertex) + end point appended) = default mode of a polygon mesh. GAPS: V domain, onlybreakpoints / allubreakpoints / extractop / keepOriginal / attribute-driven domains, divsu in the re-open case, NURBS / Bezier curve+surface prims (Unsupported; Houdini does knot insertion), int attrs at cut points (Houdini 0, hexe copies heavier source), closed keepin+keepout order (guess). Houdini-oracle (real 20.5, h37): sop-carve / -divs / -grid / -closed MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-lattice"
+title = "Lattice SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["lattice"]
+evidence = [
+  "crates/sop/src/builtins/lattice_sop.rs::bezier_weights_of_one_moved_node",
+  "crates/sop/src/builtins/lattice_sop.rs::linear_is_trilinear_and_outside_is_untouched",
+  "crates/sop/src/builtins/lattice_sop.rs::hostile_inputs",
+  "crates/sop/src/builtins/lattice_sop.rs::lattice_matches_houdini_fixtures",
+]
+notes = "h37 census SOP. 3 inputs (geometry, rest lattice, deformed lattice; Houdini needs all 3). divsx/y/z = CELLS per axis (default 3) so each lattice has (d+1)^3 points (mismatch = Failed like Houdini); a lattice point's grid cell comes from its REST POSITION in the rest bbox (point order irrelevant, probed with x- and z-fastest orders); interptype bezier (default; Bernstein FFD of degree divs, P' = sum w * deformed) / linear (trilinear in the cell); points outside the rest bbox unchanged (box corners follow their node); group = point pattern. GAPS: restgroup, kernel/radius/normthreshold/bspheres, rest lattices that are not exactly regular (Houdini drifts up to ~1e-4 at the far corner with 4-decimal-rounded rest values - an iterative inverse; fixtures use dyadic-exact rests so MATCH is bit-level), Houdini has no lattice generator in this SOP (the user builds the rest/deformed point sets). Houdini-oracle (real 20.5, h37): sop-lattice / -linear / -group MATCH via houdini_twin."
+
+[[feature]]
+id = "sop-polyframe"
+title = "PolyFrame SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["polyframe"]
+evidence = [
+  "crates/sop/src/builtins/polyframe_sop.rs::quad_styles_match_the_probed_numbers",
+  "crates/sop/src/builtins/polyframe_sop.rs::tangent_v_ortho_and_handedness",
+  "crates/sop/src/builtins/polyframe_sop.rs::names_toggles_and_hostile_params",
+  "crates/sop/src/builtins/polyframe_sop.rs::polyframe_matches_houdini_fixtures",
+]
+notes = "h37 census SOP. Point-class N / tangentu / tangentv from polygons: styles edge1 (prev - P), edge2 (default; closed = both edges from the vertex summed, open = P[i-1]-P[i+1], one-sided ends), primC (centroid - P); N = normalised sum of unit prim normals (open polys count as closed), tangentu from the FIRST prim using the point, ortho (tu -= N(N.tu), not renormalised), tangentv = cross(tu,N) unnormalised (ortho: cross(N,tu), lefthanded flips), Non/tangentuon/tangentvon + attribute names, prim group. VALUES compared too (houdini_values, 1e-4). GAPS: styles texuv / tex / attrib / mikkt (vertex outputs; Unsupported), signson, entity has no effect in any probe (kept as menu), orphan points (zero vectors; Houdini not probed), area weighting of N unconfirmed beyond the box/sphere fixtures. Houdini-oracle (real 20.5, h37): sop-polyframe / -edge1 / -quad / -primc / -sphere MATCH (P, topology, attribute names + values)."
+
+[[feature]]
+id = "sop-dissolve"
+title = "Dissolve SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["dissolve"]
+evidence = [
+  "crates/sop/src/builtins/dissolve_sop.rs::merge_walk_matches_the_probed_boxes",
+  "crates/sop/src/builtins/dissolve_sop.rs::inline_points_unused_points_and_boundary_edges",
+  "crates/sop/src/builtins/dissolve_sop.rs::attrs_follow_the_first_prim_and_compact_with_points",
+  "crates/sop/src/builtins/dissolve_sop.rs::unsupported_and_hostile",
+  "crates/sop/src/builtins/dissolve_sop.rs::dissolve_matches_houdini_fixtures",
+]
+notes = "h37 census SOP, EDGE-group path only (group tokens pA-B). Edges shared by two closed polys merge them (regions via union-find; boundary walk hops across dissolved edges, output vertex = start point of each walked edge, points may repeat; merged prim takes the first member's attrs/groups, appended after the untouched prims in first-prim order); a dissolved edge owned by one poly deletes its whole region; EMPTY group = every polygon deleted; reminlinepts (turn angle < coltol, point used by no other poly slot), remunusedpts (also drops the inline points), attrs/groups compact. GAPS (Unsupported): numeric/prim/point group patterns (Houdini edge expansion of '0' not decoded), invertsel, bridge/boundarycurves/deldegeneratebridges, regions with holes; inline removal measured only on exactly collinear points (boundary = strict < coltol is a guess); compnorms no-op. Houdini-oracle (real 20.5, h37): sop-dissolve / -regions / -box / -boundary / -all MATCH (P, cycles, attr names + values via houdini_twin/houdini_values)."
+
+[[feature]]
+id = "sop-clean"
+title = "Clean SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["clean"]
+evidence = [
+  "crates/sop/src/builtins/clean_sop.rs::degenerate_rules_follow_the_probes",
+  "crates/sop/src/builtins/clean_sop.rs::bowtie_and_nonmanifold_edges_split_points_in_descending_vertex_order",
+  "crates/sop/src/builtins/clean_sop.rs::delete_small_needs_make_manifold_and_uses_less_or_equal",
+  "crates/sop/src/builtins/clean_sop.rs::unsupported_and_hostile",
+  "crates/sop/src/builtins/clean_sop.rs::clean_matches_houdini_fixtures",
+]
+notes = "h37 census SOP. deldegengeo/degentol: closed poly dies when <3 verts or Newell area < tol^2 (strict; 4 collinear points survive tol 0), open poly dies when total length <= tol; unused points go when delunusedpts OR deldegengeo (probed); removeunusedgrp drops empty groups. make_manifold: per point the vertices split into fans (join = shared edge used by exactly two distinct prims at that point; non-manifold edges and bow-ties split), walk in DESCENDING vertex number, first fan keeps the point, later fans get fresh point copies appended in point order; delete_small deletes pieces (shared-point components after the split) with <= prim_count prims, only with make_manifold. GAPS (Unsupported): fusepts, orientpoly, reversewinding, fixoverlap/deleteoverlap, dodelattribs, dodelgroups, non-finite P (delnans), make_manifold with open polys / non-poly prims; repeated-vertex collapse inside a poly (area test only); open polys with >2 points use total length (guess). Houdini-oracle (real 20.5, h37): sop-clean / -manifold / -unused / -small MATCH (P, cycles, attr names + values via houdini_twin/houdini_values)."
