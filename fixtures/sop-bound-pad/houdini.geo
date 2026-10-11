@@ -1,0 +1,66 @@
+[
+	"fileversion","20.5.487",
+	"hasindex",false,
+	"pointcount",8,
+	"vertexcount",24,
+	"primitivecount",6,
+	"info",{
+		"hostname":"macbookpro.fritz.box",
+		"date":"2026-10-11 10:10:17",
+		"artist":"pascaldisse",
+		"software":"Houdini 20.5.487",
+		"bounds":[-1.35000002,3.6500001,-0.349999964,4.6500001,0.649999976,5.6500001],
+		"primcount_summary":"          6 Polygons\n",
+		"attribute_summary":"     1 point attributes:\tP\n"
+	},
+	"topology",[
+		"pointref",[
+			"indices",[1,5,4,0,2,6,5,1,3,7,6,2,0,4,7,3,2,1,0,3,5,6,7,4]
+		]
+	],
+	"attributes",[
+		"pointattributes",[
+			[
+				[
+					"scope","public",
+					"type","numeric",
+					"name","P",
+					"options",{
+						"type":{
+							"type":"string",
+							"value":"point"
+						}
+					}
+				],
+				[
+					"size",3,
+					"storage","fpreal32",
+					"defaults",[
+						"size",1,
+						"storage","fpreal64",
+						"values",[0]
+					],
+					"values",[
+						"size",3,
+						"storage","fpreal32",
+						"tuples",[[-1.35000002,-0.349999964,0.649999976],[3.6500001,-0.349999964,0.649999976],[3.6500001,-0.349999964,5.6500001],[-1.35000002,-0.349999964,5.6500001],[-1.35000002,4.6500001,0.649999976],[3.6500001,4.6500001,
+								0.649999976],[3.6500001,4.6500001,5.6500001],[-1.35000002,4.6500001,5.6500001]
+						]
+					]
+				]
+			]
+		]
+	],
+	"primitives",[
+		[
+			[
+				"type","Polygon_run"
+			],
+			[
+				"startvertex",0,
+				"nprimitives",6,
+				"nvertices_rle",[4,6]
+			]
+		]
+	]
+]

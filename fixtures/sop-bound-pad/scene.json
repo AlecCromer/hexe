@@ -1,0 +1,51 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box",
+   "params": {
+    "t": [
+     1,
+     2,
+     3
+    ],
+    "size": [
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "name": "bd",
+   "type": "bound",
+   "params": {
+    "minpad": [
+     0.1,
+     0.2,
+     0.3
+    ],
+    "maxpad": [
+     0.4,
+     0.5,
+     0.6
+    ],
+    "rebar": true,
+    "minsize": [
+     5,
+     5,
+     5
+    ]
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "bd",
+   0
+  ]
+ ],
+ "display": "bd"
+}

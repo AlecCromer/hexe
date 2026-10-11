@@ -31,6 +31,14 @@ mod boolean_sop;
 //
 mod box_sop;
 //
+mod bound_sop;
+//
+mod surfgen;
+//
+mod torus_sop;
+//
+mod tube_sop;
+//
 mod circle_sop;
 //
 mod clip_sop;
@@ -84,6 +92,8 @@ mod selutil;
 mod output_sop;
 //
 mod peak_sop;
+//
+mod platonic_sop;
 //
 mod polybevel_sop;
 //
@@ -159,6 +169,12 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("box", box_sop::spec, box_sop::new);
     //
+    r.register("bound", bound_sop::spec, bound_sop::new);
+    //
+    r.register("torus", torus_sop::spec, torus_sop::new);
+    //
+    r.register("tube", tube_sop::spec, tube_sop::new);
+    //
     r.register("circle", circle_sop::spec, circle_sop::new);
     //
     r.register("clip", clip_sop::spec, clip_sop::new);
@@ -208,6 +224,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("output", output_sop::spec, output_sop::new);
     //
     r.register("peak", peak_sop::spec, peak_sop::new);
+    //
+    r.register("platonic", platonic_sop::spec, platonic_sop::new);
     //
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
     //

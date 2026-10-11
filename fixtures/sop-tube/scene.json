@@ -1,0 +1,13 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "tube",
+   "params": {
+    "type": 1
+   }
+  }
+ ],
+ "edges": [],
+ "display": "g"
+}

@@ -1,0 +1,6764 @@
+{
+"Object/musclerig::musclerigstrokebuilder": [
+"Muscle Rig Stroke Builder",
+false,
+1,
+1
+],
+"Object/riggedmuscle::musclestrokebuilder": [
+"Muscle Stroke Builder",
+false,
+1,
+1
+],
+"Sop/rbdmaterialfracture::2.0::rbdconcretefracture::2.0": [
+"RBD Concrete Fracture",
+false,
+1,
+3
+],
+"Sop/rbdmaterialfracture::2.0::rbdglassfracture::2.0": [
+"RBD Glass Fracture",
+false,
+1,
+2
+],
+"Sop/rbdmaterialfracture::rbdconcretefracture": [
+"RBD Concrete Fracture",
+false,
+1,
+3
+],
+"Sop/rbdmaterialfracture::rbdglassfracture": [
+"RBD Glass Fracture",
+false,
+1,
+2
+],
+"Sop/rbdmaterialfracture::rbdwoodfracture": [
+"RBD Wood Fracture",
+false,
+1,
+1
+],
+"adaptiveprune": [
+"Adaptive Prune",
+false,
+1,
+1
+],
+"add": [
+"Add",
+false,
+0,
+1
+],
+"agent": [
+"Agent",
+false,
+0,
+1
+],
+"agentclip": [
+"Agent Clip",
+false,
+1,
+1
+],
+"agentclip::2.0": [
+"Agent Clip",
+false,
+1,
+2
+],
+"agentclipproperties": [
+"Agent Clip Properties",
+false,
+1,
+1
+],
+"agentcliptransitiongraph": [
+"Agent Clip Transition Graph",
+false,
+1,
+3
+],
+"agentcollisionlayer": [
+"Agent Collision Layer",
+false,
+1,
+1
+],
+"agentconfigurejoints": [
+"Agent Configure Joints",
+false,
+1,
+1
+],
+"agentconstraintnetwork": [
+"Agent Constraint Network",
+false,
+1,
+1
+],
+"agentdefinitioncache": [
+"Agent Definition Cache",
+false,
+0,
+1
+],
+"agentedit": [
+"Agent Edit",
+false,
+1,
+1
+],
+"agentlayer": [
+"Agent Layer",
+false,
+1,
+2
+],
+"agentlayer::2.0": [
+"Agent Layer",
+false,
+1,
+3
+],
+"agentlookat": [
+"Agent Look At",
+false,
+1,
+1
+],
+"agentlookat::2.0": [
+"Agent Look At",
+false,
+1,
+1
+],
+"agentlookat::3.0": [
+"Agent Look At",
+false,
+1,
+2
+],
+"agentmetadata": [
+"Agent Metadata",
+false,
+1,
+1
+],
+"agentprep": [
+"Agent Prep",
+false,
+1,
+1
+],
+"agentprep::2.0": [
+"Agent Prep",
+false,
+0,
+1
+],
+"agentprep::3.0": [
+"Agent Prep",
+false,
+1,
+1
+],
+"agentproxy": [
+"Agent Proxy",
+false,
+1,
+1
+],
+"agentrelationship": [
+"Agent Relationship",
+false,
+2,
+2
+],
+"agentterrainadaptation": [
+"Agent Terrain Adaptation",
+false,
+1,
+2
+],
+"agenttransformgroup": [
+"Agent Transform Group",
+false,
+1,
+1
+],
+"agentunpack": [
+"Agent Unpack",
+false,
+1,
+1
+],
+"agentvellumunpack": [
+"Agent Vellum Unpack",
+false,
+1,
+1
+],
+"alembic": [
+"Alembic",
+false,
+0,
+1
+],
+"alembicgroup": [
+"Alembic Group",
+false,
+1,
+1
+],
+"alembicprimitive": [
+"Alembic Primitive",
+false,
+1,
+1
+],
+"align": [
+"Spline Align",
+false,
+1,
+2
+],
+"apex.dev::autorigcomponent::2.0": [
+"APEX Dev Autorig Component",
+true,
+0,
+2
+],
+"apex::addgroom": [
+"APEX Add Groom",
+false,
+2,
+3
+],
+"apex::addwrinkles": [
+"APEX Add Wrinkles",
+false,
+1,
+2
+],
+"apex::autorigcomponent": [
+"APEX Autorig Component",
+false,
+0,
+2
+],
+"apex::autorigcomponent::2.0": [
+"APEX Autorig Component",
+false,
+0,
+2
+],
+"apex::buildfkgraph": [
+"APEX Build FK Graph",
+false,
+2,
+2
+],
+"apex::channelprimitivesfrommotionclip": [
+"Channel Primitives from MotionClip",
+false,
+0,
+2
+],
+"apex::configurecharacter": [
+"APEX Configure Character",
+false,
+0,
+1
+],
+"apex::configurecontrols": [
+"APEX Configure Controls",
+false,
+1,
+2
+],
+"apex::controlextract": [
+"APEX Control Extract",
+false,
+1,
+1
+],
+"apex::controlupdateparms": [
+"APEX Control Update Parms",
+false,
+1,
+2
+],
+"apex::editgraph": [
+"APEX Edit Graph",
+false,
+0,
+1
+],
+"apex::invokegraph": [
+"APEX Invoke Graph",
+false,
+1,
+9999
+],
+"apex::layoutgraph": [
+"APEX Layout Graph",
+false,
+1,
+1
+],
+"apex::mapcharacter": [
+"APEX Map Character",
+false,
+0,
+1
+],
+"apex::mergegraph": [
+"APEX Merge Graph",
+false,
+1,
+2
+],
+"apex::rigscriptcomponent": [
+"APEX Rigscript Component",
+false,
+0,
+3
+],
+"apex::rigscriptcomponent::2.0": [
+"APEX Rigscript Component",
+false,
+0,
+3
+],
+"apex::sceneaddanimation": [
+"APEX Scene Add Animation",
+false,
+1,
+2
+],
+"apex::sceneaddcharacter": [
+"APEX Scene Add Character",
+false,
+0,
+2
+],
+"apex::sceneaddconstraint": [
+"APEX Scene Add Constraint",
+true,
+0,
+2
+],
+"apex::sceneaddprop": [
+"APEX Scene Add Prop",
+false,
+0,
+2
+],
+"apex::sceneanimate": [
+"APEX Scene Animate",
+false,
+0,
+1
+],
+"apex::sceneconstraint": [
+"APEX Scene Constraint",
+true,
+1,
+1
+],
+"apex::sceneinvoke": [
+"APEX Scene Invoke",
+false,
+1,
+3
+],
+"apex::script": [
+"APEX Script",
+false,
+0,
+4
+],
+"assemble": [
+"Assemble",
+false,
+1,
+1
+],
+"attribadjustarray": [
+"Attribute Adjust Array",
+false,
+1,
+1
+],
+"attribadjustcolor": [
+"Attribute Adjust Color",
+false,
+0,
+1
+],
+"attribadjustdict": [
+"Attribute Adjust Dictionary",
+false,
+0,
+1
+],
+"attribadjustfloat": [
+"Attribute Adjust Float",
+false,
+0,
+1
+],
+"attribadjustinteger": [
+"Attribute Adjust Integer",
+false,
+0,
+1
+],
+"attribadjustvector": [
+"Attribute Adjust Vector",
+false,
+0,
+1
+],
+"attribblur": [
+"Attribute Blur",
+false,
+1,
+2
+],
+"attribcast": [
+"Attribute Cast",
+false,
+1,
+1
+],
+"attribcombine": [
+"Attribute Combine",
+false,
+1,
+2
+],
+"attribcomposite": [
+"Attribute Composite",
+false,
+0,
+9999
+],
+"attribcopy": [
+"Attribute Copy",
+false,
+1,
+2
+],
+"attribcreate": [
+"Attribute Create",
+false,
+1,
+1
+],
+"attribcreate::2.0": [
+"Attribute Create",
+false,
+1,
+1
+],
+"attribdelete": [
+"Attribute Delete",
+false,
+1,
+2
+],
+"attribexpression": [
+"Attribute Expression",
+false,
+0,
+4
+],
+"attribfade": [
+"Attribute Fade",
+false,
+1,
+3
+],
+"attribfill": [
+"Attribute Fill",
+false,
+1,
+1
+],
+"attribfind": [
+"Attribute Find",
+true,
+2,
+2
+],
+"attribfrommap": [
+"Attribute from Map",
+false,
+1,
+2
+],
+"attribfromparm": [
+"Attribute from Parameters",
+false,
+0,
+1
+],
+"attribfrompieces": [
+"Attribute from Pieces",
+false,
+2,
+2
+],
+"attribfromvolume": [
+"Attribute from Volume",
+false,
+2,
+2
+],
+"attribinterpolate": [
+"Attribute Interpolate",
+false,
+2,
+2
+],
+"attribmirror": [
+"Attribute Mirror",
+false,
+1,
+1
+],
+"attribnoise": [
+"Attribute Noise",
+false,
+1,
+1
+],
+"attribnoise::2.0": [
+"Attribute Noise",
+false,
+1,
+1
+],
+"attribpaint": [
+"Attribute Paint",
+false,
+1,
+1
+],
+"attribpromote": [
+"Attribute Promote",
+false,
+1,
+1
+],
+"attribrandomize": [
+"Attribute Randomize",
+false,
+0,
+1
+],
+"attribremap": [
+"Attribute Remap",
+false,
+1,
+1
+],
+"attribreorient": [
+"Attribute Reorient",
+false,
+2,
+2
+],
+"attribstringedit": [
+"Attribute String Edit",
+false,
+1,
+1
+],
+"attribswap": [
+"Attribute Swap",
+false,
+1,
+1
+],
+"attribtransfer": [
+"Attribute Transfer",
+false,
+2,
+2
+],
+"attribtransferbyuv": [
+"Attribute Transfer by UV",
+false,
+2,
+2
+],
+"attribute": [
+"Attribute Rename",
+false,
+1,
+1
+],
+"attribvop": [
+"Attribute VOP",
+false,
+0,
+4
+],
+"attribwrangle": [
+"Attribute Wrangle",
+false,
+0,
+4
+],
+"attribwranglecore": [
+"Attribute Wrangle Core",
+true,
+0,
+4
+],
+"autoflexlines": [
+"Autoflex Lines",
+true,
+1,
+1
+],
+"bakeode": [
+"Bake ODE",
+false,
+1,
+1
+],
+"bakevex": [
+"Bake VEX",
+true,
+1,
+1
+],
+"bakevolume": [
+"Bake Volume",
+false,
+1,
+2
+],
+"ballisticpath": [
+"Ballistic Path",
+false,
+1,
+1
+],
+"basis": [
+"Spline Basis",
+false,
+1,
+1
+],
+"bend": [
+"Bend",
+false,
+1,
+2
+],
+"beta::tissuesolver": [
+"Tissue Solver",
+true,
+0,
+3
+],
+"blast": [
+"Blast",
+false,
+1,
+1
+],
+"blendshapes": [
+"Blend Shapes",
+false,
+1,
+9999
+],
+"blendshapes::2.0": [
+"Blend Shapes",
+false,
+1,
+9999
+],
+"block_begin": [
+"Block Begin",
+false,
+0,
+1
+],
+"block_end": [
+"Block End",
+false,
+0,
+2
+],
+"bonecapturebiharmonic": [
+"Bone Capture Biharmonic",
+false,
+2,
+2
+],
+"bonecapturelines": [
+"Bone Capture Lines",
+false,
+0,
+1
+],
+"bonedeform": [
+"Bone Deform",
+false,
+1,
+3
+],
+"bonelink": [
+"Bone Link",
+false,
+0,
+3
+],
+"bonesolidify": [
+"Bone Solidify",
+true,
+1,
+2
+],
+"boolean::2.0": [
+"Boolean",
+false,
+1,
+2
+],
+"booleanfracture": [
+"Boolean Fracture",
+false,
+2,
+2
+],
+"bound": [
+"Bound",
+false,
+0,
+1
+],
+"box": [
+"Box",
+false,
+0,
+1
+],
+"break": [
+"Break",
+true,
+1,
+2
+],
+"bridge": [
+"Spline Bridge",
+true,
+1,
+1
+],
+"bulge": [
+"Bulge",
+false,
+2,
+2
+],
+"cache": [
+"Cache",
+false,
+1,
+2
+],
+"cacheif": [
+"Cache-If",
+false,
+1,
+9999
+],
+"cap": [
+"Spline Cap",
+false,
+1,
+1
+],
+"capture": [
+"Bone Capture",
+false,
+1,
+2
+],
+"captureattribpack": [
+"Capture Attribute Pack",
+false,
+1,
+1
+],
+"captureattribunpack": [
+"Capture Attribute Unpack",
+false,
+1,
+1
+],
+"capturecorrect": [
+"Capture Correct",
+false,
+1,
+1
+],
+"capturelayerpaint": [
+"Capture Layer Paint",
+true,
+1,
+3
+],
+"capturelayerpaint::2.0": [
+"Capture Layer Paint",
+false,
+1,
+3
+],
+"capturemeta": [
+"Capture Metaball",
+true,
+1,
+1
+],
+"capturemirror": [
+"Capture Mirror",
+false,
+1,
+1
+],
+"captureoverride": [
+"Capture Override",
+false,
+1,
+1
+],
+"capturepaintcore": [
+"Capture Paint Core",
+true,
+2,
+3
+],
+"captureproximity": [
+"Bone Capture Proximity",
+false,
+1,
+2
+],
+"carve": [
+"Carve",
+false,
+1,
+1
+],
+"chain": [
+"Chain",
+false,
+2,
+2
+],
+"channel": [
+"Channel",
+false,
+1,
+1
+],
+"chopnet": [
+"CHOP Network",
+false,
+0,
+0
+],
+"circle": [
+"Circle",
+false,
+0,
+0
+],
+"circlefromedges": [
+"Circle from Edges",
+false,
+1,
+1
+],
+"circlespline": [
+"Circle Spline",
+false,
+1,
+1
+],
+"clay": [
+"Spline Clay",
+false,
+1,
+2
+],
+"clean": [
+"Clean",
+false,
+1,
+1
+],
+"clip": [
+"Clip - Old",
+false,
+1,
+1
+],
+"clip::2.0": [
+"Clip",
+false,
+1,
+1
+],
+"clothcapture": [
+"Cloth Capture",
+false,
+2,
+2
+],
+"clothdeform": [
+"Cloth Deform",
+false,
+3,
+3
+],
+"cloud": [
+"Cloud",
+false,
+1,
+1
+],
+"cloud::2.0": [
+"Cloud",
+true,
+1,
+1
+],
+"cloudadjustdensityprofile": [
+"Cloud Adjust Density Profile",
+false,
+0,
+1
+],
+"cloudbillowynoise": [
+"Cloud Billowy Noise",
+false,
+1,
+2
+],
+"cloudclip": [
+"Cloud Clip",
+false,
+1,
+2
+],
+"cloudlight": [
+"Cloud Light",
+false,
+2,
+2
+],
+"cloudnoise": [
+"Cloud Noise",
+false,
+1,
+2
+],
+"cloudshapefromintersection": [
+"Cloud Shape from Intersection",
+false,
+1,
+1
+],
+"cloudshapefromline": [
+"Cloud Shape from Line",
+false,
+0,
+1
+],
+"cloudshapefrompolygon": [
+"Cloud Shape from Polygon",
+false,
+1,
+1
+],
+"cloudshapegenerate": [
+"Cloud Shape Generate",
+false,
+0,
+1
+],
+"cloudshapereplicate": [
+"Cloud Shape Replicate",
+false,
+1,
+1
+],
+"cloudwispynoise": [
+"Cloud Wispy Noise",
+false,
+1,
+3
+],
+"cluster": [
+"Cluster",
+false,
+1,
+2
+],
+"clustermesh": [
+"Cluster Mesh",
+true,
+1,
+1
+],
+"clusterpoints": [
+"Cluster Points",
+false,
+1,
+2
+],
+"collisionsource": [
+"Collision Source",
+false,
+1,
+1
+],
+"collisionsource::2.0": [
+"Collision Source",
+false,
+1,
+1
+],
+"color": [
+"Color",
+false,
+1,
+1
+],
+"comb": [
+"Comb",
+false,
+1,
+1
+],
+"compile_begin": [
+"Block Begin Compile",
+false,
+0,
+1
+],
+"compile_end": [
+"Block End Compile",
+false,
+1,
+1
+],
+"connectadjacentpieces": [
+"Connect Adjacent Pieces",
+false,
+1,
+1
+],
+"connectivity": [
+"Connectivity",
+false,
+1,
+1
+],
+"constraintnetwork": [
+"Constraints Network",
+false,
+0,
+0
+],
+"control": [
+"Control",
+false,
+0,
+1
+],
+"convert": [
+"Convert",
+false,
+1,
+1
+],
+"convertheightfield": [
+"Convert HeightField",
+false,
+1,
+1
+],
+"convertline": [
+"Convert Line",
+false,
+1,
+1
+],
+"convertmeta": [
+"Convert Meta",
+false,
+1,
+1
+],
+"convertvdb": [
+"Convert VDB",
+false,
+1,
+3
+],
+"convertvdbpoints": [
+"Convert VDB Points",
+false,
+1,
+2
+],
+"convertvolume": [
+"Convert Volume",
+false,
+1,
+1
+],
+"convexdecomposition": [
+"Convex Decomposition",
+false,
+1,
+1
+],
+"cookie": [
+"Cookie",
+true,
+1,
+2
+],
+"cop2net": [
+"COP Network - Old",
+false,
+0,
+0
+],
+"copnet": [
+"COP Network",
+false,
+0,
+0
+],
+"coppreviewmaterial": [
+"COP Preview Material",
+false,
+1,
+1
+],
+"copy": [
+"Copy with Stamp",
+true,
+1,
+2
+],
+"copytocurves": [
+"Copy to Curves",
+false,
+2,
+2
+],
+"copytopoints": [
+"Copy to Points",
+false,
+2,
+2
+],
+"copytopoints::2.0": [
+"Copy to Points",
+false,
+2,
+2
+],
+"copyxform": [
+"Copy and Transform",
+false,
+1,
+1
+],
+"crease": [
+"Crease",
+false,
+1,
+1
+],
+"creep": [
+"Creep",
+false,
+2,
+2
+],
+"cregion": [
+"Capture Region",
+false,
+0,
+0
+],
+"crosssectionsurface": [
+"Cross Section Surface",
+false,
+1,
+1
+],
+"crowdassignlayers": [
+"Crowd Assign Layers",
+false,
+1,
+1
+],
+"crowdmotionpath": [
+"Crowd MotionPath",
+false,
+1,
+1
+],
+"crowdmotionpathavoid": [
+"Crowd MotionPath Avoid",
+false,
+1,
+3
+],
+"crowdmotionpathavoidcore": [
+"Crowd MotionPath Avoid Core",
+true,
+1,
+2
+],
+"crowdmotionpathedit": [
+"Crowd MotionPath Edit",
+false,
+2,
+2
+],
+"crowdmotionpatheditcore": [
+"Crowd MotionPath Edit Core",
+true,
+1,
+1
+],
+"crowdmotionpathevaluate": [
+"Crowd MotionPath Evaluate",
+false,
+2,
+2
+],
+"crowdmotionpathevaluatecore": [
+"Crowd MotionPath Evaluate Core",
+true,
+2,
+3
+],
+"crowdmotionpathfollow": [
+"Crowd MotionPath Follow",
+false,
+1,
+3
+],
+"crowdmotionpathlayer": [
+"Crowd MotionPath Layer",
+false,
+2,
+2
+],
+"crowdmotionpathretime": [
+"Crowd MotionPath Retime",
+false,
+1,
+2
+],
+"crowdmotionpathtransition": [
+"Crowd MotionPath Transition",
+false,
+2,
+2
+],
+"crowdmotionpathtrigger": [
+"Crowd MotionPath Trigger",
+false,
+1,
+3
+],
+"crowdsource": [
+"Crowd Source",
+false,
+0,
+1
+],
+"crowdsource::2.0": [
+"Crowd Source",
+false,
+0,
+2
+],
+"crowdsource::3.0": [
+"Crowd Source",
+false,
+0,
+2
+],
+"curve": [
+"Curve",
+false,
+0,
+1
+],
+"curve::2.0": [
+"Curve",
+false,
+0,
+1
+],
+"curveclay": [
+"Spline Curve Clay",
+false,
+1,
+3
+],
+"curvesect": [
+"Curve Intersect",
+false,
+2,
+2
+],
+"debrissource": [
+"Debris Source",
+false,
+1,
+1
+],
+"debrissource::2.0": [
+"Debris Source",
+false,
+1,
+2
+],
+"deform": [
+"Deform",
+true,
+1,
+1
+],
+"deformationwrangle": [
+"Deformation Wrangle",
+false,
+1,
+4
+],
+"deformmeta": [
+"Deform Metaball",
+true,
+1,
+1
+],
+"deformmuscle": [
+"Deform Muscle",
+true,
+1,
+1
+],
+"delete": [
+"Delete",
+false,
+1,
+1
+],
+"delete_overlapping_polygons": [
+"Delete Overlapping Polygons",
+true,
+1,
+1
+],
+"deltamush": [
+"Delta Mush",
+false,
+1,
+2
+],
+"dembones_skinningconverter::1.0": [
+"Dem Bones Skinning Converter",
+false,
+1,
+1
+],
+"detangle": [
+"Detangle",
+false,
+1,
+3
+],
+"deterministicp2gcl": [
+"Deterministic P2G CL",
+true,
+2,
+2
+],
+"dissolve": [
+"Dissolve",
+false,
+1,
+1
+],
+"dissolve::2.0": [
+"Dissolve",
+false,
+1,
+1
+],
+"distancealonggeometry": [
+"Distance along Geometry",
+false,
+1,
+1
+],
+"distancefromgeometry": [
+"Distance from Geometry",
+false,
+2,
+2
+],
+"distancefromtarget": [
+"Distance from Target",
+false,
+1,
+1
+],
+"divide": [
+"Divide",
+false,
+1,
+2
+],
+"dopimport": [
+"DOP Import",
+false,
+0,
+1
+],
+"dopimport::2.0": [
+"DOP Import",
+false,
+0,
+0
+],
+"dopimportfield": [
+"Dop Import Fields",
+false,
+0,
+0
+],
+"dopimportfield::2.0": [
+"DOP Import Fields",
+false,
+0,
+0
+],
+"dopimportrecords": [
+"DOP Import Records",
+false,
+0,
+0
+],
+"dopio": [
+"Dop I/O",
+true,
+0,
+0
+],
+"dopnet": [
+"DOP Network",
+false,
+0,
+4
+],
+"drawcurve": [
+"Draw Curve",
+false,
+0,
+2
+],
+"drawhair": [
+"Draw Hair",
+true,
+0,
+2
+],
+"duplicate": [
+"Duplicate",
+true,
+1,
+1
+],
+"each": [
+"Each",
+false,
+1,
+1
+],
+"edgecollapse": [
+"Edge Collapse",
+false,
+1,
+1
+],
+"edgecusp": [
+"Edge Cusp",
+false,
+1,
+1
+],
+"edgedivide": [
+"Edge Divide",
+false,
+1,
+1
+],
+"edgeequalize": [
+"Edge Equalize",
+false,
+1,
+1
+],
+"edgeflip": [
+"Edge Flip",
+false,
+1,
+1
+],
+"edgefracture": [
+"Edge Fracture",
+false,
+1,
+2
+],
+"edgestraighten": [
+"Edge Straighten",
+false,
+1,
+1
+],
+"edgetransport": [
+"Edge Transport",
+false,
+1,
+1
+],
+"edit": [
+"Edit",
+false,
+1,
+2
+],
+"elastictransform": [
+"Elastic Transform",
+true,
+1,
+1
+],
+"ends": [
+"Ends",
+false,
+1,
+1
+],
+"enumerate": [
+"Enumerate",
+false,
+1,
+1
+],
+"error": [
+"Error",
+false,
+0,
+1
+],
+"explodedview": [
+"Exploded View",
+false,
+1,
+1
+],
+"explodedview::2.0": [
+"Exploded View",
+false,
+1,
+1
+],
+"exportobjtransforms": [
+"Export Object Transforms",
+false,
+2,
+2
+],
+"extractcentroid": [
+"Extract Centroid",
+false,
+1,
+1
+],
+"extractpointfromcurve": [
+"Extract Point from Curve",
+false,
+1,
+1
+],
+"extracttransform": [
+"Extract Transform",
+false,
+2,
+2
+],
+"extrude": [
+"Extrude - Old",
+false,
+1,
+2
+],
+"extrudevolume": [
+"Extrude Volume",
+false,
+1,
+1
+],
+"facet": [
+"Facet",
+false,
+1,
+1
+],
+"falloff": [
+"Falloff",
+true,
+1,
+1
+],
+"fascia": [
+"Fascia",
+true,
+1,
+2
+],
+"fasciasolidify": [
+"Fascia Solidify",
+true,
+1,
+2
+],
+"fasciasolver": [
+"Fascia Solver",
+true,
+2,
+2
+],
+"featherattribinterpolate": [
+"Feather Attrib Interpolate",
+true,
+1,
+2
+],
+"featherbarbtangents": [
+"Feather Barb Tangents",
+false,
+1,
+1
+],
+"featherbarbxform": [
+"Feather Barb Transform",
+false,
+1,
+3
+],
+"featherclump": [
+"Feather Clump",
+false,
+0,
+3
+],
+"featherconvert": [
+"Feather Convert",
+true,
+1,
+3
+],
+"featherdeform": [
+"Feather Deform",
+false,
+1,
+5
+],
+"featherdeintersect": [
+"Feather Deintersect",
+false,
+1,
+3
+],
+"featherdeintersect_expandneighbors": [
+"Feather Deintersect Expand Neighbors",
+true,
+1,
+2
+],
+"featherinstancepool": [
+"Feather Instance Pool",
+false,
+1,
+2
+],
+"feathermatchuncondensed": [
+"Feather Match Uncondensed",
+false,
+1,
+4
+],
+"feathermindist": [
+"Feather Minimum Distance",
+false,
+1,
+4
+],
+"feathernoise": [
+"Feather Noise",
+false,
+1,
+3
+],
+"feathernormalize": [
+"Feather Normalize",
+false,
+1,
+3
+],
+"featherprimitive": [
+"Feather Primitive",
+false,
+1,
+1
+],
+"featherray": [
+"Feather Ray",
+false,
+1,
+4
+],
+"featherraycore": [
+"Feather Ray Core",
+true,
+2,
+2
+],
+"featherresample": [
+"Feather Resample",
+false,
+1,
+3
+],
+"feathershapeorg": [
+"Feather Shape Organize",
+false,
+1,
+3
+],
+"feathersurface": [
+"Feather Surface",
+false,
+1,
+3
+],
+"feathersurfaceblend": [
+"Feather Surface Blend",
+false,
+1,
+4
+],
+"feathertemplateassign": [
+"Feather Template Assign",
+false,
+1,
+4
+],
+"feathertemplatefromshape": [
+"Feather Template from Shape",
+false,
+1,
+1
+],
+"feathertemplateinterpolate": [
+"Feather Template Interpolate",
+false,
+1,
+4
+],
+"feathertemplateinterpolatecore": [
+"Feather Template Interpolate Core",
+true,
+3,
+3
+],
+"featheruncondense": [
+"Feather Uncondense",
+false,
+1,
+3
+],
+"featherutility": [
+"Feather Utility",
+false,
+1,
+3
+],
+"feathervisualize": [
+"Feather Visualize",
+false,
+1,
+3
+],
+"featherwidth": [
+"Feather Width",
+false,
+1,
+3
+],
+"femdeform": [
+"FEM Deform",
+false,
+2,
+3
+],
+"femvalidate": [
+"FEM Validate",
+false,
+1,
+1
+],
+"fibergroom": [
+"Fiber Groom",
+false,
+1,
+2
+],
+"filament_advect_pos": [
+"Filament Advect",
+false,
+1,
+1
+],
+"file": [
+"File",
+false,
+0,
+1
+],
+"filecache": [
+"File Cache",
+false,
+0,
+1
+],
+"filecache::2.0": [
+"File Cache",
+false,
+0,
+1
+],
+"filemerge": [
+"File Merge",
+false,
+0,
+0
+],
+"filemerge::2.0": [
+"File Merge",
+false,
+0,
+0
+],
+"fillet": [
+"Spline Fillet",
+false,
+1,
+2
+],
+"finalizewaves": [
+"Finalize Waves",
+true,
+1,
+1
+],
+"findinstances": [
+"Find Instances",
+false,
+1,
+2
+],
+"findshortestpath": [
+"Find Shortest Path",
+false,
+1,
+2
+],
+"fit": [
+"Spline Fit",
+false,
+1,
+1
+],
+"flatten": [
+"Flatten",
+false,
+1,
+1
+],
+"flipboundary": [
+"FLIP Boundary",
+false,
+3,
+4
+],
+"flipcollide": [
+"FLIP Collide",
+false,
+3,
+4
+],
+"flipcontainer": [
+"FLIP Container",
+false,
+0,
+1
+],
+"flipmodifyvolume": [
+"FLIP Modify Volume",
+true,
+0,
+2
+],
+"flipsolver": [
+"FLIP Solver",
+false,
+3,
+4
+],
+"flipsource": [
+"FLIP DOP Source",
+false,
+1,
+1
+],
+"flipvolumecombine": [
+"FLIP Volume Combine",
+false,
+3,
+4
+],
+"fluidcompress": [
+"Fluid Compress",
+false,
+1,
+3
+],
+"fluidsource": [
+"Fluid Source",
+true,
+1,
+1
+],
+"font": [
+"Font",
+false,
+0,
+0
+],
+"force": [
+"Force",
+false,
+1,
+1
+],
+"foreach": [
+"For-Each Subnetwork",
+true,
+0,
+4
+],
+"fractal": [
+"Fractal",
+false,
+1,
+1
+],
+"frankenmuscle": [
+"Franken Muscle",
+false,
+1,
+2
+],
+"frankenmusclepaint": [
+"Franken Muscle Paint",
+false,
+0,
+1
+],
+"fur": [
+"Fur",
+false,
+1,
+4
+],
+"fuse": [
+"Fuse",
+false,
+1,
+1
+],
+"fuse::2.0": [
+"Fuse",
+false,
+1,
+2
+],
+"gltf": [
+"GLTF",
+false,
+0,
+0
+],
+"gluecluster": [
+"Glue Cluster",
+false,
+1,
+1
+],
+"grainsource": [
+"Grain Source",
+false,
+1,
+1
+],
+"graphcolor": [
+"Graph Color",
+false,
+1,
+1
+],
+"grid": [
+"Grid",
+false,
+0,
+0
+],
+"groomblend": [
+"Groom Blend",
+false,
+1,
+5
+],
+"groomfetch": [
+"Groom Fetch",
+false,
+0,
+0
+],
+"groomswitch": [
+"Groom Switch",
+false,
+6,
+6
+],
+"group": [
+"Group",
+true,
+1,
+2
+],
+"groupbylasso": [
+"Group by Lasso",
+false,
+1,
+1
+],
+"groupcombine": [
+"Group Combine",
+false,
+1,
+1
+],
+"groupcopy": [
+"Group Copy",
+false,
+2,
+2
+],
+"groupcreate": [
+"Group Create",
+false,
+1,
+2
+],
+"groupdelete": [
+"Group Delete",
+false,
+1,
+1
+],
+"groupexpand": [
+"Group Expand",
+false,
+1,
+1
+],
+"groupexpression": [
+"Group Expression",
+false,
+1,
+4
+],
+"groupfindpath": [
+"Group Find Path",
+false,
+1,
+1
+],
+"groupfromattribboundary": [
+"Group from Attribute Boundary",
+false,
+1,
+1
+],
+"groupinvert": [
+"Group Invert",
+false,
+1,
+1
+],
+"grouppaint": [
+"Group Paint",
+false,
+1,
+1
+],
+"grouppromote": [
+"Group Promote",
+false,
+1,
+1
+],
+"grouprange": [
+"Group by Range",
+false,
+1,
+1
+],
+"grouprename": [
+"Group Rename",
+false,
+1,
+1
+],
+"groupsfromname": [
+"Groups from Name",
+false,
+1,
+1
+],
+"grouptransfer": [
+"Group Transfer",
+false,
+2,
+2
+],
+"guideadvect": [
+"Guide Advect",
+false,
+1,
+4
+],
+"guidecollidevdb": [
+"Guide Collide With VDB",
+false,
+1,
+4
+],
+"guidedeform": [
+"Guide Deform",
+false,
+1,
+5
+],
+"guidedraw": [
+"Guide Draw",
+false,
+0,
+3
+],
+"guidegroom": [
+"Guide Groom",
+false,
+1,
+3
+],
+"guidegroom::2.0": [
+"Guide Groom",
+false,
+0,
+3
+],
+"guidegroomcore": [
+"Guide Groom Core",
+true,
+0,
+4
+],
+"guidegroup": [
+"Guide Group",
+false,
+1,
+3
+],
+"guidegrowtosurface": [
+"Guide Grow to Surface",
+false,
+2,
+2
+],
+"guideinit": [
+"Guide Initialize",
+false,
+2,
+3
+],
+"guideinterpolationmesh": [
+"Guide Interpolation Mesh",
+false,
+0,
+4
+],
+"guidemask": [
+"Guide Mask",
+false,
+1,
+4
+],
+"guidemaskcore": [
+"Guide Mask Core",
+true,
+1,
+3
+],
+"guidepartition": [
+"Guide Partition",
+false,
+1,
+4
+],
+"guideprocess": [
+"Guide Process",
+false,
+1,
+3
+],
+"guideprocesscore": [
+"Guide Process Core",
+true,
+1,
+3
+],
+"guideskinattriblookup": [
+"Guide Skin Attribute Lookup",
+false,
+2,
+2
+],
+"guidetangentspace": [
+"Guide Tangent Space",
+false,
+1,
+2
+],
+"guidetransfer": [
+"Guide Transfer",
+false,
+3,
+3
+],
+"haircardgen": [
+"Hair Card Generate",
+false,
+2,
+4
+],
+"hairclump": [
+"Hair Clump",
+false,
+2,
+4
+],
+"hairclump::2.0": [
+"Hair Clump",
+false,
+2,
+4
+],
+"hairclumpcore": [
+"Hair Clump Core",
+true,
+2,
+4
+],
+"hairgen": [
+"Hair Generate",
+false,
+0,
+4
+],
+"hairgen::2.0": [
+"Hair Generate",
+false,
+0,
+5
+],
+"hairgencore": [
+"Hair Generate Core",
+true,
+1,
+5
+],
+"hairgrowthfield": [
+"Hair Growth Field",
+false,
+2,
+4
+],
+"heatgeodesic": [
+"Heat Geodesic",
+false,
+1,
+1
+],
+"heightfield": [
+"HeightField",
+false,
+0,
+0
+],
+"heightfield_blur": [
+"HeightField Blur",
+false,
+1,
+2
+],
+"heightfield_clip": [
+"HeightField Clip",
+false,
+1,
+2
+],
+"heightfield_copylayer": [
+"HeightField Copy Layer",
+false,
+1,
+1
+],
+"heightfield_crop": [
+"HeightField Crop",
+false,
+1,
+2
+],
+"heightfield_cutoutbyobject": [
+"HeightField Cutout by Geometry",
+false,
+2,
+2
+],
+"heightfield_deform": [
+"HeightField Deform",
+false,
+3,
+3
+],
+"heightfield_distort": [
+"HeightField Distort by Noise",
+false,
+1,
+2
+],
+"heightfield_distortbylayer": [
+"HeightField Distort by Layer",
+false,
+1,
+2
+],
+"heightfield_drawmask": [
+"HeightField Draw Mask",
+false,
+1,
+1
+],
+"heightfield_erode": [
+"HeightField Erode",
+false,
+1,
+2
+],
+"heightfield_erode::2.0": [
+"HeightField Erode",
+false,
+1,
+2
+],
+"heightfield_erode_hydro": [
+"HeightField Erode Hydro",
+false,
+1,
+2
+],
+"heightfield_erode_precipitation": [
+"HeightField Erode Precipitation",
+false,
+1,
+2
+],
+"heightfield_erode_thermal": [
+"HeightField Erode Thermal",
+false,
+1,
+2
+],
+"heightfield_file": [
+"HeightField File",
+false,
+0,
+1
+],
+"heightfield_flatten": [
+"HeightField Flatten",
+false,
+1,
+1
+],
+"heightfield_flowfield": [
+"HeightField Flow Field",
+false,
+1,
+1
+],
+"heightfield_isolatelayer": [
+"HeightField Isolate Layer",
+false,
+1,
+1
+],
+"heightfield_layer": [
+"HeightField Layer",
+false,
+2,
+3
+],
+"heightfield_layerclear": [
+"HeightField Layer Clear",
+false,
+1,
+1
+],
+"heightfield_layerproperty": [
+"HeightField Layer Properties",
+false,
+1,
+1
+],
+"heightfield_maskbyconcavity": [
+"HeightField Mask by Concavity",
+true,
+1,
+1
+],
+"heightfield_maskbyfeature": [
+"HeightField Mask by Feature",
+false,
+1,
+1
+],
+"heightfield_maskbyobject": [
+"HeightField Mask by Geometry",
+false,
+2,
+2
+],
+"heightfield_maskbyocclusion": [
+"HeightField Mask by Occlusion",
+false,
+1,
+1
+],
+"heightfield_maskbyshadow": [
+"HeightField Mask by Shadow",
+true,
+1,
+1
+],
+"heightfield_noise": [
+"HeightField Noise",
+false,
+1,
+2
+],
+"heightfield_output": [
+"HeightField Output",
+false,
+1,
+1
+],
+"heightfield_paint": [
+"HeightField Paint",
+false,
+1,
+1
+],
+"heightfield_patch": [
+"HeightField Patch",
+false,
+2,
+2
+],
+"heightfield_pattern": [
+"HeightField Pattern",
+false,
+1,
+2
+],
+"heightfield_project": [
+"HeightField Project",
+false,
+2,
+2
+],
+"heightfield_quickshade": [
+"HeightField Quick Shade",
+false,
+1,
+1
+],
+"heightfield_remap": [
+"HeightField Remap",
+false,
+1,
+2
+],
+"heightfield_resample": [
+"HeightField Resample",
+false,
+1,
+1
+],
+"heightfield_scatter": [
+"HeightField Scatter",
+false,
+1,
+1
+],
+"heightfield_scatter::2.0": [
+"HeightField Scatter",
+false,
+1,
+3
+],
+"heightfield_slump": [
+"HeightField Slump",
+false,
+1,
+1
+],
+"heightfield_terrace": [
+"HeightField Terrace",
+false,
+1,
+2
+],
+"heightfield_terrace::2.0": [
+"HeightField Terrace",
+false,
+1,
+2
+],
+"heightfield_tilesplit": [
+"HeightField Tile Split",
+false,
+1,
+1
+],
+"heightfield_visualize": [
+"HeightField Visualize",
+false,
+1,
+1
+],
+"heightfield_xform": [
+"HeightField Transform",
+false,
+1,
+1
+],
+"hole": [
+"Hole",
+false,
+1,
+1
+],
+"inflate": [
+"Inflate",
+false,
+2,
+3
+],
+"instance": [
+"Instance",
+false,
+1,
+1
+],
+"intersectionanalysis": [
+"Intersection Analysis",
+false,
+1,
+2
+],
+"intersectionstitch": [
+"Intersection Stitch",
+false,
+1,
+3
+],
+"invoke": [
+"Invoke Compiled Block",
+false,
+0,
+4
+],
+"invokegraph": [
+"Invoke Compiled Graph",
+false,
+1,
+9999
+],
+"iso": [
+"IsoSurface",
+true,
+0,
+1
+],
+"isooffset": [
+"IsoOffset",
+false,
+1,
+2
+],
+"join": [
+"Join",
+false,
+1,
+1
+],
+"kelvinletsculpt": [
+"Kelvinlet Sculpt",
+true,
+2,
+2
+],
+"kinefx::adapttoterrain": [
+"Adapt to Terrain",
+false,
+1,
+3
+],
+"kinefx::adapttoterrain::2.0": [
+"Adapt to Terrain",
+false,
+1,
+3
+],
+"kinefx::agentanimationunpack": [
+"Agent Animation Unpack",
+false,
+1,
+1
+],
+"kinefx::agentcharacterunpack": [
+"Agent Character Unpack",
+false,
+1,
+1
+],
+"kinefx::agentfromrig": [
+"Agent from Rig",
+false,
+1,
+1
+],
+"kinefx::agentfromrigcore": [
+"Agent from Rig Core",
+true,
+1,
+1
+],
+"kinefx::agentposefromrig": [
+"Agent Pose from Rig",
+false,
+2,
+3
+],
+"kinefx::attachcontrolgeo": [
+"Attach Control Geometry",
+true,
+1,
+2
+],
+"kinefx::attachjointgeo": [
+"Attach Joint Geo",
+false,
+1,
+3
+],
+"kinefx::attribtransformcompute": [
+"Attribute Transform Compute",
+false,
+1,
+1
+],
+"kinefx::attribtransformextract": [
+"Attribute Transform Extract",
+false,
+1,
+1
+],
+"kinefx::capturepackedgeo": [
+"Capture Packed Geometry",
+false,
+2,
+2
+],
+"kinefx::characterblendshapechannels": [
+"Character Blend Shape Channels",
+false,
+1,
+2
+],
+"kinefx::characterblendshapes": [
+"Character Blend Shapes",
+false,
+3,
+3
+],
+"kinefx::characterblendshapesadd": [
+"Character Blend Shapes Add",
+false,
+1,
+2
+],
+"kinefx::characterblendshapescore": [
+"Character Blend Shapes Core",
+true,
+2,
+2
+],
+"kinefx::characterblendshapesextract": [
+"Character Blend Shapes Extract",
+false,
+1,
+1
+],
+"kinefx::characterio": [
+"Character I/O",
+false,
+0,
+3
+],
+"kinefx::characterio::2.0": [
+"Character I/O",
+false,
+0,
+3
+],
+"kinefx::characterpack": [
+"Character Pack",
+false,
+0,
+3
+],
+"kinefx::characterunpack": [
+"Character Unpack",
+false,
+1,
+1
+],
+"kinefx::clipexport": [
+"Animation Clip Export",
+true,
+1,
+1
+],
+"kinefx::clipimport": [
+"Animation Clip Import",
+true,
+0,
+1
+],
+"kinefx::computemotionclipcreate": [
+"Compute Motion Clip Create",
+true,
+0,
+0
+],
+"kinefx::computemotionclipretime": [
+"Compute MotionClip Retime",
+true,
+1,
+1
+],
+"kinefx::computerigpose": [
+"Compute Rig Pose",
+false,
+1,
+1
+],
+"kinefx::computetransform": [
+"Compute Transform",
+false,
+1,
+1
+],
+"kinefx::configureclipinfo": [
+"Configure Clip Info",
+false,
+1,
+1
+],
+"kinefx::configurejointlimits": [
+"Configure Joint Limits",
+false,
+0,
+2
+],
+"kinefx::configurejoints": [
+"Configure Joints",
+false,
+1,
+3
+],
+"kinefx::configurerigvis": [
+"Configure Rig Visualizers",
+false,
+1,
+1
+],
+"kinefx::configurerigvis::2.0": [
+"Configure Rig Visualizers",
+false,
+1,
+1
+],
+"kinefx::deletejoints": [
+"Delete Joints",
+false,
+1,
+1
+],
+"kinefx::dembones_skinningconverter": [
+"Dem Bones Skinning Converter",
+false,
+2,
+2
+],
+"kinefx::dynamicwarp": [
+"Dynamic Warp",
+false,
+2,
+2
+],
+"kinefx::extractlocomotion": [
+"Extract Locomotion",
+false,
+1,
+2
+],
+"kinefx::fbikconfiguretargets": [
+"Full Body IK Configure Targets",
+false,
+1,
+2
+],
+"kinefx::fbxanimimport": [
+"FBX Animation Import",
+false,
+0,
+0
+],
+"kinefx::fbxcharacterimport": [
+"FBX Character Import",
+false,
+0,
+0
+],
+"kinefx::fbxskinimport": [
+"FBX Skin Import",
+false,
+0,
+0
+],
+"kinefx::fktransfer": [
+"FK Transfer",
+false,
+1,
+2
+],
+"kinefx::fullbodyik": [
+"Full Body IK",
+false,
+1,
+2
+],
+"kinefx::groupjoints": [
+"Group Joints",
+false,
+1,
+1
+],
+"kinefx::ikchains": [
+"IK Chains",
+false,
+2,
+2
+],
+"kinefx::ikchains::2.0": [
+"IK Chains",
+false,
+2,
+2
+],
+"kinefx::jointcapturebiharmonic": [
+"Joint Capture Biharmonic",
+false,
+2,
+3
+],
+"kinefx::jointcapturepaint": [
+"Joint Capture Paint",
+false,
+3,
+3
+],
+"kinefx::jointcaptureproximity": [
+"Joint Capture Proximity",
+false,
+2,
+3
+],
+"kinefx::jointdeform": [
+"Joint Deform",
+false,
+3,
+3
+],
+"kinefx::mappoints": [
+"Map Points",
+false,
+2,
+2
+],
+"kinefx::mocapimport": [
+"Mocap Import",
+false,
+0,
+0
+],
+"kinefx::mocapstream": [
+"Mocap Stream",
+false,
+0,
+1
+],
+"kinefx::motionclip": [
+"MotionClip",
+false,
+1,
+9999
+],
+"kinefx::motionclipblend": [
+"MotionClip Blend",
+false,
+2,
+2
+],
+"kinefx::motionclipblend::2.0": [
+"MotionClip Blend",
+false,
+2,
+2
+],
+"kinefx::motionclipcomputevelocity": [
+"MotionClip Compute Velocity",
+true,
+1,
+2
+],
+"kinefx::motionclipcreate": [
+"MotionClip Create ",
+false,
+0,
+1
+],
+"kinefx::motionclipcreateclipinfo": [
+"MotionClip Create Clip Info",
+true,
+0,
+1
+],
+"kinefx::motionclipcycle": [
+"MotionClip Cycle",
+false,
+1,
+1
+],
+"kinefx::motionclipcycle::2.0": [
+"MotionClip Cycle",
+false,
+1,
+1
+],
+"kinefx::motionclipevaluate": [
+"MotionClip Evaluate",
+false,
+1,
+1
+],
+"kinefx::motionclipextract": [
+"MotionClip Extract",
+false,
+1,
+1
+],
+"kinefx::motionclipextractkeyposes": [
+"MotionClip Extract Key Poses",
+false,
+1,
+1
+],
+"kinefx::motionclipextractlocomotion": [
+"MotionClip Extract Locomotion",
+false,
+1,
+1
+],
+"kinefx::motionclipmerge": [
+"Motion Clip Merge",
+true,
+0,
+2
+],
+"kinefx::motionclipposedelete": [
+"MotionClip Pose Delete",
+false,
+1,
+1
+],
+"kinefx::motionclipposedelete::2.0": [
+"MotionClip Pose Delete",
+false,
+1,
+1
+],
+"kinefx::motionclipposeinsert": [
+"MotionClip Pose Insert",
+false,
+2,
+2
+],
+"kinefx::motionclipretime": [
+"MotionClip Retime",
+false,
+1,
+1
+],
+"kinefx::motionclipsequence": [
+"MotionClip Sequence",
+false,
+2,
+2
+],
+"kinefx::motionclipsequence::2.0": [
+"MotionClip Sequence",
+false,
+2,
+2
+],
+"kinefx::motionclipunpack": [
+"MotionClip Unpack",
+true,
+1,
+1
+],
+"kinefx::motionclipupdate": [
+"MotionClip Update",
+false,
+2,
+2
+],
+"kinefx::motionmixersetup": [
+"MotionClip Mixer Setup",
+true,
+0,
+0
+],
+"kinefx::orientjoints": [
+"Orient Joints",
+false,
+1,
+2
+],
+"kinefx::parentjoints": [
+"Parent Joints",
+false,
+1,
+1
+],
+"kinefx::pendulummotion": [
+"Pendulum Motion",
+false,
+0,
+2
+],
+"kinefx::pendulummotioncore": [
+"Pendulum Motion Core",
+true,
+0,
+4
+],
+"kinefx::pointcapturebiharmonic": [
+"Point Capture Biharmonic",
+true,
+2,
+3
+],
+"kinefx::posedifference": [
+"Pose Difference",
+false,
+2,
+2
+],
+"kinefx::poseweightinterp": [
+"Pose Weight Interpolation",
+true,
+1,
+3
+],
+"kinefx::projectilemotion": [
+"Projectile Motion",
+false,
+0,
+2
+],
+"kinefx::projectilemotioncore": [
+"Projectile Motion Core",
+true,
+0,
+4
+],
+"kinefx::ragdollcollisionshapes": [
+"Ragdoll Collision Shapes",
+false,
+1,
+2
+],
+"kinefx::ragdollcollisionshapes::2.0": [
+"Ragdoll Collision Shapes",
+false,
+1,
+3
+],
+"kinefx::ragdollconstraints": [
+"Ragdoll Constraints",
+true,
+2,
+3
+],
+"kinefx::ragdollsolver": [
+"Ragdoll Solver",
+false,
+1,
+4
+],
+"kinefx::ragdollsolver::2.0": [
+"Ragdoll Solver",
+false,
+2,
+3
+],
+"kinefx::resamplesplinetransforms": [
+"Resample Spline Transforms",
+true,
+1,
+2
+],
+"kinefx::reversefoot": [
+"Reverse Foot",
+false,
+1,
+3
+],
+"kinefx::rigattribvop": [
+"Rig Attribute VOP",
+false,
+0,
+4
+],
+"kinefx::rigattribwrangle": [
+"Rig Attribute Wrangle",
+false,
+0,
+4
+],
+"kinefx::rigcopytransforms": [
+"Rig Copy Transforms",
+false,
+2,
+2
+],
+"kinefx::rigdoctor": [
+"Rig Doctor",
+false,
+1,
+1
+],
+"kinefx::rigmatchpose": [
+"Rig Match Pose",
+false,
+2,
+2
+],
+"kinefx::rigmirrorpose": [
+"Rig Mirror Pose",
+false,
+1,
+1
+],
+"kinefx::rigpose": [
+"Rig Pose",
+false,
+1,
+1
+],
+"kinefx::rigpython": [
+"Rig Python",
+false,
+0,
+4
+],
+"kinefx::rigstashpose": [
+"Rig Stash Pose",
+false,
+1,
+2
+],
+"kinefx::rop_fbxanimoutput": [
+"ROP FBX Animation Output",
+false,
+1,
+1
+],
+"kinefx::rop_fbxcharacteroutput": [
+"ROP FBX Character Output",
+false,
+2,
+3
+],
+"kinefx::rop_gltfcharacteroutput": [
+"ROP GLTF Character Output",
+false,
+2,
+3
+],
+"kinefx::scenecharacterexport": [
+"Scene Character Export",
+false,
+2,
+2
+],
+"kinefx::scenecharacterimport": [
+"Scene Character Import",
+false,
+0,
+0
+],
+"kinefx::secondarymotion": [
+"Secondary Motion",
+false,
+1,
+2
+],
+"kinefx::skeleton": [
+"Skeleton",
+false,
+0,
+1
+],
+"kinefx::skeletonblend": [
+"Skeleton Blend",
+false,
+1,
+2
+],
+"kinefx::skeletonblend::2.0": [
+"Skeleton Blend",
+false,
+1,
+2
+],
+"kinefx::skeletonblend::3.0": [
+"Skeleton Blend",
+false,
+1,
+9999
+],
+"kinefx::skeletonmirror": [
+"Skeleton Mirror",
+false,
+1,
+1
+],
+"kinefx::smoothmotion": [
+"Smooth Motion",
+false,
+1,
+2
+],
+"kinefx::smoothmotioncore": [
+"Smooth Motion Core",
+true,
+1,
+1
+],
+"kinefx::splineik": [
+"Spline IK",
+true,
+1,
+1
+],
+"kinefx::stabilizejoint": [
+"Stabilize Joint",
+false,
+1,
+3
+],
+"kinefx::usdanimimport": [
+"USD Animation Import",
+false,
+0,
+0
+],
+"kinefx::usdcharacterimport": [
+"USD Character Import",
+false,
+0,
+0
+],
+"kinefx::usdskinimport": [
+"USD Skin Import",
+false,
+0,
+0
+],
+"kinefx::visrig": [
+"Visualize Rig",
+false,
+1,
+1
+],
+"knife": [
+"Knife",
+true,
+1,
+1
+],
+"laplacian": [
+"Laplacian",
+false,
+1,
+1
+],
+"lattice": [
+"Lattice",
+false,
+3,
+3
+],
+"latticefromvolume": [
+"Lattice from Volume",
+false,
+1,
+2
+],
+"layer": [
+"Layer",
+true,
+1,
+1
+],
+"layoutbrushcomb": [
+"Comb",
+true,
+0,
+6
+],
+"layoutbrushdelete": [
+"Delete",
+true,
+0,
+6
+],
+"layoutbrushfill": [
+"Fill",
+true,
+0,
+6
+],
+"layoutbrushline": [
+"Line",
+true,
+0,
+6
+],
+"layoutbrushmove": [
+"Nudge",
+true,
+0,
+6
+],
+"layoutbrushorient": [
+"Orient",
+true,
+0,
+6
+],
+"layoutbrushpaint": [
+"Paint",
+true,
+0,
+6
+],
+"layoutbrushplace": [
+"Place",
+true,
+0,
+6
+],
+"layoutbrushreplace": [
+"Replace",
+true,
+0,
+6
+],
+"layoutbrushscale": [
+"Scale",
+true,
+0,
+6
+],
+"layoutbrushstack": [
+"Stack",
+true,
+0,
+6
+],
+"lidarimport": [
+"Lidar Import",
+false,
+0,
+0
+],
+"line": [
+"Line",
+false,
+0,
+0
+],
+"linearsolver": [
+"Linear Solver",
+false,
+1,
+3
+],
+"loadslices": [
+"Load Slices",
+true,
+0,
+0
+],
+"lopimport": [
+"LOP Import",
+false,
+0,
+0
+],
+"lopimport::2.0": [
+"LOP Import",
+false,
+0,
+0
+],
+"lopnet": [
+"LOP Network",
+false,
+0,
+0
+],
+"lsystem": [
+"L-System",
+false,
+0,
+4
+],
+"magnet": [
+"Magnet",
+false,
+2,
+2
+],
+"maskbyfeature": [
+"Mask by Feature",
+false,
+1,
+3
+],
+"matchaxis": [
+"Match Axis",
+false,
+1,
+1
+],
+"matchsize": [
+"Match Size",
+false,
+1,
+2
+],
+"matchtopology": [
+"Match Topology",
+false,
+2,
+2
+],
+"material": [
+"Material",
+false,
+1,
+1
+],
+"matnet": [
+"Material Network",
+false,
+0,
+0
+],
+"mdd": [
+"MDD",
+false,
+0,
+1
+],
+"measure": [
+"Measure",
+false,
+1,
+1
+],
+"measure::2.0": [
+"Measure",
+false,
+1,
+1
+],
+"measurethickness": [
+"Measure Thickness",
+false,
+1,
+1
+],
+"merge": [
+"Merge",
+false,
+0,
+9999
+],
+"mergepacked": [
+"Merge Packed",
+false,
+0,
+9999
+],
+"metaball": [
+"Metaball",
+false,
+0,
+0
+],
+"metagroups": [
+"MetaGroups",
+false,
+1,
+1
+],
+"mirror": [
+"Mirror",
+false,
+1,
+1
+],
+"mlattribgenerate": [
+"ML Attribute Generate",
+false,
+1,
+1
+],
+"mlexample": [
+"ML Example",
+false,
+1,
+2
+],
+"mlexamplecreatecore": [
+"ML Example Create Core",
+true,
+1,
+2
+],
+"mlexampledecompose": [
+"ML Example Decompose",
+false,
+1,
+1
+],
+"mlexampledecomposecore": [
+"ML Example Decompose Core",
+true,
+1,
+1
+],
+"mlexampledeserializepacked": [
+"ML Example Deserialize Packed Representation",
+true,
+1,
+1
+],
+"mlexampledeserializepoint": [
+"ML Example Deserialize Point Representation",
+true,
+1,
+1
+],
+"mlexampleimport": [
+"ML Example Import",
+false,
+0,
+0
+],
+"mlexampleoutput": [
+"ML Example Output",
+false,
+1,
+1
+],
+"mlexamplepartition": [
+"ML Example Partition",
+false,
+1,
+1
+],
+"mlexampleserializepacked": [
+"ML Example Serialize Packed Representation",
+true,
+1,
+1
+],
+"mlexampleserializepoint": [
+"ML Example Serialize Point Representation",
+true,
+1,
+1
+],
+"mlextractexample": [
+"ML Extract Example",
+false,
+1,
+1
+],
+"mlextractexamplecore": [
+"ML Extract Example Core",
+true,
+1,
+1
+],
+"mlposegenerate": [
+"ML Pose Generate",
+false,
+1,
+1
+],
+"mlposeserialize": [
+"ML Pose Serialize",
+false,
+1,
+1
+],
+"mlregressioninference": [
+"ML Regression Inference",
+false,
+1,
+1
+],
+"mlregressioninferencecore": [
+"ML Regression Inference Core",
+true,
+1,
+1
+],
+"mlregressionproximity": [
+"ML Regression Proximity",
+false,
+2,
+2
+],
+"mlregressionproximitycore": [
+"ML Regression Proximity Core",
+true,
+1,
+2
+],
+"mountain": [
+"Mountain",
+false,
+1,
+1
+],
+"mountain::2.0": [
+"Mountain",
+true,
+1,
+1
+],
+"mpmcollider": [
+"MPM Collider",
+false,
+1,
+2
+],
+"mpmcontainer": [
+"MPM Container",
+false,
+0,
+1
+],
+"mpmsolver": [
+"MPM Solver",
+false,
+1,
+3
+],
+"mpmsource": [
+"MPM Source",
+false,
+1,
+2
+],
+"muscle": [
+"Muscle",
+true,
+0,
+9999
+],
+"musclecapture": [
+"Muscle Capture",
+true,
+1,
+2
+],
+"muscleconstraintproperties": [
+"Muscle Constraint Properties",
+true,
+1,
+2
+],
+"muscleconstraintpropertiesfem": [
+"Muscle Constraint Properties FEM",
+true,
+1,
+2
+],
+"muscleconstraintpropertiesvellum": [
+"Muscle Constraint Properties Vellum",
+false,
+0,
+2
+],
+"muscledeform": [
+"Muscle Deform",
+true,
+1,
+4
+],
+"muscleflex": [
+"Muscle Flex",
+false,
+1,
+3
+],
+"muscleid": [
+"Muscle ID",
+false,
+1,
+1
+],
+"musclemerge": [
+"Muscle Merge",
+false,
+0,
+6
+],
+"musclemirror": [
+"Muscle Mirror",
+false,
+1,
+1
+],
+"musclepaint": [
+"Muscle Paint",
+false,
+1,
+1
+],
+"musclepreroll": [
+"Muscle Preroll",
+false,
+1,
+1
+],
+"muscleproperties": [
+"Muscle Properties",
+false,
+0,
+1
+],
+"muscleslideconstraint": [
+"Muscle Slide Constraint",
+true,
+1,
+3
+],
+"musclesolidify": [
+"Muscle Solidify",
+false,
+1,
+1
+],
+"musclesolver": [
+"Muscle Solver",
+true,
+0,
+3
+],
+"musclesolverfem": [
+"Muscle Solver FEM",
+true,
+0,
+3
+],
+"musclesolvervellum": [
+"Muscle Solver Vellum",
+false,
+0,
+3
+],
+"muscletensionlines": [
+"Muscle Tension Lines",
+false,
+1,
+2
+],
+"muscletpose": [
+"Muscle T-Pose",
+true,
+1,
+2
+],
+"name": [
+"Name",
+false,
+1,
+1
+],
+"neighborsearchcl": [
+"Neighbor Search CL",
+true,
+1,
+1
+],
+"normal": [
+"Normal",
+false,
+1,
+1
+],
+"null": [
+"Null",
+false,
+0,
+1
+],
+"object_merge": [
+"Object Merge",
+false,
+0,
+0
+],
+"objnet": [
+"Object Network",
+false,
+0,
+0
+],
+"oceanevaluate": [
+"Ocean Evaluate",
+false,
+2,
+2
+],
+"oceanevaluate::2.0": [
+"Ocean Evaluate",
+false,
+2,
+2
+],
+"oceanfoam": [
+"Ocean Foam",
+false,
+1,
+1
+],
+"oceansource": [
+"Ocean Source",
+false,
+0,
+2
+],
+"oceansource::2.0": [
+"Ocean Source",
+false,
+0,
+2
+],
+"oceanspectrum": [
+"Ocean Spectrum",
+false,
+0,
+2
+],
+"oceanwaves": [
+"Ocean Waves",
+false,
+0,
+2
+],
+"onnx": [
+"ONNX Inference",
+false,
+1,
+1
+],
+"opencl": [
+"OpenCL",
+false,
+1,
+4
+],
+"orientalongcurve": [
+"Orientation along Curve",
+false,
+1,
+2
+],
+"output": [
+"Output",
+false,
+0,
+1
+],
+"pack": [
+"Pack",
+false,
+1,
+1
+],
+"packeddiskedit": [
+"Packed Disk Properties",
+false,
+1,
+1
+],
+"packededit": [
+"Packed Properties",
+false,
+1,
+1
+],
+"packedfoldersplit": [
+"Packed Folder Split",
+false,
+1,
+1
+],
+"packfolder": [
+"Pack Folder",
+false,
+0,
+9999
+],
+"packgroom": [
+"Groom Pack",
+false,
+0,
+4
+],
+"packinject": [
+"Pack Inject",
+false,
+2,
+2
+],
+"packpoints": [
+"Pack Points",
+false,
+1,
+1
+],
+"paint": [
+"Paint Color",
+true,
+1,
+1
+],
+"paintcolorvolume": [
+"Volume Paint Color",
+false,
+0,
+3
+],
+"paintfogvolume": [
+"Volume Paint Fog",
+false,
+0,
+3
+],
+"paintsdfvolume": [
+"Volume Paint SDF",
+false,
+0,
+2
+],
+"particle": [
+"Particle",
+true,
+1,
+3
+],
+"particlefluidmask": [
+"Particle Fluid Mask",
+false,
+0,
+3
+],
+"particlefluidsurface": [
+"Particle Fluid Surface",
+false,
+1,
+2
+],
+"particlefluidsurface::2.0": [
+"Particle Fluid Surface",
+false,
+1,
+3
+],
+"particlefluidsurface::3.0": [
+"Particle Fluid Surface",
+false,
+1,
+4
+],
+"particlefluidtank": [
+"Particle Fluid Tank",
+false,
+0,
+0
+],
+"particletrail": [
+"Particle Trail",
+false,
+1,
+1
+],
+"partition": [
+"Partition",
+true,
+1,
+1
+],
+"pathdeform": [
+"Path Deform",
+false,
+2,
+2
+],
+"pca": [
+"Principal Component Analysis",
+false,
+1,
+2
+],
+"peak": [
+"Peak",
+false,
+1,
+1
+],
+"planarinflate": [
+"Planar Inflate",
+false,
+1,
+1
+],
+"planarpatch": [
+"Planar Patch",
+false,
+0,
+0
+],
+"planarpatchfromcurves": [
+"Planar Patch from Curves",
+false,
+1,
+1
+],
+"planarpleat": [
+"Planar Pleat",
+false,
+1,
+1
+],
+"planartiles": [
+"Planar Tiles",
+false,
+0,
+0
+],
+"platonic": [
+"Platonic Solids",
+false,
+0,
+0
+],
+"point": [
+"Point - Old",
+true,
+1,
+2
+],
+"pointcapture": [
+"Point Capture",
+false,
+2,
+3
+],
+"pointcapturecore": [
+"Point Capture Core",
+true,
+2,
+2
+],
+"pointcloudiso": [
+"Point Cloud Iso",
+false,
+1,
+1
+],
+"pointcloudmeasure": [
+"Point Cloud Measure",
+false,
+1,
+2
+],
+"pointcloudnormal": [
+"Point Cloud Normal",
+false,
+1,
+1
+],
+"pointcloudreduce": [
+"Point Cloud Reduce",
+false,
+1,
+2
+],
+"pointcloudsurface": [
+"Point Cloud Surface",
+false,
+1,
+1
+],
+"pointdeform": [
+"Point Deform",
+false,
+2,
+3
+],
+"pointgenerate": [
+"Point Generate",
+false,
+0,
+1
+],
+"pointjitter": [
+"Point Jitter",
+false,
+1,
+1
+],
+"pointmap": [
+"Point Map",
+true,
+1,
+1
+],
+"pointreplicate": [
+"Point Replicate",
+false,
+1,
+1
+],
+"pointsfromvolume": [
+"Points from Volume",
+false,
+1,
+1
+],
+"pointvelocity": [
+"Point Velocity",
+false,
+1,
+1
+],
+"pointweld": [
+"Point Weld",
+false,
+1,
+1
+],
+"pointwrangle": [
+"Point Wrangle",
+true,
+0,
+4
+],
+"polybevel": [
+"PolyBevel",
+false,
+1,
+1
+],
+"polybevel::2.0": [
+"PolyBevel - Old",
+false,
+1,
+2
+],
+"polybevel::3.0": [
+"PolyBevel",
+false,
+1,
+2
+],
+"polybridge": [
+"PolyBridge",
+false,
+1,
+2
+],
+"polycap": [
+"PolyCap",
+true,
+1,
+1
+],
+"polycut": [
+"PolyCut",
+false,
+1,
+1
+],
+"polydoctor": [
+"PolyDoctor",
+false,
+1,
+1
+],
+"polyexpand2d": [
+"PolyExpand2D",
+false,
+1,
+1
+],
+"polyextrude": [
+"PolyExtrude",
+false,
+1,
+1
+],
+"polyextrude::2.0": [
+"PolyExtrude",
+false,
+1,
+2
+],
+"polyfill": [
+"PolyFill",
+false,
+1,
+1
+],
+"polyframe": [
+"PolyFrame",
+false,
+1,
+1
+],
+"polyhinge": [
+"PolyHinge",
+false,
+1,
+1
+],
+"polyknit": [
+"PolyKnit",
+true,
+1,
+1
+],
+"polyloft": [
+"PolyLoft",
+false,
+1,
+2
+],
+"polypatch": [
+"PolyPatch",
+false,
+1,
+1
+],
+"polypath": [
+"PolyPath",
+false,
+1,
+1
+],
+"polyreduce": [
+"PolyReduce",
+false,
+1,
+3
+],
+"polyreduce::2.0": [
+"PolyReduce",
+false,
+1,
+3
+],
+"polysoup": [
+"PolySoup",
+false,
+1,
+1
+],
+"polyspline": [
+"PolySpline",
+false,
+1,
+1
+],
+"polysplit": [
+"PolySplit",
+false,
+1,
+1
+],
+"polysplit::2.0": [
+"PolySplit",
+false,
+1,
+2
+],
+"polystitch": [
+"PolyStitch",
+true,
+1,
+1
+],
+"polywire": [
+"PolyWire",
+false,
+1,
+1
+],
+"posescope": [
+"Pose Scope",
+false,
+1,
+1
+],
+"posespacedeform": [
+"Pose-Space Deform",
+false,
+2,
+2
+],
+"posespacedeformcombine": [
+"Pose-Space Deform Combine",
+false,
+1,
+9999
+],
+"posespaceedit": [
+"Pose-Space Edit",
+false,
+1,
+2
+],
+"posespaceeditconfigure": [
+"Pose-Space Edit Configure",
+false,
+1,
+1
+],
+"primitive": [
+"Primitive Properties",
+false,
+1,
+2
+],
+"primitivesplit": [
+"Primitive Split",
+true,
+1,
+1
+],
+"profile": [
+"Spline Profile",
+false,
+1,
+1
+],
+"project": [
+"Spline Project",
+false,
+2,
+2
+],
+"proximity": [
+"Proximity",
+false,
+1,
+2
+],
+"pyrobakevolume": [
+"Pyro Bake Volume",
+false,
+1,
+1
+],
+"pyroburstsource": [
+"Pyro Burst Source",
+false,
+0,
+1
+],
+"pyropostprocess": [
+"Pyro Post-Process",
+false,
+1,
+1
+],
+"pyropostprocess::2.0": [
+"Pyro Post-Process",
+false,
+1,
+1
+],
+"pyroscatterfromburst": [
+"Pyro Scatter from Burst",
+false,
+0,
+1
+],
+"pyrosolver": [
+"Pyro Solver",
+false,
+1,
+2
+],
+"pyrosource": [
+"Pyro Source",
+false,
+1,
+2
+],
+"pyrosourceinstance": [
+"Pyro Source Instance",
+false,
+2,
+2
+],
+"pyrosourcepack": [
+"Pyro Source Pack",
+false,
+0,
+1
+],
+"pyrosourcespread": [
+"Pyro Source Spread",
+false,
+1,
+1
+],
+"pyrospawnsources": [
+"Pyro Spawn Sources",
+false,
+0,
+1
+],
+"pyrotrailpath": [
+"Pyro Trail Path",
+false,
+0,
+1
+],
+"pyrotrailsource": [
+"Pyro Trail Source",
+false,
+1,
+1
+],
+"python": [
+"Python",
+false,
+0,
+4
+],
+"quadremesh": [
+"Quad Remesh (Beta)",
+false,
+1,
+1
+],
+"rails": [
+"Rails",
+false,
+2,
+2
+],
+"rawimport": [
+"Raw Import",
+false,
+0,
+0
+],
+"ray": [
+"Ray",
+false,
+2,
+2
+],
+"rbdbulletsolver": [
+"RBD Bullet Solver",
+false,
+1,
+5
+],
+"rbdcardeform": [
+"RBD Car Deform",
+false,
+2,
+3
+],
+"rbdcarfollowpath": [
+"RBD Car Follow Path",
+false,
+2,
+4
+],
+"rbdcarrig": [
+"RBD Car Rig",
+false,
+1,
+1
+],
+"rbdcluster": [
+"RBD Cluster",
+false,
+1,
+3
+],
+"rbdcluster::2.0": [
+"RBD Cluster",
+false,
+1,
+3
+],
+"rbdconcretefracture::3.0": [
+"RBD Concrete Fracture",
+true,
+1,
+3
+],
+"rbdconetwistconstraintproperties": [
+"RBD Cone Twist Constraint Properties",
+false,
+2,
+3
+],
+"rbdconfigure": [
+"RBD Configure",
+false,
+1,
+4
+],
+"rbdconnectedfaces": [
+"RBD Connected Faces",
+false,
+1,
+3
+],
+"rbdconstraintproperties": [
+"RBD Constraint Properties",
+false,
+0,
+3
+],
+"rbdconstraintproperties::2.0": [
+"RBD Constraint Properties",
+false,
+0,
+3
+],
+"rbdconstraintsfromcurves": [
+"RBD Constraints from Curves",
+false,
+1,
+4
+],
+"rbdconstraintsfromlines": [
+"RBD Constraints from Lines",
+false,
+1,
+3
+],
+"rbdconstraintsfromrules": [
+"RBD Constraints from Rules",
+false,
+1,
+4
+],
+"rbdconvertconstraints": [
+"RBD Convert Constraints",
+false,
+1,
+3
+],
+"rbdcustomfracture::1.0": [
+"RBD Custom fracture",
+true,
+1,
+3
+],
+"rbddeformingtoanimated": [
+"RBD Deforming to Animated",
+false,
+1,
+3
+],
+"rbddeformpieces": [
+"RBD Deform Pieces",
+false,
+3,
+3
+],
+"rbddisconnectedfaces": [
+"RBD Disconnected Faces",
+false,
+1,
+1
+],
+"rbdexplodedview": [
+"RBD Exploded View",
+false,
+1,
+3
+],
+"rbdfindinstances": [
+"RBD Find Instances",
+false,
+1,
+3
+],
+"rbdglassfracture::3.0": [
+"RBD Glass Fracture",
+true,
+1,
+2
+],
+"rbdgroupconstraints": [
+"RBD Group Constraints",
+false,
+2,
+3
+],
+"rbdguidesetup": [
+"RBD Guide Setup",
+false,
+1,
+4
+],
+"rbdinteriordetail": [
+"RBD Interior Detail",
+false,
+1,
+4
+],
+"rbdio": [
+"RBD I/O",
+false,
+0,
+4
+],
+"rbdio::2.0": [
+"RBD I/O",
+false,
+0,
+4
+],
+"rbdmatchtransforms": [
+"RBD Match Transforms",
+false,
+4,
+4
+],
+"rbdmaterialfracture": [
+"RBD Material Fracture",
+false,
+1,
+4
+],
+"rbdmaterialfracture::2.0": [
+"RBD Material Fracture",
+false,
+1,
+4
+],
+"rbdmaterialfracture::3.0": [
+"RBD Material Fracture",
+false,
+1,
+4
+],
+"rbdpack": [
+"RBD Pack",
+false,
+1,
+3
+],
+"rbdpaint": [
+"RBD Paint",
+false,
+1,
+3
+],
+"rbdrecursivefracture": [
+"RBD Recursive Fracture",
+true,
+1,
+4
+],
+"rbdrecursivefracture::2.0": [
+"RBD Recursive Fracture",
+true,
+1,
+4
+],
+"rbdrewireconstraints": [
+"RBD Rewire Constraints",
+true,
+3,
+3
+],
+"rbdunpack": [
+"RBD Unpack",
+false,
+1,
+1
+],
+"rbdwoodfracture::2.0": [
+"RBD Wood Fracture",
+true,
+1,
+1
+],
+"rbdxform": [
+"RBD Transform",
+false,
+1,
+3
+],
+"refine": [
+"Refine",
+false,
+1,
+1
+],
+"reguide": [
+"Reguide",
+false,
+2,
+3
+],
+"relax": [
+"Point Relax",
+false,
+1,
+2
+],
+"remesh": [
+"Remesh",
+false,
+1,
+2
+],
+"remesh::2.0": [
+"Remesh",
+false,
+1,
+2
+],
+"remeshbubbles": [
+"Remesh Bubbles",
+false,
+0,
+2
+],
+"remeshgrid": [
+"Remesh to Grid",
+false,
+1,
+1
+],
+"remeshtocamera": [
+"Remesh to Camera",
+false,
+1,
+1
+],
+"repack": [
+"Repack",
+false,
+1,
+1
+],
+"resample": [
+"Resample",
+false,
+1,
+1
+],
+"rest": [
+"Rest Position",
+false,
+1,
+2
+],
+"retime": [
+"Retime",
+false,
+1,
+1
+],
+"reverse": [
+"Reverse",
+false,
+1,
+1
+],
+"revolve": [
+"Revolve",
+false,
+1,
+1
+],
+"revolve::2.0": [
+"Revolve",
+false,
+1,
+1
+],
+"rewire": [
+"Rewire Vertices",
+false,
+1,
+1
+],
+"ripple": [
+"Ripple",
+false,
+1,
+1
+],
+"ripple::2.0": [
+"Ripple",
+false,
+1,
+1
+],
+"ripplesolver": [
+"Ripple Solver",
+false,
+1,
+3
+],
+"rishader": [
+"RMan Shader",
+false,
+1,
+1
+],
+"roommapframe": [
+"Room Map Frame",
+false,
+1,
+1
+],
+"rop_alembic": [
+"ROP Alembic Output",
+false,
+0,
+1
+],
+"rop_dembones_skinningconverter": [
+"Dem Bones Skinning Converter",
+true,
+0,
+1
+],
+"rop_fbx": [
+"ROP FBX Output",
+false,
+0,
+1
+],
+"rop_geometry": [
+"ROP Geometry Output",
+false,
+0,
+1
+],
+"rop_geometryraw": [
+"ROP Geometry Raw Output",
+false,
+0,
+1
+],
+"rop_gltf": [
+"ROP GLTF Output",
+false,
+0,
+1
+],
+"ropnet": [
+"ROP Network",
+false,
+0,
+0
+],
+"sblend": [
+"Sequence Blend",
+false,
+1,
+9999
+],
+"sblend::2.0": [
+"Sequence Blend",
+false,
+1,
+9999
+],
+"scatter": [
+"Scatter",
+false,
+1,
+1
+],
+"scatter::2.0": [
+"Scatter",
+false,
+1,
+1
+],
+"scatteralign": [
+"Scatter and Align",
+false,
+1,
+2
+],
+"scatterintexturemask": [
+"Scatter in Texture Mask",
+false,
+0,
+2
+],
+"script": [
+"Script",
+false,
+0,
+1
+],
+"sculpt": [
+"Sculpt",
+false,
+1,
+1
+],
+"sculpt::2.0": [
+"Sculpt",
+false,
+1,
+1
+],
+"shallowwatersolver": [
+"Shallow Water Solver",
+false,
+1,
+1
+],
+"shapediff": [
+"Shape Difference",
+false,
+2,
+2
+],
+"shatter": [
+"Shatter",
+true,
+1,
+1
+],
+"shop": [
+"Shader",
+true,
+1,
+1
+],
+"shopnet": [
+"SHOP Network",
+false,
+0,
+0
+],
+"shotsculpt": [
+"Shot Sculpt",
+true,
+1,
+1
+],
+"shrinkwrap": [
+"Shrinkwrap",
+false,
+1,
+1
+],
+"shrinkwrap::2.0": [
+"Shrinkwrap",
+false,
+1,
+1
+],
+"simplexrefine": [
+"Simplex Refine",
+true,
+1,
+1
+],
+"singlecurveoperation": [
+"Single Curve Operation",
+true,
+1,
+1
+],
+"singlepointweld": [
+"Single Point Weld",
+true,
+1,
+1
+],
+"skin": [
+"Skin",
+false,
+1,
+2
+],
+"skinproperties": [
+"Skin Properties",
+false,
+1,
+2
+],
+"skinsolidify": [
+"Skin Solidify",
+false,
+1,
+1
+],
+"skinsolidify::2.0": [
+"Skin Solidify",
+false,
+1,
+1
+],
+"skinsolvervellum": [
+"Skin Solver Vellum",
+false,
+0,
+2
+],
+"sky": [
+"Sky",
+true,
+0,
+1
+],
+"skybox": [
+"Sky Box",
+false,
+0,
+3
+],
+"skyfield": [
+"Sky Field",
+false,
+0,
+1
+],
+"skyfieldfrommap": [
+"Sky Field from Map",
+false,
+1,
+2
+],
+"skyfieldnoise": [
+"Sky Field Noise",
+false,
+1,
+2
+],
+"skyfieldpattern": [
+"Sky Field Pattern",
+false,
+1,
+2
+],
+"slidemodifierpaint": [
+"Slide Modifier Paint",
+true,
+1,
+1
+],
+"smooth": [
+"Smooth",
+false,
+1,
+1
+],
+"smooth::2.0": [
+"Smooth",
+false,
+1,
+1
+],
+"softpeak": [
+"Soft Peak",
+false,
+1,
+1
+],
+"softxform": [
+"Soft Transform",
+false,
+1,
+1
+],
+"solidembed": [
+"Solid Embed",
+true,
+1,
+1
+],
+"solidfracture": [
+"Solid Fracture",
+true,
+1,
+1
+],
+"solidify": [
+"Solidify",
+false,
+1,
+1
+],
+"solidify::2.0": [
+"Solidify",
+true,
+1,
+1
+],
+"solver": [
+"Solver",
+false,
+0,
+4
+],
+"sopnet": [
+"SOP Network",
+false,
+0,
+0
+],
+"sort": [
+"Sort",
+false,
+1,
+1
+],
+"sphere": [
+"Sphere",
+false,
+0,
+1
+],
+"spiral": [
+"Spiral",
+false,
+0,
+0
+],
+"split": [
+"Split",
+false,
+1,
+1
+],
+"splitpoints": [
+"Point Split",
+false,
+1,
+1
+],
+"spraypaint": [
+"Spray Paint",
+false,
+1,
+2
+],
+"spring": [
+"Spring",
+true,
+1,
+3
+],
+"sprite": [
+"Sprite",
+false,
+1,
+1
+],
+"sssscatter": [
+"SSS Scatter",
+true,
+1,
+1
+],
+"starburst": [
+"Starburst",
+false,
+1,
+1
+],
+"stash": [
+"Stash",
+false,
+0,
+1
+],
+"stitch": [
+"Stitch",
+false,
+1,
+2
+],
+"stroke": [
+"Stroke",
+false,
+0,
+2
+],
+"strokecache": [
+"Stroke Cache",
+true,
+2,
+4
+],
+"subdivide": [
+"Subdivide",
+false,
+1,
+2
+],
+"subnet": [
+"Subnetwork",
+false,
+0,
+4
+],
+"superquad": [
+"Superquad",
+false,
+0,
+0
+],
+"surfacedeform": [
+"Surface Deform",
+false,
+3,
+3
+],
+"surfacerelax": [
+"Surface Relax",
+true,
+1,
+2
+],
+"surfacesplat": [
+"Surface Splat",
+true,
+2,
+2
+],
+"surfsect": [
+"Spline Surfsect",
+false,
+2,
+2
+],
+"sweep": [
+"Sweep",
+false,
+2,
+3
+],
+"sweep::2.0": [
+"Sweep",
+false,
+0,
+2
+],
+"switch": [
+"Switch",
+false,
+1,
+9999
+],
+"switchif": [
+"Switch-If",
+false,
+0,
+2
+],
+"tableimport": [
+"Table Import",
+false,
+0,
+0
+],
+"tangentfield": [
+"Tangent Field",
+false,
+1,
+1
+],
+"testgeometry_capybara": [
+"Test Geometry: Capybara",
+false,
+0,
+0
+],
+"testgeometry_crag": [
+"Test Geometry: Crag",
+false,
+0,
+0
+],
+"testgeometry_electra": [
+"Test Geometry: Electra",
+false,
+0,
+0
+],
+"testgeometry_pighead": [
+"Test Geometry: Pig Head",
+false,
+0,
+0
+],
+"testgeometry_rubbertoy": [
+"Test Geometry: Rubber Toy",
+false,
+0,
+0
+],
+"testgeometry_shaderball": [
+"Test Geometry: Shader Ball",
+false,
+0,
+0
+],
+"testgeometry_shaderball::2.0": [
+"Test Geometry: Shader Ball",
+false,
+0,
+0
+],
+"testgeometry_squab": [
+"Test Geometry: Squab",
+false,
+0,
+0
+],
+"testgeometry_templatebody": [
+"Test Geometry: Template Body",
+false,
+0,
+0
+],
+"testgeometry_templatehead": [
+"Test Geometry: Template Head",
+false,
+0,
+0
+],
+"testgeometry_tommy": [
+"Test Geometry: Tommy",
+false,
+0,
+0
+],
+"testsim_crowdtransition": [
+"Test Simulation: Crowd Transition",
+false,
+1,
+4
+],
+"testsim_ragdoll": [
+"Test Simulation: Ragdoll",
+false,
+1,
+1
+],
+"tetconform": [
+"Tet Conform",
+false,
+1,
+2
+],
+"tetcraft": [
+"Tet Craft",
+true,
+1,
+1
+],
+"tetembed": [
+"Tet Embed",
+false,
+1,
+2
+],
+"tetfracture": [
+"Tet Fracture",
+false,
+1,
+1
+],
+"tetlayer": [
+"Tet Layer",
+true,
+1,
+1
+],
+"tetpartition": [
+"Tet Partition",
+false,
+2,
+2
+],
+"tetrahedralize": [
+"Tetrahedralize",
+false,
+1,
+2
+],
+"tetrahedralize::2.0": [
+"Tetrahedralize",
+true,
+1,
+2
+],
+"tetrasurface": [
+"Convert Tets",
+false,
+1,
+1
+],
+"tetstrata": [
+"Tet Strata",
+true,
+1,
+2
+],
+"texture": [
+"UV Texture",
+false,
+1,
+1
+],
+"texturefeature": [
+"Texture Feature",
+false,
+1,
+2
+],
+"texturemaskpaint": [
+"Texture Mask Paint",
+false,
+1,
+2
+],
+"textureopticalflow": [
+"Texture Optical Flow",
+false,
+2,
+2
+],
+"timeblend": [
+"Time Blend",
+false,
+1,
+1
+],
+"timeblend::2.0": [
+"Time Blend",
+true,
+1,
+1
+],
+"timeshift": [
+"Time Shift",
+false,
+1,
+1
+],
+"timewarp": [
+"Time Warp",
+true,
+1,
+1
+],
+"tissueproperties": [
+"Tissue Properties",
+false,
+1,
+2
+],
+"tissuesolidify": [
+"Tissue Solidify",
+false,
+1,
+4
+],
+"tissuesolidify::2.0": [
+"Tissue Solidify",
+false,
+0,
+4
+],
+"tissuesolver": [
+"Tissue Solver",
+true,
+0,
+5
+],
+"tissuesolvervellum": [
+"Tissue Solver Vellum",
+false,
+0,
+2
+],
+"toonshaderattribs": [
+"Toon Shader Attributes",
+false,
+1,
+1
+],
+"topnet": [
+"TOP Geometry",
+false,
+0,
+1
+],
+"topnetmgr": [
+"TOP Network",
+false,
+0,
+0
+],
+"topobuild": [
+"TopoBuild",
+false,
+0,
+2
+],
+"topoflow": [
+"Topo Flow",
+false,
+2,
+4
+],
+"topoflowbake": [
+"Topo Flow Bake",
+true,
+2,
+2
+],
+"topoflowsample": [
+"Topo Flow Sample",
+false,
+0,
+0
+],
+"topolandmark": [
+"Topo Landmark",
+false,
+2,
+4
+],
+"topotransfer": [
+"Topo Transfer",
+false,
+2,
+4
+],
+"torus": [
+"Torus",
+false,
+0,
+0
+],
+"trace": [
+"Trace",
+false,
+0,
+1
+],
+"trail": [
+"Trail",
+false,
+1,
+1
+],
+"triangulate2d": [
+"Triangulate2D",
+false,
+1,
+1
+],
+"triangulate2d::2.0": [
+"Triangulate2D",
+false,
+1,
+1
+],
+"triangulate2d::3.0": [
+"Triangulate2D",
+false,
+1,
+1
+],
+"tribez": [
+"TriBezier",
+false,
+1,
+1
+],
+"tridivide": [
+"TriDivide",
+false,
+1,
+2
+],
+"trim": [
+"Spline Trim",
+false,
+1,
+1
+],
+"tristrip": [
+"TriStrip",
+true,
+1,
+1
+],
+"tube": [
+"Tube",
+false,
+0,
+1
+],
+"twist": [
+"Twist",
+true,
+1,
+1
+],
+"unix": [
+"Unix",
+false,
+0,
+1
+],
+"unpack": [
+"Unpack",
+false,
+1,
+1
+],
+"unpackfolder": [
+"Unpack Folder",
+false,
+1,
+1
+],
+"unpackgroom": [
+"Groom Unpack",
+false,
+1,
+1
+],
+"unpackpoints": [
+"Unpack Points",
+false,
+1,
+2
+],
+"unpackusd": [
+"Unpack USD",
+false,
+0,
+1
+],
+"unpackusd::2.0": [
+"Unpack USD",
+false,
+1,
+1
+],
+"usdconfigure": [
+"USD Configure",
+false,
+1,
+1
+],
+"usdexport": [
+"USD Export",
+false,
+1,
+1
+],
+"usdimport": [
+"USD Import",
+false,
+0,
+0
+],
+"uvautoseam": [
+"UV Autoseam",
+false,
+1,
+1
+],
+"uvbrush": [
+"UV Brush",
+false,
+1,
+1
+],
+"uvedit": [
+"UV Edit",
+false,
+1,
+1
+],
+"uvflatten": [
+"UV Flatten",
+false,
+1,
+1
+],
+"uvflatten::2.0": [
+"UV Flatten",
+false,
+1,
+1
+],
+"uvflatten::3.0": [
+"UV Flatten",
+false,
+1,
+1
+],
+"uvfuse": [
+"UV Fuse",
+false,
+1,
+1
+],
+"uvlayout": [
+"UV Layout",
+false,
+1,
+1
+],
+"uvlayout::2.0": [
+"UV Layout",
+false,
+1,
+1
+],
+"uvlayout::3.0": [
+"UV Layout",
+false,
+1,
+2
+],
+"uvpelt": [
+"UV Pelt",
+false,
+1,
+2
+],
+"uvpelt::2.0": [
+"UV Pelt",
+false,
+1,
+2
+],
+"uvproject": [
+"UV Project",
+false,
+1,
+1
+],
+"uvquickshade": [
+"UV Quick Shade",
+false,
+1,
+1
+],
+"uvtransform": [
+"UV Transform",
+false,
+1,
+1
+],
+"uvtransform::2.0": [
+"UV Transform",
+false,
+1,
+1
+],
+"uvunwrap": [
+"UV Unwrap",
+false,
+1,
+2
+],
+"vdb": [
+"VDB",
+false,
+0,
+1
+],
+"vdbactivate": [
+"VDB Activate",
+false,
+1,
+2
+],
+"vdbactivatesdf": [
+"VDB Activate SDF",
+false,
+1,
+1
+],
+"vdbadvectpoints": [
+"VDB Advect Points",
+false,
+1,
+3
+],
+"vdbadvectsdf": [
+"VDB Advect",
+false,
+2,
+2
+],
+"vdbanalysis": [
+"VDB Analysis",
+false,
+1,
+2
+],
+"vdbclip": [
+"VDB Clip",
+false,
+1,
+2
+],
+"vdbcollider": [
+"VDB Collider",
+false,
+1,
+1
+],
+"vdbcollidersprocess": [
+"VDB Colliders Process",
+true,
+1,
+1
+],
+"vdbcombine": [
+"VDB Combine",
+false,
+1,
+2
+],
+"vdbconvexclipsdf": [
+"VDB Convex Clip SDF",
+false,
+2,
+2
+],
+"vdbcreatecl": [
+"NanoVDB Create CL",
+true,
+2,
+2
+],
+"vdbdiagnostics": [
+"VDB Diagnostics",
+false,
+1,
+1
+],
+"vdbextrapolate": [
+"VDB Extrapolate",
+false,
+1,
+2
+],
+"vdbfracture": [
+"VDB Fracture",
+false,
+2,
+3
+],
+"vdbfromparticlefluid": [
+"VDB from Particle Fluid",
+false,
+1,
+1
+],
+"vdbfromparticles": [
+"VDB from Particles",
+false,
+1,
+2
+],
+"vdbfrompolygons": [
+"VDB from Polygons",
+false,
+1,
+2
+],
+"vdblod": [
+"VDB LOD",
+false,
+1,
+1
+],
+"vdbmerge": [
+"VDB Merge",
+false,
+1,
+9999
+],
+"vdbmorphsdf": [
+"VDB Morph SDF",
+false,
+2,
+3
+],
+"vdbocclusionmask": [
+"VDB Occlusion Mask",
+false,
+1,
+1
+],
+"vdbpointsdelete": [
+"VDB Points Delete",
+false,
+1,
+1
+],
+"vdbpointsgroup": [
+"VDB Points Group",
+false,
+1,
+2
+],
+"vdbpotentialflow": [
+"VDB Potential Flow",
+false,
+1,
+2
+],
+"vdbprojectnondivergent": [
+"VDB Project Non-Divergent",
+false,
+1,
+2
+],
+"vdbrasterizefrustum": [
+"VDB Rasterize Frustum",
+false,
+1,
+3
+],
+"vdbrenormalizesdf": [
+"VDB Renormalize SDF",
+false,
+1,
+1
+],
+"vdbresample": [
+"VDB Resample",
+false,
+1,
+2
+],
+"vdbreshapesdf": [
+"VDB Reshape SDF",
+false,
+1,
+2
+],
+"vdbsegmentbyconnectivity": [
+"VDB Segment by Connectivity",
+false,
+1,
+1
+],
+"vdbsmooth": [
+"VDB Smooth",
+false,
+1,
+2
+],
+"vdbsmoothsdf": [
+"VDB Smooth SDF",
+false,
+1,
+2
+],
+"vdbtopologytosdf": [
+"VDB Topology to SDF",
+false,
+1,
+1
+],
+"vdbtospheres": [
+"VDB to Spheres",
+false,
+1,
+1
+],
+"vdbvectormerge": [
+"VDB Vector from Scalar",
+false,
+1,
+1
+],
+"vdbvectorsplit": [
+"VDB Vector Split",
+false,
+1,
+1
+],
+"vdbvisualizetree": [
+"VDB Visualize Tree",
+false,
+1,
+1
+],
+"vectordeform": [
+"Vector Deform",
+true,
+1,
+3
+],
+"vellumattachconstraints": [
+"Vellum Attach Constraints",
+false,
+2,
+3
+],
+"vellumbrush": [
+"Vellum Brush",
+false,
+2,
+3
+],
+"vellumconstraintproperty": [
+"Vellum Constraint Properties",
+false,
+2,
+3
+],
+"vellumconstraints": [
+"Vellum Constraints",
+false,
+1,
+3
+],
+"vellumconstraints_grain": [
+"Vellum Configure Grain",
+false,
+1,
+3
+],
+"vellumdrape": [
+"Vellum Drape",
+false,
+2,
+3
+],
+"vellumio": [
+"Vellum I/O",
+false,
+0,
+3
+],
+"vellumio::2.0": [
+"Vellum I/O",
+false,
+0,
+3
+],
+"vellumpack": [
+"Vellum Pack",
+false,
+2,
+2
+],
+"vellumpostprocess": [
+"Vellum Post-Process",
+false,
+1,
+3
+],
+"vellumrefframe": [
+"Vellum Reference Frame",
+false,
+3,
+3
+],
+"vellumrestblend": [
+"Vellum Rest Blend",
+false,
+2,
+4
+],
+"vellumsolver": [
+"Vellum Solver",
+false,
+2,
+3
+],
+"vellumunpack": [
+"Vellum Unpack",
+false,
+1,
+1
+],
+"vellumxformpieces": [
+"Vellum Transform Pieces",
+false,
+2,
+3
+],
+"verify_bsdf": [
+"Verify BSDF",
+false,
+0,
+0
+],
+"vertex": [
+"Vertex - Old",
+true,
+1,
+2
+],
+"vertexsplit": [
+"Vertex Split",
+true,
+1,
+1
+],
+"vex": [
+"VEX",
+true,
+1,
+4
+],
+"visibility": [
+"Visibility",
+false,
+1,
+1
+],
+"visualize": [
+"Visualize Properties",
+false,
+0,
+1
+],
+"volume": [
+"Volume",
+false,
+0,
+1
+],
+"volumeadjustfog": [
+"Volume Adjust Fog",
+false,
+1,
+1
+],
+"volumeambientocclusion": [
+"Volume Ambient Occlusion",
+false,
+1,
+1
+],
+"volumeanalysis": [
+"Volume Analysis",
+false,
+1,
+1
+],
+"volumearrivaltime": [
+"Volume Arrival Time",
+false,
+2,
+2
+],
+"volumebin": [
+"Volume Bin",
+true,
+1,
+1
+],
+"volumeblur": [
+"Volume Blur",
+false,
+1,
+1
+],
+"volumebound": [
+"Volume Bound",
+false,
+1,
+1
+],
+"volumebreak": [
+"Volume Break",
+false,
+1,
+2
+],
+"volumecombine": [
+"Volume Combine",
+false,
+1,
+1
+],
+"volumecompress": [
+"Volume Compress",
+false,
+1,
+2
+],
+"volumeconvolve3": [
+"Volume Convolve 3x3x3",
+false,
+1,
+1
+],
+"volumedeform": [
+"Volume Deform",
+false,
+1,
+2
+],
+"volumefeather": [
+"Volume Feather",
+false,
+1,
+1
+],
+"volumefft": [
+"Volume FFT",
+false,
+1,
+1
+],
+"volumefromattrib": [
+"Volume from Attribute",
+false,
+2,
+2
+],
+"volumemerge": [
+"Volume Merge",
+false,
+2,
+2
+],
+"volumemix": [
+"Volume Mix",
+false,
+1,
+2
+],
+"volumenoisefog": [
+"Volume Noise Fog",
+false,
+1,
+1
+],
+"volumenoisesdf": [
+"Volume Noise SDF",
+false,
+1,
+1
+],
+"volumenoisevector": [
+"Volume Noise Vector",
+false,
+1,
+1
+],
+"volumenormalize": [
+"Volume Normalize Weights",
+false,
+1,
+1
+],
+"volumeopticalflow": [
+"Volume Optical Flow",
+false,
+2,
+2
+],
+"volumepatch": [
+"Volume Patch",
+false,
+3,
+3
+],
+"volumeramp": [
+"Volume Ramp",
+false,
+1,
+1
+],
+"volumerasterize": [
+"Volume Rasterize",
+false,
+2,
+2
+],
+"volumerasterizeattributes": [
+"Volume Rasterize Attributes",
+false,
+1,
+1
+],
+"volumerasterizecurve": [
+"Volume Rasterize Curve",
+false,
+0,
+3
+],
+"volumerasterizehair": [
+"Volume Rasterize Hair",
+false,
+1,
+1
+],
+"volumerasterizelattice": [
+"Volume Rasterize Lattice",
+false,
+1,
+3
+],
+"volumerasterizeparticles": [
+"Volume Rasterize Particles",
+false,
+2,
+2
+],
+"volumerasterizepoints": [
+"Volume Rasterize Points",
+false,
+2,
+2
+],
+"volumereduce": [
+"Volume Reduce",
+false,
+1,
+1
+],
+"volumeresample": [
+"Volume Resample",
+false,
+1,
+1
+],
+"volumeresize": [
+"Volume Resize",
+false,
+1,
+2
+],
+"volumesdf": [
+"Volume SDF",
+false,
+1,
+1
+],
+"volumeslice": [
+"Volume Slice",
+false,
+1,
+1
+],
+"volumesplice": [
+"Volume Splice",
+false,
+1,
+1
+],
+"volumestamp": [
+"Volume Stamp",
+false,
+3,
+3
+],
+"volumesurface": [
+"Volume Surface",
+false,
+1,
+2
+],
+"volumetrail": [
+"Volume Trail",
+false,
+2,
+2
+],
+"volumevectorjoin": [
+"Volume Vector Join",
+false,
+1,
+1
+],
+"volumevectorsplit": [
+"Volume Vector Split",
+false,
+1,
+1
+],
+"volumevelocity": [
+"Volume Velocity",
+false,
+1,
+3
+],
+"volumevelocityfromcurves": [
+"Volume Velocity from Curves",
+false,
+0,
+3
+],
+"volumevelocityfromsurface": [
+"Volume Velocity from Surface",
+false,
+1,
+1
+],
+"volumevisualization": [
+"Volume Visualization",
+false,
+1,
+1
+],
+"volumevop": [
+"Volume VOP",
+false,
+1,
+4
+],
+"volumewrangle": [
+"Volume Wrangle",
+false,
+1,
+4
+],
+"volumewranglecore": [
+"Volume Wrangle Core",
+true,
+1,
+4
+],
+"vopnet": [
+"VOP Network",
+false,
+0,
+0
+],
+"vopsop": [
+"VOP SOP",
+true,
+1,
+4
+],
+"vopsoptype": [
+"VOP SOP Type",
+true,
+0,
+0
+],
+"voronoiadjacency": [
+"Voronoi Adjacency",
+false,
+1,
+1
+],
+"voronoifracture": [
+"Voronoi Fracture",
+false,
+2,
+3
+],
+"voronoifracture::2.0": [
+"Voronoi Fracture",
+false,
+2,
+2
+],
+"voronoifracturepoints": [
+"Voronoi Fracture Points",
+false,
+1,
+3
+],
+"voronoisplit": [
+"Voronoi Split",
+false,
+2,
+2
+],
+"vortexforceattribs": [
+"Vortex Force Attributes",
+false,
+1,
+1
+],
+"waveform": [
+"Waveform",
+true,
+1,
+1
+],
+"wavevelocity": [
+"WaveVelocity",
+true,
+1,
+1
+],
+"weightarraybiharmonic": [
+"Weight Array Biharmonic",
+false,
+1,
+1
+],
+"weightarrayinterpolate": [
+"Weight Array Interpolate",
+false,
+2,
+2
+],
+"whitewaterpostprocess": [
+"Whitewater Post-Process",
+false,
+1,
+3
+],
+"whitewatersolver": [
+"Whitewater Solver",
+false,
+3,
+3
+],
+"whitewatersource": [
+"Whitewater Source",
+false,
+1,
+2
+],
+"whitewatersource::2.0": [
+"Whitewater Source",
+false,
+0,
+3
+],
+"whitewatersource::3.0": [
+"Whitewater Source",
+false,
+1,
+4
+],
+"windingnumber": [
+"Winding Number",
+false,
+2,
+2
+],
+"wire": [
+"Wireframe",
+false,
+1,
+1
+],
+"wireblend": [
+"Wire Blend",
+false,
+1,
+9999
+],
+"wirecapture": [
+"Wire Capture",
+false,
+2,
+2
+],
+"wiredeform": [
+"Wire Deform",
+false,
+3,
+3
+],
+"wiretransfershape": [
+"Wire Transfer",
+false,
+2,
+2
+],
+"wrinkledeformer": [
+"Wrinkle Deformer",
+false,
+2,
+3
+],
+"xform": [
+"Transform",
+false,
+1,
+1
+],
+"xformaxis": [
+"Transform Axis",
+false,
+1,
+1
+],
+"xformbyattrib": [
+"Transform by Attribute",
+false,
+1,
+1
+],
+"xformpieces": [
+"Transform Pieces",
+false,
+2,
+3
+]
+}

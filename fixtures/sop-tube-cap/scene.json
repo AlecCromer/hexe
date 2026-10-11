@@ -1,0 +1,18 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "tube",
+   "params": {
+    "type": 1,
+    "cap": true,
+    "consolidatepts": false,
+    "surftype": 3,
+    "rows": 3,
+    "cols": 6
+   }
+  }
+ ],
+ "edges": [],
+ "display": "g"
+}

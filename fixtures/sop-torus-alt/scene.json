@@ -1,0 +1,15 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "torus",
+   "params": {
+    "surftype": 5,
+    "rows": 4,
+    "cols": 5
+   }
+  }
+ ],
+ "edges": [],
+ "display": "g"
+}
