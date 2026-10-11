@@ -107,6 +107,8 @@ mod polybevel_sop;
 //
 mod polyframe_sop;
 //
+mod pointjitter_sop;
+//
 mod polysplit_sop;
 //
 mod split_sop;
@@ -250,6 +252,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("platonic", platonic_sop::spec, platonic_sop::new);
     //
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
+    //
+    r.register("pointjitter", pointjitter_sop::spec, pointjitter_sop::new);
     //
     r.register("polysplit", polysplit_sop::spec, polysplit_sop::new);
     //

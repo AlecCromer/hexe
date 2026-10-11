@@ -1616,3 +1616,19 @@ evidence = [
   "crates/sop/src/builtins/split_sop.rs::split_matches_houdini_fixtures",
 ]
 notes = "h38 census SOP. Graph has ONE output per node: hexe-only param `output` (0 selected, 1 rest) picks the Houdini output; oracle twin = split -> null(input 0 from output index). Prim mode: selected (or rest) prims + their points renumbered, unused points dropped; point mode: points kept, prims lose vertices on dropped points, polygons < 3 verts dropped (box pts 0,1 rest = 6 pts / 4 prims, two quads become tris); negate swaps outputs; empty group = all. guess = named prim group, else named point group (UNVERIFIED), numeric = prims. GAPS: breakpoints / edges grouptype (Unsupported), removegrp, nonexistent group name (Houdini selects nothing silently, hexe errors). Houdini-oracle (real 20.5, h38): sop-split / -rest / -pts / -pts-rest / -negate MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-pointjitter"
+title = "Point Jitter SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["pointjitter"]
+evidence = [
+  "crates/sop/src/builtins/pointjitter_sop.rs::displacement_is_uniform_in_a_cube_of_edge_scale",
+  "crates/sop/src/builtins/pointjitter_sop.rs::deterministic_and_seeded",
+  "crates/sop/src/builtins/pointjitter_sop.rs::group_limits_the_jitter",
+  "crates/sop/src/builtins/pointjitter_sop.rs::hostile_params",
+  "crates/sop/src/builtins/pointjitter_sop.rs::pointjitter_stat_matches_houdini_fixture",
+]
+notes = "h38 census SOP, STATISTICAL twin (STAT-PASS, Houdini RNG not reproducible). hython probe 3600-pt grid: per-axis displacement UNIFORM in +-scale*axisscale/2 (std 0.2887 at scale 1, mean |d| 0.483, doubles at scale 2), seed changes the stream. Hexe: splitmix64 keyed by seed + point + axis (deterministic). GAPS: usepscale / useidattrib (Unsupported), updatenmls. Houdini-oracle (real 20.5, h38): sop-pointjitter STAT-PASS (mean/std of |P-base| within 5 %, case.toml stat-disp)."
