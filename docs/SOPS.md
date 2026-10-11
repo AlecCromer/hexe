@@ -11,22 +11,22 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | attribcopy | shipped (sop-attribcopy) | via `attrib-family.json` | ok |
 | attribcreate | shipped (sop-attribcreate) | `attribcreate.json` | ok |
 | attribdelete | shipped (sop-attribdelete) | via `attrib-family.json` | ok |
-| attribnoise | partial (sop-noise) | `attribnoise.json` | ok |
+| attribnoise | shipped (sop-noise) | `attribnoise.json` | ok |
 | attribpromote | shipped (sop-attribpromote) | via `attrib-family.json` | ok |
 | attribtransfer | shipped (sop-attribtransfer) | via `attrib-family.json` | ok |
 | bend | shipped (sop-bend) | `bend.json` | ok |
 | blast | shipped (sop-blast) | via `group-blast.json` | ok |
 | block_begin | shipped (sop-foreach) | via `foreach.json` | ok |
 | block_end | shipped (sop-foreach) | via `foreach.json` | ok |
-| boolean | partial (sop-boolean) | `boolean.json` | ok |
+| boolean | shipped (sop-boolean) | `boolean.json` | ok |
 | box | shipped (sop-box) | via `attribcreate.json` | ok |
 | circle | shipped (sop-circle) | via `curves.json` | ok |
 | clip | shipped (sop-clip) | `clip.json` | ok |
 | color | shipped (sop-color) | `color.json` | ok |
 | connectivity | shipped (sop-connectivity) | `connectivity.json` | ok |
 | convert | shipped (sop-convert) | `convert.json` | ok |
-| copytopoints | partial (sop-copytopoints) | `copytopoints.json` | ok |
-| curve | partial (sop-curve) | via `curves.json` | ok |
+| copytopoints | shipped (sop-copytopoints) | `copytopoints.json` | ok |
+| curve | shipped (sop-curve) | via `curves.json` | ok |
 | delete | shipped (sop-delete) | `delete.json` | ok |
 | divide | shipped (sop-divide) | `divide.json` | ok |
 | facet | shipped (sop-facet) | `facet.json` | ok |
@@ -42,23 +42,23 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | measure | shipped (sop-measure) | `measure.json` | ok |
 | merge | shipped (sop-merge) | via `connectivity.json` | ok |
 | mirror | shipped (sop-mirror) | `mirror.json` | ok |
-| mountain | partial (sop-mountain) | `mountain.json` | ok |
+| mountain | shipped (sop-mountain) | `mountain.json` | ok |
 | normal | shipped (sop-normal) | `normal.json` | ok |
 | null | shipped (sop-registry) | via `switch.json` | ok |
 | output | shipped (sop-output) | via `switch.json` | ok |
 | peak | shipped (sop-peak) | `peak.json` | ok |
-| polybevel | partial (sop-polybevel) | `polybevel.json` | ok |
+| polybevel | shipped (sop-polybevel) | `polybevel.json` | ok |
 | polyextrude | shipped (sop-polyextrude) | `polyextrude.json` | ok |
 | polyfill | shipped (sop-polyfill) | `polyfill.json` | ok |
-| polyreduce | partial (sop-polyreduce) | `polyreduce.json` | ok |
+| polyreduce | shipped (sop-polyreduce) | `polyreduce.json` | ok |
 | ray | shipped (sop-ray) | `ray.json` | ok |
 | resample | shipped (sop-resample) | via `curves.json` | ok |
 | reverse | shipped (sop-reverse) | `reverse.json` | ok |
 | revolve | shipped (sop-revolve) | `revolve.json` | ok |
-| rop_geometry | partial (rop-geometry) | via `file-rop.json` | ok |
-| scatter | partial (sop-scatter) | `scatter.json` | ok |
+| rop_geometry | shipped (rop-geometry) | via `file-rop.json` | ok |
+| scatter | shipped (sop-scatter) | `scatter.json` | ok |
 | skin | shipped (sop-skin) | `skin.json` | ok |
-| smooth | partial (sop-smooth) | `smooth.json` | ok |
+| smooth | shipped (sop-smooth) | `smooth.json` | ok |
 | sort | shipped (sop-sort) | `sort.json` | ok |
 | sphere | shipped (sop-sphere) | via `convert.json` | ok |
 | subdivide | shipped (sop-subdivide) | `subdivide.json` | ok |
@@ -71,5 +71,5 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300`, exit 0 = o
 | wrangle | shipped (sop-wrangle) | `wrangle.json` | ok |
 | xform | shipped (sop-transform) | via `boolean.json` | ok |
 
-Totals: 63 SOPs · 63 covered (37 dedicated + 26 via) · parity 53 shipped / 10 partial / 0 planned / 0 no-row · renders 44/44 exit 0.
-Gaps: 0 SOP w/o example. Partial = ledger `status=partial`, see `notes` in ledger.
+Totals: 63 SOPs · 63 covered (37 dedicated + 26 via) · parity 63 shipped / 0 partial / 0 planned / 0 no-row · renders 44/44 exit 0.
+Gaps: 0 SOP w/o example. Ledger (all areas): 82 shipped / 0 partial. A `partial` row would show in the parity column; see `notes` in ledger.
