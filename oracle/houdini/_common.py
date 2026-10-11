@@ -116,3 +116,14 @@ def finish(sop, scene, build, note="", oracle=None, stat=None):
         json.dump(out, f, indent=1)
         f.write("\n")
     return out
+def poly_curve(net, name, pts, closed=False):
+    """Houdini twin of the hexe `curve` SOP (polygon output): curve::2.0 whose stash geometry is one polygon through `pts`."""
+    geo = hou.Geometry()
+    pr = geo.createPolygon(is_closed=closed)
+    for q in pts:
+        pt = geo.createPoint(); pt.setPosition(q); pr.addVertex(pt)
+    n = net.createNode("curve::2.0", name)
+    n.parm("outputtype").set(0)
+    n.parm("order").set(4)
+    n.parm("savedstashgeo").set(geo)
+    return n

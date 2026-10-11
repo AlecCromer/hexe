@@ -1,0 +1,31 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "grid",
+   "params": {
+    "size": [
+     6,
+     4,
+     0
+    ],
+    "rows": 3,
+    "cols": 3
+   }
+  },
+  {
+   "name": "op1",
+   "type": "carve",
+   "params": {}
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

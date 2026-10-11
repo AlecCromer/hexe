@@ -1,0 +1,26 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "curve",
+   "params": {
+    "coords": "0,0,0 1,2,0 3,2,0 4,0,0 5,1,1",
+    "close": false
+   }
+  },
+  {
+   "name": "op1",
+   "type": "carve",
+   "params": {}
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

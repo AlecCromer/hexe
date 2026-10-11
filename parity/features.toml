@@ -1500,3 +1500,18 @@ evidence = [
   "crates/sop/src/builtins/platonic_sop.rs::platonic_matches_houdini_fixtures",
 ]
 notes = "h36 census SOP. Tetra/cube/octa/icosa/dodeca from Houdini's own hard-coded f32 tables (read back from hython 20.5, incl. its rounding noise; cube edge 1, dodeca circumradius 0.99332), orient x/y/z, radius, t, r (xyz order). NOT modelled: type 5 soccer ball (60 pts / 32 prims + prim Cd; Unsupported); Houdini clamps negative type to 0 (hexe range-checks). Houdini-oracle (real 20.5, h36): sop-platonic (+ -cube/-octa/-icosa/-dodeca/-xform) MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-carve"
+title = "Carve SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["carve"]
+evidence = [
+  "crates/sop/src/builtins/carve_sop.rs::default_cuts_from_quarter_to_end",
+  "crates/sop/src/builtins/carve_sop.rs::domain_divisions_and_outside_pieces",
+  "crates/sop/src/builtins/carve_sop.rs::hostile_params",
+  "crates/sop/src/builtins/carve_sop.rs::carve_matches_houdini_fixtures",
+]
+notes = "h37 census SOP. Poly path only (polylines + polygon boundaries): U domain firstu/domainu1 (default 0.25) + secondu/domainu2, arclen, divsu (divs-1 equal pieces of the keepin span), keepin/keepout (order out-first, in, out-last), prim group; reversed domain swaps, clamps to 0..1; open output = all-new points in prim order, unselected prims first with their original points; CLOSED polys: secondu on = same pieces (keepout = one wrapped prim with the seam point twice), secondu off = loop re-opened at lo (original points kept, new start (if not on a vertex) + end point appended) = default mode of a polygon mesh. GAPS: V domain, onlybreakpoints / allubreakpoints / extractop / keepOriginal / attribute-driven domains, divsu in the re-open case, NURBS / Bezier curve+surface prims (Unsupported; Houdini does knot insertion), int attrs at cut points (Houdini 0, hexe copies heavier source), closed keepin+keepout order (guess). Houdini-oracle (real 20.5, h37): sop-carve / -divs / -grid / -closed MATCH, bit-for-bit via houdini_twin."
