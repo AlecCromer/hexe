@@ -12,6 +12,7 @@ mod parity;
 mod perf;
 mod render;
 mod size;
+mod sops;
 mod version;
 
 pub type Res = Result<(), String>;
@@ -39,6 +40,7 @@ const COMMANDS: &[(&str, &str, Command)] = &[
         "Headless app render proof: examples/polyextrude.json -> target/ci/polyextrude.png (asserts non-empty + dims; needs a GUI session)",
         render::run,
     ),
+    ("sops", "Generate docs/SOPS.md from the SOP registry + param schemas; --check = drift gate (ci)", sops::run),
     ("size", "Release binary size vs [binary] max_mb and original_mb (ratio)", size::run),
     ("leakscan", "Scan spec/ (or a dir) for decompiler residue; ci runs it only when MODE=clean", leakscan::run),
     ("version", "Print the workspace version, or `version set X.Y.Z[-pre]`", version::run),
