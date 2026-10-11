@@ -8,7 +8,7 @@
 
 # STATUS — Oracle 2026-10-11
 
-- Oracle 2026-10-11: 125 MATCH / 1 TOPO-DIFF (boolean split-poly start vertex) / 10 STAT-PASS over 136 (N=136, census 68 types); /Applications/Hexe.app = 98df559 (h37 merge: sops-a + motion-ui; code-identical to main HEAD).
+- Oracle 2026-10-11: 143 MATCH / 1 TOPO-DIFF (boolean split-poly start vertex) / 12 STAT-PASS over 156 (N=156); 79 SOPs; /Applications/Hexe.app = h38 merge (sops-b + sops-c), built from main HEAD.
 
 ---
 
