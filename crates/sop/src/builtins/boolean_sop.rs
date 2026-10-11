@@ -554,7 +554,7 @@ fn drop_collinear(loops: &mut Vec<(Vec<u32>, usize)>, pos: &[V3]) {
     }
 }
 
-fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError> {
+fn run(a: &Detail, b: &Detail, op: u32, solid: bool, a_first: bool) -> Result<Detail, CookError> {
     let (pa, pb) = (polys_of(a)?, polys_of(b)?);
     let (bsp_a, bsp_b) = (build(pa.clone())?, build(pb.clone())?);
     let ca = classify(&pa, &bsp_b)?;
@@ -653,6 +653,7 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
         }
     }
     drop_collinear(&mut fused, &w.pos);
+    houdini_order(&mut fused, &meta, &w, [a, b], a_first);
     // emit
     // Houdini numbers points by first appearance over the prim order
     let mut used: Vec<u32> = Vec::new();
@@ -762,6 +763,52 @@ fn run(a: &Detail, b: &Detail, op: u32, solid: bool) -> Result<Detail, CookError
     Ok(d)
 }
 
+type Loop = (Vec<u32>, usize);
+
+/// Houdini boolean::2.0 output order (hython, fixtures `parity/ref/boolean/*.topo`): the ORIGINAL A operand's pieces first (A = the
+/// swapped-back operand for B-A), then B's; per operand the prims that survive UNTOUCHED (same corner cycle as the source prim,
+/// source start vertex kept; a flipped one reverses everything after the first corner) come before the SPLIT prims, each in source
+/// prim order (split order kept); coplanar-kept (`CoSame`) pieces trail the lot. Split-polygon start vertices are not derived.
+fn houdini_order(fused: &mut Vec<Loop>, meta: &[(u8, u32, Tag, bool)], w: &Welder, dets: [&Detail; 2], a_first: bool) {
+    let key = |q: V3| [(q[0] * WELD).round() as i64, (q[1] * WELD).round() as i64, (q[2] * WELD).round() as i64];
+    let same_cycle = |l: &[u32], t: &[u32]| {
+        l.len() == t.len() && (0..l.len()).any(|r| (0..l.len()).all(|i| l[(i + r) % l.len()] == t[i]))
+    };
+    let all_pos = dets.map(super::meshutil::positions);
+    let mut keyed: Vec<([u32; 3], Loop)> = Vec::with_capacity(fused.len());
+    for (l, m) in fused.drain(..) {
+        let (side, src, tag, flip) = meta[m];
+        let det = dets[side as usize];
+        // the source prim's corners as welded ids (None = not a point of this result)
+        let ids: Option<Vec<u32>> = det.prims.get(src as usize).and_then(|pr| {
+            let pos = &all_pos[side as usize];
+            let pts = super::meshutil::closed_poly_pts(det, pr)?;
+            pts.iter().map(|&i| pos.get(i).and_then(|q| w.map.get(&key(*q)).copied())).collect()
+        });
+        let mut l = l;
+        let mut untouched = false;
+        if let Some(mut t) = ids {
+            if flip && t.len() > 1 {
+                t[1..].reverse();
+            }
+            if same_cycle(&l, &t) {
+                l = t;
+                untouched = true;
+            }
+        }
+        let co = matches!(tag, Tag::CoSame);
+        let side_rank = if co {
+            2
+        } else if (side == 0) == a_first {
+            0
+        } else {
+            1
+        };
+        keyed.push(([side_rank, u32::from(!untouched), src], (l, m)));
+    }
+    keyed.sort_by_key(|k| k.0);
+    fused.extend(keyed.into_iter().map(|k| k.1));
+}
 /// Source of one output point on one operand: weighted source points (exact coincident = one point, weight 1).
 struct Cand {
     w: Vec<(usize, f64)>,
@@ -945,7 +992,7 @@ impl Node<Detail> for Boolean {
             (false, _, _) => Ok(empty),
             (true, false, OP_INTERSECT) => Ok(empty),
             (true, false, _) => Ok(Arc::clone(a)),
-            (true, true, _) => Ok(Arc::new(fix(run(a, b, op, solid)?))),
+            (true, true, _) => Ok(Arc::new(fix(run(a, b, op, solid, !swapped)?))),
         }
     }
 }
@@ -1661,5 +1708,88 @@ mod tests {
             let (a0, a1) = (area(&rp, &rf), area(&xp, &xf));
             assert!((a0 - a1).abs() < 1e-3 * a0.max(1.0), "{name} area {a0} vs {a1}");
         }
+    }
+
+    /// H35 ORDER corpus: `parity/ref/boolean/bx<tx>_<ty>_<tz>_<op>.topo` (hython boolean::2.0, box A vs box B at t/4). Cooks the same
+    /// scene and compares prim ORDER (as position sets) + exact cycles. Returns (prim_order_ok, exact_ok, untouched_exact_ok) per case.
+    fn order_case(file: &std::path::Path) -> (String, bool, bool, bool) {
+        let name = file.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let body = name.strip_prefix("bx").expect("bx");
+        let (offs, op) = body.rsplit_once('_').expect("op");
+        let t: Vec<f64> = offs.split('_').map(|v| v.parse::<f64>().expect("off") / 4.0).collect();
+        let opn = match op {
+            "union" => 0,
+            "sub" => 1,
+            "int" => 2,
+            _ => 3,
+        };
+        let scene = format!(
+            r#"{{"nodes":[{{"name":"a","type":"box"}},{{"name":"b","type":"box"}},{{"name":"xf","type":"xform","params":{{"t":[{},{},{}]}}}},{{"name":"bool1","type":"boolean","params":{{"operation":{opn},"outputgroups":false}}}}],"edges":[["b",0,"xf",0],["a",0,"bool1",0],["xf",0,"bool1",1]],"display":"bool1"}}"#,
+            t[0], t[1], t[2]
+        );
+        let (mut g, id) = load_scene(&scene).expect("scene loads");
+        let out = g.cook(id, 0.0).expect("cooks");
+        let topo = std::fs::read_to_string(file).expect("read topo");
+        let (mut rp, mut rf): (Vec<[i64; 3]>, Vec<Vec<usize>>) = (Vec::new(), Vec::new());
+        let q = |s: &str| (s.parse::<f64>().expect("f") * 1e3).round() as i64;
+        for l in topo.lines() {
+            let w: Vec<&str> = l.split_whitespace().collect();
+            match w.first() {
+                Some(&"P") => rp.push([q(w[2]), q(w[3]), q(w[4])]),
+                Some(&"F") => rf.push(w[2..].iter().map(|s| s.parse().expect("i")).collect()),
+                _ => {}
+            }
+        }
+        let xp: Vec<[i64; 3]> =
+            out.p().iter().map(|p| [0, 1, 2].map(|i| (f64::from(p[i]) * 1e3).round() as i64)).collect();
+        let xf: Vec<Vec<usize>> = out
+            .prims
+            .iter()
+            .map(|pr| {
+                out.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| p as usize).collect()
+            })
+            .collect();
+        let pos = |p: &[[i64; 3]], f: &[usize]| -> Vec<[i64; 3]> { f.iter().map(|&i| p[i]).collect() };
+        let set = |v: Vec<[i64; 3]>| {
+            let mut v = v;
+            v.sort_unstable();
+            v
+        };
+        let counts = rf.len() == xf.len() && rp.len() == xp.len();
+        let order = counts && rf.iter().zip(&xf).all(|(h, x)| set(pos(&rp, h)) == set(pos(&xp, x)));
+        let exact = order && rp == xp && rf == xf;
+        // untouched prims = full unit faces of A or B (4 corners, two extents of 1): the Houdini corner cycle must be reproduced exactly
+        let full = |ps: &[[i64; 3]]| {
+            let ext: Vec<i64> = (0..3)
+                .map(|a| ps.iter().map(|p| p[a]).max().unwrap_or(0) - ps.iter().map(|p| p[a]).min().unwrap_or(0))
+                .collect();
+            ps.len() == 4 && ext.iter().filter(|&&e| e == 1000).count() == 2 && ext.contains(&0)
+        };
+        let untouched = order
+            && rf.iter().zip(&xf).all(|(h, x)| {
+                let hp = pos(&rp, h);
+                !full(&hp) || hp == pos(&xp, x)
+            });
+        (name, order, exact, untouched)
+    }
+
+    #[test]
+    fn houdini_prim_order_and_untouched_cycles_match_the_hython_corpus() {
+        // verified: A-operand pieces then B's (untouched before split, source prim order), untouched prims keep the source cycle.
+        // Not verified (see ledger sop-boolean): split-polygon start vertex (so point ids), coplanar-face configs, and the symmetric
+        // t(.5,.5,.5) union / B-A where Houdini lists B's pieces first.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../parity/ref/boolean");
+        let mut n = 0;
+        for off in ["-2_-2_-2", "1_1_1", "2_-2_2", "2_2_2"] {
+            for op in ["union", "sub", "int", "subba"] {
+                if off == "2_2_2" && matches!(op, "union" | "subba") {
+                    continue;
+                }
+                let (name, order, _, untouched) = order_case(&dir.join(format!("bx{off}_{op}.topo")));
+                assert!(order && untouched, "{name}: prim order={order} untouched cycles={untouched}");
+                n += 1;
+            }
+        }
+        assert_eq!(n, 14);
     }
 }

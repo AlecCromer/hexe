@@ -43,7 +43,7 @@ CAUSE = {
     "sop-uvunwrap": W("uv present both (values not compared; algorithms differ by design)"),
     "sop-uvlayout": W("Houdini adds detail attrs coverage + numnonpacked; uv values not compared"),
     "sop-copytopoints": W("hexe writes copynum (point+prim) when param on, Houdini copytopoints::2.0 writes none"),
-    "sop-boolean": "H33: groups diff closed (new `outputgroups` toggle, twin sets off = Houdini default; hexe default stays ON); remaining: point/prim ORDER of the intersection result differs (counts 14/9/42 + P multiset equal): Houdini keeps A.pts 0..3 then cut pts in its own sweep order, hexe interleaves - not reproduced",
+    "sop-boolean": "H35: P ORDER now MATCH (A pieces then B, untouched before split in source prim order, untouched prims keep the source cycle, points by first appearance); remaining TOPO-DIFF = start vertex of 4 split polys (+x/+z/+y of A and B -x), rule not derived (parity/ref/boolean/bx*.topo corpus)",
     "sop-reverse": "- (Houdini keeps the first vertex of a closed polygon: [1,5,4,0] -> [1,0,4,5]; hexe identical since H32)",
     "sop-divide": "zero-diff since H33: piece 0 replaces the prim in place, later pieces appended in REVERSE prim order, quad 2nd tri = (c,d,a). n>4 polys: Houdini ear order (observed, regular polys) NOT reproduced - hexe still fans",
     "sop-clip": "cut-point order + prim order: Houdini appends the cut points (+x,-z) first, prims start [1,2,3,0]; hexe cut points (-x,-z) first. Point SET equal, counts 8/5/20 equal; no cap (dofill 0 vs capclip DEFERRED); winding now equal (H32)",

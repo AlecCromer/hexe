@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 88, STAT-PASS 10, ORDER-DIFF 1, P-DIFF 1  (N=100)
+Histogram: MATCH 88, STAT-PASS 10, TOPO-DIFF 1, P-DIFF 1  (N=100)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -17,7 +17,7 @@ Histogram: MATCH 88, STAT-PASS 10, ORDER-DIFF 1, P-DIFF 1  (N=100)
 | sop-attribtransfer | 9/4/16 | 9/4/16 | MATCH | MATCH | - |
 | sop-bend | 5/1/5 | 5/1/5 | MATCH | MATCH | - (Houdini bend toward -X by default, twin sets hexe side=(-1,0,0); parm map is a best guess) |
 | sop-blast | 8/5/20 | 8/5/20 | MATCH | MATCH | - |
-| sop-boolean | 14/9/42 | 14/9/42 | ORDER-DIFF | ORDER-DIFF | H33: groups diff closed (new `outputgroups` toggle, twin sets off = Houdini default; hexe default stays ON); remaining: point/prim ORDER of the intersection result differs (counts 14/9/42 + P multiset equal): Houdini keeps A.pts 0..3 then cut pts in its own sweep order, hexe interleaves - not reproduced |
+| sop-boolean | 14/9/42 | 14/9/42 | MATCH | TOPO-DIFF | H35: P ORDER now MATCH (A pieces then B, untouched before split in source prim order, untouched prims keep the source cycle, points by first appearance); remaining TOPO-DIFF = start vertex of 4 split polys (+x/+z/+y of A and B -x), rule not derived (parity/ref/boolean/bx*.topo corpus) |
 | sop-box | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim0 [1,5,4,0] verbatim, clockwise from outside) |
 | sop-circle | 6/1/6 | 6/1/6 | MATCH | MATCH | - (default reverse=1 now ON in hexe: clockwise; one prim, identical point cycle) |
 | sop-clip | 8/5/20 | 8/5/20 | MATCH | MATCH | cut-point order + prim order: Houdini appends the cut points (+x,-z) first, prims start [1,2,3,0]; hexe cut points (-x,-z) first. Point SET equal, counts 8/5/20 equal; no cap (dofill 0 vs capclip DEFERRED); winding now equal (H32) |
