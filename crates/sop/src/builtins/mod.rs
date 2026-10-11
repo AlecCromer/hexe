@@ -31,6 +31,8 @@ mod boolean_sop;
 //
 mod box_sop;
 //
+mod bound_sop;
+//
 mod circle_sop;
 //
 mod clip_sop;
@@ -158,6 +160,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("boolean", boolean_sop::spec, boolean_sop::new);
     //
     r.register("box", box_sop::spec, box_sop::new);
+    //
+    r.register("bound", bound_sop::spec, bound_sop::new);
     //
     r.register("circle", circle_sop::spec, circle_sop::new);
     //

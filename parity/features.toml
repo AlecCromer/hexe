@@ -1440,3 +1440,18 @@ evidence = [
   "apps/hexe-tauri/src-tauri/src/model.rs::palette_lists_the_native_motion_node",
 ]
 notes = "hexe-native (tag): Hexe-only node, not parity; no Houdini oracle. Crate sop-motion (not a hexe-sop builtin: registered by the Tauri app via model.rs::app_registry; hexe-cli/hexe_sop::registry() do NOT know `motion` yet). Params scene menu stand|push|leg_hit|fall_from_height (gaia_motion/scenes.py:57), impulse_ns F + impulse_dir V3 (world Z-up, normalised, -> --push-impulse x y z), impulse_body, frames, fps (clip fps for time->frame, default 30), python_bin, motion_root (cwd of the spawn), cache_dir, timeout_s. Cook = python -m gaia_motion.cli run --scene --frames --out --push-body --push-impulse --up-axis y (cli.py:20-38), clip cached by hash(scene, impulse vec, body, frames) in ~/.gaia/cache/hexe/motion/<hash>/ (tmp run dir + atomic rename, .ok marker), output = geo/frame.%04d.geo at round(time*fps) clamped (export.py:48-54), 24-point body cloud. Python non-zero exit / timeout / missing frame -> CookError::Failed with stderr tail. Unit tests use fixtures/motion/stub.sh (AGENTS.md section 2: no .py in repo, so the fake python is a POSIX sh script). NOT modelled: push_t0/push_duration/drop_height/physics flags, BVH output, skinned mesh (only the point cloud exists upstream). UNVERIFIED: default python_bin ~/projects/gaia-motion/.venv/bin/python does not exist on this box (integration test falls back to ~/.gaia/cache/gaia-motion/venv/bin/python); behaviour quality of the sim is gaia-motion's own caveat (sim2sim marginal)."
+
+[[feature]]
+id = "sop-bound"
+title = "Bound SOP"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["bound"]
+evidence = [
+  "crates/sop/src/builtins/bound_sop.rs::unit_cube_bounds_itself_in_box_layout",
+  "crates/sop/src/builtins/bound_sop.rs::padding_rebar_keep_group_and_xform",
+  "crates/sop/src/builtins/bound_sop.rs::group_point_vs_prim_and_empty_input_and_unsupported",
+  "crates/sop/src/builtins/bound_sop.rs::bound_matches_houdini_fixtures",
+]
+notes = "h36 census SOP. Box bounds (Houdini box layout: pts bottom ring then top, prims [1,5,4,0]..), minpad/maxpad, rebar/minsize, group (guess/prims = prim pattern, points = point pattern), keepOriginal, createboundinggeo, bounds prim group, xform detail attrib (16 floats). NOT modelled: boundtype sphere/rectangle, oriented bbox, dodivs, breakpoints/edges group types, radii attrib (Unsupported). Houdini-oracle (real 20.5, h36): sop-bound / -pad / -keep MATCH, bit-for-bit via houdini_twin."
