@@ -105,7 +105,7 @@ Histogram: MATCH 88, STAT-PASS 10, TOPO-DIFF 1, P-DIFF 1  (N=100)
 | sop-switch | 8/6/24 | 8/6/24 | MATCH | MATCH | - (box branch) |
 | sop-transform | 8/6/24 | 8/6/24 | MATCH | MATCH | - (SRT math verified (t/r/s)) |
 | sop-twist | 8/6/24 | 8/6/24 | MATCH | MATCH | - (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess) |
-| sop-uvlayout | 8/6/24 | 8/6/24 | MATCH | MATCH | - (Houdini adds detail attrs coverage + numnonpacked; uv values not compared) |
+| sop-uvlayout | 8/6/24 | 8/6/24 | MATCH | MATCH | - (H35: detail attrs coverage + numnonpacked MATCH; twin = Houdini defaults (res 1024, 1 texel); uv VALUES not compared here (hexe uvunwrap island orientation differs) - proven on Houdini's own unwrap geo by test houdini_unwrap_in_gives_houdini_island_order_pitch_and_cells) |
 | sop-uvlayout-stat | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-uvproject | 8/6/24 | 8/6/24 | MATCH | MATCH | - (vertex uv present both (uv VALUES not compared)) |
 | sop-uvunwrap | 8/6/24 | 8/6/24 | MATCH | MATCH | - (uv present both (values not compared; algorithms differ by design)) |

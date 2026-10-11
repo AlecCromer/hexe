@@ -41,7 +41,7 @@ CAUSE = {
     "sop-ray": W("projected P equal Houdini index-for-index"),
     "sop-uvproject": W("vertex uv present both (uv VALUES not compared)"),
     "sop-uvunwrap": W("uv present both (values not compared; algorithms differ by design)"),
-    "sop-uvlayout": W("Houdini adds detail attrs coverage + numnonpacked; uv values not compared"),
+    "sop-uvlayout": W("H35: detail attrs coverage + numnonpacked MATCH; twin = Houdini defaults (res 1024, 1 texel); uv VALUES not compared here (hexe uvunwrap island orientation differs) - proven on Houdini's own unwrap geo by test houdini_unwrap_in_gives_houdini_island_order_pitch_and_cells"),
     "sop-copytopoints": W("hexe writes copynum (point+prim) when param on, Houdini copytopoints::2.0 writes none"),
     "sop-boolean": "H35: P ORDER now MATCH (A pieces then B, untouched before split in source prim order, untouched prims keep the source cycle, points by first appearance); remaining TOPO-DIFF = start vertex of 4 split polys (+x/+z/+y of A and B -x), rule not derived (parity/ref/boolean/bx*.topo corpus)",
     "sop-reverse": "- (Houdini keeps the first vertex of a closed polygon: [1,5,4,0] -> [1,0,4,5]; hexe identical since H32)",

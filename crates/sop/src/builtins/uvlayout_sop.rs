@@ -261,6 +261,43 @@ fn pack_maxrects(dims: &[(f64, f64)], first: &[usize], padding: f64) -> Packed {
     }
     Packed { slots, used_w: uw, used_h: uh, fixed: None }
 }
+/// Whole texels of a float extent (float noise of the f32 uv bbox must not drop a texel).
+fn texels(x: f64) -> f64 {
+    (x + 1e-6 * x.abs().max(1.0)).floor()
+}
+/// Houdini `uvlayout::3.0` equal-island grid (hython-probed on box -> uvunwrap, 6 equal islands, every resolution x padding):
+/// `cols = ceil(sqrt(n))` x `ceil(n / cols)` landscape cells, one cell pitch `floor((avail + pad) / cols)` texels (square cells, the
+/// bin counts one trailing gutter), island = pitch - pad texels, cells filled row-major bottom-left in `area_order` (area
+/// descending, float-jitter ties by first prim). Houdini's own island size comes from a 0.5 %-tolerance scale bisection and lands
+/// up to 0.3 % below pitch - pad; that quantisation is not reproduced. `None` unless every island has the same (w, h).
+fn pack_equal_grid(
+    dims: &[(f64, f64)],
+    first: &[usize],
+    avail: f64,
+    pad: f64,
+) -> Option<(f64, Vec<[f64; 2]>, usize, usize)> {
+    let (w, h) = *dims.first()?;
+    let same = |a: f64, b: f64| (a - b).abs() <= 1e-4 * a.abs().max(b.abs());
+    if dims.len() < 2 || !(w > 0.0 && h > 0.0) || !dims.iter().all(|d| same(d.0, w) && same(d.1, h)) {
+        return None;
+    }
+    let n = dims.len();
+    let cols = (n as f64).sqrt().ceil() as usize;
+    let rows = n.div_ceil(cols);
+    let cell = |k: usize| ((avail + pad) / k as f64).floor();
+    let ts = ((cell(cols) - pad) / w).min((cell(rows) - pad) / h);
+    if !(ts.is_finite() && ts > 0.0 && texels(ts * w) >= 1.0) {
+        return None;
+    }
+    // whole-texel pitch per axis (island rect floor(ts * dim) + gutter)
+    let (px, py) = (texels(ts * w) + pad, texels(ts * h) + pad);
+    let order = area_order(dims, first);
+    let mut slots = vec![[0.0; 2]; n];
+    for (k, &i) in order.iter().enumerate() {
+        slots[i] = [(k % cols) as f64 * px / ts, (k / cols) as f64 * py / ts];
+    }
+    Some((ts, slots, cols, rows))
+}
 /// Texel packing (`resolution` > 0): gutter = `ceil(padding * res)` whole texels, margin = `ceil(margin * res)` texels, every
 /// island rect a whole number of texels at a whole-texel origin (maxrects into the `res` bin). `fit`: the largest uniform
 /// scale (texels per input unit) whose rects fit the bin (bisection); else 1 input unit = the whole texture (`res` texels)
@@ -276,6 +313,16 @@ fn pack_texels(
     let pad = (padding * res - PACK_EPS).ceil().max(0.0);
     let mt = (margin * res - PACK_EPS).ceil().max(0.0);
     let avail = res - 2.0 * mt;
+    if fit && let Some((ts, slots, cols, rows)) = pack_equal_grid(dims, first, avail, pad) {
+        let (w, h) = dims.first().copied().unwrap_or((0.0, 0.0));
+        let (px, py) = (texels(ts * w) + pad, texels(ts * h) + pad);
+        return Ok(Packed {
+            slots,
+            used_w: ((cols - 1) as f64 * px + texels(ts * w)) / ts,
+            used_h: ((rows - 1) as f64 * py + texels(ts * h)) / ts,
+            fixed: Some((ts / res, mt / res)),
+        });
+    }
     let rects = |s: f64| -> Vec<(f64, f64)> {
         dims.iter().map(|d| ((d.0 * s - PACK_EPS).ceil().max(1.0), (d.1 * s - PACK_EPS).ceil().max(1.0))).collect()
     };
@@ -730,6 +777,61 @@ mod tests {
             Some(AttrData::F32(v)) => v[0],
             Some(AttrData::I32(v)) => v[0] as f32,
             other => panic!("no detail {name}: {other:?}"),
+        }
+    }
+    const HOUDINI_UNWRAP: &[u8] = include_bytes!("../../../../parity/ref/uvlayout/box_unwrap.geo");
+    const HOUDINI_LAYOUT: &[u8] = include_bytes!("../../../../fixtures/sop-uvlayout/houdini.geo");
+    /// Houdini's own `uvunwrap` output fed to hexe `uvlayout` (resolution 1024, padding 1 texel = Houdini default, fit): island ORDER
+    /// (area desc, jitter ties by prim), cell PITCH (floor((1024 + 1) / 3) = 341 texels) and 3x2 placement equal Houdini's per-vertex uv
+    /// exactly at the island origins; island size within 2e-3 (Houdini's 0.5 %-tolerance scale bisection lands 0.04 % below pitch - pad).
+    #[test]
+    fn houdini_unwrap_in_gives_houdini_island_order_pitch_and_cells() {
+        let inp = read_geo(HOUDINI_UNWRAP).expect("unwrap geo");
+        let h = read_geo(HOUDINI_LAYOUT).expect("layout geo");
+        let p = fresh()
+            .with("padding", ParamValue::F(1.0 / 1024.0))
+            .with("fit", ParamValue::B(true))
+            .with("resolution", ParamValue::I(1024));
+        let o = cook(inp, p).expect("cooks");
+        let (uo, uh) = (uvs(&o), uvs(&h));
+        assert_eq!((uo.len(), uh.len()), (24, 24));
+        for (i, (a, b)) in uo.chunks(4).zip(uh.chunks(4)).enumerate() {
+            let (ba, bb) = (bbox(a), bbox(b));
+            for j in 0..2 {
+                assert!((ba.0[j] - bb.0[j]).abs() < 1e-5, "prim {i} origin {j}: {ba:?} vs {bb:?}");
+                assert!((ba.1[j] - bb.1[j]).abs() < 2e-3, "prim {i} far corner {j}: {ba:?} vs {bb:?}");
+            }
+            // corner order inside the island is the input's (no rotation); Houdini's axisalign turns ONE square island (prim 2) a quarter
+            // turn (tie on a square: rule not derived) -> its corners are the documented gap
+            let same = a.iter().zip(b).all(|(x, y)| (x[0] - y[0]).abs() < 2e-3 && (x[1] - y[1]).abs() < 2e-3);
+            assert!(same || i == 2, "prim {i}: {a:?} vs {b:?}");
+        }
+        let (hc, dc) = (detail_f(&h, "coverage"), detail_f(&o, "coverage"));
+        assert!((hc - dc).abs() <= 0.01 * hc, "coverage {hc} vs {dc}");
+        assert_eq!(detail_f(&o, "numnonpacked"), detail_f(&h, "numnonpacked"));
+    }
+    /// Cell pitch = floor((res + pad) / cols) for other resolutions / gutters (hython-probed: 512 -> 171/172, 256 -> 85/86, 2048 -> 682/683).
+    #[test]
+    fn equal_island_grid_pitch_follows_houdini_floor_rule() {
+        for (res, pad_px, pitch) in [
+            (1024u32, 0.0, 341.0),
+            (1024, 2.0, 342.0),
+            (1024, 10.0, 344.0),
+            (512, 1.0, 171.0),
+            (256, 2.0, 86.0),
+            (2048, 2.0, 683.0),
+        ] {
+            let p = fresh()
+                .with("padding", ParamValue::F((pad_px / f64::from(res)) as f32))
+                .with("fit", ParamValue::B(true))
+                .with("resolution", ParamValue::I(res as i32));
+            let o = cook(islands(&[(1.0, 1.0); 6]), p).expect("cooks");
+            let b = boxes(&o, 6);
+            let mut xs: Vec<f32> = b.iter().map(|q| q.0[0]).collect();
+            xs.sort_by(f32::total_cmp);
+            xs.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+            assert_eq!(xs.len(), 3, "{res}/{pad_px}");
+            assert!((f64::from(xs[1]) * f64::from(res) - pitch).abs() < 1e-3, "{res}/{pad_px}: {xs:?}");
         }
     }
     /// Real Houdini 20.5 (`fixtures/sop-uvlayout-stat/houdini.geo`, box -> uvunwrap tile 3 -> uvlayout): 6 equal islands are
