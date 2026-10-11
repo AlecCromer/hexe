@@ -1,0 +1,96 @@
+{
+ "sop": "sop-groupcombine-pts",
+ "houdini": "20.5.487",
+ "note": "box -> point groups pa=0-3 pb=2-5 -> groupcombine (guess) r = !pa or pb... = NOT pa XOR pb -> blast points keep r",
+ "points": 4,
+ "prims": 1,
+ "vertices": 4,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [
+  "pa",
+  "pb",
+  "r"
+ ],
+ "prim_groups": [],
+ "bbox_min": [
+  -0.5,
+  -0.5,
+  0.5
+ ],
+ "bbox_max": [
+  0.5,
+  0.5,
+  0.5
+ ],
+ "P": [
+  [
+   0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "P_all": [
+  [
+   0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "prim_pts": [
+  [
+   1,
+   3,
+   2,
+   0
+  ]
+ ],
+ "prim_closed": [
+  true
+ ]
+}

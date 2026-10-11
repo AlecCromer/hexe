@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "sph", "type": "sphere", "params": { "type": 2 } },
+    { "name": "cap", "type": "groupcreate", "params": { "groupname": "cap", "groupnormal": true, "dir": [0, 1, 0], "angle": 60 } },
+    { "name": "keep", "type": "blast", "params": { "group": "cap", "grouptype": 1, "negate": true } }
+  ],
+  "edges": [["sph", 0, "cap", 0], ["cap", 0, "keep", 0]],
+  "display": "keep"
+}

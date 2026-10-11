@@ -32,7 +32,7 @@ const MERGE_UNION: u32 = 1;
 const MERGE_INTERSECT: u32 = 2;
 const MERGE_SUBTRACT: u32 = 3;
 /// Degrees of slack on the (inclusive) normal-angle boundary.
-const ANGLE_EPS: f64 = 1e-6;
+pub(super) const ANGLE_EPS: f64 = 1e-6;
 const MIN_LEN: f64 = 1e-12;
 
 pub fn spec() -> Vec<ParamSpec> {
@@ -72,11 +72,11 @@ pub(super) fn bad(who: &str, m: impl AsRef<str>) -> CookError {
 pub(super) fn failed(who: &str, m: impl AsRef<str>) -> CookError {
     CookError::Failed(format!("{who}: {}", m.as_ref()))
 }
-type V3 = [f64; 3];
-fn dot(a: V3, b: V3) -> f64 {
+pub(super) type V3 = [f64; 3];
+pub(super) fn dot(a: V3, b: V3) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
-fn widen(q: [f32; 3]) -> V3 {
+pub(super) fn widen(q: [f32; 3]) -> V3 {
     [f64::from(q[0]), f64::from(q[1]), f64::from(q[2])]
 }
 /// `*`/`?` glob, iterative (no recursion, no backtracking blow-up).
@@ -111,7 +111,7 @@ pub(super) fn prim_verts(d: &Detail, p: &Prim) -> std::ops::Range<usize> {
     let (lo, hi) = (usize::try_from(p.verts.start).unwrap_or(0), usize::try_from(p.verts.end).unwrap_or(0));
     if lo <= hi && hi <= d.vertex_point.len() { lo..hi } else { 0..0 }
 }
-fn token_set(d: &Detail, class: AttrClass, body: &str, n: usize, who: &str) -> Result<Vec<bool>, CookError> {
+pub(super) fn token_set(d: &Detail, class: AttrClass, body: &str, n: usize, who: &str) -> Result<Vec<bool>, CookError> {
     if body == "*" {
         return Ok(vec![true; n]);
     }
@@ -318,12 +318,12 @@ fn prim_normal(d: &Detail, pr: &Prim) -> Option<V3> {
     let nw = newell_corners(&pos);
     unit(nw)
 }
-fn unit(a: V3) -> Option<V3> {
+pub(super) fn unit(a: V3) -> Option<V3> {
     let l = dot(a, a).sqrt();
     (l.is_finite() && l > MIN_LEN).then(|| [a[0] / l, a[1] / l, a[2] / l])
 }
 /// Element normals for `class` (`None` = no normal).
-fn normals(d: &Detail, class: AttrClass) -> Vec<Option<V3>> {
+pub(super) fn normals(d: &Detail, class: AttrClass) -> Vec<Option<V3>> {
     let pn: Vec<Option<V3>> = d.prims.iter().map(|p| prim_normal(d, p)).collect();
     match class {
         AttrClass::Prim => pn,

@@ -1,0 +1,47 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "gc",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "sel",
+    "grouptype": 1,
+    "groupnormal": true,
+    "dir": [
+     0,
+     1,
+     0
+    ],
+    "angle": 90
+   }
+  },
+  {
+   "name": "bl",
+   "type": "blast",
+   "params": {
+    "group": "sel",
+    "grouptype": 0,
+    "negate": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "gc",
+   0
+  ],
+  [
+   "gc",
+   0,
+   "bl",
+   0
+  ]
+ ],
+ "display": "bl"
+}

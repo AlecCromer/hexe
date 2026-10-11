@@ -1,0 +1,49 @@
+{
+ "nodes": [
+  {
+   "name": "sph",
+   "type": "sphere",
+   "params": {
+    "type": 2
+   }
+  },
+  {
+   "name": "gc",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "sel",
+    "groupnormal": true,
+    "dir": [
+     0,
+     1,
+     0
+    ],
+    "angle": 60
+   }
+  },
+  {
+   "name": "bl",
+   "type": "blast",
+   "params": {
+    "group": "sel",
+    "grouptype": 1,
+    "negate": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "sph",
+   0,
+   "gc",
+   0
+  ],
+  [
+   "gc",
+   0,
+   "bl",
+   0
+  ]
+ ],
+ "display": "bl"
+}

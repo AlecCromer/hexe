@@ -1,0 +1,121 @@
+{
+ "sop": "sop-groupcreate-pattern",
+ "houdini": "20.5.487",
+ "note": "box -> groupcreate prims basegroup '!0-2 ^4' (unioned complement then subtract) -> blast keep selected",
+ "points": 6,
+ "prims": 2,
+ "vertices": 8,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [
+  "sel"
+ ],
+ "bbox_min": [
+  -0.5,
+  -0.5,
+  -0.5
+ ],
+ "bbox_max": [
+  0.5,
+  0.5,
+  0.5
+ ],
+ "P": [
+  [
+   -0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   -0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "P_all": [
+  [
+   -0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   -0.5,
+   -0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   2,
+   5,
+   1
+  ],
+  [
+   3,
+   4,
+   5,
+   2
+  ]
+ ],
+ "prim_closed": [
+  true,
+  true
+ ]
+}

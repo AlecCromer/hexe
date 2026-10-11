@@ -1,0 +1,51 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "gc",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "sel",
+    "groupbounding": true,
+    "size": [
+     1.2,
+     2,
+     1.2
+    ],
+    "t": [
+     0.5,
+     0,
+     0
+    ],
+    "includenotwhollycontained": true
+   }
+  },
+  {
+   "name": "bl",
+   "type": "blast",
+   "params": {
+    "group": "sel",
+    "grouptype": 1,
+    "negate": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "gc",
+   0
+  ],
+  [
+   "gc",
+   0,
+   "bl",
+   0
+  ]
+ ],
+ "display": "bl"
+}

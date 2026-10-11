@@ -71,6 +71,10 @@ mod grid_sop;
 //
 mod group_sop;
 //
+mod groupcombine_sop;
+//
+mod groupcreate_sop;
+//
 mod groupdelete_sop;
 //
 mod grouppromote_sop;
@@ -216,6 +220,10 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("grid", grid_sop::spec, grid_sop::new);
     //
     r.register("group", group_sop::spec, group_sop::new);
+    //
+    r.register("groupcombine", groupcombine_sop::spec, groupcombine_sop::new);
+    //
+    r.register("groupcreate", groupcreate_sop::spec, groupcreate_sop::new);
     //
     r.register("groupdelete", groupdelete_sop::spec, groupdelete_sop::new);
     //

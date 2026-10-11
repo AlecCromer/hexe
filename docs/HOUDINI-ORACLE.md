@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 125, STAT-PASS 10, TOPO-DIFF 1  (N=136)
+Histogram: MATCH 131, STAT-PASS 10, TOPO-DIFF 1  (N=142)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -63,6 +63,12 @@ Histogram: MATCH 125, STAT-PASS 10, TOPO-DIFF 1  (N=136)
 | sop-fuse | 8/6/24 | 8/6/24 | MATCH | MATCH | - (box -> polyextrude -> fuse: both sides 8/6/24, polyextrude connected default now equal) |
 | sop-grid | 12/6/24 | 12/6/24 | MATCH | MATCH | - |
 | sop-group | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim group 'top' present both) |
+| sop-groupcombine | 8/4/16 | 8/4/16 | MATCH | MATCH |  |
+| sop-groupcombine-pts | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
+| sop-groupcreate-bbox | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
+| sop-groupcreate-normal | 97/96/360 | 97/96/360 | MATCH | MATCH |  |
+| sop-groupcreate-pattern | 6/2/8 | 6/2/8 | MATCH | MATCH |  |
+| sop-groupcreate-pointnormal | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
 | sop-groupdelete | 8/6/24 | 8/6/24 | MATCH | MATCH | - |
 | sop-grouppromote | 8/6/24 | 8/6/24 | MATCH | MATCH | - (point group toppts both) |
 | sop-knife | 12/10/40 | 12/10/40 | MATCH | MATCH | same cut-point/prim order difference as clip (shared core); 12/10/40 equal, groups blanked in both |

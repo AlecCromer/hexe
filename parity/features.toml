@@ -1584,3 +1584,36 @@ evidence = [
   "crates/sop/src/builtins/clean_sop.rs::clean_matches_houdini_fixtures",
 ]
 notes = "h37 census SOP. deldegengeo/degentol: closed poly dies when <3 verts or Newell area < tol^2 (strict; 4 collinear points survive tol 0), open poly dies when total length <= tol; unused points go when delunusedpts OR deldegengeo (probed); removeunusedgrp drops empty groups. make_manifold: per point the vertices split into fans (join = shared edge used by exactly two distinct prims at that point; non-manifold edges and bow-ties split), walk in DESCENDING vertex number, first fan keeps the point, later fans get fresh point copies appended in point order; delete_small deletes pieces (shared-point components after the split) with <= prim_count prims, only with make_manifold. GAPS (Unsupported): fusepts, orientpoly, reversewinding, fixoverlap/deleteoverlap, dodelattribs, dodelgroups, non-finite P (delnans), make_manifold with open polys / non-poly prims; repeated-vertex collapse inside a poly (area test only); open polys with >2 points use total length (guess). Houdini-oracle (real 20.5, h37): sop-clean / -manifold / -unused / -small MATCH (P, cycles, attr names + values via houdini_twin/houdini_values)."
+
+[[feature]]
+id = "sop-groupcreate"
+title = "Group Create SOP (Houdini groupcreate: base pattern, bounding box, normals, merge op)"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["groupcreate"]
+evidence = [
+  "crates/sop/src/builtins/groupcreate_sop.rs::base_patterns_match_hython",
+  "crates/sop/src/builtins/groupcreate_sop.rs::pattern_corner_cases_match_hython",
+  "crates/sop/src/builtins/groupcreate_sop.rs::mergeop_matches_hython",
+  "crates/sop/src/builtins/groupcreate_sop.rs::bounding_box_matches_hython",
+  "crates/sop/src/builtins/groupcreate_sop.rs::normals_match_hython",
+  "crates/sop/src/builtins/groupcreate_sop.rs::names_and_unsupported_and_hostile",
+]
+notes = "H38c: prim + point groups; basegroup pattern grammar probed in hython 20.5 (ids, N-M incl. reversed, :step, names+globs, ! = unioned complement, ^ = subtract, unknown names empty); bbox (inclusive, wholly vs includenotwhollycontained, negative size empty); normals (angle inclusive, oppositenormals, zero dir empty); mergeop x4. Houdini-oracle (real 20.5, membership proven through blast): sop-groupcreate-bbox|pattern|normal|pointnormal MATCH. NOT modelled (Unsupported): edge + vertex groups, boundtype sphere/object/volume/hull; ignored: geotype, ordered, edge-angle/length, random, camerapath, nonplanar; no `,` increments, no [..] globs. The legacy `group` SOP keeps its own (differing: `!` subtracts) semantics."
+
+[[feature]]
+id = "sop-groupcombine"
+title = "Group Combine SOP (Houdini groupcombine: A op B op C op D, left to right)"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["groupcombine"]
+evidence = [
+  "crates/sop/src/builtins/groupcombine_sop.rs::binary_ops_match_hython",
+  "crates/sop/src/builtins/groupcombine_sop.rs::negate_and_chain_match_hython",
+  "crates/sop/src/builtins/groupcombine_sop.rs::classes_and_empties_match_hython",
+  "crates/sop/src/builtins/groupcombine_sop.rs::rows_chain_and_overwrite",
+  "crates/sop/src/builtins/groupcombine_sop.rs::unsupported_and_hostile",
+]
+notes = "H38c: multiparm rows 1..4 (numcombine), ops none|or|and|xor|sub folded left to right, `none` skips its operand, negate_* = all-but, operands use the groupcreate pattern grammar, grouptype guess|points|prims. Houdini-oracle (real 20.5): sop-groupcombine (prims, sub+or chain) + sop-groupcombine-pts (points, negate+xor) MATCH. UNVERIFIED: guess order when A names both a point and a prim group (prims first), [..] globs. NOT modelled: edge + vertex groups, rows > 4."
