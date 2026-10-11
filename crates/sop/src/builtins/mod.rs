@@ -39,6 +39,8 @@ mod torus_sop;
 //
 mod tube_sop;
 //
+mod attribrandomize_sop;
+//
 mod carve_sop;
 //
 mod circle_sop;
@@ -190,6 +192,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("torus", torus_sop::spec, torus_sop::new);
     //
     r.register("tube", tube_sop::spec, tube_sop::new);
+    //
+    r.register("attribrandomize", attribrandomize_sop::spec, attribrandomize_sop::new);
     //
     r.register("carve", carve_sop::spec, carve_sop::new);
     //

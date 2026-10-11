@@ -1632,3 +1632,20 @@ evidence = [
   "crates/sop/src/builtins/pointjitter_sop.rs::pointjitter_stat_matches_houdini_fixture",
 ]
 notes = "h38 census SOP, STATISTICAL twin (STAT-PASS, Houdini RNG not reproducible). hython probe 3600-pt grid: per-axis displacement UNIFORM in +-scale*axisscale/2 (std 0.2887 at scale 1, mean |d| 0.483, doubles at scale 2), seed changes the stream. Hexe: splitmix64 keyed by seed + point + axis (deterministic). GAPS: usepscale / useidattrib (Unsupported), updatenmls. Houdini-oracle (real 20.5, h38): sop-pointjitter STAT-PASS (mean/std of |P-base| within 5 %, case.toml stat-disp)."
+
+[[feature]]
+id = "sop-attribrandomize"
+title = "Attribute Randomize SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["attribrandomize"]
+evidence = [
+  "crates/sop/src/builtins/attribrandomize_sop.rs::default_creates_uniform_color_in_unit_range",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::normal_and_scale_and_ops",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::add_on_p_is_a_zero_centred_jitter_with_min_max",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::deterministic_seeded_and_grouped",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::hostile_params",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::attribrandomize_stat_matches_houdini_fixture",
+]
+notes = "h38 census SOP, STATISTICAL twin (STAT-PASS, Houdini RNG not reproducible). hython probe 4900-pt grid: uniform default 0..1 (mean .5 std .2887), min/max per component, scale multiplies the draw, normal = median + stddev * N(0,1) (std .998-1.02 measured), operation set/add on P and new Cd (Color, size 3). Hexe: float attrs (dims 1-4) class detail/prim/point/vertex, ops set/add/min/max/mult, constant/uniform/normal, splitmix64 stream keyed by seed+element+component. GAPS (Unsupported): bernoulli, uniformdiscrete, uniformorient, uniformball, exponential, lognormal, cauchy, ramp, discrete, allsame, seedattrib, int/string attrs, grouptype; Houdini constant-distribution result on P not understood (std 2.9, not probed further). Houdini-oracle (real 20.5, h38): sop-attribrandomize STAT-PASS (P add uniform +-0.5, mean/std of |P-base| within 5 %)."
