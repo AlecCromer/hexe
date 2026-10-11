@@ -2,9 +2,10 @@
 # Fake `python` for the sop-motion tests.
 # push : `stub.sh -m gaia_motion.cli run --scene S --frames N --out DIR ...` -> DIR/geo/frame.%04d.geo (N tiny 2-point .geo files,
 #        point 0 = (idx,0,0), point 1 = (idx,1,0)) + DIR/argv.txt. `--push-body FAIL` -> stderr message + exit 3 (nothing written).
+# behaviour: `stub.sh -m gaia_motion.cli behaviour --name N --out DIR --run-s D --fps F [--seed S]` -> same frames as chain (no --ns; `--name FAIL` -> exit 5).
 # chain: `stub.sh -m gaia_motion.cli chain --out DIR --ns X --run-s D --fps F [--seed S]` -> floor(D*F)+1 frames of 24 named SMPL points
 #        (point i = (i/10, y, frame-1)), y of Pelvis = (frame-1)/100; + DIR/argv.txt. `--ns 13` -> exit 4.
-out=""; frames=3; prev=""; body=""; chain=0; runs=12; fps=30; ns=0
+out=""; name=""; frames=3; prev=""; body=""; chain=0; runs=12; fps=30; ns=0
 for a in "$@"; do
   case "$prev" in
     --out) out="$a" ;;
@@ -13,11 +14,14 @@ for a in "$@"; do
     --run-s) runs="$a" ;;
     --fps) fps="$a" ;;
     --ns) ns="$a" ;;
+    --name) name="$a" ;;
   esac
   [ "$a" = chain ] && chain=1
+  [ "$a" = behaviour ] && chain=1
   prev="$a"
 done
 if [ "$body" = "FAIL" ]; then echo "stub: boom (push-body FAIL)" >&2; exit 3; fi
+if [ "$name" = FAIL ]; then echo "stub: behaviour boom (name FAIL)" >&2; exit 5; fi
 if [ "$chain" = 1 ] && [ "$ns" = 13 ]; then echo "stub: chain boom (ns 13)" >&2; exit 4; fi
 [ -n "$out" ] || { echo "stub: --out missing" >&2; exit 2; }
 mkdir -p "$out/geo" || exit 2

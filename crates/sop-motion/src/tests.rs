@@ -61,7 +61,7 @@ fn registry_contract_and_menu_matches_gaia_motion_scenes() {
     let mode = &spec()[0];
     assert_eq!(mode.name, "mode");
     assert_eq!(mode.default, ParamValue::Menu(0)); // push
-    assert_eq!(mode.menu.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), ["push", "chain"]);
+    assert_eq!(mode.menu.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), ["push", "chain", "behaviour"]);
     let scene = spec().into_iter().find(|s| s.name == "scene").expect("scene param");
     let toks: Vec<&str> = scene.menu.iter().map(|(t, _)| t.as_str()).collect();
     assert_eq!(toks, SCENES);
@@ -359,7 +359,7 @@ fn chain_failure_surfaces_stderr_and_hostile_chain_params_are_bad_param() {
     assert!(m.contains("exited 4") && m.contains("stub: chain boom (ns 13)"), "{m}");
     assert_eq!(std::fs::read_dir(&sc.0).expect("ls").count(), 0, "failed run must leave no cache entry");
     let bad: Vec<(&str, ParamValue)> = vec![
-        ("mode", ParamValue::Menu(2)),
+        ("mode", ParamValue::Menu(3)),
         ("seed", ParamValue::I(-2)),
         ("seed", ParamValue::I(i32::MAX)),
         ("duration_s", ParamValue::F(f32::NAN)),
@@ -451,4 +451,193 @@ fn parity_real_chain_matches_sealed_houdini_chain_geo() {
         worst = worst.max(diff);
     }
     eprintln!("parity worst max |dP| = {worst:e}");
+}
+
+/// A fake gaia-motion checkout: `<scratch>/root/behaviours/{stagger,balance}.json` (+ a data table and a non-json file the listing must skip).
+fn fake_root(sc: &Scratch) -> PathBuf {
+    let b = sc.0.join("root/behaviours");
+    std::fs::create_dir_all(&b).expect("behaviours dir");
+    std::fs::write(b.join("stagger.json"), r#"{"name":"stagger","impulses":[]}"#).expect("w");
+    std::fs::write(b.join("balance.json"), r#"{"name":"balance"}"#).expect("w");
+    std::fs::write(b.join("table.json"), r#"{"schema":1,"dofs":[]}"#).expect("w");
+    std::fs::write(b.join("notes.txt"), "name").expect("w");
+    sc.0.join("root")
+}
+fn behaviour_params(sc: &Scratch, root: &Path, over: &[(&str, ParamValue)]) -> ParamSet {
+    let cache = sc.0.join("cache");
+    let mut o: Vec<(&str, ParamValue)> = vec![
+        ("mode", ParamValue::Menu(2)),
+        ("behaviour", ParamValue::S("stagger".into())),
+        ("seed", ParamValue::I(8)),
+        ("duration_s", ParamValue::F(2.0)),
+        ("fps", ParamValue::F(4.0)),
+        ("motion_root", ParamValue::S(root.to_string_lossy().into_owned())),
+    ];
+    o.extend(over.iter().cloned());
+    params(&cache.to_string_lossy(), &o)
+}
+#[test]
+fn behaviour_listing_is_the_json_objects_with_a_name_and_is_cached_per_dir_mtime() {
+    let sc = Scratch::new("beh-list");
+    let root = fake_root(&sc);
+    assert_eq!(behaviours(&root), ["balance", "stagger"]);
+    assert_eq!(behaviours(&sc.0.join("nonexistent")), Vec::<String>::new());
+    // cached: an in-place edit of an existing file is not re-read (dir mtime unchanged) ...
+    let b = root.join("behaviours");
+    let before = std::fs::metadata(&b).and_then(|m| m.modified()).expect("mtime");
+    std::fs::write(b.join("stagger.json"), r#"{"nameless":1}"#).expect("w");
+    if std::fs::metadata(&b).and_then(|m| m.modified()).expect("mtime") == before {
+        assert_eq!(behaviours(&root), ["balance", "stagger"], "served from cache");
+    }
+    // ... but a new file changes the dir mtime and is picked up
+    std::thread::sleep(Duration::from_millis(20));
+    std::fs::write(b.join("zeta.json"), r#"{"name":"zeta"}"#).expect("w");
+    let names = behaviours(&root);
+    assert!(names.contains(&"zeta".to_string()) && names.contains(&"balance".to_string()), "{names:?}");
+}
+#[test]
+fn behaviour_param_is_a_dropdown_over_the_real_gaia_motion_directory() {
+    let spec = spec();
+    let b = spec.iter().find(|s| s.name == "behaviour").expect("behaviour param");
+    assert_eq!(b.choices, behaviours(&expand(DEFAULT_ROOT)));
+    assert!(matches!(&b.default, ParamValue::S(_)) && b.default.is_acceptable());
+    for n in ["seed", "fps", "duration_s", "frame"] {
+        assert!(spec.iter().any(|s| s.name == n), "{n}");
+    }
+    if expand(DEFAULT_ROOT).join("behaviours/stagger.json").is_file() {
+        for want in ["balance", "catch-fall", "stagger", "get-up", "protect-head"] {
+            assert!(b.choices.iter().any(|c| c == want), "{want} in {:?}", b.choices);
+        }
+        assert!(!b.choices.iter().any(|c| c == "smpl_pd_params"), "data table is not a behaviour");
+        assert_eq!(b.default, ParamValue::S("balance".into()));
+    }
+}
+#[test]
+fn behaviour_mode_cooks_a_skeleton_passes_flags_and_caches_per_preset_seed() {
+    let sc = Scratch::new("beh-cook");
+    let root = fake_root(&sc);
+    let p = behaviour_params(&sc, &root, &[]);
+    let d = cook(&p, 0.5).expect("behaviour frame"); // 0.5 s * 4 fps = idx 2 -> file 3
+    assert_eq!((d.p().len(), d.prim_count()), (24, 23));
+    assert_eq!(pelvis_z(&d), 0.02);
+    let cfg = read_cfg(&p).expect("cfg");
+    let dir = sc.0.join("cache").join(param_hash(&cfg));
+    let argv = std::fs::read_to_string(dir.join("argv.txt")).expect("argv.txt");
+    let mut got: Vec<&str> = argv.lines().collect();
+    let oi = got.iter().position(|a| *a == "--out").expect("--out") + 1;
+    got[oi] = "<out>";
+    assert_eq!(
+        got,
+        [
+            "-m",
+            "gaia_motion.cli",
+            "behaviour",
+            "--name",
+            "stagger",
+            "--out",
+            "<out>",
+            "--run-s",
+            "2",
+            "--fps",
+            "4",
+            "--seed",
+            "8"
+        ]
+    );
+    let h = |o: &[(&str, ParamValue)]| param_hash(&read_cfg(&behaviour_params(&sc, &root, o)).expect("cfg"));
+    let base = h(&[]);
+    assert_eq!(
+        base,
+        h(&[("frame", ParamValue::I(3)), ("timeout_s", ParamValue::I(9)), ("impulse_ns", ParamValue::F(5.0))])
+    );
+    for o in [
+        [("behaviour", ParamValue::S("balance".into()))],
+        [("seed", ParamValue::I(9))],
+        [("duration_s", ParamValue::F(3.0))],
+        [("fps", ParamValue::F(5.0))],
+    ] {
+        assert_ne!(base, h(&o), "{o:?}");
+    }
+    // editing the preset file (size/mtime) is a new clip
+    std::fs::write(root.join("behaviours/stagger.json"), r#"{"name":"stagger","impulses":[1]}"#).expect("w");
+    assert_ne!(base, h(&[]), "preset edit re-runs the clip");
+    // seed -1 -> no --seed
+    let ns = behaviour_params(&sc, &root, &[("seed", ParamValue::I(-1))]);
+    cook(&ns, 0.0).expect("no seed");
+    let a2 =
+        std::fs::read_to_string(sc.0.join("cache").join(param_hash(&read_cfg(&ns).expect("cfg"))).join("argv.txt"))
+            .expect("argv");
+    assert!(!a2.contains("--seed"), "{a2}");
+}
+#[test]
+fn behaviour_scrubs_with_the_timeline_and_the_frame_override_wins() {
+    let sc = Scratch::new("beh-scrub");
+    let root = fake_root(&sc);
+    let p = behaviour_params(&sc, &root, &[]); // 2 s at 4 fps = 9 frames, pelvis_z = (frame-1)/100
+    // hexe timeline: $F -> time = (F - 1) / timeline_fps; here timeline fps == clip fps (4)
+    for (f, want) in [(1, 0.0), (3, 0.02), (9, 0.08), (40, 0.08)] {
+        let t = (f as f32 - 1.0) / 4.0;
+        assert_eq!(pelvis_z(&cook(&p, t).expect("scrub")), want, "F{f}");
+    }
+    let over = behaviour_params(&sc, &root, &[("frame", ParamValue::I(4))]);
+    assert_eq!(pelvis_z(&cook(&over, 0.0).expect("override")), 0.03);
+}
+#[test]
+fn behaviour_errors_are_bad_param_or_surface_stderr() {
+    let sc = Scratch::new("beh-bad");
+    let root = fake_root(&sc);
+    let e =
+        cook(&behaviour_params(&sc, &root, &[("behaviour", ParamValue::S("nope".into()))]), 0.0).expect_err("unknown");
+    let CookError::BadParam(m) = &e else { panic!("{e:?}") };
+    assert!(m.contains("nope") && m.contains("balance, stagger"), "{m}");
+    for bad in ["", "../x", "table", "notes"] {
+        let e = cook(&behaviour_params(&sc, &root, &[("behaviour", ParamValue::S(bad.into()))]), 0.0).expect_err(bad);
+        assert!(matches!(e, CookError::BadParam(_)), "{bad:?}: {e:?}");
+    }
+    std::fs::write(root.join("behaviours/FAIL.json"), r#"{"name":"FAIL"}"#).expect("w");
+    let e = cook(&behaviour_params(&sc, &root, &[("behaviour", ParamValue::S("FAIL".into()))]), 0.0)
+        .expect_err("stub exits 5");
+    let CookError::Failed(m) = &e else { panic!("{e:?}") };
+    assert!(m.contains("exited 5") && m.contains("behaviour boom"), "{m}");
+}
+/// Real `behaviour` runs (MuJoCo, ~3 s each) against a gaia-motion checkout that has the `behaviour` subcommand (`HEXE_MOTION_ROOT`, else
+/// `~/projects/gaia-motion-wt/contact`, else `~/projects/gaia-motion`); skipped when absent. Two behaviours cook to different, finite poses.
+#[test]
+fn integration_real_behaviours_differ() {
+    let home = std::env::var_os("HOME").map(PathBuf::from).expect("HOME");
+    let candidates = [
+        std::env::var_os("HEXE_MOTION_ROOT").map(PathBuf::from).unwrap_or_default(),
+        home.join("projects/gaia-motion-wt/contact"),
+        home.join("projects/gaia-motion"),
+    ];
+    let py = home.join(".gaia/cache/gaia-motion/venv/bin/python");
+    let Some(root) = candidates.iter().find(|r| r.join("gaia_motion/behaviour.py").is_file()) else {
+        eprintln!("SKIP integration_real_behaviours: no gaia-motion checkout with the `behaviour` subcommand");
+        return;
+    };
+    if !py.is_file() || !home.join(".gaia/cache/gaia-motion/assets/masked_mimic.onnx").is_file() {
+        eprintln!("SKIP integration_real_behaviours: no gaia-motion python / onnx");
+        return;
+    }
+    let sc = Scratch::new("beh-real");
+    let mut poses = Vec::new();
+    for name in ["balance-ankles", "catch-fall"] {
+        let p = behaviour_params(
+            &sc,
+            root,
+            &[
+                ("behaviour", ParamValue::S(name.into())),
+                ("seed", ParamValue::I(-1)),
+                ("duration_s", ParamValue::F(3.0)),
+                ("fps", ParamValue::F(30.0)),
+                ("python_bin", ParamValue::S(py.to_string_lossy().into_owned())),
+            ],
+        );
+        let d = cook(&p, 89.0 / 30.0).expect("real behaviour cook");
+        assert_eq!((d.p().len(), d.prim_count()), (24, 23), "{name}");
+        assert!(d.p().iter().all(|q| q.iter().all(|c| c.is_finite())), "{name}");
+        poses.push((pelvis_z(&d), d.p().to_vec()));
+    }
+    assert_ne!(poses[0].1, poses[1].1, "balance-ankles vs catch-fall at F90 must differ");
+    eprintln!("real behaviours at F90: balance-ankles pelvis_y {} | catch-fall pelvis_y {}", poses[0].0, poses[1].0);
 }

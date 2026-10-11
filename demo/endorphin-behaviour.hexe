@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "name": "motion", "type": "motion", "params": { "mode": 2, "behaviour": "balance", "seed": -1, "duration_s": 8.0, "fps": 30.0, "frame": 0 } },
+    { "name": "output1", "type": "output" }
+  ],
+  "edges": [["motion", 0, "output1", 0]],
+  "display": "output1",
+  "ui": { "pos": { "motion": [0, 0], "output1": [0, 120] } }
+}

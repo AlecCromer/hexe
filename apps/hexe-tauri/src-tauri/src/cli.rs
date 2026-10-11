@@ -1,7 +1,7 @@
-//! Command line: `hexe [scene.json] [--set node.param=value]... [--script ops] [--render out.png [--size WxH] [--wire]] [--version]`.
+//! Command line: `hexe [scene.json] [--set node.param=value]... [--frame N] [--fps R] [--script ops] [--render out.png [--size WxH] [--wire]] [--version]`.
 use crate::model::split_set;
 
-pub const USAGE: &str = "usage: hexe [scene.json] [--set node.param=value]... [--script ops|file] [--render out.png [--size WxH] [--wire]] [--version]";
+pub const USAGE: &str = "usage: hexe [scene.json] [--set node.param=value]... [--frame N] [--fps R] [--script ops|file] [--render out.png [--size WxH] [--wire]] [--version]";
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Cli {
@@ -9,6 +9,10 @@ pub struct Cli {
     pub scene: Option<String>,
     /// `--set node.param=value` overrides, re-applied on every reload.
     pub sets: Vec<String>,
+    /// `--frame N`: the timeline `$F` (1-based) the display cook / render runs at (default 1).
+    pub frame: Option<i32>,
+    /// `--fps R`: timeline rate; `time = ($F - 1) / R` (default 30, the gaia-motion clip rate).
+    pub fps: Option<f32>,
     /// `--script` argument (op text or a file path), parsed by `script::parse`.
     pub script: Option<String>,
     /// `--render out.png`: headless render of the scene (window cooks, canvas -> PNG, exit); see `render.rs`.
@@ -43,6 +47,16 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, String> 
                 let v = it.next().ok_or("--set needs node.param=value")?;
                 split_set(&v)?;
                 cli.sets.push(v);
+            }
+            "--frame" => {
+                let v = it.next().ok_or("--frame needs N (1-based)")?;
+                let ok = v.trim().parse().ok().filter(|f| (1..=crate::model::MAX_FRAME).contains(f));
+                cli.frame = Some(ok.ok_or(format!("--frame {v}: want an integer 1..={}", crate::model::MAX_FRAME))?);
+            }
+            "--fps" => {
+                let v = it.next().ok_or("--fps needs a rate")?;
+                let ok = v.trim().parse::<f32>().ok().filter(|f| f.is_finite() && *f > 0.0 && *f <= 1000.0);
+                cli.fps = Some(ok.ok_or(format!("--fps {v}: want a number in (0, 1000]"))?);
             }
             "--script" => cli.script = Some(it.next().ok_or("--script needs ops or a file")?),
             "--render" => cli.render = Some(it.next().ok_or("--render needs an output .png path")?),
@@ -103,6 +117,33 @@ mod tests {
             assert!(p(bad).is_err(), "{bad:?}");
         }
         assert_eq!(p(&["-psn_0_1"]), Ok(Parsed::Run(Cli::default())));
+        // Houdini-path spelling of a --set key
+        assert_eq!(split_set("motion/behaviour=stagger"), Ok(("motion", "behaviour", "stagger")));
+        assert_eq!(split_set("motion.behaviour=stagger"), Ok(("motion", "behaviour", "stagger")));
+        assert!(p(&["--set", "motion=stagger"]).is_err() && p(&["--set", "/x=1"]).is_err());
+    }
+    #[test]
+    fn frame_and_fps_flags() {
+        let Ok(Parsed::Run(c)) = p(&["a.json", "--frame", "90", "--fps", "24", "--render", "o.png"]) else {
+            panic!("parse")
+        };
+        assert_eq!((c.frame, c.fps), (Some(90), Some(24.0)));
+        let Ok(Parsed::Run(d)) = p(&["a.json"]) else { panic!("parse") };
+        assert_eq!((d.frame, d.fps), (None, None));
+        for bad in [
+            &["--frame"][..],
+            &["--frame", "0"],
+            &["--frame", "-3"],
+            &["--frame", "1.5"],
+            &["--frame", "x"],
+            &["--frame", "99999999"],
+            &["--fps"],
+            &["--fps", "0"],
+            &["--fps", "nan"],
+            &["--fps", "1001"],
+        ] {
+            assert!(p(bad).is_err(), "{bad:?}");
+        }
     }
     #[test]
     fn render_flags() {
