@@ -8,7 +8,7 @@
 
 # STATUS — Oracle 2026-10-11
 
-- Oracle 2026-10-11: 94 MATCH / 1 TOPO-DIFF (boolean split-poly start vertex) / 10 STAT-PASS over 105; /Applications/Hexe.app = 84e6474.
+- Oracle 2026-10-11: 104 MATCH / 1 TOPO-DIFF (boolean split-poly start vertex) / 10 STAT-PASS over 115 (N=115, census 68 types); /Applications/Hexe.app = (see merge commit, h36 merge).
 
 ---
 
