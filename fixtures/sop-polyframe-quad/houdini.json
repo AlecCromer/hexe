@@ -1,0 +1,107 @@
+{
+ "sop": "sop-polyframe-quad",
+ "houdini": "20.5.487",
+ "note": "polyframe two edges, ortho + lefthanded + tangentv, custom names, on a skew closed quad",
+ "points": 4,
+ "prims": 1,
+ "vertices": 4,
+ "attribs": {
+  "point": [
+   "P",
+   "nn",
+   "tu",
+   "tv"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:nn": [
+   "Float",
+   3
+  ],
+  "point:tu": [
+   "Float",
+   3
+  ],
+  "point:tv": [
+   "Float",
+   3
+  ],
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "bbox_max": [
+  2.5,
+  1.5,
+  0.5
+ ],
+ "P": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.5,
+   1.5,
+   0.5
+  ],
+  [
+   0.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.5,
+   1.5,
+   0.5
+  ],
+  [
+   0.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2,
+   3
+  ]
+ ],
+ "prim_closed": [
+  true
+ ]
+}

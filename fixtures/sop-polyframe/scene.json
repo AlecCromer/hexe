@@ -1,0 +1,22 @@
+{
+ "nodes": [
+  {
+   "name": "b",
+   "type": "box"
+  },
+  {
+   "name": "op1",
+   "type": "polyframe",
+   "params": {}
+  }
+ ],
+ "edges": [
+  [
+   "b",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

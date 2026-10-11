@@ -1530,3 +1530,18 @@ evidence = [
   "crates/sop/src/builtins/lattice_sop.rs::lattice_matches_houdini_fixtures",
 ]
 notes = "h37 census SOP. 3 inputs (geometry, rest lattice, deformed lattice; Houdini needs all 3). divsx/y/z = CELLS per axis (default 3) so each lattice has (d+1)^3 points (mismatch = Failed like Houdini); a lattice point's grid cell comes from its REST POSITION in the rest bbox (point order irrelevant, probed with x- and z-fastest orders); interptype bezier (default; Bernstein FFD of degree divs, P' = sum w * deformed) / linear (trilinear in the cell); points outside the rest bbox unchanged (box corners follow their node); group = point pattern. GAPS: restgroup, kernel/radius/normthreshold/bspheres, rest lattices that are not exactly regular (Houdini drifts up to ~1e-4 at the far corner with 4-decimal-rounded rest values - an iterative inverse; fixtures use dyadic-exact rests so MATCH is bit-level), Houdini has no lattice generator in this SOP (the user builds the rest/deformed point sets). Houdini-oracle (real 20.5, h37): sop-lattice / -linear / -group MATCH via houdini_twin."
+
+[[feature]]
+id = "sop-polyframe"
+title = "PolyFrame SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["polyframe"]
+evidence = [
+  "crates/sop/src/builtins/polyframe_sop.rs::quad_styles_match_the_probed_numbers",
+  "crates/sop/src/builtins/polyframe_sop.rs::tangent_v_ortho_and_handedness",
+  "crates/sop/src/builtins/polyframe_sop.rs::names_toggles_and_hostile_params",
+  "crates/sop/src/builtins/polyframe_sop.rs::polyframe_matches_houdini_fixtures",
+]
+notes = "h37 census SOP. Point-class N / tangentu / tangentv from polygons: styles edge1 (prev - P), edge2 (default; closed = both edges from the vertex summed, open = P[i-1]-P[i+1], one-sided ends), primC (centroid - P); N = normalised sum of unit prim normals (open polys count as closed), tangentu from the FIRST prim using the point, ortho (tu -= N(N.tu), not renormalised), tangentv = cross(tu,N) unnormalised (ortho: cross(N,tu), lefthanded flips), Non/tangentuon/tangentvon + attribute names, prim group. VALUES compared too (houdini_values, 1e-4). GAPS: styles texuv / tex / attrib / mikkt (vertex outputs; Unsupported), signson, entity has no effect in any probe (kept as menu), orphan points (zero vectors; Houdini not probed), area weighting of N unconfirmed beyond the box/sphere fixtures. Houdini-oracle (real 20.5, h37): sop-polyframe / -edge1 / -quad / -primc / -sphere MATCH (P, topology, attribute names + values)."

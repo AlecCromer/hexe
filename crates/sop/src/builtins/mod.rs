@@ -101,6 +101,8 @@ mod platonic_sop;
 //
 mod polybevel_sop;
 //
+mod polyframe_sop;
+//
 mod polyextrude_sop;
 //
 mod ray_sop;
@@ -236,6 +238,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("platonic", platonic_sop::spec, platonic_sop::new);
     //
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
+    //
+    r.register("polyframe", polyframe_sop::spec, polyframe_sop::new);
     //
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
     //

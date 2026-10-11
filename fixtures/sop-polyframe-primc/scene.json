@@ -1,0 +1,53 @@
+{
+ "nodes": [
+  {
+   "name": "q",
+   "type": "curve",
+   "params": {
+    "coords": "0.0,0.0,0.0 2.0,0.0,0.0 2.5,1.5,0.5 0.0,1.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "l",
+   "type": "curve",
+   "params": {
+    "coords": "0.0,0.0,0.0 1.0,0.0,0.0 1.0,1.0,0.0",
+    "close": false
+   }
+  },
+  {
+   "name": "m",
+   "type": "merge"
+  },
+  {
+   "name": "op1",
+   "type": "polyframe",
+   "params": {
+    "style": 2,
+    "tangentvon": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "q",
+   0,
+   "m",
+   0
+  ],
+  [
+   "l",
+   0,
+   "m",
+   1
+  ],
+  [
+   "m",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

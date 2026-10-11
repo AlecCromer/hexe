@@ -475,6 +475,41 @@ pub(super) mod testkit {
         }
         Ok(())
     }
+    /// Attribute VALUE evidence on top of `houdini_twin`: every Point / Vertex / Prim float attribute of the REAL Houdini `.geo`
+    /// (except `P`) must equal hexe's same-named attribute within `tol` per component (int / string attributes: exact).
+    pub fn houdini_values(scene: &str, houdini_geo: &[u8], tol: f32) -> Result<(), String> {
+        use hexe_geo::{AttrClass, AttrData, read_geo};
+        let h = read_geo(houdini_geo).map_err(|e| format!("houdini.geo: {e:?}"))?;
+        let (mut g, id) = crate::load_scene(scene).map_err(|e| format!("scene: {e:?}"))?;
+        let d = g.cook(id, 0.0).map_err(|e| format!("cook: {e:?}"))?;
+        for a in h.attrs.iter().filter(|a| a.class != AttrClass::Detail && a.name != "P") {
+            let m =
+                d.attr(a.class, &a.name).ok_or_else(|| format!("{:?} attr `{}` missing in hexe", a.class, a.name))?;
+            let flat = |x: &AttrData| -> Option<Vec<f32>> {
+                match x {
+                    AttrData::F32(v) => Some(v.clone()),
+                    AttrData::V2(v) => Some(v.iter().flatten().copied().collect()),
+                    AttrData::V3(v) => Some(v.iter().flatten().copied().collect()),
+                    AttrData::V4(v) => Some(v.iter().flatten().copied().collect()),
+                    AttrData::FN { data, .. } => Some(data.clone()),
+                    _ => None,
+                }
+            };
+            match (flat(&a.data), flat(&m.data)) {
+                (Some(x), Some(y)) => {
+                    if x.len() != y.len() {
+                        return Err(format!("{:?} `{}`: {} vs {} floats", a.class, a.name, y.len(), x.len()));
+                    }
+                    if let Some(k) = x.iter().zip(&y).position(|(p, q)| (p - q).abs() > tol) {
+                        return Err(format!("{:?} `{}`[{k}] hexe {} vs houdini {}", a.class, a.name, y[k], x[k]));
+                    }
+                }
+                _ if a.data != m.data => return Err(format!("{:?} `{}` differs", a.class, a.name)),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
     pub fn prim_pts(d: &Detail, i: usize) -> Vec<[f32; 3]> {
         let pr = &d.prims[i];
         d.vertex_point[pr.verts.start as usize..pr.verts.end as usize].iter().map(|&p| d.p()[p as usize]).collect()

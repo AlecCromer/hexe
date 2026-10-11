@@ -1,0 +1,33 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "curve",
+   "params": {
+    "coords": "0.0,0.0,0.0 2.0,0.0,0.0 2.5,1.5,0.5 0.0,1.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "op1",
+   "type": "polyframe",
+   "params": {
+    "ortho": true,
+    "lefthanded": true,
+    "tangentvon": true,
+    "N": "nn",
+    "tangentu": "tu",
+    "tangentv": "tv"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}
