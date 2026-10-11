@@ -1,0 +1,80 @@
+[
+	"fileversion","20.5.487",
+	"hasindex",false,
+	"pointcount",6,
+	"vertexcount",8,
+	"primitivecount",2,
+	"info",{
+		"hostname":"macbookpro.fritz.box",
+		"date":"2026-10-11 12:41:34",
+		"artist":"pascaldisse",
+		"software":"Houdini 20.5.487",
+		"bounds":[-0.5,0.5,-0.5,0.5,-0.5,0.5],
+		"primcount_summary":"          2 Polygons\n",
+		"attribute_summary":"     1 point attributes:\tP\n",
+		"group_summary":"     1 primitive groups:\tsel\n"
+	},
+	"topology",[
+		"pointref",[
+			"indices",[0,2,5,1,3,4,5,2]
+		]
+	],
+	"attributes",[
+		"pointattributes",[
+			[
+				[
+					"scope","public",
+					"type","numeric",
+					"name","P",
+					"options",{
+						"type":{
+							"type":"string",
+							"value":"point"
+						}
+					}
+				],
+				[
+					"size",3,
+					"storage","fpreal32",
+					"defaults",[
+						"size",1,
+						"storage","fpreal64",
+						"values",[0]
+					],
+					"values",[
+						"size",3,
+						"storage","fpreal32",
+						"tuples",[[-0.5,-0.5,-0.5],[-0.5,-0.5,0.5],[-0.5,0.5,-0.5],[0.5,0.5,-0.5],[0.5,0.5,0.5],[-0.5,0.5,0.5]
+						]
+					]
+				]
+			]
+		]
+	],
+	"primitives",[
+		[
+			[
+				"type","Polygon_run"
+			],
+			[
+				"startvertex",0,
+				"nprimitives",2,
+				"nvertices",[4,4]
+			]
+		]
+	],
+	"primitivegroups",[
+		[
+			[
+				"name","sel"
+			],
+			[
+				"selection",[
+					"unordered",[
+						"i8",[1,1]
+					]
+				]
+			]
+		]
+	]
+]

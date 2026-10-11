@@ -1,0 +1,86 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "ga",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "a",
+    "basegroup": "0-2"
+   }
+  },
+  {
+   "name": "gb",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "b",
+    "basegroup": "2-4"
+   }
+  },
+  {
+   "name": "gcc",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "c",
+    "basegroup": "4-5"
+   }
+  },
+  {
+   "name": "comb",
+   "type": "groupcombine",
+   "params": {
+    "group1": "r",
+    "group_a1": "a",
+    "op_ab1": 4,
+    "group_b1": "b",
+    "op_bc1": 1,
+    "group_c1": "c"
+   }
+  },
+  {
+   "name": "bl",
+   "type": "blast",
+   "params": {
+    "group": "r",
+    "grouptype": 1,
+    "negate": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "ga",
+   0
+  ],
+  [
+   "ga",
+   0,
+   "gb",
+   0
+  ],
+  [
+   "gb",
+   0,
+   "gcc",
+   0
+  ],
+  [
+   "gcc",
+   0,
+   "comb",
+   0
+  ],
+  [
+   "comb",
+   0,
+   "bl",
+   0
+  ]
+ ],
+ "display": "bl"
+}

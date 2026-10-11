@@ -1,0 +1,94 @@
+{
+ "sop": "sop-groupcreate-pointnormal",
+ "houdini": "20.5.487",
+ "note": "box -> groupcreate POINTS by normal dir(0,1,0) angle 90 (top points 4-7) -> blast points keep selected",
+ "points": 4,
+ "prims": 1,
+ "vertices": 4,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [
+  "sel"
+ ],
+ "prim_groups": [],
+ "bbox_min": [
+  -0.5,
+  0.5,
+  -0.5
+ ],
+ "bbox_max": [
+  0.5,
+  0.5,
+  0.5
+ ],
+ "P": [
+  [
+   -0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "P_all": [
+  [
+   -0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   0.5,
+   0.5
+  ],
+  [
+   -0.5,
+   0.5,
+   0.5
+  ]
+ ],
+ "prim_pts": [
+  [
+   1,
+   2,
+   3,
+   0
+  ]
+ ],
+ "prim_closed": [
+  true
+ ]
+}

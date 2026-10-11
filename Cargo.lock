@@ -4419,6 +4419,8 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "hexe-geo",
+ "hexe-graph",
+ "hexe-sop",
  "png 0.18.1",
  "serde",
  "serde_json",

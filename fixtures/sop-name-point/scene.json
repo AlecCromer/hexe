@@ -1,0 +1,30 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "nm",
+   "type": "name",
+   "params": {
+    "attribname": "tag",
+    "class": 1,
+    "numnames": 2,
+    "group1": "0-2",
+    "name1": "p",
+    "group2": "6",
+    "name2": "q"
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "nm",
+   0
+  ]
+ ],
+ "display": "nm"
+}

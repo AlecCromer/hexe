@@ -71,6 +71,10 @@ mod grid_sop;
 //
 mod group_sop;
 //
+mod groupcombine_sop;
+//
+mod groupcreate_sop;
+//
 mod groupdelete_sop;
 //
 mod grouppromote_sop;
@@ -90,6 +94,8 @@ mod merge_sop;
 mod mirror_sop;
 //
 mod mountain_sop;
+//
+mod name_sop;
 //
 mod normal_sop;
 //
@@ -217,6 +223,10 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("group", group_sop::spec, group_sop::new);
     //
+    r.register("groupcombine", groupcombine_sop::spec, groupcombine_sop::new);
+    //
+    r.register("groupcreate", groupcreate_sop::spec, groupcreate_sop::new);
+    //
     r.register("groupdelete", groupdelete_sop::spec, groupdelete_sop::new);
     //
     r.register("grouppromote", grouppromote_sop::spec, grouppromote_sop::new);
@@ -236,6 +246,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("mirror", mirror_sop::spec, mirror_sop::new);
     //
     r.register("mountain", mountain_sop::spec, mountain_sop::new);
+    //
+    r.register("name", name_sop::spec, name_sop::new);
     //
     r.register("normal", normal_sop::spec, normal_sop::new);
     //
