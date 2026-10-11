@@ -2,7 +2,13 @@
 
 - Desktop app = `apps/hexe-tauri` (Tauri 2: Rust commands over hexe-graph + vite/TS UI, three.js viewport). egui `apps/hexe` DELETED (last at 805b5aa).
 - Bundle: `cd apps/hexe-tauri && bun run tauri build` -> `target/release/bundle/{macos/Hexe.app,dmg/Hexe_0.1.0_aarch64.dmg}`; ad-hoc `codesign --force --deep --sign -`.
-- Backlog of egui features not yet ported: apps/hexe-tauri/PORT-TODO.md.
+- egui->Tauri port checklist: apps/hexe-tauri/PORT-TODO.md (0 open).
+
+---
+
+# STATUS — Oracle 2026-10-11
+
+- Oracle 2026-10-11: 94 MATCH / 1 TOPO-DIFF (boolean split-poly start vertex) / 10 STAT-PASS over 105; /Applications/Hexe.app = 84e6474.
 
 ---
 
