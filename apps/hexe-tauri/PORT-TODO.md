@@ -1,7 +1,7 @@
 # PORT-TODO: egui `apps/hexe` -> `apps/hexe-tauri`
 
 Source = `apps/hexe/src/{main,network,params,script,viewport,gpu}.rs` @ main `805b5aa` (git history keeps it: `git show 805b5aa:apps/hexe/src/<f>`).
-Checklist = in egui, NOT yet in Tauri. `[ ]` open.
+Checklist = egui features ported to Tauri. `[x]` done, `[ ]` open. Status: 0 open (all ticked).
 
 ## network (network.rs)
 - [x] multi-select: shift-click toggles node in selection (egui `Act::Select{add}`); Delete removes ALL selected (tauri: single sel) (T3: Set selection, group drag, Delete = one undo step)
