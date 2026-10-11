@@ -6,6 +6,12 @@
 
 ---
 
+# STATUS — Oracle 2026-10-11
+
+- Oracle 2026-10-11: 94 MATCH / 1 TOPO-DIFF (boolean split-poly start vertex) / 10 STAT-PASS over 105; /Applications/Hexe.app = 84e6474.
+
+---
+
 # STATUS — h1/bgeo (bjson decoder, WIP salvage)
 
 - crates/geo/src/bjson.rs: binary-JSON (`0x7f NSJb`) → serde Value; json_read.rs: p_r/c_r/run prim abbreviations → Detail.
