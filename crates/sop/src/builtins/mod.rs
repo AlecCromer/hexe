@@ -55,6 +55,8 @@ mod curve_sop;
 //
 mod delete_sop;
 //
+mod dissolve_sop;
+//
 mod divide_sop;
 //
 mod fuse_sop;
@@ -196,6 +198,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("curve", curve_sop::spec, curve_sop::new);
     //
     r.register("delete", delete_sop::spec, delete_sop::new);
+    //
+    r.register("dissolve", dissolve_sop::spec, dissolve_sop::new);
     //
     r.register("divide", divide_sop::spec, divide_sop::new);
     //

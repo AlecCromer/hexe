@@ -1545,3 +1545,19 @@ evidence = [
   "crates/sop/src/builtins/polyframe_sop.rs::polyframe_matches_houdini_fixtures",
 ]
 notes = "h37 census SOP. Point-class N / tangentu / tangentv from polygons: styles edge1 (prev - P), edge2 (default; closed = both edges from the vertex summed, open = P[i-1]-P[i+1], one-sided ends), primC (centroid - P); N = normalised sum of unit prim normals (open polys count as closed), tangentu from the FIRST prim using the point, ortho (tu -= N(N.tu), not renormalised), tangentv = cross(tu,N) unnormalised (ortho: cross(N,tu), lefthanded flips), Non/tangentuon/tangentvon + attribute names, prim group. VALUES compared too (houdini_values, 1e-4). GAPS: styles texuv / tex / attrib / mikkt (vertex outputs; Unsupported), signson, entity has no effect in any probe (kept as menu), orphan points (zero vectors; Houdini not probed), area weighting of N unconfirmed beyond the box/sphere fixtures. Houdini-oracle (real 20.5, h37): sop-polyframe / -edge1 / -quad / -primc / -sphere MATCH (P, topology, attribute names + values)."
+
+[[feature]]
+id = "sop-dissolve"
+title = "Dissolve SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["dissolve"]
+evidence = [
+  "crates/sop/src/builtins/dissolve_sop.rs::merge_walk_matches_the_probed_boxes",
+  "crates/sop/src/builtins/dissolve_sop.rs::inline_points_unused_points_and_boundary_edges",
+  "crates/sop/src/builtins/dissolve_sop.rs::attrs_follow_the_first_prim_and_compact_with_points",
+  "crates/sop/src/builtins/dissolve_sop.rs::unsupported_and_hostile",
+  "crates/sop/src/builtins/dissolve_sop.rs::dissolve_matches_houdini_fixtures",
+]
+notes = "h37 census SOP, EDGE-group path only (group tokens pA-B). Edges shared by two closed polys merge them (regions via union-find; boundary walk hops across dissolved edges, output vertex = start point of each walked edge, points may repeat; merged prim takes the first member's attrs/groups, appended after the untouched prims in first-prim order); a dissolved edge owned by one poly deletes its whole region; EMPTY group = every polygon deleted; reminlinepts (turn angle < coltol, point used by no other poly slot), remunusedpts (also drops the inline points), attrs/groups compact. GAPS (Unsupported): numeric/prim/point group patterns (Houdini edge expansion of '0' not decoded), invertsel, bridge/boundarycurves/deldegeneratebridges, regions with holes; inline removal measured only on exactly collinear points (boundary = strict < coltol is a guess); compnorms no-op. Houdini-oracle (real 20.5, h37): sop-dissolve / -regions / -box / -boundary / -all MATCH (P, cycles, attr names + values via houdini_twin/houdini_values)."
