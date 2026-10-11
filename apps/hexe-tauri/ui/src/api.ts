@@ -59,6 +59,9 @@ export const api = {
   scriptReady: () => invoke<void>("script_ready"),
   scriptAck: (error: string | null = null) => invoke<void>("script_ack", { error }),
   cook: () => invoke<Cooked>("cook"),
+  /** timeline: `$F` (1-based) + rate; the display cook runs at `($F - 1) / fps` */
+  timelineGet: () => invoke<[number, number]>("timeline_get"),
+  timelineSet: (frame: number) => invoke<void>("timeline_set", { frame }),
   spreadsheet: (cls: SheetClass, offset: number, limit: number) => invoke<SheetData>("spreadsheet", { class: cls, offset, limit }),
     startupScene: () => invoke<string | null>("startup_scene"),
     selectionSet: (ids: number[]) => invoke<void>("selection_set", { ids }),

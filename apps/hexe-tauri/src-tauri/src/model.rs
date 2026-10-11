@@ -140,7 +140,15 @@ pub struct Session {
     pastes: u32,
     /// Viewport point selection (ptnums of the display geometry), pushed by the UI; see `selection_get`.
     selection: Vec<u32>,
+    /// Timeline `$F` (1-based): the display cook runs at `time = ($F - 1) / fps`.
+    frame: i32,
+    /// Timeline rate (frames per second). Default [`DEFAULT_TIMELINE_FPS`] = the gaia-motion clip rate, so `$F` is the clip frame.
+    fps: f32,
 }
+/// Timeline rate unless `--fps`: gaia-motion renders its clips at 30 fps (`motion` SOP `fps` default).
+pub const DEFAULT_TIMELINE_FPS: f32 = 30.0;
+/// Largest `$F` accepted (`--frame`, `timeline_set`).
+pub const MAX_FRAME: i32 = 1_000_000;
 
 /// Whole-graph snapshot for undo / redo: the scene text (names, params, wires, `ui.pos`) + the display node name
 /// (the scene format cannot say "no display"). `scene = None` = empty graph.
@@ -187,6 +195,8 @@ impl Default for Session {
             clip: None,
             pastes: 0,
             selection: Vec::new(),
+            frame: 1,
+            fps: DEFAULT_TIMELINE_FPS,
         }
     }
 }
@@ -254,7 +264,8 @@ pub fn param_from_json(like: &ParamValue, v: &Value) -> Result<ParamValue, Strin
 pub fn split_set(arg: &str) -> Result<(&str, &str, &str), String> {
     let bad = || format!("--set {arg}: want node.param=value");
     let (key, val) = arg.split_once('=').ok_or_else(bad)?;
-    let (node, param) = key.split_once('.').ok_or_else(bad)?;
+    // `node.param` (canonical) or the Houdini-path spelling `node/param`; node names never contain either
+    let (node, param) = key.split_once('.').or_else(|| key.split_once('/')).ok_or_else(bad)?;
     if node.is_empty() || param.is_empty() { Err(bad()) } else { Ok((node, param, val)) }
 }
 
@@ -819,7 +830,35 @@ impl Session {
         self.graph.name(n).map(str::to_string)
     }
 
-    /// Cook the display node. Never panics, never `Err`: a failure is `CookResult.error` (+ `error_node`; the UI shows both).
+    /// Timeline `$F` (1-based).
+    pub fn frame(&self) -> i32 {
+        self.frame
+    }
+    /// Timeline rate in frames per second.
+    pub fn fps(&self) -> f32 {
+        self.fps
+    }
+    /// Set `$F` (`1..=MAX_FRAME`); the next [`Session::cook`] runs at `time = ($F - 1) / fps`. Scrubbing is not an undoable edit.
+    pub fn set_frame(&mut self, frame: i32) -> Result<(), String> {
+        if !(1..=MAX_FRAME).contains(&frame) {
+            return Err(format!("frame {frame} outside 1..={MAX_FRAME}"));
+        }
+        self.frame = frame;
+        Ok(())
+    }
+    /// Set the timeline rate (finite, `0 < fps <= 1000`).
+    pub fn set_fps(&mut self, fps: f32) -> Result<(), String> {
+        if !fps.is_finite() || fps <= 0.0 || fps > 1000.0 {
+            return Err(format!("fps {fps} must be in (0, 1000]"));
+        }
+        self.fps = fps;
+        Ok(())
+    }
+    /// Cook time in seconds of the current `$F`.
+    pub fn time(&self) -> f32 {
+        (self.frame - 1) as f32 / self.fps
+    }
+    /// Cook the display node at the timeline time. Never panics, never `Err`: a failure is `CookResult.error` (+ `error_node`; the UI shows both).
     pub fn cook(&mut self) -> CookResult {
         self.last = None;
         let fail = |error: String, error_node: Option<u32>| CookResult {
@@ -828,8 +867,10 @@ impl Session {
             ..CookResult::default()
         };
         let Some(display) = self.graph.display() else { return fail("no display node".into(), None) };
+        let (time, fps) = (self.time(), self.fps);
         let graph = &mut self.graph;
-        match catch_unwind(AssertUnwindSafe(|| graph.cook(display, 0.0))) {
+        graph.set_fps(fps);
+        match catch_unwind(AssertUnwindSafe(|| graph.cook(display, time))) {
             Ok(Ok(detail)) => {
                 let out = flatten(&detail);
                 self.last = Some(detail);
@@ -1000,6 +1041,105 @@ mod tests {
         assert_eq!(scene.kind, "menu");
         let labels: Vec<&str> = scene.menu.iter().map(|e| e.label.as_str()).collect();
         assert_eq!(labels, ["Stand", "Push", "Leg Hit", "Fall From Height"]);
+    }
+
+    /// Per-test scratch under `~/.gaia/cache/hexe/motion-test/` (never /tmp): `behaviours/{balance,stagger}.json` + `cache/` + the scene.
+    fn motion_scene(tag: &str) -> (std::path::PathBuf, String) {
+        let home = std::env::var_os("HOME").map(std::path::PathBuf::from).expect("HOME");
+        let dir = home.join(".gaia/cache/hexe/motion-test").join(format!("{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("root/behaviours")).expect("dirs");
+        for n in ["balance", "stagger"] {
+            std::fs::write(dir.join(format!("root/behaviours/{n}.json")), format!(r#"{{"name":"{n}"}}"#))
+                .expect("preset");
+        }
+        let stub = format!("{}/../../../fixtures/motion/stub.sh", env!("CARGO_MANIFEST_DIR"));
+        let scene = json!({
+            "nodes": [
+                {"name": "motion", "type": "motion", "params": {
+                    "mode": 2, "behaviour": "balance", "seed": 3, "duration_s": 2.0, "fps": 4.0,
+                    "python_bin": stub, "motion_root": dir.join("root").to_string_lossy(), "cache_dir": dir.join("cache").to_string_lossy()}},
+                {"name": "output1", "type": "output"}
+            ],
+            "edges": [["motion", 0, "output1", 0]],
+            "display": "output1"
+        });
+        let path = dir.join("scene.json");
+        std::fs::write(&path, scene.to_string()).expect("scene");
+        (dir, path.to_string_lossy().into_owned())
+    }
+    /// Pelvis `P.y` (point 0) of a cook result.
+    fn pelvis_y(c: &CookResult) -> f32 {
+        c.positions[1]
+    }
+
+    /// Headless `--set motion.behaviour=stagger` round trip: override applies on load, shows in the param pane, reaches the CLI, and survives save/reload.
+    #[test]
+    fn set_behaviour_round_trip_headless() {
+        let (dir, scene) = motion_scene("set-beh");
+        let mut s = Session::new();
+        s.set_overrides(vec!["motion.behaviour=stagger".into()]).expect("override parses");
+        s.graph_load(&scene).expect("loads");
+        assert!(s.set_errors.is_empty(), "{:?}", s.set_errors);
+        let g = s.graph_get();
+        let m = g.nodes.iter().find(|n| n.ty == "motion").expect("motion node");
+        assert_eq!(m.params["behaviour"], json!("stagger"), "override beats the scene's balance");
+        let nt = s.list_node_types();
+        let b = nt
+            .iter()
+            .find(|n| n.ty == "motion")
+            .and_then(|n| n.params.iter().find(|p| p.name == "behaviour"))
+            .expect("param info");
+        assert_eq!(b.kind, "string");
+        assert!(!b.choices.is_empty(), "dropdown choices come from behaviours/*.json");
+        let c = s.cook();
+        assert_eq!(c.error, None);
+        assert_eq!(c.counts.points, 24);
+        let argv = std::fs::read_dir(dir.join("cache"))
+            .expect("cache")
+            .filter_map(Result::ok)
+            .find_map(|e| std::fs::read_to_string(e.path().join("argv.txt")).ok())
+            .expect("argv.txt");
+        assert!(argv.contains("behaviour\n--name\nstagger\n") && argv.contains("--seed\n3"), "{argv}");
+        // round trip: save, reload without the override -> the saved value is stagger
+        let out = dir.join("saved.json");
+        s.graph_save(&out.to_string_lossy()).expect("save");
+        let mut t = Session::new();
+        t.graph_load(&out.to_string_lossy()).expect("reload");
+        let g2 = t.graph_get();
+        assert_eq!(g2.nodes.iter().find(|n| n.ty == "motion").expect("motion").params["behaviour"], json!("stagger"));
+        // a name outside the directory is a cook error that names the node and lists the choices
+        let mut u = Session::new();
+        u.set_overrides(vec!["motion.behaviour=nope".into()]).expect("override parses");
+        u.graph_load(&scene).expect("loads");
+        let e = u.cook().error.expect("unknown behaviour fails the cook");
+        assert!(e.contains("nope") && e.contains("balance, stagger"), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The timeline: `$F` drives the display cook time `($F - 1) / fps`; the motion node scrubs with it.
+    #[test]
+    fn timeline_frame_scrubs_the_motion_clip() {
+        let (dir, scene) = motion_scene("timeline");
+        let mut s = Session::new();
+        s.graph_load(&scene).expect("loads");
+        assert_eq!((s.frame(), s.fps()), (1, DEFAULT_TIMELINE_FPS));
+        s.set_fps(4.0).expect("fps"); // timeline rate == clip rate (4) -> $F is the clip frame; stub pelvis y = (frame-1)/100
+        for (f, want) in [(1, 0.0), (3, 0.02), (9, 0.08), (500, 0.08)] {
+            s.set_frame(f).expect("frame");
+            assert!((s.time() - (f - 1) as f32 / 4.0).abs() < 1e-6);
+            let c = s.cook();
+            assert_eq!(c.error, None, "F{f}");
+            assert_eq!(pelvis_y(&c), want, "F{f}");
+        }
+        for bad in [0, -1, MAX_FRAME + 1] {
+            assert!(s.set_frame(bad).is_err(), "{bad}");
+        }
+        for bad in [0.0, -1.0, f32::NAN, f32::INFINITY, 1001.0] {
+            assert!(s.set_fps(bad).is_err(), "{bad}");
+        }
+        assert_eq!((s.frame(), s.fps()), (500, 4.0), "rejected values change nothing");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

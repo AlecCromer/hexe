@@ -193,10 +193,29 @@ async function main(): Promise<void> {
       if (id !== undefined) { e.preventDefault(); void structural(() => api.setDisplay(Number(id)))(); }
     }
   });
+  // timeline: `$F` lives in Rust (`--frame`/`--fps` seed it); number box + slider scrub it, every change re-cooks at ($F - 1) / fps
+  const frameBox = $<HTMLInputElement>("frame"), frameSlider = $<HTMLInputElement>("frameslider");
+  const showFrame = (f: number, fps: number) => {
+    frameBox.value = String(f);
+    frameSlider.max = String(Math.max(360, f));
+    frameSlider.value = String(f);
+    $("fpslab").textContent = `${fps} fps`;
+  };
+  const scrub = async (raw: string) => {
+    const f = Math.round(Number(raw));
+    if (!Number.isFinite(f) || f < 1) return;
+    try { await api.timelineSet(f); } catch (e) { say(msg(e), true); return; }
+    const [cur, fps] = await api.timelineGet();
+    showFrame(cur, fps);
+    await recook();
+  };
+  frameSlider.addEventListener("input", () => void scrub(frameSlider.value));
+  frameBox.addEventListener("change", () => void scrub(frameBox.value));
+  { const [f, fps] = await api.timelineGet(); showFrame(f, fps); }
   const start = await api.startupScene();
   if (start) { path.value = start; await open(); } else { await refresh(); showParams(); }
   // proof / test door (read by the T1 proof script): drive the real param pane through the DOM
-    (window as unknown as Record<string, unknown>).__hexe = { select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, open: async (p: string) => { path.value = p; await open(); } };
+    (window as unknown as Record<string, unknown>).__hexe = { select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, setFrame: scrub, open: async (p: string) => { path.value = p; await open(); } };
     const job = await api.renderRequest();
     if (job) await headlessRender(job);
 }

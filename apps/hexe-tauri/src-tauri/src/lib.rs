@@ -130,6 +130,17 @@ fn script_ready(gate: State<Gate>) {
 fn script_ack(gate: State<Gate>, error: Option<String>) {
     let _ = gate.ack.send(error);
 }
+/// Timeline `(frame, fps)`: `$F` (1-based) and the rate; the display cook runs at `($F - 1) / fps`.
+#[tauri::command]
+fn timeline_get(app: State<App>) -> (i32, f32) {
+    let s = app.lock();
+    (s.frame(), s.fps())
+}
+/// Set `$F` (scrub). The UI re-cooks afterwards.
+#[tauri::command]
+fn timeline_set(app: State<App>, frame: i32) -> Res<()> {
+    app.lock().set_frame(frame)
+}
 #[tauri::command]
 fn cook(app: State<App>) -> CookResult {
     app.lock().cook()
@@ -245,6 +256,12 @@ pub fn run() {
     if let Err(e) = session.set_overrides(cli.sets.clone()) {
         fail(&e);
     }
+    if let Some(fps) = cli.fps {
+        session.set_fps(fps).unwrap_or_else(|e| fail(&e));
+    }
+    if let Some(frame) = cli.frame {
+        session.set_frame(frame).unwrap_or_else(|e| fail(&e));
+    }
     // fail fast on a --set that cannot apply to the startup scene (the window would only show it in the log)
     if let Some(path) = &cli.scene {
         let mut probe = Session::new();
@@ -311,6 +328,8 @@ pub fn run() {
             paste_nodes,
             script_ready,
             script_ack,
+            timeline_get,
+            timeline_set,
             cook,
             spreadsheet,
             startup_scene,
