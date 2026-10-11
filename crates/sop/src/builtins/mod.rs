@@ -109,6 +109,8 @@ mod polyframe_sop;
 //
 mod polysplit_sop;
 //
+mod split_sop;
+//
 mod polyextrude_sop;
 //
 mod ray_sop;
@@ -250,6 +252,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
     //
     r.register("polysplit", polysplit_sop::spec, polysplit_sop::new);
+    //
+    r.register("split", split_sop::spec, split_sop::new);
     //
     r.register("polyframe", polyframe_sop::spec, polyframe_sop::new);
     //

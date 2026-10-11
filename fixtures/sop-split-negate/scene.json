@@ -1,0 +1,28 @@
+{
+ "nodes": [
+  {
+   "name": "src",
+   "type": "box",
+   "params": {}
+  },
+  {
+   "name": "op1",
+   "type": "split",
+   "params": {
+    "group": "5",
+    "grouptype": 4,
+    "negate": true,
+    "output": 0
+   }
+  }
+ ],
+ "edges": [
+  [
+   "src",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}

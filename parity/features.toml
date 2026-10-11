@@ -1600,3 +1600,19 @@ evidence = [
   "crates/sop/src/builtins/polysplit_sop.rs::polysplit_matches_houdini_fixtures",
 ]
 notes = "h38 census SOP. splitloc tokens: pA-B (new point on edge A->B at edgepercent when edgepercenttoggle else 0.5, measured from A) and NeM (edge M of prim N); lone pN is an error in Houdini too. Edge points inserted into every prim sharing the edge; consecutive tokens on a common prim split it (piece1 = cycle[i..=j], piece2 = rest); output = uncut prims in place, then cut pieces appended; new points after originals in token order. GAPS (Unsupported): path segments across faces (Houdini routes via intermediate edge points / vertices; percent of intermediates not derived), two segments in one prim, pathtype edge loop, close, group output, NeM percent direction (only 0.5 probed). Houdini-oracle (real 20.5, h38): sop-polysplit / -edge / -pct / -chain / -single MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-split"
+title = "Split SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["split"]
+evidence = [
+  "crates/sop/src/builtins/split_sop.rs::prims_split_into_selected_and_rest",
+  "crates/sop/src/builtins/split_sop.rs::point_mode_shortens_prims_and_drops_degenerate",
+  "crates/sop/src/builtins/split_sop.rs::empty_pattern_is_everything",
+  "crates/sop/src/builtins/split_sop.rs::hostile_params",
+  "crates/sop/src/builtins/split_sop.rs::split_matches_houdini_fixtures",
+]
+notes = "h38 census SOP. Graph has ONE output per node: hexe-only param `output` (0 selected, 1 rest) picks the Houdini output; oracle twin = split -> null(input 0 from output index). Prim mode: selected (or rest) prims + their points renumbered, unused points dropped; point mode: points kept, prims lose vertices on dropped points, polygons < 3 verts dropped (box pts 0,1 rest = 6 pts / 4 prims, two quads become tris); negate swaps outputs; empty group = all. guess = named prim group, else named point group (UNVERIFIED), numeric = prims. GAPS: breakpoints / edges grouptype (Unsupported), removegrp, nonexistent group name (Houdini selects nothing silently, hexe errors). Houdini-oracle (real 20.5, h38): sop-split / -rest / -pts / -pts-rest / -negate MATCH, bit-for-bit via houdini_twin."
