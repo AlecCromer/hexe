@@ -72,11 +72,14 @@ impl Node<Detail> for Polysplit {
         let mut eps: Vec<EdgePt> = Vec::new();
         for t in &toks {
             let (a, b) = if let Some(r) = t.strip_prefix('p') {
-                let (a, b) = r.split_once('-').ok_or_else(|| bad(format!("`splitloc`: `{t}` is not an edge point `pA-B`")))?;
+                let (a, b) =
+                    r.split_once('-').ok_or_else(|| bad(format!("`splitloc`: `{t}` is not an edge point `pA-B`")))?;
                 (num(a)?, num(b)?)
             } else if let Some((n, m)) = t.split_once('e') {
                 let (n, m) = (num(n)?, num(m)?);
-                let c = cyc(n).filter(|_| src.prims.get(n).is_some_and(is_poly)).ok_or_else(|| bad(format!("`splitloc`: prim {n} is not a polygon")))?;
+                let c = cyc(n)
+                    .filter(|_| src.prims.get(n).is_some_and(is_poly))
+                    .ok_or_else(|| bad(format!("`splitloc`: prim {n} is not a polygon")))?;
                 match (c.get(m), c.get((m + 1) % c.len().max(1))) {
                     (Some(&a), Some(&b)) => (a, b),
                     _ => return Err(bad(format!("`splitloc`: `{t}` edge out of range"))),
@@ -151,7 +154,11 @@ impl Node<Detail> for Polysplit {
         let mut prims: Vec<Prim> = Vec::new();
         let mut prim_src: Vec<Option<usize>> = Vec::new();
         let mut budget = 0u64;
-        let mut emit = |pts: &[usize], kind: PrimKind, src_i: usize, vs: &dyn Fn(usize) -> Option<usize>| -> Result<(), CookError> {
+        let mut emit = |pts: &[usize],
+                        kind: PrimKind,
+                        src_i: usize,
+                        vs: &dyn Fn(usize) -> Option<usize>|
+         -> Result<(), CookError> {
             budget += pts.len() as u64;
             if budget > MAX_ELEMS {
                 return Err(failed(OP, "output too large"));
@@ -183,7 +190,8 @@ impl Node<Detail> for Polysplit {
         }
         for (i, cut) in cuts.iter().enumerate() {
             let (Some((x, y)), Some(c)) = (cut, &outcyc[i]) else { continue };
-            let (mut a, mut b) = (c.iter().position(|q| q == x).unwrap_or(0), c.iter().position(|q| q == y).unwrap_or(0));
+            let (mut a, mut b) =
+                (c.iter().position(|q| q == x).unwrap_or(0), c.iter().position(|q| q == y).unwrap_or(0));
             if a > b {
                 std::mem::swap(&mut a, &mut b);
             }
@@ -229,7 +237,9 @@ mod tests {
     }
     #[test]
     fn percent_is_measured_from_the_first_point() {
-        let d = run("p0-3", |p| p.with("edgepercenttoggle", ParamValue::B(true)).with("edgepercent", ParamValue::F(0.25))).expect("cooks");
+        let d =
+            run("p0-3", |p| p.with("edgepercenttoggle", ParamValue::B(true)).with("edgepercent", ParamValue::F(0.25)))
+                .expect("cooks");
         assert_eq!(d.p()[9], [0.0, 0.25, 0.0]);
         let e = run("p0-3", |p| p.with("edgepercent", ParamValue::F(0.25))).expect("cooks");
         assert_eq!(e.p()[9], [0.0, 0.5, 0.0]);

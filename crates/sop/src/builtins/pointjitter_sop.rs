@@ -105,7 +105,8 @@ mod tests {
         assert!(d.iter().all(|v| v.iter().all(|c| c.abs() <= 0.5 + 1e-6)));
         let var = d.iter().map(|v| v[0] * v[0]).sum::<f64>() / d.len() as f64;
         assert!((var.sqrt() - 0.2887).abs() < 0.01, "std {}", var.sqrt());
-        let o2 = run(g.clone(), &[("scale", ParamValue::F(2.0)), ("axisscale", ParamValue::V3([1.0, 0.0, 1.0]))]).expect("cooks");
+        let o2 = run(g.clone(), &[("scale", ParamValue::F(2.0)), ("axisscale", ParamValue::V3([1.0, 0.0, 1.0]))])
+            .expect("cooks");
         let d2 = disp(&o2, &g);
         assert!(d2.iter().all(|v| v[1] == 0.0 && v[0].abs() <= 1.0 + 1e-6));
     }
@@ -119,7 +120,11 @@ mod tests {
     #[test]
     fn group_limits_the_jitter() {
         let mut g = grid(4);
-        g.groups.push(hexe_geo::Group { name: "a".into(), class: AttrClass::Point, mask: (0..16).map(|i| i < 2).collect() });
+        g.groups.push(hexe_geo::Group {
+            name: "a".into(),
+            class: AttrClass::Point,
+            mask: (0..16).map(|i| i < 2).collect(),
+        });
         let o = run(g.clone(), &[("group", ParamValue::S("a".into()))]).expect("cooks");
         assert_ne!(o.p()[0], g.p()[0]);
         assert_eq!(&o.p()[2..], &g.p()[2..]);
@@ -134,9 +139,11 @@ mod tests {
     /// Statistical twin vs real Houdini 20.5 (mean / std of |P - base| within 5 %, 70x70 point grid; same metric as `cargo xtask oracle` stat-disp).
     #[test]
     fn pointjitter_stat_matches_houdini_fixture() {
-        let h = hexe_geo::read_geo(include_bytes!("../../../../fixtures/sop-pointjitter/houdini.geo")).expect("houdini.geo");
+        let h = hexe_geo::read_geo(include_bytes!("../../../../fixtures/sop-pointjitter/houdini.geo"))
+            .expect("houdini.geo");
         let b = hexe_geo::read_geo(include_bytes!("../../../../fixtures/sop-pointjitter/base.geo")).expect("base.geo");
-        let (mut g, id) = crate::load_scene(include_str!("../../../../fixtures/sop-pointjitter/scene.json")).expect("scene");
+        let (mut g, id) =
+            crate::load_scene(include_str!("../../../../fixtures/sop-pointjitter/scene.json")).expect("scene");
         let d = g.cook(id, 0.0).expect("cook");
         assert_eq!(d.point_count, h.point_count);
         let ms = |x: &Detail| {

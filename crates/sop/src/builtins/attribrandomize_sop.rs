@@ -58,7 +58,8 @@ fn mix(mut z: u64) -> u64 {
 }
 fn unit(seed: u64, i: usize, c: u64, k: u64) -> f64 {
     // (0,1]: never 0 so ln() is safe
-    ((mix(mix(seed ^ (i as u64).wrapping_mul(0xD1B5_4A32_D192_ED03)) ^ (c << 8 | k)) >> 11) as f64 + 1.0) / (1u64 << 53) as f64
+    ((mix(mix(seed ^ (i as u64).wrapping_mul(0xD1B5_4A32_D192_ED03)) ^ (c << 8 | k)) >> 11) as f64 + 1.0)
+        / (1u64 << 53) as f64
 }
 fn rows(a: &AttrData) -> Option<(usize, Vec<[f64; 4]>)> {
     let w = |v: &[f32]| {
@@ -110,7 +111,8 @@ impl Node<Detail> for AttribRandomize {
             _ => return Err(bad("`class`: missing or out of range")),
         };
         let op = p.menu("operation").filter(|&m| m < 5).ok_or_else(|| bad("`operation`: missing or out of range"))?;
-        let dist = p.menu("distribution").filter(|&m| m < 3).ok_or_else(|| bad("`distribution`: missing or out of range"))?;
+        let dist =
+            p.menu("distribution").filter(|&m| m < 3).ok_or_else(|| bad("`distribution`: missing or out of range"))?;
         let dim = int(p, "dimensions")?;
         if !(1..=4).contains(&dim) {
             return Err(bad(format!("`dimensions`: {dim} outside 1..=4")));
@@ -133,9 +135,13 @@ impl Node<Detail> for AttribRandomize {
             Some(a) => match rows(&a.data) {
                 Some((d, r)) if d == dim => r,
                 Some((d, _)) => return Err(bad(format!("`dimensions`: existing `{name}` has {d} components"))),
-                None => return Err(CookError::Unsupported("attribrandomize: only float attributes are modelled".into())),
+                None => {
+                    return Err(CookError::Unsupported("attribrandomize: only float attributes are modelled".into()));
+                }
             },
-            None if name == "P" => src.p().iter().map(|v| [f64::from(v[0]), f64::from(v[1]), f64::from(v[2]), 0.0]).collect(),
+            None if name == "P" => {
+                src.p().iter().map(|v| [f64::from(v[0]), f64::from(v[1]), f64::from(v[2]), 0.0]).collect()
+            }
             None => vec![[0.0; 4]; n],
         };
         if name == "P" && dim != 3 {
@@ -226,11 +232,16 @@ mod tests {
             0,
         ));
         assert!(m.abs() < 0.1 && (s - 2.0).abs() < 0.1, "{m} {s}");
-        let c = run(grid(4), &[("distribution", ParamValue::Menu(0)), ("constvaluex", ParamValue::F(3.0))]).expect("cooks");
+        let c =
+            run(grid(4), &[("distribution", ParamValue::Menu(0)), ("constvaluex", ParamValue::F(3.0))]).expect("cooks");
         assert!(col(&c, "Cd", 0).iter().all(|v| *v == 3.0));
         let m = run(
             c.as_ref().clone(),
-            &[("distribution", ParamValue::Menu(0)), ("constvaluex", ParamValue::F(2.0)), ("operation", ParamValue::Menu(4))],
+            &[
+                ("distribution", ParamValue::Menu(0)),
+                ("constvaluex", ParamValue::F(2.0)),
+                ("operation", ParamValue::Menu(4)),
+            ],
         )
         .expect("cooks");
         assert!(col(&m, "Cd", 0).iter().all(|v| *v == 6.0));
@@ -240,7 +251,12 @@ mod tests {
         let g = grid(60);
         let o = run(
             g.clone(),
-            &[("name", ParamValue::S("P".into())), ("operation", ParamValue::Menu(1)), ("minx", ParamValue::F(-0.5)), ("maxx", ParamValue::F(0.5))],
+            &[
+                ("name", ParamValue::S("P".into())),
+                ("operation", ParamValue::Menu(1)),
+                ("minx", ParamValue::F(-0.5)),
+                ("maxx", ParamValue::F(0.5)),
+            ],
         )
         .expect("cooks");
         let dx: Vec<f32> = o.p().iter().zip(g.p()).map(|(a, b)| a[0] - b[0]).collect();
@@ -251,9 +267,16 @@ mod tests {
     fn deterministic_seeded_and_grouped() {
         let a = run(grid(8), &[]).expect("a");
         assert_eq!(a.attr(AttrClass::Point, "Cd"), run(grid(8), &[]).expect("b").attr(AttrClass::Point, "Cd"));
-        assert_ne!(a.attr(AttrClass::Point, "Cd"), run(grid(8), &[("seed", ParamValue::F(3.0))]).expect("c").attr(AttrClass::Point, "Cd"));
+        assert_ne!(
+            a.attr(AttrClass::Point, "Cd"),
+            run(grid(8), &[("seed", ParamValue::F(3.0))]).expect("c").attr(AttrClass::Point, "Cd")
+        );
         let mut g = grid(4);
-        g.groups.push(hexe_geo::Group { name: "a".into(), class: AttrClass::Point, mask: (0..16).map(|i| i < 2).collect() });
+        g.groups.push(hexe_geo::Group {
+            name: "a".into(),
+            class: AttrClass::Point,
+            mask: (0..16).map(|i| i < 2).collect(),
+        });
         let o = run(g, &[("group", ParamValue::S("a".into()))]).expect("cooks");
         assert!(col(&o, "Cd", 0)[2..].iter().all(|v| *v == 0.0));
     }
@@ -269,9 +292,12 @@ mod tests {
     /// Statistical twin vs real Houdini 20.5 (`P add uniform -0.5..0.5` on a 70x70 point grid: mean / std of |P - base| within 5 %).
     #[test]
     fn attribrandomize_stat_matches_houdini_fixture() {
-        let h = hexe_geo::read_geo(include_bytes!("../../../../fixtures/sop-attribrandomize/houdini.geo")).expect("houdini.geo");
-        let b = hexe_geo::read_geo(include_bytes!("../../../../fixtures/sop-attribrandomize/base.geo")).expect("base.geo");
-        let (mut g, id) = crate::load_scene(include_str!("../../../../fixtures/sop-attribrandomize/scene.json")).expect("scene");
+        let h = hexe_geo::read_geo(include_bytes!("../../../../fixtures/sop-attribrandomize/houdini.geo"))
+            .expect("houdini.geo");
+        let b =
+            hexe_geo::read_geo(include_bytes!("../../../../fixtures/sop-attribrandomize/base.geo")).expect("base.geo");
+        let (mut g, id) =
+            crate::load_scene(include_str!("../../../../fixtures/sop-attribrandomize/scene.json")).expect("scene");
         let d = g.cook(id, 0.0).expect("cook");
         assert_eq!(d.point_count, h.point_count);
         let ms = |x: &Detail| {

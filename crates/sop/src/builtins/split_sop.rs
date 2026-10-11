@@ -7,6 +7,7 @@
 //! * prim mode: output = those prims in source order; points = the points they use, in source order, renumbered (unused points removed).
 //! * point mode: output = those points; every prim keeps only its vertices on a kept point (order kept), and a polygon left with fewer than
 //!   3 vertices is dropped (an open one with fewer than 2). E.g. box points 0,1 -> `rest` = 6 points, 4 prims (two quads shortened to tris).
+//!
 //! Attributes and groups are carried by the same remap as the other re-topologising SOPs.
 //!
 //! Not modelled: `breakpoints` / `edges` grouptype (-> `Unsupported`), `removegrp`. A group name that does not exist is an error here
@@ -140,7 +141,8 @@ mod tests {
     use super::*;
     fn run(pat: &str, ov: &[(&str, ParamValue)]) -> Result<Arc<Detail>, CookError> {
         let n = new();
-        let p = ov.iter().fold(defaults(&*n).with("group", ParamValue::S(pat.into())), |p, (k, v)| p.with(k, v.clone()));
+        let p =
+            ov.iter().fold(defaults(&*n).with("group", ParamValue::S(pat.into())), |p, (k, v)| p.with(k, v.clone()));
         cook(&*n, cube(), &p)
     }
     #[test]
