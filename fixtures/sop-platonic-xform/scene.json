@@ -1,0 +1,25 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "platonic",
+   "params": {
+    "type": 4,
+    "orient": 0,
+    "radius": 2,
+    "t": [
+     1,
+     2,
+     3
+    ],
+    "r": [
+     10,
+     20,
+     30
+    ]
+   }
+  }
+ ],
+ "edges": [],
+ "display": "g"
+}

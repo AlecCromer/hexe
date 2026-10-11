@@ -1,0 +1,13 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "platonic",
+   "params": {
+    "type": 2
+   }
+  }
+ ],
+ "edges": [],
+ "display": "g"
+}

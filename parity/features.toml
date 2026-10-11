@@ -1485,3 +1485,18 @@ evidence = [
   "crates/sop/src/builtins/tube_sop.rs::tube_matches_houdini_fixtures",
 ]
 notes = "h36 census SOP. Polygon tube/cone: rows >= 2 rings (ring 0 on top), cols points per ring, rad (top, bottom) * radscale, height, orient x/y/z, t, r, cap (cap polys BEFORE sides; consolidatepts off = separate cap points), surftype as torus (rows do not wrap). DEVIATION: Houdini default type is prim (single Tube prim); hexe default is poly and type prim is Unsupported (Tube-prim xform model not probed); mesh/nurbs/bezier/polysoup Unsupported; vertexnormals and Houdini's 1e-5 clamp of a capped zero bottom radius NOT modelled. Houdini-oracle (real 20.5, h36, type=1): sop-tube / -xform / -cap MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-platonic"
+title = "Platonic Solids SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["platonic"]
+evidence = [
+  "crates/sop/src/builtins/platonic_sop.rs::counts_of_the_five_solids",
+  "crates/sop/src/builtins/platonic_sop.rs::radius_center_orient_and_rotate",
+  "crates/sop/src/builtins/platonic_sop.rs::hostile_params",
+  "crates/sop/src/builtins/platonic_sop.rs::platonic_matches_houdini_fixtures",
+]
+notes = "h36 census SOP. Tetra/cube/octa/icosa/dodeca from Houdini's own hard-coded f32 tables (read back from hython 20.5, incl. its rounding noise; cube edge 1, dodeca circumradius 0.99332), orient x/y/z, radius, t, r (xyz order). NOT modelled: type 5 soccer ball (60 pts / 32 prims + prim Cd; Unsupported); Houdini clamps negative type to 0 (hexe range-checks). Houdini-oracle (real 20.5, h36): sop-platonic (+ -cube/-octa/-icosa/-dodeca/-xform) MATCH, bit-for-bit via houdini_twin."

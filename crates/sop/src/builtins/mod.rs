@@ -93,6 +93,8 @@ mod output_sop;
 //
 mod peak_sop;
 //
+mod platonic_sop;
+//
 mod polybevel_sop;
 //
 mod polyextrude_sop;
@@ -222,6 +224,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("output", output_sop::spec, output_sop::new);
     //
     r.register("peak", peak_sop::spec, peak_sop::new);
+    //
+    r.register("platonic", platonic_sop::spec, platonic_sop::new);
     //
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
     //
