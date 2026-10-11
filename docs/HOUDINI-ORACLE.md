@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 89, STAT-PASS 10, TOPO-DIFF 1  (N=100)
+Histogram: MATCH 104, STAT-PASS 10, TOPO-DIFF 1  (N=115)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -18,6 +18,9 @@ Histogram: MATCH 89, STAT-PASS 10, TOPO-DIFF 1  (N=100)
 | sop-bend | 5/1/5 | 5/1/5 | MATCH | MATCH | - (Houdini bend toward -X by default, twin sets hexe side=(-1,0,0); parm map is a best guess) |
 | sop-blast | 8/5/20 | 8/5/20 | MATCH | MATCH | - |
 | sop-boolean | 14/9/42 | 14/9/42 | MATCH | TOPO-DIFF | H35: P ORDER now MATCH (A pieces then B, untouched before split in source prim order, untouched prims keep the source cycle, points by first appearance); remaining TOPO-DIFF = start vertex of 4 split polys (+x/+z/+y of A and B -x), rule not derived (parity/ref/boolean/bx*.topo corpus) |
+| sop-bound | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
+| sop-bound-keep | 16/12/48 | 16/12/48 | MATCH | MATCH |  |
+| sop-bound-pad | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-box | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim0 [1,5,4,0] verbatim, clockwise from outside) |
 | sop-circle | 6/1/6 | 6/1/6 | MATCH | MATCH | - (default reverse=1 now ON in hexe: clockwise; one prim, identical point cycle) |
 | sop-clip | 8/5/20 | 8/5/20 | MATCH | MATCH | cut-point order + prim order: Houdini appends the cut points (+x,-z) first, prims start [1,2,3,0]; hexe cut points (-x,-z) first. Point SET equal, counts 8/5/20 equal; no cap (dofill 0 vs capclip DEFERRED); winding now equal (H32) |
@@ -69,6 +72,12 @@ Histogram: MATCH 89, STAT-PASS 10, TOPO-DIFF 1  (N=100)
 | sop-normal | 8/6/24 | 8/6/24 | MATCH | MATCH | - (vertex N present both; N VALUES not compared) |
 | sop-output | 8/6/24 | 8/6/24 | MATCH | MATCH | - |
 | sop-peak | 8/6/24 | 8/6/24 | MATCH | MATCH | - (displaced P equal Houdini index-for-index (outward)) |
+| sop-platonic | 4/4/12 | 4/4/12 | MATCH | MATCH |  |
+| sop-platonic-cube | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
+| sop-platonic-dodeca | 20/12/60 | 20/12/60 | MATCH | MATCH |  |
+| sop-platonic-icosa | 12/20/60 | 12/20/60 | MATCH | MATCH |  |
+| sop-platonic-octa | 6/8/24 | 6/8/24 | MATCH | MATCH |  |
+| sop-platonic-xform | 20/12/60 | 20/12/60 | MATCH | MATCH |  |
 | sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | 56/54 match (offset .1 divs 2 round); div 1–4 zero-diff incl. point/prim order |
 | sop-polyextrude | 8/6/24 | 8/6/24 | MATCH | MATCH | - (splittype 0 connected components = Houdini default: closed box 8/6/24, corners mitre-displaced +-0.5 -> +-1, point order = first appearance; splittype 1 keeps the per-face path; inset/divisions/connected groups beyond the closed-box case UNVERIFIED) |
 | sop-polyfill | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
@@ -103,7 +112,13 @@ Histogram: MATCH 89, STAT-PASS 10, TOPO-DIFF 1  (N=100)
 | sop-sweep-scale | 300/288/1152 | 300/288/1152 | MATCH | MATCH |  |
 | sop-sweep-tube | 200/194/784 | 200/194/784 | MATCH | MATCH |  |
 | sop-switch | 8/6/24 | 8/6/24 | MATCH | MATCH | - (box branch) |
+| sop-torus | 288/288/1152 | 288/288/1152 | MATCH | MATCH |  |
+| sop-torus-alt | 20/40/120 | 20/40/120 | MATCH | MATCH |  |
+| sop-torus-xform | 35/35/140 | 35/35/140 | MATCH | MATCH |  |
 | sop-transform | 8/6/24 | 8/6/24 | MATCH | MATCH | - (SRT math verified (t/r/s)) |
+| sop-tube | 24/12/48 | 24/12/48 | MATCH | MATCH |  |
+| sop-tube-cap | 30/26/84 | 30/26/84 | MATCH | MATCH |  |
+| sop-tube-xform | 15/10/40 | 15/10/40 | MATCH | MATCH |  |
 | sop-twist | 8/6/24 | 8/6/24 | MATCH | MATCH | - (hexe twist now turns clockwise seen from +Y like Houdini: +90 moves corner (-x,-z) to (+x,-z); the parm map strength 90 <-> angle 90 is still a best guess) |
 | sop-uvlayout | 8/6/24 | 8/6/24 | MATCH | MATCH | - (H35: detail attrs coverage + numnonpacked MATCH; twin = Houdini defaults (res 1024, 1 texel); uv VALUES not compared here (hexe uvunwrap island orientation differs) - proven on Houdini's own unwrap geo by test houdini_unwrap_in_gives_houdini_island_order_pitch_and_cells) |
 | sop-uvlayout-stat | 8/6/24 | 8/6/24 | MATCH | MATCH |  |

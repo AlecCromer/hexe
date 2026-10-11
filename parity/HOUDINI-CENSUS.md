@@ -2,6 +2,25 @@
 
 Source: `hou.sopNodeTypeCategory().nodeTypes()` in hython 20.5.487 (script: `oracle/houdini/census.py`). Names namespace-stripped (`kinefx::`, `apex::`, `beta::`, `Sop/ns::`), versions collapsed to latest. Hexe side: `hexe-cli nodes`.
 
+## h36 implemented (this branch)
+
+Six-SOP target, 4 shipped in the 90 min budget (all hython-twin MATCH, bit-for-bit through `houdini_twin`, ledger rows `sop-bound|torus|tube|platonic`):
+
+| sop | fixtures | verdict | gaps |
+|---|---|---|---|
+| bound | sop-bound, -pad, -keep | MATCH x3 | boundtype sphere/rectangle, dodivs, oriented bbox, breakpoints/edges group types |
+| torus | sop-torus, -xform, -alt | MATCH x3 | type mesh/nurbs/bezier/polysoup (no Mesh prim) |
+| tube | sop-tube, -xform, -cap | MATCH x3 (type=1) | Houdini default type=prim (Tube prim xform not probed) -> hexe default poly; vertexnormals |
+| platonic | sop-platonic (+cube/octa/icosa/dodeca/xform) | MATCH x6 | type 5 soccer ball |
+
+Candidate list check: polyextrude, resample, fuse, clip, ray, peak, sort, normal, attribpromote, blast, delete, matchsize, knife, mirror, twist, subdivide, polyreduce, polybevel were ALREADY in hexe; `carve` and `lattice` were the only truly missing ones from the user list.
+
+## Left (next picks, by Houdini docs popularity)
+
+carve, lattice, polyframe, dissolve, clean, polysplit, edgedivide, split, trail, attribrandomize, attribswap, groupcreate/groupexpand/groupinvert, name, pointjitter, align, bulge, tube type=prim, torus/tube Mesh prim.
+
+Method notes: classification into groups is keyword/list based (one-off script, not committed - AGENTS section 2); the raw hython dump is `oracle/houdini/census-houdini.json`; regenerate with `hython oracle/houdini/census.py`. `hidden()` types are counted as deprecated/legacy (152); `group`, `knife`, `twist` are hidden in 20.5 but hexe implements them.
+
 ## Numbers
 
 | metric | n |
@@ -10,8 +29,8 @@ Source: `hou.sopNodeTypeCategory().nodeTypes()` in hython 20.5.487 (script: `ora
 | distinct SOP names | 1025 |
 | hidden / legacy (Houdini `hidden()` flag = deprecated or internal) | 152 |
 | visible (non-hidden) SOP names | 873 |
-| hexe registered types | 64 |
-| hexe covers visible Houdini SOPs | 60 (6.9% of visible) |
+| hexe registered types | 68 |
+| hexe covers visible Houdini SOPs | 64 (7.3% of visible) |
 | hexe covers hidden/legacy names | 3 (group, knife, twist) |
 | hexe-only / renamed | `wrangle` = Houdini `attribwrangle`; `motion` = hexe-only (no Houdini SOP) |
 
@@ -19,7 +38,7 @@ Source: `hou.sopNodeTypeCategory().nodeTypes()` in hython 20.5.487 (script: `ora
 
 | group | houdini | hexe has | missing | note |
 |---|---|---|---|---|
-| core-modeling | 113 | 27 | 86 | target |
+| core-modeling | 113 | 31 | 82 | target |
 | attribute | 93 | 16 | 77 | target (incl. group*/uv*) |
 | deform | 41 | 6 | 35 | target |
 | scatter-copy | 33 | 2 | 31 | target (pack/unpack incl.) |
@@ -31,17 +50,17 @@ Source: `hou.sopNodeTypeCategory().nodeTypes()` in hython 20.5.487 (script: `ora
 
 ## Missing, by group
 
-### core-modeling - 86 missing
+### core-modeling - 82 missing
 
-bound cap carve circlefromedges circlespline clay clean cluster convexdecomposition crease crosssectionsurface
+cap carve circlefromedges circlespline clay clean cluster convexdecomposition crease crosssectionsurface
 curveclay curvesect detangle dissolve edgecollapse edgecusp edgedivide edgeequalize edgeflip edgestraighten
 edgetransport extractcentroid extrude fillet fit flatten font hole inflate intersectionanalysis
 intersectionstitch isooffset join laplacian lsystem matchtopology metaball planarinflate planarpatch
-planarpatchfromcurves planarpleat planartiles platonic pointcloudiso pointcloudreduce pointcloudsurface
-polybridge polycut polydoctor polyexpand2d polyhinge polyloft polypatch polypath polysoup polyspline polysplit
-polywire primitive profile project quadremesh rails refine remesh remeshbubbles remeshgrid remeshtocamera
-rewire shrinkwrap solidify spiral split sprite starburst stitch superquad surfsect torus trace triangulate2d
-tribez tridivide trim tube
+planarpatchfromcurves planarpleat planartiles pointcloudiso pointcloudreduce pointcloudsurface polybridge
+polycut polydoctor polyexpand2d polyhinge polyloft polypatch polypath polysoup polyspline polysplit polywire
+primitive profile project quadremesh rails refine remesh remeshbubbles remeshgrid remeshtocamera rewire
+shrinkwrap solidify spiral split sprite starburst stitch superquad surfsect trace triangulate2d tribez
+tridivide trim
 
 ### attribute - 77 missing
 
