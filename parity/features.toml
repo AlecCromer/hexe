@@ -1584,3 +1584,19 @@ evidence = [
   "crates/sop/src/builtins/clean_sop.rs::clean_matches_houdini_fixtures",
 ]
 notes = "h37 census SOP. deldegengeo/degentol: closed poly dies when <3 verts or Newell area < tol^2 (strict; 4 collinear points survive tol 0), open poly dies when total length <= tol; unused points go when delunusedpts OR deldegengeo (probed); removeunusedgrp drops empty groups. make_manifold: per point the vertices split into fans (join = shared edge used by exactly two distinct prims at that point; non-manifold edges and bow-ties split), walk in DESCENDING vertex number, first fan keeps the point, later fans get fresh point copies appended in point order; delete_small deletes pieces (shared-point components after the split) with <= prim_count prims, only with make_manifold. GAPS (Unsupported): fusepts, orientpoly, reversewinding, fixoverlap/deleteoverlap, dodelattribs, dodelgroups, non-finite P (delnans), make_manifold with open polys / non-poly prims; repeated-vertex collapse inside a poly (area test only); open polys with >2 points use total length (guess). Houdini-oracle (real 20.5, h37): sop-clean / -manifold / -unused / -small MATCH (P, cycles, attr names + values via houdini_twin/houdini_values)."
+
+[[feature]]
+id = "sop-polysplit"
+title = "Polysplit SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["polysplit"]
+evidence = [
+  "crates/sop/src/builtins/polysplit_sop.rs::edge_point_only_inserts_in_both_prims",
+  "crates/sop/src/builtins/polysplit_sop.rs::path_in_one_prim_splits_it",
+  "crates/sop/src/builtins/polysplit_sop.rs::percent_is_measured_from_the_first_point",
+  "crates/sop/src/builtins/polysplit_sop.rs::hostile_params",
+  "crates/sop/src/builtins/polysplit_sop.rs::polysplit_matches_houdini_fixtures",
+]
+notes = "h38 census SOP. splitloc tokens: pA-B (new point on edge A->B at edgepercent when edgepercenttoggle else 0.5, measured from A) and NeM (edge M of prim N); lone pN is an error in Houdini too. Edge points inserted into every prim sharing the edge; consecutive tokens on a common prim split it (piece1 = cycle[i..=j], piece2 = rest); output = uncut prims in place, then cut pieces appended; new points after originals in token order. GAPS (Unsupported): path segments across faces (Houdini routes via intermediate edge points / vertices; percent of intermediates not derived), two segments in one prim, pathtype edge loop, close, group output, NeM percent direction (only 0.5 probed). Houdini-oracle (real 20.5, h38): sop-polysplit / -edge / -pct / -chain / -single MATCH, bit-for-bit via houdini_twin."
