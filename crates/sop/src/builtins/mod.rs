@@ -95,6 +95,8 @@ mod mirror_sop;
 //
 mod mountain_sop;
 //
+mod name_sop;
+//
 mod normal_sop;
 //
 mod meshutil;
@@ -244,6 +246,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("mirror", mirror_sop::spec, mirror_sop::new);
     //
     r.register("mountain", mountain_sop::spec, mountain_sop::new);
+    //
+    r.register("name", name_sop::spec, name_sop::new);
     //
     r.register("normal", normal_sop::spec, normal_sop::new);
     //

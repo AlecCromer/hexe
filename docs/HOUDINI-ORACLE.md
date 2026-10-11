@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 131, STAT-PASS 10, TOPO-DIFF 1  (N=142)
+Histogram: MATCH 133, STAT-PASS 10, TOPO-DIFF 1  (N=144)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -88,6 +88,8 @@ Histogram: MATCH 131, STAT-PASS 10, TOPO-DIFF 1  (N=142)
 | sop-mountain | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03882/0.04032(+3.9%) disp_std 0.03039/0.02925(-3.8%) |
 | sop-mountain-freq | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03881/0.03936(+1.4%) disp_std 0.03024/0.02902(-4.0%) |
 | sop-mountain-oct | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03635/0.03666(+0.9%) disp_std 0.02779/0.02749(-1.1%) |
+| sop-name | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
+| sop-name-point | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-noise | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.2997/0.3092(+3.2%) disp_std 0.1438/0.1387(-3.5%) |
 | sop-noise-freq | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.2952/0.3076(+4.2%) disp_std 0.1417/0.136(-4.0%) |
 | sop-noise-oct | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.2733/0.2783(+1.8%) disp_std 0.1258/0.1219(-3.1%) |

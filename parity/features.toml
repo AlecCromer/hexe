@@ -1617,3 +1617,19 @@ evidence = [
   "crates/sop/src/builtins/groupcombine_sop.rs::unsupported_and_hostile",
 ]
 notes = "H38c: multiparm rows 1..4 (numcombine), ops none|or|and|xor|sub folded left to right, `none` skips its operand, negate_* = all-but, operands use the groupcreate pattern grammar, grouptype guess|points|prims. Houdini-oracle (real 20.5): sop-groupcombine (prims, sub+or chain) + sop-groupcombine-pts (points, negate+xor) MATCH. UNVERIFIED: guess order when A names both a point and a prim group (prims first), [..] globs. NOT modelled: edge + vertex groups, rows > 4."
+
+[[feature]]
+id = "sop-name"
+title = "Name SOP (Houdini name: string attribute from group patterns / group names)"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["name"]
+evidence = [
+  "crates/sop/src/builtins/name_sop.rs::rows_match_hython",
+  "crates/sop/src/builtins/name_sop.rs::classes_match_hython",
+  "crates/sop/src/builtins/name_sop.rs::name_from_group_matches_hython",
+  "crates/sop/src/builtins/name_sop.rs::chained_names_keep_old_values",
+  "crates/sop/src/builtins/name_sop.rs::hostile_and_passthrough",
+]
+notes = "H38c: prim|point|vertex(all only); attribname; rows 1..8 (group pattern, empty = all, later row wins); donamefromgroup + namefromgroupmask (group order, rows after); existing string attr keeps untouched values; invalid attr name = passthrough, empty = BadParam. Houdini-oracle (real 20.5): sop-name + sop-name-point MATCH, string VALUES equal via oracle/houdini/check-name-values.py (hython). NOT modelled: numrenames, vertex patterns (prim ranges -> Unsupported). UNVERIFIED: existing non-string attribute of that name (Failed)."
