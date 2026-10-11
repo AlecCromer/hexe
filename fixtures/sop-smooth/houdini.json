@@ -1,7 +1,7 @@
 {
  "sop": "sop-smooth",
  "houdini": "20.5.487",
- "note": "box -> smooth uniform strength 0.5 no boundary pin. Houdini smooth::2.0 is a different model (strength/filterquality); P values expected to differ",
+ "note": "box -> smooth uniform strength 0.5 filterquality 2 no boundary pin. MATCH since H35: hexe implements the fitted Houdini smooth::2.0 model (I + s*diag(M^q)^-1 M^q) x = P, M = I - D^-1 A, q = min(filterquality,5); probes in parity/ref/smooth-probes/",
  "points": 8,
  "prims": 6,
  "vertices": 24,

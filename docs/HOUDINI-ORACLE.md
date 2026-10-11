@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 88, STAT-PASS 10, ORDER-DIFF 1, P-DIFF 1  (N=100)
+Histogram: MATCH 89, STAT-PASS 10, ORDER-DIFF 1  (N=100)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -92,7 +92,7 @@ Histogram: MATCH 88, STAT-PASS 10, ORDER-DIFF 1, P-DIFF 1  (N=100)
 | sop-skin-closev | 24/24/96 | 24/24/96 | MATCH | MATCH |  |
 | sop-skin-eq | 36/24/96 | 36/24/96 | MATCH | MATCH |  |
 | sop-skin-tris | 12/12/36 | 12/12/36 | MATCH | MATCH |  |
-| sop-smooth | 8/6/24 | 8/6/24 | P-DIFF | P-DIFF | H33: twin scene fixed (was unknown params iterations/pin_boundary -> HEXE-ERR); now cooks, P-DIFF: Houdini smooth::2.0 box corner factor f(strength,quality), uniform: q1 = 1/(1+2s/3) exactly; q2 s.5 = 6/7, q3 s.5 = 27/29, q10 s.5 = .98844 (MORE quality = LESS shrink; model not reverse-engineered, see ledger) |
+| sop-smooth | 8/6/24 | 8/6/24 | MATCH | MATCH | H35 MATCH: hexe now implements the hython-fitted smooth::2.0 model: (I + strength*K) x = P per channel, M = I - D^-1 A (D = distinct-neighbour count), pinned rows of M zeroed, K = diag(M^q)^-1 M^q, q = min(filterquality,5). 200 probe replays (box/grid5/sphere/fan/perturbed grid x none/unsharededges) max/dP/ 5.7e-5 = Houdini's own iterative-solve noise (parity/ref/smooth-probes/). Not probed: groupboundary (Houdini default), group parm, scale/curvature methods. |
 | sop-sort | 9/4/16 | 9/4/16 | MATCH | MATCH | - (reverse permutation itself consistent) |
 | sop-sphere | 266/288/1104 | 266/288/1104 | MATCH | MATCH | - (poles 0/1, ring +X toward -Z now equal) |
 | sop-subdivide | 26/24/96 | 26/24/96 | MATCH | MATCH | zero-diff since H33: face pts then edge pts (first encounter) were already equal; quad child k ring rotated right by k (box), tri/pentagon children unrotated (probed) |
