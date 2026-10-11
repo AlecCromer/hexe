@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 133, STAT-PASS 10, TOPO-DIFF 1  (N=144)
+Histogram: PLACEHOLDER
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -14,6 +14,7 @@ Histogram: MATCH 133, STAT-PASS 10, TOPO-DIFF 1  (N=144)
 | sop-attribcopy | 9/4/16 | 9/4/16 | MATCH | MATCH | - |
 | sop-attribdelete | 9/4/16 | 9/4/16 | MATCH | MATCH | - |
 | sop-attribpromote | 9/4/16 | 9/4/16 | MATCH | MATCH | - (prim attr v present both) |
+| sop-attribrandomize | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.481/0.4809(-0.0%) disp_std 0.1422/0.1383(-2.7%) |
 | sop-attribtransfer | 9/4/16 | 9/4/16 | MATCH | MATCH | - |
 | sop-bend | 5/1/5 | 5/1/5 | MATCH | MATCH | - (Houdini bend toward -X by default, twin sets hexe side=(-1,0,0); parm map is a best guess) |
 | sop-blast | 8/5/20 | 8/5/20 | MATCH | MATCH | - |
@@ -102,6 +103,7 @@ Histogram: MATCH 133, STAT-PASS 10, TOPO-DIFF 1  (N=144)
 | sop-platonic-icosa | 12/20/60 | 12/20/60 | MATCH | MATCH |  |
 | sop-platonic-octa | 6/8/24 | 6/8/24 | MATCH | MATCH |  |
 | sop-platonic-xform | 20/12/60 | 20/12/60 | MATCH | MATCH |  |
+| sop-pointjitter | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.4816/0.4789(-0.5%) disp_std 0.139/0.1396(+0.5%) |
 | sop-polybevel | 56/54/216 | 56/54/216 | MATCH | MATCH | 56/54 match (offset .1 divs 2 round); div 1–4 zero-diff incl. point/prim order |
 | sop-polyextrude | 8/6/24 | 8/6/24 | MATCH | MATCH | - (splittype 0 connected components = Houdini default: closed box 8/6/24, corners mitre-displaced +-0.5 -> +-1, point order = first appearance; splittype 1 keeps the per-face path; inset/divisions/connected groups beyond the closed-box case UNVERIFIED) |
 | sop-polyfill | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
@@ -113,6 +115,11 @@ Histogram: MATCH 133, STAT-PASS 10, TOPO-DIFF 1  (N=144)
 | sop-polyframe-primc | 7/2/7 | 7/2/7 | MATCH | MATCH |  |
 | sop-polyframe-quad | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
 | sop-polyframe-sphere | 20/24/84 | 20/24/84 | MATCH | MATCH |  |
+| sop-polysplit | 11/5/21 | 11/5/21 | MATCH | MATCH |  |
+| sop-polysplit-chain | 12/6/24 | 12/6/24 | MATCH | MATCH |  |
+| sop-polysplit-edge | 11/5/21 | 11/5/21 | MATCH | MATCH |  |
+| sop-polysplit-pct | 11/5/21 | 11/5/21 | MATCH | MATCH |  |
+| sop-polysplit-single | 10/4/18 | 10/4/18 | MATCH | MATCH |  |
 | sop-ray | 9/4/16 | 9/4/16 | MATCH | MATCH | - (projected P equal Houdini index-for-index) |
 | sop-registry | 8/6/24 | 8/6/24 | MATCH | MATCH | - (null passthrough of box) |
 | sop-resample | 24/1/24 | 24/1/24 | MATCH | MATCH | - (inherits the circle order; sample points equal) |
@@ -133,6 +140,11 @@ Histogram: MATCH 133, STAT-PASS 10, TOPO-DIFF 1  (N=144)
 | sop-smooth | 8/6/24 | 8/6/24 | MATCH | MATCH | H35 MATCH: hexe now implements the hython-fitted smooth::2.0 model: (I + strength*K) x = P per channel, M = I - D^-1 A (D = distinct-neighbour count), pinned rows of M zeroed, K = diag(M^q)^-1 M^q, q = min(filterquality,5). 200 probe replays (box/grid5/sphere/fan/perturbed grid x none/unsharededges) max/dP/ 5.7e-5 = Houdini's own iterative-solve noise (parity/ref/smooth-probes/). Not probed: groupboundary (Houdini default), group parm, scale/curvature methods. |
 | sop-sort | 9/4/16 | 9/4/16 | MATCH | MATCH | - (reverse permutation itself consistent) |
 | sop-sphere | 266/288/1104 | 266/288/1104 | MATCH | MATCH | - (poles 0/1, ring +X toward -Z now equal) |
+| sop-split | 8/2/8 | 8/2/8 | MATCH | MATCH |  |
+| sop-split-negate | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
+| sop-split-pts | 2/0/0 | 2/0/0 | MATCH | MATCH |  |
+| sop-split-pts-rest | 6/4/14 | 6/4/14 | MATCH | MATCH |  |
+| sop-split-rest | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
 | sop-subdivide | 26/24/96 | 26/24/96 | MATCH | MATCH | zero-diff since H33: face pts then edge pts (first encounter) were already equal; quad child k ring rotated right by k (box), tri/pentagon children unrotated (probed) |
 | sop-sweep | 300/288/1152 | 300/288/1152 | MATCH | MATCH |  |
 | sop-sweep-caps | 300/290/1176 | 300/290/1176 | MATCH | MATCH |  |

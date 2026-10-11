@@ -1,0 +1,176 @@
+{
+ "sop": "sop-polysplit",
+ "houdini": "20.5.487",
+ "note": "polysplit path between two edge points of ONE quad (grid 3x3): quad cut in two, neighbour of the shared edge gets the point inserted; cut prims appended after uncut ones",
+ "points": 11,
+ "prims": 5,
+ "vertices": 21,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  -5.0,
+  0.0,
+  -5.0
+ ],
+ "bbox_max": [
+  5.0,
+  0.0,
+  5.0
+ ],
+ "P": [
+  [
+   -5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   0.0,
+   0.0,
+   -5.0
+  ],
+  [
+   5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   -5.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   5.0,
+   0.0,
+   0.0
+  ],
+  [
+   -5.0,
+   0.0,
+   5.0
+  ],
+  [
+   0.0,
+   0.0,
+   5.0
+  ]
+ ],
+ "P_all": [
+  [
+   -5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   0.0,
+   0.0,
+   -5.0
+  ],
+  [
+   5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   -5.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   5.0,
+   0.0,
+   0.0
+  ],
+  [
+   -5.0,
+   0.0,
+   5.0
+  ],
+  [
+   0.0,
+   0.0,
+   5.0
+  ],
+  [
+   5.0,
+   0.0,
+   5.0
+  ],
+  [
+   -2.5,
+   0.0,
+   -5.0
+  ],
+  [
+   -2.5,
+   0.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   1,
+   2,
+   5,
+   4
+  ],
+  [
+   3,
+   10,
+   4,
+   7,
+   6
+  ],
+  [
+   4,
+   5,
+   8,
+   7
+  ],
+  [
+   9,
+   1,
+   4,
+   10
+  ],
+  [
+   10,
+   3,
+   0,
+   9
+  ]
+ ],
+ "prim_closed": [
+  true,
+  true,
+  true,
+  true,
+  true
+ ]
+}

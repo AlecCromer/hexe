@@ -1,0 +1,39 @@
+{
+ "nodes": [
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 70,
+    "cols": 70,
+    "type": 4
+   }
+  },
+  {
+   "name": "rnd1",
+   "type": "attribrandomize",
+   "params": {
+    "name": "P",
+    "class": 2,
+    "operation": 1,
+    "distribution": 1,
+    "dimensions": 3,
+    "minx": -0.5,
+    "miny": -0.5,
+    "minz": -0.5,
+    "maxx": 0.5,
+    "maxy": 0.5,
+    "maxz": 0.5
+   }
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "rnd1",
+   0
+  ]
+ ],
+ "display": "rnd1"
+}

@@ -1,0 +1,27 @@
+{
+ "nodes": [
+  {
+   "name": "grid1",
+   "type": "grid",
+   "params": {
+    "rows": 70,
+    "cols": 70,
+    "type": 4
+   }
+  },
+  {
+   "name": "jit1",
+   "type": "pointjitter",
+   "params": {}
+  }
+ ],
+ "edges": [
+  [
+   "grid1",
+   0,
+   "jit1",
+   0
+  ]
+ ],
+ "display": "jit1"
+}

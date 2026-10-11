@@ -1,0 +1,61 @@
+{
+ "sop": "sop-split-pts",
+ "houdini": "20.5.487",
+ "note": "split out0 of box POINT group 0 1: 2 points, every prim shortened below 3 vertices -> no prims",
+ "points": 2,
+ "prims": 0,
+ "vertices": 0,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  -0.5,
+  -0.5,
+  -0.5
+ ],
+ "bbox_max": [
+  0.5,
+  -0.5,
+  -0.5
+ ],
+ "P": [
+  [
+   -0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   -0.5,
+   -0.5
+  ]
+ ],
+ "P_all": [
+  [
+   -0.5,
+   -0.5,
+   -0.5
+  ],
+  [
+   0.5,
+   -0.5,
+   -0.5
+  ]
+ ],
+ "prim_pts": [],
+ "prim_closed": []
+}

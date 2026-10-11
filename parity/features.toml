@@ -1633,3 +1633,68 @@ evidence = [
   "crates/sop/src/builtins/name_sop.rs::hostile_and_passthrough",
 ]
 notes = "H38c: prim|point|vertex(all only); attribname; rows 1..8 (group pattern, empty = all, later row wins); donamefromgroup + namefromgroupmask (group order, rows after); existing string attr keeps untouched values; invalid attr name = passthrough, empty = BadParam. Houdini-oracle (real 20.5): sop-name + sop-name-point MATCH, string VALUES equal via oracle/houdini/check-name-values.py (hython). NOT modelled: numrenames, vertex patterns (prim ranges -> Unsupported). UNVERIFIED: existing non-string attribute of that name (Failed)."
+
+[[feature]]
+id = "sop-polysplit"
+title = "Polysplit SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["polysplit"]
+evidence = [
+  "crates/sop/src/builtins/polysplit_sop.rs::edge_point_only_inserts_in_both_prims",
+  "crates/sop/src/builtins/polysplit_sop.rs::path_in_one_prim_splits_it",
+  "crates/sop/src/builtins/polysplit_sop.rs::percent_is_measured_from_the_first_point",
+  "crates/sop/src/builtins/polysplit_sop.rs::hostile_params",
+  "crates/sop/src/builtins/polysplit_sop.rs::polysplit_matches_houdini_fixtures",
+]
+notes = "h38 census SOP. splitloc tokens: pA-B (new point on edge A->B at edgepercent when edgepercenttoggle else 0.5, measured from A) and NeM (edge M of prim N); lone pN is an error in Houdini too. Edge points inserted into every prim sharing the edge; consecutive tokens on a common prim split it (piece1 = cycle[i..=j], piece2 = rest); output = uncut prims in place, then cut pieces appended; new points after originals in token order. GAPS (Unsupported): path segments across faces (Houdini routes via intermediate edge points / vertices; percent of intermediates not derived), two segments in one prim, pathtype edge loop, close, group output, NeM percent direction (only 0.5 probed). Houdini-oracle (real 20.5, h38): sop-polysplit / -edge / -pct / -chain / -single MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-split"
+title = "Split SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["split"]
+evidence = [
+  "crates/sop/src/builtins/split_sop.rs::prims_split_into_selected_and_rest",
+  "crates/sop/src/builtins/split_sop.rs::point_mode_shortens_prims_and_drops_degenerate",
+  "crates/sop/src/builtins/split_sop.rs::empty_pattern_is_everything",
+  "crates/sop/src/builtins/split_sop.rs::hostile_params",
+  "crates/sop/src/builtins/split_sop.rs::split_matches_houdini_fixtures",
+]
+notes = "h38 census SOP. Graph has ONE output per node: hexe-only param `output` (0 selected, 1 rest) picks the Houdini output; oracle twin = split -> null(input 0 from output index). Prim mode: selected (or rest) prims + their points renumbered, unused points dropped; point mode: points kept, prims lose vertices on dropped points, polygons < 3 verts dropped (box pts 0,1 rest = 6 pts / 4 prims, two quads become tris); negate swaps outputs; empty group = all. guess = named prim group, else named point group (UNVERIFIED), numeric = prims. GAPS: breakpoints / edges grouptype (Unsupported), removegrp, nonexistent group name (Houdini selects nothing silently, hexe errors). Houdini-oracle (real 20.5, h38): sop-split / -rest / -pts / -pts-rest / -negate MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-pointjitter"
+title = "Point Jitter SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["pointjitter"]
+evidence = [
+  "crates/sop/src/builtins/pointjitter_sop.rs::displacement_is_uniform_in_a_cube_of_edge_scale",
+  "crates/sop/src/builtins/pointjitter_sop.rs::deterministic_and_seeded",
+  "crates/sop/src/builtins/pointjitter_sop.rs::group_limits_the_jitter",
+  "crates/sop/src/builtins/pointjitter_sop.rs::hostile_params",
+  "crates/sop/src/builtins/pointjitter_sop.rs::pointjitter_stat_matches_houdini_fixture",
+]
+notes = "h38 census SOP, STATISTICAL twin (STAT-PASS, Houdini RNG not reproducible). hython probe 3600-pt grid: per-axis displacement UNIFORM in +-scale*axisscale/2 (std 0.2887 at scale 1, mean |d| 0.483, doubles at scale 2), seed changes the stream. Hexe: splitmix64 keyed by seed + point + axis (deterministic). GAPS: usepscale / useidattrib (Unsupported), updatenmls. Houdini-oracle (real 20.5, h38): sop-pointjitter STAT-PASS (mean/std of |P-base| within 5 %, case.toml stat-disp)."
+
+[[feature]]
+id = "sop-attribrandomize"
+title = "Attribute Randomize SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["attribrandomize"]
+evidence = [
+  "crates/sop/src/builtins/attribrandomize_sop.rs::default_creates_uniform_color_in_unit_range",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::normal_and_scale_and_ops",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::add_on_p_is_a_zero_centred_jitter_with_min_max",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::deterministic_seeded_and_grouped",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::hostile_params",
+  "crates/sop/src/builtins/attribrandomize_sop.rs::attribrandomize_stat_matches_houdini_fixture",
+]
+notes = "h38 census SOP, STATISTICAL twin (STAT-PASS, Houdini RNG not reproducible). hython probe 4900-pt grid: uniform default 0..1 (mean .5 std .2887), min/max per component, scale multiplies the draw, normal = median + stddev * N(0,1) (std .998-1.02 measured), operation set/add on P and new Cd (Color, size 3). Hexe: float attrs (dims 1-4) class detail/prim/point/vertex, ops set/add/min/max/mult, constant/uniform/normal, splitmix64 stream keyed by seed+element+component. GAPS (Unsupported): bernoulli, uniformdiscrete, uniformorient, uniformball, exponential, lognormal, cauchy, ramp, discrete, allsame, seedattrib, int/string attrs, grouptype; Houdini constant-distribution result on P not understood (std 2.9, not probed further). Houdini-oracle (real 20.5, h38): sop-attribrandomize STAT-PASS (P add uniform +-0.5, mean/std of |P-base| within 5 %)."

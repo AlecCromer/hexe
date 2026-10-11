@@ -39,6 +39,8 @@ mod torus_sop;
 //
 mod tube_sop;
 //
+mod attribrandomize_sop;
+//
 mod carve_sop;
 //
 mod circle_sop;
@@ -112,6 +114,12 @@ mod platonic_sop;
 mod polybevel_sop;
 //
 mod polyframe_sop;
+//
+mod pointjitter_sop;
+//
+mod polysplit_sop;
+//
+mod split_sop;
 //
 mod polyextrude_sop;
 //
@@ -191,6 +199,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("tube", tube_sop::spec, tube_sop::new);
     //
+    r.register("attribrandomize", attribrandomize_sop::spec, attribrandomize_sop::new);
+    //
     r.register("carve", carve_sop::spec, carve_sop::new);
     //
     r.register("circle", circle_sop::spec, circle_sop::new);
@@ -258,6 +268,12 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("platonic", platonic_sop::spec, platonic_sop::new);
     //
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
+    //
+    r.register("pointjitter", pointjitter_sop::spec, pointjitter_sop::new);
+    //
+    r.register("polysplit", polysplit_sop::spec, polysplit_sop::new);
+    //
+    r.register("split", split_sop::spec, split_sop::new);
     //
     r.register("polyframe", polyframe_sop::spec, polyframe_sop::new);
     //
