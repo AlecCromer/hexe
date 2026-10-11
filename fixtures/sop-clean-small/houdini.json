@@ -1,0 +1,119 @@
+{
+ "sop": "sop-clean-small",
+ "houdini": "20.5.487",
+ "note": "clean make_manifold + delete_small prim_count 1: the 2-quad strip survives (2 > 1), the lone triangle goes",
+ "points": 6,
+ "prims": 2,
+ "vertices": 8,
+ "attribs": {
+  "point": [
+   "P"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "bbox_max": [
+  2.0,
+  1.0,
+  0.0
+ ],
+ "P": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ],
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "P_all": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   1.0,
+   1.0,
+   0.0
+  ],
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   2.0,
+   0.0,
+   0.0
+  ],
+  [
+   2.0,
+   1.0,
+   0.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   2,
+   3
+  ],
+  [
+   1,
+   4,
+   5,
+   2
+  ]
+ ],
+ "prim_closed": [
+  true,
+  true
+ ]
+}

@@ -43,6 +43,8 @@ mod carve_sop;
 //
 mod circle_sop;
 //
+mod clean_sop;
+//
 mod clip_sop;
 //
 mod color_sop;
@@ -186,6 +188,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("carve", carve_sop::spec, carve_sop::new);
     //
     r.register("circle", circle_sop::spec, circle_sop::new);
+    //
+    r.register("clean", clean_sop::spec, clean_sop::new);
     //
     r.register("clip", clip_sop::spec, clip_sop::new);
     //

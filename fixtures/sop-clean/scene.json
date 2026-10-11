@@ -1,0 +1,153 @@
+{
+ "nodes": [
+  {
+   "name": "q",
+   "type": "curve",
+   "params": {
+    "coords": "0.0,0.0,0.0 1.0,0.0,0.0 1.0,1.0,0.0 0.0,1.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "dg",
+   "type": "curve",
+   "params": {
+    "coords": "3.0,0.0,0.0 4.0,0.0,0.0 5.0,0.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "tri",
+   "type": "curve",
+   "params": {
+    "coords": "3.0,2.0,0.0 4.0,2.0,0.0 3.0,3.0,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "t",
+   "type": "curve",
+   "params": {
+    "coords": "6.0,0.0,0.0 7.0,0.0,0.0 6.5,0.0005,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "s",
+   "type": "curve",
+   "params": {
+    "coords": "6.0,3.0,0.0 6.0005,3.0,0.0 6.0,3.001,0.0",
+    "close": true
+   }
+  },
+  {
+   "name": "ln",
+   "type": "curve",
+   "params": {
+    "coords": "8.0,0.0,0.0 9.0,0.0,0.0",
+    "close": false
+   }
+  },
+  {
+   "name": "ls",
+   "type": "curve",
+   "params": {
+    "coords": "8.0,2.0,0.0 8.0005,2.0,0.0",
+    "close": false
+   }
+  },
+  {
+   "name": "ad",
+   "type": "add",
+   "params": {
+    "points": "9,9,9"
+   }
+  },
+  {
+   "name": "m",
+   "type": "merge"
+  },
+  {
+   "name": "m2",
+   "type": "merge"
+  },
+  {
+   "name": "m3",
+   "type": "merge"
+  },
+  {
+   "name": "op1",
+   "type": "clean",
+   "params": {}
+  }
+ ],
+ "edges": [
+  [
+   "q",
+   0,
+   "m",
+   0
+  ],
+  [
+   "dg",
+   0,
+   "m",
+   1
+  ],
+  [
+   "tri",
+   0,
+   "m",
+   2
+  ],
+  [
+   "t",
+   0,
+   "m",
+   3
+  ],
+  [
+   "m",
+   0,
+   "m2",
+   0
+  ],
+  [
+   "s",
+   0,
+   "m2",
+   1
+  ],
+  [
+   "ln",
+   0,
+   "m2",
+   2
+  ],
+  [
+   "ls",
+   0,
+   "m2",
+   3
+  ],
+  [
+   "m2",
+   0,
+   "m3",
+   0
+  ],
+  [
+   "ad",
+   0,
+   "m3",
+   1
+  ],
+  [
+   "m3",
+   0,
+   "op1",
+   0
+  ]
+ ],
+ "display": "op1"
+}
