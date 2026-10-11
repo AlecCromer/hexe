@@ -1515,3 +1515,18 @@ evidence = [
   "crates/sop/src/builtins/carve_sop.rs::carve_matches_houdini_fixtures",
 ]
 notes = "h37 census SOP. Poly path only (polylines + polygon boundaries): U domain firstu/domainu1 (default 0.25) + secondu/domainu2, arclen, divsu (divs-1 equal pieces of the keepin span), keepin/keepout (order out-first, in, out-last), prim group; reversed domain swaps, clamps to 0..1; open output = all-new points in prim order, unselected prims first with their original points; CLOSED polys: secondu on = same pieces (keepout = one wrapped prim with the seam point twice), secondu off = loop re-opened at lo (original points kept, new start (if not on a vertex) + end point appended) = default mode of a polygon mesh. GAPS: V domain, onlybreakpoints / allubreakpoints / extractop / keepOriginal / attribute-driven domains, divsu in the re-open case, NURBS / Bezier curve+surface prims (Unsupported; Houdini does knot insertion), int attrs at cut points (Houdini 0, hexe copies heavier source), closed keepin+keepout order (guess). Houdini-oracle (real 20.5, h37): sop-carve / -divs / -grid / -closed MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-lattice"
+title = "Lattice SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["lattice"]
+evidence = [
+  "crates/sop/src/builtins/lattice_sop.rs::bezier_weights_of_one_moved_node",
+  "crates/sop/src/builtins/lattice_sop.rs::linear_is_trilinear_and_outside_is_untouched",
+  "crates/sop/src/builtins/lattice_sop.rs::hostile_inputs",
+  "crates/sop/src/builtins/lattice_sop.rs::lattice_matches_houdini_fixtures",
+]
+notes = "h37 census SOP. 3 inputs (geometry, rest lattice, deformed lattice; Houdini needs all 3). divsx/y/z = CELLS per axis (default 3) so each lattice has (d+1)^3 points (mismatch = Failed like Houdini); a lattice point's grid cell comes from its REST POSITION in the rest bbox (point order irrelevant, probed with x- and z-fastest orders); interptype bezier (default; Bernstein FFD of degree divs, P' = sum w * deformed) / linear (trilinear in the cell); points outside the rest bbox unchanged (box corners follow their node); group = point pattern. GAPS: restgroup, kernel/radius/normthreshold/bspheres, rest lattices that are not exactly regular (Houdini drifts up to ~1e-4 at the far corner with 4-decimal-rounded rest values - an iterative inverse; fixtures use dyadic-exact rests so MATCH is bit-level), Houdini has no lattice generator in this SOP (the user builds the rest/deformed point sets). Houdini-oracle (real 20.5, h37): sop-lattice / -linear / -group MATCH via houdini_twin."

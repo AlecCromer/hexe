@@ -1,0 +1,2 @@
+from _common import *
+lattice_case("sop-lattice", "lattice defaults (3x3x3 cells, bezier) over [-1.5,1.5]x[-1.5,1.5]x[0,3] (dyadic-exact rest grid); jittered deformed lattice; samples inside/outside/corners", (3, 3, 3), (-1.5, -1.5, 0), (1.5, 1.5, 3), 1, [(0.1,0.3,1.1),(0.9,-1.0,2.8),(-0.7,1.0,0.2),(2.5,0.0,1.5),(0.0,-3.0,1.0),(0.0,0.0,-1.0),(-1.5,-1.5,0.0),(1.5,1.5,3.0),(0.35,0.45,1.25),(-0.5,-1.0,2.5)])

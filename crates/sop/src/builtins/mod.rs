@@ -73,6 +73,8 @@ mod grouppromote_sop;
 //
 mod knife_sop;
 //
+mod lattice_sop;
+//
 mod line_sop;
 //
 mod matchsize_sop;
@@ -210,6 +212,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("grouppromote", grouppromote_sop::spec, grouppromote_sop::new);
     //
     r.register("knife", knife_sop::spec, knife_sop::new);
+    //
+    r.register("lattice", lattice_sop::spec, lattice_sop::new);
     //
     r.register("line", line_sop::spec, line_sop::new);
     //
