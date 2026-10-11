@@ -1455,3 +1455,33 @@ evidence = [
   "crates/sop/src/builtins/bound_sop.rs::bound_matches_houdini_fixtures",
 ]
 notes = "h36 census SOP. Box bounds (Houdini box layout: pts bottom ring then top, prims [1,5,4,0]..), minpad/maxpad, rebar/minsize, group (guess/prims = prim pattern, points = point pattern), keepOriginal, createboundinggeo, bounds prim group, xform detail attrib (16 floats). NOT modelled: boundtype sphere/rectangle, oriented bbox, dodivs, breakpoints/edges group types, radii attrib (Unsupported). Houdini-oracle (real 20.5, h36): sop-bound / -pad / -keep MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-torus"
+title = "Torus SOP"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["torus"]
+evidence = [
+  "crates/sop/src/builtins/torus_sop.rs::default_counts_and_first_ring",
+  "crates/sop/src/builtins/torus_sop.rs::small_torus_orient_transform_and_surftypes",
+  "crates/sop/src/builtins/torus_sop.rs::hostile_params",
+  "crates/sop/src/builtins/torus_sop.rs::torus_matches_houdini_fixtures",
+]
+notes = "h36 census SOP. Polygon torus: rows = minor-circle points (angle -2pi j/rows), cols = major-circle points, rad (major, minor), orient x/y/z, uniform scale, t, r (xyz order), surftype rows/cols/rowcol/triangles/quads/alttriangles/revtriangles (shared crates/sop/src/builtins/surfgen.rs). NOT modelled: type mesh/nurbs/bezier/polysoup (hexe has no Mesh prim; Unsupported), imperfect/order/caps (NURBS-only). Houdini-oracle (real 20.5, h36): sop-torus / -xform / -alt MATCH, bit-for-bit via houdini_twin."
+
+[[feature]]
+id = "sop-tube"
+title = "Tube SOP"
+area = "A"
+tier = "P1"
+status = "shipped"
+commands = ["tube"]
+evidence = [
+  "crates/sop/src/builtins/tube_sop.rs::default_poly_tube_and_caps",
+  "crates/sop/src/builtins/tube_sop.rs::rad_height_orient_and_rotate",
+  "crates/sop/src/builtins/tube_sop.rs::surftypes_and_hostile_params",
+  "crates/sop/src/builtins/tube_sop.rs::tube_matches_houdini_fixtures",
+]
+notes = "h36 census SOP. Polygon tube/cone: rows >= 2 rings (ring 0 on top), cols points per ring, rad (top, bottom) * radscale, height, orient x/y/z, t, r, cap (cap polys BEFORE sides; consolidatepts off = separate cap points), surftype as torus (rows do not wrap). DEVIATION: Houdini default type is prim (single Tube prim); hexe default is poly and type prim is Unsupported (Tube-prim xform model not probed); mesh/nurbs/bezier/polysoup Unsupported; vertexnormals and Houdini's 1e-5 clamp of a capped zero bottom radius NOT modelled. Houdini-oracle (real 20.5, h36, type=1): sop-tube / -xform / -cap MATCH, bit-for-bit via houdini_twin."
