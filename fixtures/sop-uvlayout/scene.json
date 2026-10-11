@@ -15,8 +15,9 @@
    "name": "uvl",
    "type": "uvlayout",
    "params": {
-    "padding": 0.05,
-    "fit": true
+    "padding": 0.0009765625,
+    "fit": true,
+    "resolution": 1024
    }
   }
  ],

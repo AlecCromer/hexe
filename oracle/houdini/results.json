@@ -499,11 +499,12 @@
    9,
    42
   ],
-  "p": "ORDER-DIFF",
+  "p": "MATCH",
+  "topo_bad_prims": 4,
   "flags": [
-   "ORDER-DIFF"
+   "TOPO-DIFF"
   ],
-  "verdict": "ORDER-DIFF",
+  "verdict": "TOPO-DIFF",
   "bbox": {
    "houdini": [
     [
