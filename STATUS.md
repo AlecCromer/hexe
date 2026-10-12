@@ -22,3 +22,10 @@
 - fixtures/bgeo-bjson/: 8 files (axis cross ctrl-box ctrl-disc-xy ctrl-planes-xy sg_geolight simple_sphere tree0) + MANIFEST rows; NO golden-compare tests yet (bjson_tests are probe/survey, no value assertions).
 - Prim types seen: p_r 42, c_r 90, run 16 (PackedGeometry 55, Mesh/NURBMesh/Circle/Sphere/Tube/Bezier/NURBCurve/PackedDisk) — only polygon/curve runs mapped to Detail; others pass-through/unverified.
 - TODO: assert tests vs fixtures (point/prim counts, vs .geo twins); legacy BgeoV; writer; 84-fixture target unmeasured.
+
+---
+
+# STATUS — Endorphin hitreact oracle 2026-10-12 (branch endo/finish)
+
+- Oracle row `sop-motion-hitreact` (oracle/houdini/sop-motion-hitreact.py): hexe `motion` mode=hitreact seed 12 f30 vs gaia-motion HDA `gaia::motion::1.0` hit_reaction cooked in hython 20.5.487 → MATCH (24/23/46, max|dP| 0.0, name + pelvis_z equal). Histogram 144 MATCH / 12 STAT-PASS / 1 TOPO-DIFF (N=157).
+- OPEN: reader-vs-reader only (both read the same MuJoCo CLI sim, no Houdini-native twin of the hit reaction); scene motion_root pinned to `~/projects/gaia-motion-wt/endo` until merge; re-record if hitreact.py changes seed-12 f30. Details: gaia-motion docs/STATUS.md.

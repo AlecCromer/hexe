@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 143, STAT-PASS 12, TOPO-DIFF 1  (N=156)
+Histogram: MATCH 144, STAT-PASS 12, TOPO-DIFF 1  (N=157)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -86,6 +86,7 @@ Histogram: MATCH 143, STAT-PASS 12, TOPO-DIFF 1  (N=156)
 | sop-matchsize | 8/6/24 | 8/6/24 | MATCH | MATCH | - (explicit target size/center, P equal) |
 | sop-measure | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim attr area present both (values not compared)) |
 | sop-merge | 17/10/40 | 17/10/40 | MATCH | MATCH | - |
+| sop-motion-hitreact | 24/23/46 | 24/23/46 | MATCH | MATCH | -  Houdini side = gaia::motion::1.0 HDA (hython 20.5.487, scene hit_reaction, seed 12, $F 30) vs hexe `motion` mode=hitreact (seed 12, 3 s, frame 30). Both spawn the SAME core CLI `gaia_motion.cli hitreact`, so this proves the two READERS (HDA python SOP skeleton vs sop-motion) agree - P max/dP/ 0.0, 24 pts/23 bone polylines/46 vtx, point `name` + detail `pelvis_z` equal - NOT that the sim equals a Houdini-native sim (no Houdini twin of the MuJoCo hit reaction exists). Needs gaia-motion endo checkout + venv; hitreact.py may change the sim -> re-record |
 | sop-mountain | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03882/0.04032(+3.9%) disp_std 0.03039/0.02925(-3.8%) |
 | sop-mountain-freq | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03881/0.03936(+1.4%) disp_std 0.03024/0.02902(-4.0%) |
 | sop-mountain-oct | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03635/0.03666(+0.9%) disp_std 0.02779/0.02749(-1.1%) |

@@ -61,7 +61,10 @@ fn registry_contract_and_menu_matches_gaia_motion_scenes() {
     let mode = &spec()[0];
     assert_eq!(mode.name, "mode");
     assert_eq!(mode.default, ParamValue::Menu(0)); // push
-    assert_eq!(mode.menu.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), ["push", "chain", "behaviour"]);
+    assert_eq!(
+        mode.menu.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(),
+        ["push", "chain", "behaviour", "hitreact"]
+    );
     let scene = spec().into_iter().find(|s| s.name == "scene").expect("scene param");
     let toks: Vec<&str> = scene.menu.iter().map(|(t, _)| t.as_str()).collect();
     assert_eq!(toks, SCENES);
@@ -352,6 +355,63 @@ fn chain_passes_the_cli_chain_flags_and_caches_per_hash() {
     assert_ne!(base, param_hash(&read_cfg(&params(&sc.s(), &[])).expect("push")));
 }
 #[test]
+fn hitreact_mode_passes_the_hitreact_flags_cooks_a_skeleton_and_has_its_own_hash() {
+    let sc = Scratch::new("hitreact");
+    let over = [("mode", ParamValue::Menu(3))];
+    let p = chain_params(&sc.s(), &over);
+    let d = cook(&p, 0.5).expect("hitreact frame");
+    assert_eq!((d.p().len(), d.prim_count(), d.vertex_count()), (24, 23, 46));
+    assert_eq!(pelvis_z(&d), 0.02);
+    let cfg = read_cfg(&p).expect("cfg");
+    assert!(cfg.hitreact && !cfg.chain);
+    let argv = std::fs::read_to_string(sc.0.join(param_hash(&cfg)).join("argv.txt")).expect("argv.txt");
+    let got: Vec<&str> = argv.lines().collect();
+    assert_eq!(&got[0..3], ["-m", "gaia_motion.cli", "hitreact"]);
+    assert!(got.windows(2).any(|w| w == ["--seed", "8"]) && got.windows(2).any(|w| w == ["--ns", "100"]));
+    assert_ne!(param_hash(&cfg), param_hash(&read_cfg(&chain_params(&sc.s(), &[])).expect("chain")));
+    let f = chain_params(&sc.s(), &[("mode", ParamValue::Menu(3)), ("frame", ParamValue::I(4))]);
+    assert_eq!(pelvis_z(&cook(&f, 99.0).expect("frame 4")), 0.03);
+    let bad = chain_params(&sc.s(), &[("mode", ParamValue::Menu(4))]);
+    assert!(matches!(cook(&bad, 0.0), Err(CookError::BadParam(_))));
+}
+/// Real hit-reaction run (gaia-motion `hitreact --seed 12`, ~3 s); skipped when the checkout has no `hitreact` yet (`GAIA_MOTION_HITREACT_ROOT` overrides the worktree path).
+#[test]
+fn integration_real_hitreact_cooks_a_moving_skeleton() {
+    let home = std::env::var_os("HOME").map(PathBuf::from).expect("HOME");
+    let root = std::env::var_os("GAIA_MOTION_HITREACT_ROOT")
+        .map_or_else(|| home.join("projects/gaia-motion-wt/endo"), PathBuf::from);
+    let py = home.join(".gaia/cache/gaia-motion/venv/bin/python");
+    let assets = home.join(".gaia/cache/gaia-motion/assets/masked_mimic.onnx");
+    let usable = root.join("gaia_motion/hitreact.py").is_file()
+        && root.join("models/masked_mimic_smpl/masked_mimic.onnx").is_file()
+        && assets.is_file()
+        && py.is_file();
+    if !usable {
+        eprintln!("SKIP integration_real_hitreact: no gaia-motion checkout with hitreact + venv + assets");
+        return;
+    }
+    let sc = Scratch::new("realhit");
+    let over = [
+        ("mode", ParamValue::Menu(3)),
+        ("python_bin", ParamValue::S(py.to_string_lossy().into_owned())),
+        ("motion_root", ParamValue::S(root.to_string_lossy().into_owned())),
+        ("seed", ParamValue::I(12)),
+        ("duration_s", ParamValue::F(3.0)),
+        ("fps", ParamValue::F(30.0)),
+    ];
+    let at = |f: i32| {
+        let mut o = over.to_vec();
+        o.push(("frame", ParamValue::I(f)));
+        cook(&chain_params(&sc.s(), &o), 0.0).expect("real hitreact cooks")
+    };
+    let (d1, d30) = (at(1), at(30));
+    assert_eq!((d30.p().len(), d30.prim_count()), (24, 23));
+    assert!(d30.p().iter().flatten().all(|c| c.is_finite()));
+    assert!((pelvis_z(&d1) - 0.95).abs() < 0.02, "standing at t=0: {}", pelvis_z(&d1));
+    assert_ne!(d1.p()[1], d30.p()[1], "the body moves between frame 1 and 30");
+    eprintln!("hitreact frame 30: pelvis_z = {}", pelvis_z(&d30));
+}
+#[test]
 fn chain_failure_surfaces_stderr_and_hostile_chain_params_are_bad_param() {
     let sc = Scratch::new("chainfail");
     let e = cook(&chain_params(&sc.s(), &[("impulse_ns", ParamValue::F(13.0))]), 0.0).expect_err("stub exits 4");
@@ -359,7 +419,7 @@ fn chain_failure_surfaces_stderr_and_hostile_chain_params_are_bad_param() {
     assert!(m.contains("exited 4") && m.contains("stub: chain boom (ns 13)"), "{m}");
     assert_eq!(std::fs::read_dir(&sc.0).expect("ls").count(), 0, "failed run must leave no cache entry");
     let bad: Vec<(&str, ParamValue)> = vec![
-        ("mode", ParamValue::Menu(3)),
+        ("mode", ParamValue::Menu(4)),
         ("seed", ParamValue::I(-2)),
         ("seed", ParamValue::I(i32::MAX)),
         ("duration_s", ParamValue::F(f32::NAN)),

@@ -7,6 +7,7 @@ def W(x=""):
     return "- (" + x + ")" if x else "-"
 CAUSE = {
     "sop-add": "-",
+    "sop-motion-hitreact": "-  Houdini side = gaia::motion::1.0 HDA (hython 20.5.487, scene hit_reaction, seed 12, $F 30) vs hexe `motion` mode=hitreact (seed 12, 3 s, frame 30). Both spawn the SAME core CLI `gaia_motion.cli hitreact`, so this proves the two READERS (HDA python SOP skeleton vs sop-motion) agree - P max|dP| 0.0, 24 pts/23 bone polylines/46 vtx, point `name` + detail `pelvis_z` equal - NOT that the sim equals a Houdini-native sim (no Houdini twin of the MuJoCo hit reaction exists). Needs gaia-motion endo checkout + venv; hitreact.py may change the sim -> re-record",
     "sop-bend": "- (Houdini bend toward -X by default, twin sets hexe side=(-1,0,0); parm map is a best guess)",
     "sop-circle": "- (default reverse=1 now ON in hexe: clockwise; one prim, identical point cycle)",
     "sop-curve": "- (real curve::2.0 twin: scriptable authoring parm is the Data/Geometry parm savedstashgeo, Houdini passes the stash through, so this checks data model + prim kind + P, not coords parsing)",

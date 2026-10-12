@@ -3,6 +3,7 @@
 # push : `stub.sh -m gaia_motion.cli run --scene S --frames N --out DIR ...` -> DIR/geo/frame.%04d.geo (N tiny 2-point .geo files,
 #        point 0 = (idx,0,0), point 1 = (idx,1,0)) + DIR/argv.txt. `--push-body FAIL` -> stderr message + exit 3 (nothing written).
 # behaviour: `stub.sh -m gaia_motion.cli behaviour --name N --out DIR --run-s D --fps F [--seed S]` -> same frames as chain (no --ns; `--name FAIL` -> exit 5).
+# hitreact: `stub.sh -m gaia_motion.cli hitreact --out DIR --ns X --run-s D --fps F [--seed S]` -> same frames as chain.
 # chain: `stub.sh -m gaia_motion.cli chain --out DIR --ns X --run-s D --fps F [--seed S]` -> floor(D*F)+1 frames of 24 named SMPL points
 #        (point i = (i/10, y, frame-1)), y of Pelvis = (frame-1)/100; + DIR/argv.txt. `--ns 13` -> exit 4.
 out=""; name=""; frames=3; prev=""; body=""; chain=0; runs=12; fps=30; ns=0
@@ -18,6 +19,7 @@ for a in "$@"; do
   esac
   [ "$a" = chain ] && chain=1
   [ "$a" = behaviour ] && chain=1
+  [ "$a" = hitreact ] && chain=1
   prev="$a"
 done
 if [ "$body" = "FAIL" ]; then echo "stub: boom (push-body FAIL)" >&2; exit 3; fi
