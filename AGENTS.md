@@ -41,4 +41,4 @@ Never /tmp · never `pkill -f` · one live test at a time · each lane own workt
 
 ## Layout
 `crates/*` libs (layers in `xtask/src/layers.rs` TABLE) · `apps/hexe-tauri` Tauri app (egui retired; backlog PORT-TODO.md) · `apps/hexe-cli` CLI + oracle entry · `xtask/` gates · `parity/` ledger · `fixtures/` oracle cases · `spec/` prose spec · `perf/` budgets.
-Commands: `cargo xtask ci|layers|assets|parity|oracle|perf|size|deny|leakscan|version`.
+Commands: `cargo xtask ci|layers|assets|parity|oracle|perf|size|deny|leakscan|version|boolstart`.

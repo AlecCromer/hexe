@@ -1,0 +1,16 @@
+# A=unit box, B=box t(s,s,s), subtract aminusb, solid/solid. split-poly signature: start = first token; K<i> = kept corner (slot i of the source face cycle), N = new point
+s=0.010  A+x: K0 N N N K2 K3 | A+y: N K2 K3 K0 N N | A+z: K1 N N N K3 K0 | B-x: N K0 N N | B-y: K2 N N N | B-z: N N K3 N
+threshold s~0.06667  changed: B-y K2 N N N -> N N K2 N, B-z N N K3 N -> N K3 N N
+s=0.070  A+x: K0 N N N K2 K3 | A+y: N K2 K3 K0 N N | A+z: K1 N N N K3 K0 | B-x: N K0 N N | B-y: N N K2 N | B-z: N K3 N N
+threshold s~0.16700  changed: A+y N K2 K3 K0 N N -> K0 N N N K2 K3
+s=0.170  A+x: K0 N N N K2 K3 | A+y: K0 N N N K2 K3 | A+z: K1 N N N K3 K0 | B-x: N K0 N N | B-y: N N K2 N | B-z: N K3 N N
+threshold s~0.33333  changed: A+x K0 N N N K2 K3 -> N K2 K3 K0 N N, B-z N K3 N N -> N N K3 N
+s=0.335  A+x: N K2 K3 K0 N N | A+y: K0 N N N K2 K3 | A+z: K1 N N N K3 K0 | B-x: N K0 N N | B-y: N N K2 N | B-z: N N K3 N
+threshold s~0.35728  changed: A+y K0 N N N K2 K3 -> N N N K2 K3 K0
+s=0.360  A+x: N K2 K3 K0 N N | A+y: N N N K2 K3 K0 | A+z: K1 N N N K3 K0 | B-x: N K0 N N | B-y: N N K2 N | B-z: N N K3 N
+threshold s~0.50000  changed: A+x N K2 K3 K0 N N -> N N N K2 K3 K0, A+y N N N K2 K3 K0 -> K2 K3 K0 N N N
+s=0.500  A+x: N N N K2 K3 K0 | A+y: K2 K3 K0 N N N | A+z: K1 N N N K3 K0 | B-x: N K0 N N | B-y: N N K2 N | B-z: N N K3 N
+threshold s~0.50000  changed: A+x N N N K2 K3 K0 -> K2 K3 K0 N N N, B-y N N K2 N -> N N N K2, B-z N N K3 N -> K3 N N N
+s=0.505  A+x: K2 K3 K0 N N N | A+y: K2 K3 K0 N N N | A+z: K1 N N N K3 K0 | B-x: N K0 N N | B-y: N N N K2 | B-z: K3 N N N
+threshold s~0.55608  changed: A+z K1 N N N K3 K0 -> N N N K3 K0 K1
+s=0.560  A+x: K2 K3 K0 N N N | A+y: K2 K3 K0 N N N | A+z: N N N K3 K0 K1 | B-x: N K0 N N | B-y: N N N K2 | B-z: K3 N N N

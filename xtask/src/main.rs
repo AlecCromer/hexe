@@ -4,6 +4,7 @@ use std::process::ExitCode;
 
 mod assets;
 mod baseline;
+mod boolstart;
 mod ci;
 mod layers;
 mod leakscan;
@@ -24,6 +25,11 @@ const COMMANDS: &[(&str, &str, Command)] = &[
         "ci",
         "fmt, clippy -D warnings, test, [leakscan if MODE=clean], layers, assets, deny, parity, oracle (stops at first failure)",
         ci::run,
+    ),
+    (
+        "boolstart",
+        "Start-vertex hypothesis table for the Houdini boolean corpus parity/ref/boolean/bx*.topo (analysis, exit 0)",
+        boolstart::run,
     ),
     ("layers", "Enforce the crate dependency layering (xtask/src/layers.rs TABLE)", layers::run),
     ("assets", "Asset policy vs ATTRIBUTION.toml; --write regenerates ATTRIBUTION.md", assets::run),
