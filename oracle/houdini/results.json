@@ -5140,6 +5140,80 @@
   }
  },
  {
+  "sop": "sop-motion-hitreact",
+  "houdini": [
+   24,
+   23,
+   46
+  ],
+  "hexe": [
+   24,
+   23,
+   46
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.070359,
+     0.083754,
+     -0.537311
+    ],
+    [
+     0.885273,
+     0.927813,
+     0.205023
+    ]
+   ],
+   "hexe": [
+    [
+     -0.070359,
+     0.083754,
+     -0.537311
+    ],
+    [
+     0.885273,
+     0.927813,
+     0.205023
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "name"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": [
+     "pelvis_z"
+    ]
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "name"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": [
+     "pelvis_z"
+    ]
+   }
+  }
+ },
+ {
   "sop": "sop-mountain",
   "houdini": [
    4900,
