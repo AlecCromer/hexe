@@ -18,7 +18,7 @@ Histogram: MATCH 143, STAT-PASS 12, TOPO-DIFF 1  (N=156)
 | sop-attribtransfer | 9/4/16 | 9/4/16 | MATCH | MATCH | - |
 | sop-bend | 5/1/5 | 5/1/5 | MATCH | MATCH | - (Houdini bend toward -X by default, twin sets hexe side=(-1,0,0); parm map is a best guess) |
 | sop-blast | 8/5/20 | 8/5/20 | MATCH | MATCH | - |
-| sop-boolean | 14/9/42 | 14/9/42 | MATCH | TOPO-DIFF | H35: P ORDER now MATCH (A pieces then B, untouched before split in source prim order, untouched prims keep the source cycle, points by first appearance); remaining TOPO-DIFF = start vertex of 4 split polys (+x/+z/+y of A and B -x), rule not derived (parity/ref/boolean/bx*.topo corpus) |
+| sop-boolean | 14/9/42 | 14/9/42 | MATCH | TOPO-DIFF | H35: P ORDER now MATCH (A pieces then B, untouched before split in source prim order, untouched prims keep the source cycle, points by first appearance); remaining TOPO-DIFF = start vertex of 4 split polys (+x/+z/+y of A and B -x), rule not derived (parity/ref/boolean/bx*.topo corpus) H35b START VERTEX NOT DERIVED: no hypothesis fits (cargo xtask boolstart: best 42/128 unambiguous split polys of bx*.topo = last kept corner before the cut chain; sweep parity/ref/boolean/start-sweep.txt: identical-topology polys flip start at offset s=1/15, .16700, 1/3, .35728, 1/2, .55608 => depends on continuous geometry, not on topology / point index / coordinate order) |
 | sop-bound | 8/6/24 | 8/6/24 | MATCH | MATCH |  |
 | sop-bound-keep | 16/12/48 | 16/12/48 | MATCH | MATCH |  |
 | sop-bound-pad | 8/6/24 | 8/6/24 | MATCH | MATCH |  |

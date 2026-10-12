@@ -9,6 +9,7 @@
 # STATUS — Oracle 2026-10-11
 
 - Oracle 2026-10-11: 143 MATCH / 1 TOPO-DIFF (boolean split-poly start vertex) / 12 STAT-PASS over 156 (N=156); 79 SOPs; /Applications/Hexe.app = h38 merge (sops-b + sops-c), built from main HEAD.
+- Oracle 2026-10-12 (H35b): histogram unchanged (143/12/1). h33/order-twins = already on main (e039ca3, rebase = no-op); h34/model-twins merged (probes only, dc956f8). sop-boolean start vertex NOT derived: `cargo xtask boolstart` table (best 42/128), hython sweep parity/ref/boolean/start-sweep.txt (start flips with offset at identical topology) -> TOPO-DIFF stays, no per-case hack.
 
 ---
 
