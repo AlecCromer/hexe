@@ -118,6 +118,7 @@ pub fn spec() -> Vec<ParamSpec> {
             ("push", "Push (scene)"),
             ("chain", "Endorphin Chain"),
             ("behaviour", "Behaviour (preset)"),
+            ("hitreact", "Hit Reaction"),
         ]),
         ParamSpec::new("scene", ParamValue::Menu(1)).label("Scene").menu(&[
             ("stand", "Stand"),
@@ -166,6 +167,8 @@ struct Motion {
 #[derive(Debug, Clone, PartialEq)]
 struct Cfg {
     chain: bool,
+    /// `mode = hitreact`: chest shove -> hit detect -> arm IK + gain schedule -> blend-back (`gaia_motion.cli hitreact`).
+    hitreact: bool,
     /// `mode = behaviour`: preset stem + `size:mtime` of its file (cache key).
     behaviour: Option<(String, String)>,
     ns: f32,
@@ -203,8 +206,8 @@ fn string<'a>(p: &'a ParamSet, name: &str) -> Result<&'a str, CookError> {
 
 fn read_cfg(p: &ParamSet) -> Result<Cfg, CookError> {
     let Some(mode_i) = p.menu("mode") else { return bad("missing menu param `mode`") };
-    if mode_i > 2 {
-        return bad(format!("mode menu index {mode_i} out of range (0..3)"));
+    if mode_i > 3 {
+        return bad(format!("mode menu index {mode_i} out of range (0..4)"));
     }
     let Some(scene_i) = p.menu("scene") else { return bad("missing menu param `scene`") };
     let Some(scene) = SCENES.get(scene_i as usize).copied() else {
@@ -280,6 +283,7 @@ fn read_cfg(p: &ParamSet) -> Result<Cfg, CookError> {
     };
     Ok(Cfg {
         chain: mode_i == 1,
+        hitreact: mode_i == 3,
         behaviour,
         ns,
         seed,
@@ -313,6 +317,8 @@ fn param_hash(c: &Cfg) -> String {
     let key = if let Some((name, stamp)) = &c.behaviour {
         // sim inputs: preset (name + file stamp), seed, duration; `fps` too because the .geo sequence is resampled at it
         format!("behaviour-v1|{name}|{stamp}|{}|{:08x}|{:08x}", c.seed, c.duration.to_bits(), c.fps.to_bits())
+    } else if c.hitreact {
+        format!("hitreact-v1|{:08x}|{}|{:08x}|{:08x}", c.ns.to_bits(), c.seed, c.duration.to_bits(), c.fps.to_bits())
     } else if c.chain {
         format!("chain-v1|{:08x}|{}|{:08x}|{:08x}", c.ns.to_bits(), c.seed, c.duration.to_bits(), c.fps.to_bits())
     } else {
@@ -450,8 +456,8 @@ fn run_python(c: &Cfg, run: &Path) -> Result<(), CookError> {
         if c.seed >= 0 {
             cmd.arg("--seed").arg(c.seed.to_string());
         }
-    } else if c.chain {
-        cmd.args(["-m", "gaia_motion.cli", "chain", "--out"])
+    } else if c.chain || c.hitreact {
+        cmd.args(["-m", "gaia_motion.cli", if c.hitreact { "hitreact" } else { "chain" }, "--out"])
             .arg(run)
             .arg("--ns")
             .arg(c.ns.to_string())
@@ -496,7 +502,10 @@ fn run_python(c: &Cfg, run: &Path) -> Result<(), CookError> {
         let code = status.code().map_or_else(|| "signal".to_string(), |c| c.to_string());
         return Err(CookError::Failed(format!("gaia-motion exited {code}: {}", tail(&err_log))));
     }
-    let last = frame_path(&run.join("geo"), if c.chain || c.behaviour.is_some() { 1 } else { i64::from(c.frames) });
+    let last = frame_path(
+        &run.join("geo"),
+        if c.chain || c.hitreact || c.behaviour.is_some() { 1 } else { i64::from(c.frames) },
+    );
     if !last.is_file() {
         return Err(CookError::Failed(format!(
             "gaia-motion exited 0 but {} is missing; stderr: {}",
@@ -523,12 +532,21 @@ impl Node<Detail> for Motion {
     fn cook(&self, ctx: &CookCtx, _inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let cfg = read_cfg(ctx.params)?;
         let geo_dir = ensure_clip(&cfg)?;
-        let sequence = cfg.chain || cfg.behaviour.is_some();
+        let sequence = cfg.chain || cfg.hitreact || cfg.behaviour.is_some();
         let frames = if sequence { count_frames(&geo_dir)? } else { cfg.frames };
         let idx =
             if cfg.frame > 0 { i64::from(cfg.frame.min(frames) - 1) } else { frame_index(ctx.time, cfg.fps, frames) };
         let path = frame_path(&geo_dir, idx + 1);
-        let what = cfg.behaviour.as_ref().map_or(if cfg.chain { "chain" } else { cfg.scene }, |(n, _)| n.as_str());
+        let what = cfg.behaviour.as_ref().map_or(
+            if cfg.chain {
+                "chain"
+            } else if cfg.hitreact {
+                "hitreact"
+            } else {
+                cfg.scene
+            },
+            |(n, _)| n.as_str(),
+        );
         (ctx.log)(&format!("motion: {what} frame {} of {frames}", idx + 1));
         let d = hexe_geo::read_any(&path).map_err(|e| CookError::Failed(format!("read {}: {e}", path.display())))?;
         if sequence { skeleton(d).map(Arc::new) } else { Ok(Arc::new(d)) }
