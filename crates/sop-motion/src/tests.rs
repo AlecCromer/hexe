@@ -374,12 +374,11 @@ fn hitreact_mode_passes_the_hitreact_flags_cooks_a_skeleton_and_has_its_own_hash
     let bad = chain_params(&sc.s(), &[("mode", ParamValue::Menu(4))]);
     assert!(matches!(cook(&bad, 0.0), Err(CookError::BadParam(_))));
 }
-/// Real hit-reaction run (gaia-motion `hitreact --seed 12`, ~3 s); skipped when the checkout has no `hitreact` yet (`GAIA_MOTION_HITREACT_ROOT` overrides the worktree path).
+/// Real hit-reaction run (gaia-motion `hitreact --seed 12`, ~3 s); skipped when the checkout has no `hitreact` (`GAIA_MOTION_ROOT` overrides the default `~/projects/gaia-motion`).
 #[test]
 fn integration_real_hitreact_cooks_a_moving_skeleton() {
     let home = std::env::var_os("HOME").map(PathBuf::from).expect("HOME");
-    let root = std::env::var_os("GAIA_MOTION_HITREACT_ROOT")
-        .map_or_else(|| home.join("projects/gaia-motion-wt/endo"), PathBuf::from);
+    let root = std::env::var_os("GAIA_MOTION_ROOT").map_or_else(|| home.join("projects/gaia-motion"), PathBuf::from);
     let py = home.join(".gaia/cache/gaia-motion/venv/bin/python");
     let assets = home.join(".gaia/cache/gaia-motion/assets/masked_mimic.onnx");
     let usable = root.join("gaia_motion/hitreact.py").is_file()

@@ -190,7 +190,7 @@ fn bad<T>(m: impl Into<String>) -> Result<T, CookError> {
     Err(CookError::BadParam(m.into()))
 }
 
-/// `~` / `~/x` -> `$HOME/x`; anything else verbatim.
+/// `~` / `~/x` -> `$HOME/x`; anything else verbatim. (`motion_root` also accepts the literal `$GAIA_MOTION_ROOT` = env value, else `DEFAULT_ROOT`; see `read_cfg`.)
 fn expand(s: &str) -> PathBuf {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     match (s.strip_prefix("~/"), s == "~", home) {
@@ -265,7 +265,11 @@ fn read_cfg(p: &ParamSet) -> Result<Cfg, CookError> {
     if python == expand(DEFAULT_PYTHON) && !python.is_file() {
         python = expand(FALLBACK_PYTHON);
     }
-    let root = expand(root);
+    let root = if root == "$GAIA_MOTION_ROOT" {
+        std::env::var_os("GAIA_MOTION_ROOT").map_or_else(|| expand(DEFAULT_ROOT), PathBuf::from)
+    } else {
+        expand(root)
+    };
     let behaviour = if mode_i == 2 {
         let name = p.string("behaviour").unwrap_or(FALLBACK_BEHAVIOUR).trim().to_string();
         let known = behaviours(&root);

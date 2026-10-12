@@ -28,4 +28,4 @@
 # STATUS — Endorphin hitreact oracle 2026-10-12 (branch endo/finish)
 
 - Oracle row `sop-motion-hitreact` (oracle/houdini/sop-motion-hitreact.py): hexe `motion` mode=hitreact seed 12 f30 vs gaia-motion HDA `gaia::motion::1.0` hit_reaction cooked in hython 20.5.487 → MATCH (24/23/46, max|dP| 0.0, name + pelvis_z equal). Histogram 144 MATCH / 12 STAT-PASS / 1 TOPO-DIFF (N=157).
-- OPEN: reader-vs-reader only (both read the same MuJoCo CLI sim, no Houdini-native twin of the hit reaction); scene motion_root pinned to `~/projects/gaia-motion-wt/endo` until merge; re-record if hitreact.py changes seed-12 f30. Details: gaia-motion docs/STATUS.md.
+- OPEN: reader-vs-reader only (both read the same MuJoCo CLI sim, no Houdini-native twin of the hit reaction); scene motion_root = `$GAIA_MOTION_ROOT` (env, default `~/projects/gaia-motion` main); re-record if hitreact.py changes seed-12 f30. Details: gaia-motion docs/STATUS.md.

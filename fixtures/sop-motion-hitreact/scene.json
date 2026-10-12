@@ -10,7 +10,7 @@
     "duration_s": 3.0,
     "fps": 30.0,
     "frame": 30,
-    "motion_root": "~/projects/gaia-motion-wt/endo"
+    "motion_root": "$GAIA_MOTION_ROOT"
    }
   }
  ],
