@@ -90,8 +90,8 @@ impl Node<Detail> for EmptySource {
 
 /// Port names of an `unsupported:` node (cap 16 inputs).
 const PORT_NAMES: [&str; 16] = [
-    "input0", "input1", "input2", "input3", "input4", "input5", "input6", "input7", "input8", "input9", "input10", "input11",
-    "input12", "input13", "input14", "input15",
+    "input0", "input1", "input2", "input3", "input4", "input5", "input6", "input7", "input8", "input9", "input10",
+    "input11", "input12", "input13", "input14", "input15",
 ];
 /// A node type hexe has no twin for (`"type": "unsupported:<houdini type>"`, e.g. from a `.hip` import): keeps the parms and the
 /// wiring so nothing is dropped, cooks to `CookError::Unsupported` naming the type.
@@ -113,7 +113,9 @@ impl UnsupportedNode {
                     _ => ParamValue::S(x.to_string()),
                 },
                 Value::String(s) => ParamValue::S(s.clone()),
-                Value::Array(a) if a.len() == 3 && a.iter().all(|c| c.as_f64().is_some_and(|f| (f as f32).is_finite())) => {
+                Value::Array(a)
+                    if a.len() == 3 && a.iter().all(|c| c.as_f64().is_some_and(|f| (f as f32).is_finite())) =>
+                {
                     ParamValue::V3([0, 1, 2].map(|i| a[i].as_f64().unwrap_or(0.0) as f32))
                 }
                 other => ParamValue::S(other.to_string()),
@@ -173,10 +175,17 @@ pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> 
         if let Some(real) = n.ty.strip_prefix("unsupported:") {
             let ports = def.edges.iter().filter(|e| e.2 == n.name).map(|e| e.3 + 1).max().unwrap_or(0);
             if ports > PORT_NAMES.len() {
-                return err(format!("node `{}`: input {} beyond the {} ports of an unsupported node", n.name, ports - 1, PORT_NAMES.len()));
+                return err(format!(
+                    "node `{}`: input {} beyond the {} ports of an unsupported node",
+                    n.name,
+                    ports - 1,
+                    PORT_NAMES.len()
+                ));
             }
             let (node, overrides) = UnsupportedNode::build(real, &n.params, ports);
-            let id = graph.add_boxed(Box::new(node), overrides).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
+            let id = graph
+                .add_boxed(Box::new(node), overrides)
+                .map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
             graph.rename(id, &n.name).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
             names.insert(n.name.clone(), id);
             continue;

@@ -39,15 +39,11 @@ pub fn spawn<R: tauri::Runtime>(app: tauri::AppHandle<R>, port: u16) {
     let listener = match TcpListener::bind(("127.0.0.1", port)) {
         Ok(listener) => listener,
         Err(e) => {
-            eprintln!(
-                "[tauri-debug-server] debug server disabled: bind 127.0.0.1:{port} failed: {e}"
-            );
+            eprintln!("[tauri-debug-server] debug server disabled: bind 127.0.0.1:{port} failed: {e}");
             return;
         }
     };
-    eprintln!(
-        "[tauri-debug-server] debug server on http://127.0.0.1:{port} (/eval /console /screenshot /info)"
-    );
+    eprintln!("[tauri-debug-server] debug server on http://127.0.0.1:{port} (/eval /console /screenshot /info)");
 
     let state = Arc::new(DebugState {
         port,
@@ -106,29 +102,17 @@ pub fn build_windows<R: tauri::Runtime>(
     let script = init_script(port);
     for cfg in windows {
         let builder = tauri::WebviewWindowBuilder::from_config(app, cfg)?;
-        if script.is_empty() {
-            builder
-        } else {
-            builder.initialization_script(&script)
-        }
-        .build()?;
+        if script.is_empty() { builder } else { builder.initialization_script(&script) }.build()?;
     }
     Ok(())
 }
 
 /// Port from env var `var` (else `default`). Returns 0 (= disabled) if unparsable or explicitly 0.
 pub fn port_from_env(var: &str, default: u16) -> u16 {
-    std::env::var(var)
-        .unwrap_or_else(|_| default.to_string())
-        .parse::<u16>()
-        .unwrap_or(0)
+    std::env::var(var).unwrap_or_else(|_| default.to_string()).parse::<u16>().unwrap_or(0)
 }
 
-fn handle_connection<R: tauri::Runtime>(
-    mut stream: TcpStream,
-    app: tauri::AppHandle<R>,
-    state: Arc<DebugState>,
-) {
+fn handle_connection<R: tauri::Runtime>(mut stream: TcpStream, app: tauri::AppHandle<R>, state: Arc<DebugState>) {
     let request = match read_request(&mut stream) {
         Ok(request) => request,
         Err(e) => {
@@ -139,11 +123,7 @@ fn handle_connection<R: tauri::Runtime>(
     };
 
     if request.path.starts_with("/devtools/page/") && request.is_websocket_upgrade() {
-        let label = request.path["/devtools/page/".len()..]
-            .split('?')
-            .next()
-            .unwrap_or("main")
-            .to_string();
+        let label = request.path["/devtools/page/".len()..].split('?').next().unwrap_or("main").to_string();
         handle_cdp_connection(stream, request.raw, app, state, label);
         return;
     }
@@ -163,10 +143,7 @@ struct Request {
 
 impl Request {
     fn is_websocket_upgrade(&self) -> bool {
-        self.headers
-            .get("upgrade")
-            .map(|value| value.eq_ignore_ascii_case("websocket"))
-            .unwrap_or(false)
+        self.headers.get("upgrade").map(|value| value.eq_ignore_ascii_case("websocket")).unwrap_or(false)
     }
 }
 
@@ -189,18 +166,10 @@ fn read_request(stream: &mut TcpStream) -> Result<Request, String> {
 
     let headers_text = String::from_utf8_lossy(&buf[..header_end]);
     let mut lines = headers_text.split("\r\n");
-    let request_line = lines
-        .next()
-        .ok_or_else(|| "missing request line".to_string())?;
+    let request_line = lines.next().ok_or_else(|| "missing request line".to_string())?;
     let mut parts = request_line.split_whitespace();
-    let method = parts
-        .next()
-        .ok_or_else(|| "missing method".to_string())?
-        .to_string();
-    let path = parts
-        .next()
-        .ok_or_else(|| "missing path".to_string())?
-        .to_string();
+    let method = parts.next().ok_or_else(|| "missing method".to_string())?.to_string();
+    let path = parts.next().ok_or_else(|| "missing path".to_string())?.to_string();
 
     let mut content_length = 0_usize;
     let mut headers = HashMap::new();
@@ -209,9 +178,7 @@ fn read_request(stream: &mut TcpStream) -> Result<Request, String> {
             let name = name.trim().to_ascii_lowercase();
             let value = value.trim().to_string();
             if name == "content-length" {
-                content_length = value
-                    .parse::<usize>()
-                    .map_err(|_| "bad content-length".to_string())?;
+                content_length = value.parse::<usize>().map_err(|_| "bad content-length".to_string())?;
             }
             headers.insert(name, value);
         }
@@ -221,10 +188,7 @@ fn read_request(stream: &mut TcpStream) -> Result<Request, String> {
     let body_start = header_end + 4;
     let mut body = buf[body_start..].to_vec();
     if !(path.starts_with("/devtools/page/")
-        && headers
-            .get("upgrade")
-            .map(|value| value.eq_ignore_ascii_case("websocket"))
-            .unwrap_or(false))
+        && headers.get("upgrade").map(|value| value.eq_ignore_ascii_case("websocket")).unwrap_or(false))
     {
         while body.len() < content_length {
             let n = stream.read(&mut tmp).map_err(|e| e.to_string())?;
@@ -236,24 +200,14 @@ fn read_request(stream: &mut TcpStream) -> Result<Request, String> {
         body.truncate(content_length);
     }
 
-    Ok(Request {
-        method,
-        path,
-        headers,
-        body,
-        raw,
-    })
+    Ok(Request { method, path, headers, body, raw })
 }
 
 fn find_header_end(buf: &[u8]) -> Option<usize> {
     buf.windows(4).position(|w| w == b"\r\n\r\n")
 }
 
-fn route<R: tauri::Runtime>(
-    request: Request,
-    app: tauri::AppHandle<R>,
-    state: Arc<DebugState>,
-) -> Vec<u8> {
+fn route<R: tauri::Runtime>(request: Request, app: tauri::AppHandle<R>, state: Arc<DebugState>) -> Vec<u8> {
     let method = request.method.as_str();
     let path = request.path.as_str();
     if method == "OPTIONS" {
@@ -278,9 +232,8 @@ fn route<R: tauri::Runtime>(
             empty_response(204)
         }
         ("POST", "/__log") => {
-            let value = serde_json::from_slice::<Value>(&request.body).unwrap_or_else(
-                |_| json!({ "msg": String::from_utf8_lossy(&request.body).to_string() }),
-            );
+            let value = serde_json::from_slice::<Value>(&request.body)
+                .unwrap_or_else(|_| json!({ "msg": String::from_utf8_lossy(&request.body).to_string() }));
             let mut logs = state.logs.lock().unwrap();
             logs.push_back(value.clone());
             while logs.len() > MAX_LOGS {
@@ -298,9 +251,7 @@ fn route<R: tauri::Runtime>(
             }
             json_response(200, Value::Array(snapshot))
         }
-        ("GET", "/json") | ("GET", "/json/list") => {
-            json_response(200, cdp_targets(&app, state.port))
-        }
+        ("GET", "/json") | ("GET", "/json/list") => json_response(200, cdp_targets(&app, state.port)),
         ("GET", "/json/version") => json_response(
             200,
             json!({
@@ -337,13 +288,9 @@ fn eval_in_page<R: tauri::Runtime>(
         let script = format!(
             "(async()=>{{let o;try{{const v=await (0,eval)({source_json});let s;try{{s=JSON.parse(JSON.stringify(v===undefined?null:v))}}catch(_){{s=String(v)}}o={{id:{id},ok:true,value:s}}}}catch(e){{o={{id:{id},ok:false,error:String(e&&e.message?e.message+String.fromCharCode(10)+(e.stack||''):e&&e.stack||e)}}}}try{{await fetch('http://127.0.0.1:{port}/__result',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify(o)}})}}catch(_){{}}}})();"
         );
-        let window = app
-            .get_webview_window(label)
-            .ok_or_else(|| format!("no {label} window"))?;
+        let window = app.get_webview_window(label).ok_or_else(|| format!("no {label} window"))?;
         window.eval(&script).map_err(|e| e.to_string())?;
-        receiver
-            .recv_timeout(timeout)
-            .map_err(|_| "eval timeout".to_string())
+        receiver.recv_timeout(timeout).map_err(|_| "eval timeout".to_string())
     })();
 
     state.pending.lock().unwrap().remove(&id);
@@ -370,16 +317,10 @@ fn info_response<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Vec<u8> {
                     info.insert("scaleFactor".to_string(), json!(scale_factor));
                 }
                 if let Ok(position) = window.outer_position() {
-                    info.insert(
-                        "outerPosition".to_string(),
-                        json!({ "x": position.x, "y": position.y }),
-                    );
+                    info.insert("outerPosition".to_string(), json!({ "x": position.x, "y": position.y }));
                 }
                 if let Ok(size) = window.outer_size() {
-                    info.insert(
-                        "outerSize".to_string(),
-                        json!({ "width": size.width, "height": size.height }),
-                    );
+                    info.insert("outerSize".to_string(), json!({ "width": size.width, "height": size.height }));
                 }
                 Value::Object(info)
             })
@@ -427,24 +368,16 @@ fn handle_cdp_connection<R: tauri::Runtime>(
     state: Arc<DebugState>,
     label: String,
 ) {
-    let wrapped = PrependStream {
-        prefix: Cursor::new(request_head),
-        stream,
-    };
-    let mut ws = match accept_hdr(
-        wrapped,
-        |_request: &tungstenite::handshake::server::Request, response| Ok(response),
-    ) {
+    let wrapped = PrependStream { prefix: Cursor::new(request_head), stream };
+    let mut ws = match accept_hdr(wrapped, |_request: &tungstenite::handshake::server::Request, response| Ok(response))
+    {
         Ok(ws) => ws,
         Err(e) => {
             eprintln!("[tauri-debug-server] CDP websocket handshake failed: {e}");
             return;
         }
     };
-    let _ = ws
-        .get_mut()
-        .stream
-        .set_read_timeout(Some(Duration::from_millis(100)));
+    let _ = ws.get_mut().stream.set_read_timeout(Some(Duration::from_millis(100)));
 
     let client_id = state.cdp_seq.fetch_add(1, Ordering::Relaxed);
     let (sender, receiver) = mpsc::channel();
@@ -453,8 +386,7 @@ fn handle_cdp_connection<R: tauri::Runtime>(
     loop {
         match ws.read() {
             Ok(Message::Text(text)) => {
-                let response =
-                    handle_cdp_message(text.as_ref(), app.clone(), Arc::clone(&state), &label);
+                let response = handle_cdp_message(text.as_ref(), app.clone(), Arc::clone(&state), &label);
                 if let Some(response) = response {
                     if ws.send(Message::Text(response.into())).is_err() {
                         break;
@@ -465,10 +397,7 @@ fn handle_cdp_connection<R: tauri::Runtime>(
             Ok(Message::Binary(_)) => {}
             Ok(Message::Ping(_)) | Ok(Message::Pong(_)) | Ok(Message::Frame(_)) => {}
             Err(tungstenite::Error::Io(e))
-                if matches!(
-                    e.kind(),
-                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
-                ) =>
+                if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) =>
             {
                 while let Ok(event) = receiver.try_recv() {
                     if ws.send(Message::Text(event.into())).is_err() {
@@ -496,10 +425,7 @@ fn handle_cdp_message<R: tauri::Runtime>(
     let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
     let response = match method {
         "Runtime.evaluate" => {
-            let expression = params
-                .get("expression")
-                .and_then(Value::as_str)
-                .unwrap_or("");
+            let expression = params.get("expression").and_then(Value::as_str).unwrap_or("");
             match eval_in_page(app, state, label, expression, Duration::from_secs(10)) {
                 Ok(body) => cdp_eval_success(id, &body),
                 Err(error) => cdp_eval_error(id, error),
@@ -527,17 +453,9 @@ fn handle_cdp_message<R: tauri::Runtime>(
 }
 
 fn cdp_eval_success(id: Value, body: &str) -> Value {
-    let bridge = serde_json::from_str::<Value>(body)
-        .unwrap_or_else(|_| json!({ "ok": false, "error": body }));
+    let bridge = serde_json::from_str::<Value>(body).unwrap_or_else(|_| json!({ "ok": false, "error": body }));
     if bridge.get("ok").and_then(Value::as_bool) == Some(false) {
-        return cdp_eval_error(
-            id,
-            bridge
-                .get("error")
-                .and_then(Value::as_str)
-                .unwrap_or("eval failed")
-                .to_string(),
-        );
+        return cdp_eval_error(id, bridge.get("error").and_then(Value::as_str).unwrap_or("eval failed").to_string());
     }
     let value = bridge.get("value").cloned().unwrap_or(Value::Null);
     let result = if value.is_null() {
@@ -591,10 +509,7 @@ fn cdp_targets<R: tauri::Runtime>(app: &tauri::AppHandle<R>, port: u16) -> Value
 fn broadcast_cdp_console(state: &Arc<DebugState>, value: &Value) {
     let level = value.get("level").and_then(Value::as_str).unwrap_or("log");
     let msg = value.get("msg").and_then(Value::as_str).unwrap_or("");
-    let ts = value
-        .get("ts")
-        .and_then(Value::as_f64)
-        .unwrap_or_else(|| state.seq.load(Ordering::Relaxed) as f64);
+    let ts = value.get("ts").and_then(Value::as_f64).unwrap_or_else(|| state.seq.load(Ordering::Relaxed) as f64);
     let event = json!({
         "method": "Runtime.consoleAPICalled",
         "params": {
@@ -619,13 +534,8 @@ fn broadcast_cdp_console(state: &Arc<DebugState>, value: &Value) {
 /// a "new" identity to TCC, so the grant never stuck and macOS re-prompted
 /// forever. A webview self-snapshot needs no Screen Recording permission at all
 /// and also captures exactly the page content regardless of overlapping windows.
-fn screenshot_bytes<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    label: &str,
-) -> Result<Vec<u8>, String> {
-    let window = app
-        .get_webview_window(label)
-        .ok_or_else(|| format!("no {label} window"))?;
+fn screenshot_bytes<R: tauri::Runtime>(app: tauri::AppHandle<R>, label: &str) -> Result<Vec<u8>, String> {
+    let window = app.get_webview_window(label).ok_or_else(|| format!("no {label} window"))?;
     // `with_webview` dispatches its closure onto the main thread (WebKit is
     // main-thread-only) and returns without blocking. `takeSnapshot` is async:
     // its completion handler — also on the main thread — sends the PNG back over
@@ -646,10 +556,7 @@ fn screenshot_bytes<R: tauri::Runtime>(
 /// macOS: run `WKWebView.takeSnapshotWithConfiguration:completionHandler:` and
 /// send the resulting PNG bytes over `tx`. Called on the main thread.
 #[cfg(target_os = "macos")]
-fn capture_webview_png(
-    wk_webview: *mut std::ffi::c_void,
-    tx: mpsc::Sender<Result<Vec<u8>, String>>,
-) {
+fn capture_webview_png(wk_webview: *mut std::ffi::c_void, tx: mpsc::Sender<Result<Vec<u8>, String>>) {
     use block2::RcBlock;
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
@@ -689,11 +596,7 @@ unsafe fn nsimage_to_png(
     use objc2::{class, msg_send};
 
     if image.is_null() {
-        let detail = if error.is_null() {
-            "nil snapshot image".to_string()
-        } else {
-            ns_error_string(error)
-        };
+        let detail = if error.is_null() { "nil snapshot image".to_string() } else { ns_error_string(error) };
         return Err(format!("takeSnapshot failed: {detail}"));
     }
 
@@ -733,18 +636,13 @@ unsafe fn ns_error_string(error: *mut objc2::runtime::AnyObject) -> String {
     if utf8.is_null() {
         return "unknown error".into();
     }
-    std::ffi::CStr::from_ptr(utf8)
-        .to_string_lossy()
-        .into_owned()
+    std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned()
 }
 
 /// Non-macOS (iOS): the debug server compiles under the `webkit` feature there,
 /// but `screencapture`/AppKit never worked on iOS anyway. Fail cleanly.
 #[cfg(not(target_os = "macos"))]
-fn capture_webview_png(
-    _wk_webview: *mut std::ffi::c_void,
-    tx: mpsc::Sender<Result<Vec<u8>, String>>,
-) {
+fn capture_webview_png(_wk_webview: *mut std::ffi::c_void, tx: mpsc::Sender<Result<Vec<u8>, String>>) {
     let _ = tx.send(Err("webview snapshot is only implemented on macOS".into()));
 }
 
@@ -757,16 +655,8 @@ fn base64_encode(bytes: &[u8]) -> String {
         let b2 = *chunk.get(2).unwrap_or(&0);
         out.push(TABLE[(b0 >> 2) as usize] as char);
         out.push(TABLE[(((b0 & 0b0000_0011) << 4) | (b1 >> 4)) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            TABLE[(((b1 & 0b0000_1111) << 2) | (b2 >> 6)) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            TABLE[(b2 & 0b0011_1111) as usize] as char
-        } else {
-            '='
-        });
+        out.push(if chunk.len() > 1 { TABLE[(((b1 & 0b0000_1111) << 2) | (b2 >> 6)) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { TABLE[(b2 & 0b0011_1111) as usize] as char } else { '=' });
     }
     out
 }
@@ -776,11 +666,7 @@ fn empty_response(status: u16) -> Vec<u8> {
 }
 
 fn json_response(status: u16, value: Value) -> Vec<u8> {
-    raw_response(
-        status,
-        "application/json",
-        serde_json::to_vec(&value).unwrap_or_else(|_| b"{\"ok\":false}".to_vec()),
-    )
+    raw_response(status, "application/json", serde_json::to_vec(&value).unwrap_or_else(|_| b"{\"ok\":false}".to_vec()))
 }
 
 fn raw_response(status: u16, content_type: &str, body: Vec<u8>) -> Vec<u8> {
@@ -804,10 +690,7 @@ fn raw_response(status: u16, content_type: &str, body: Vec<u8>) -> Vec<u8> {
 
 // Native frame capture → includes traffic lights; own window only, no shell/TCC helper.
 #[cfg(target_os = "macos")]
-fn native_window_png<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    label: &str,
-) -> Result<Vec<u8>, String> {
+fn native_window_png<R: tauri::Runtime>(app: tauri::AppHandle<R>, label: &str) -> Result<Vec<u8>, String> {
     let window = app.get_webview_window(label).ok_or("no window")?;
     let (tx, rx) = mpsc::channel();
     app.run_on_main_thread(move || {
@@ -831,23 +714,10 @@ fn native_window_png<R: tauri::Runtime>(
                 ) -> *mut std::ffi::c_void;
                 fn CGImageRelease(image: *mut std::ffi::c_void);
             }
-            let ns_window = window
-                .ns_window()
-                .map_err(|e| e.to_string())?
-                .cast::<AnyObject>();
+            let ns_window = window.ns_window().map_err(|e| e.to_string())?.cast::<AnyObject>();
             let number: isize = msg_send![&*ns_window, windowNumber];
             // IncludingWindow + BoundsIgnoreFraming → native-scale window, no shadow.
-            let image = CGWindowListCreateImage(
-                Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: 0.0,
-                    height: 0.0,
-                },
-                8,
-                number as u32,
-                1,
-            );
+            let image = CGWindowListCreateImage(Rect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 }, 8, number as u32, 1);
             if image.is_null() {
                 return Err("native window capture unavailable".to_string());
             }
@@ -858,8 +728,7 @@ fn native_window_png<R: tauri::Runtime>(
                 return Err("native bitmap unavailable".to_string());
             }
             let props: *mut AnyObject = msg_send![class!(NSDictionary), dictionary];
-            let png: *mut AnyObject =
-                msg_send![rep, representationUsingType: 4usize, properties: props];
+            let png: *mut AnyObject = msg_send![rep, representationUsingType: 4usize, properties: props];
             let result = if png.is_null() {
                 Err("native PNG unavailable".to_string())
             } else {
@@ -877,6 +746,5 @@ fn native_window_png<R: tauri::Runtime>(
         let _ = tx.send(result);
     })
     .map_err(|e| e.to_string())?;
-    rx.recv_timeout(Duration::from_secs(10))
-        .map_err(|e| e.to_string())?
+    rx.recv_timeout(Duration::from_secs(10)).map_err(|e| e.to_string())?
 }
