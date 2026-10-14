@@ -316,6 +316,7 @@ impl Ctx<'_> {
     fn prim(&mut self, t: u32) -> Result<(), GeoError> {
         let name = type_name(t)
             .ok_or_else(|| GeoError::Unsupported(format!("legacy bgeo primitive type 0x{t:x} (no model)")))?;
+        let mut profile = false;
         let (kind, verts) = match t {
             0x1 => {
                 let n = self.c.count("Poly vertex count")?;
@@ -377,9 +378,7 @@ impl Ctx<'_> {
                 };
                 let n = cols.checked_mul(rows).ok_or_else(|| GeoError::Count("mesh too large".into()))?;
                 let r = self.vertices(n)?;
-                if t != 0x10 {
-                    self.profiles()?;
-                }
+                profile = t != 0x10;
                 let (c32, r32) = (cols as u32, rows as u32);
                 match bases {
                     Some((ubasis, vbasis)) if t == 0x40 => {
@@ -396,6 +395,10 @@ impl Ctx<'_> {
         let r = read_values(&mut self.c, &mut q);
         self.qdefs = q;
         r?;
+        // trim/profile block comes AFTER the prim attribute values (fabric.bgeo v5: `mat` idx word, then profile flag 0)
+        if profile {
+            self.profiles()?;
+        }
         self.prims.push(Prim { kind, verts });
         Ok(())
     }

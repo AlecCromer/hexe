@@ -17,5 +17,5 @@ Self-check only (no oracle values): parse must consume the file exactly to the `
 | mountain.bgeo | 5 | Ok 27426 / 109696 / 27424 (quads), consumes to trailer |
 | head_poly.bgeo | 5 | Ok 1302 / 4864 / 1216, 3 prim groups, consumes to trailer |
 | deflamp.bgeo | 3 | Ok 109 / 114 / 3, 1 prim group + prim attrib, consumes to trailer |
-| fabric.bgeo | 5 | `Err(Count("profile prim groups is negative"))`: NURBMesh profile block layout differs in v5 (trim loops / extra header); FINDING, not decoded |
+| fabric.bgeo | 5 | Ok 13020 / 13020 / 62 NURBMesh (H39: trim/profile block sits AFTER the prim attrib values, not before; fixed) |
 Prim type tokens (u32 bit flags): Poly 0x1, NURBCurve 0x2, BezierCurve 0x4, Mesh 0x10, NURBMesh 0x20, BezierMesh 0x40, Circle 0x1000, Sphere 0x2000, Tube 0x4000, MetaBall 0x100000, MetaSQuad 0x200000. Any other token (0x8, 0x80, 0x400, particle, volume, ...) -> `Unsupported("legacy bgeo primitive type 0x.. (no model)")`. Only types seen in the corpus are mapped; NURBS/mesh/quadric prims are kept as `PrimKind::Unknown{ty}` + vertices (same model as the GPD reader).

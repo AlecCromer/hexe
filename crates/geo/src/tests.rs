@@ -341,13 +341,14 @@ fn unknown_prim_types_pass_through() {
 }
 
 #[test]
-#[ignore = "TODO wave 2: binary bgeo (BgeoV legacy binary + binary-JSON) reader"]
 fn bgeo_binary_reads() {
-    let p = PathBuf::from(
-        "/Applications/Houdini/Current/Frameworks/Houdini.framework/Versions/Current/Resources/houdini/public/GPD/all.bgeo",
-    );
+    // legacy BgeoV (H13 reader): repo byte copy of Houdini GPD/all.bgeo
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/houdini-ship/gpd-all-legacy/all.bgeo");
     let d = read_geo(&std::fs::read(p).unwrap()).unwrap();
-    assert_eq!(d.point_count, 367);
+    assert_eq!((d.point_count, d.vertex_count(), d.prim_count()), (367, 455, 13));
+    // binary-JSON (bjson): shipped axis.bgeo
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/bgeo-bjson/axis.bgeo");
+    assert_eq!(read_geo(&std::fs::read(p).unwrap()).unwrap().point_count, 7);
 }
 
 /// promote-1: Houdini 20.5 ASCII writes a plain per-prim `nvertices` list (not `nvertices_rle`) when counts do not run-length

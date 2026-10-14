@@ -711,8 +711,8 @@ area = "B"
 tier = "P1"
 status = "shipped"
 commands = []
-evidence = ["crates/geo/src/bgeo_legacy_tests.rs::binary_equals_text_twin", "crates/geo/src/bgeo_legacy_tests.rs::every_truncation_is_a_clean_error", "crates/geo/src/bgeo_legacy_tests.rs::lying_header_counts_never_panic_or_overallocate", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle"]
-notes = "all.bgeo (v2) == its text twin (points, vertex->point map, prim ranges+types, attr values, groups). v3/v5: 5 of 6 install files parse to the exact trailer (no twin, UNVERIFIED values); fabric.bgeo NURBMesh profile block fails. Non-float attrib types, vertex/prim/detail attribs, ordered-group lists, wide (>=65536 pts) indices are inferred (UNVERIFIED)."
+evidence = ["crates/geo/src/bgeo_legacy_tests.rs::binary_equals_text_twin", "crates/geo/src/bgeo_legacy_tests.rs::installed_legacy_files_match_houdini_counts", "crates/geo/src/bgeo_legacy_tests.rs::every_truncation_is_a_clean_error", "crates/geo/src/bgeo_legacy_tests.rs::lying_header_counts_never_panic_or_overallocate", "crates/geo/src/ship_tests.rs::houdini_ship_gated_files_match_oracle"]
+notes = "all.bgeo (v2) == its text twin (points, vertex->point map, prim ranges+types, attr values, groups). v3/v5: 5 of 6 install files parse to the exact trailer (no twin, UNVERIFIED values); fabric.bgeo (H39: profile block is after prim attrib values) parses; all 7 install files: points/prims/vertices == Houdini loadFromFile (fixtures/bgeo-legacy/counts.json; P bbox too, except quadric-bearing all.bgeo). Non-float attrib types, vertex/prim/detail attribs, ordered-group lists, wide (>=65536 pts) indices are inferred (UNVERIFIED)."
 
 [[feature]]
 id = "geo-nurbs-prims"
