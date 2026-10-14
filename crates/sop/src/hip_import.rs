@@ -27,6 +27,8 @@ pub struct GeoImport {
     /// Nodes with keyframed / expression parms (value at save time used).
     pub animated: Vec<String>,
     pub notes: Vec<String>,
+    /// Wires of the `.hip` NOT in the scene: the hexe twin has fewer input ports than Houdini's node (reported, never silent).
+    pub dropped_wires: usize,
 }
 #[derive(Debug, Clone)]
 pub struct HipImport {
@@ -141,7 +143,9 @@ fn import_network(reg: &Registry, net: &HipNetwork) -> GeoImport {
     let mut ordered: Vec<&HipNode> = net.nodes.iter().collect();
     ordered.sort_by(|a, b| a.name.cmp(&b.name));
     let mut pos = Map::new();
+    let mut dropped_wires = 0usize;
     for n in &ordered {
+        let mut ports = 16usize;
         let mut node = json!({ "name": n.name });
         if n.parms.iter().flat_map(|p| &p.values).any(HipValue::is_animated) || n.has_channels {
             animated.push(n.name.clone());
@@ -149,6 +153,7 @@ fn import_network(reg: &Registry, net: &HipNetwork) -> GeoImport {
         match hexe_type(reg, &n.ty) {
             Some(t) => {
                 node["type"] = json!(t);
+                ports = reg.create(&t).map_or(0, |x| x.inputs().len());
                 let specs = reg.specs(&t).unwrap_or_default();
                 let mut params = Map::new();
                 let mut no_twin: Vec<&str> = Vec::new();
@@ -192,7 +197,10 @@ fn import_network(reg: &Registry, net: &HipNetwork) -> GeoImport {
         nodes.push(node);
         for (i, inp) in n.inputs.iter().enumerate() {
             if let Some(inp) = inp {
-                if names.contains(inp.src.as_str()) {
+                if i >= ports {
+                    dropped_wires += 1;
+                    notes.push(format!("{}: input {i} from `{}` dropped (hexe `{}` has {ports} input port(s))", n.name, inp.src, n.ty));
+                } else if names.contains(inp.src.as_str()) {
                     edges.push(json!([inp.src, inp.output, n.name, i]));
                 } else {
                     notes.push(format!("{}: input {i} from `{}` outside the network (not wired)", n.name, inp.src));
@@ -218,6 +226,7 @@ fn import_network(reg: &Registry, net: &HipNetwork) -> GeoImport {
         unsupported,
         animated,
         notes,
+        dropped_wires,
     }
 }
 /// Map a parsed scene onto hexe scenes (one per `geo` container with nodes).
@@ -350,7 +359,7 @@ mod tests {
                             Ok(()) => "MATCH".to_string(),
                             Err(e) if e.starts_with("cook:") => format!("HEXE-ERR {}", e.chars().take(110).collect::<String>()),
                             Err(e) => {
-                                let kind = if g.animated.iter().any(|a| up.contains(a)) { "PARM-DIFF(animated)" } else if e.starts_with("counts") { "COUNT-DIFF" } else if e.starts_with("P[") { "P-DIFF" } else if e.starts_with("prim") { "TOPO-DIFF" } else { "ATTR-DIFF" };
+                                let kind = if e.starts_with("scene:") { "LOAD-ERR" } else if g.animated.iter().any(|a| up.contains(a)) { "PARM-DIFF(animated)" } else if e.starts_with("counts") { "COUNT-DIFF" } else if e.starts_with("P[") { "P-DIFF" } else if e.starts_with("prim") { "TOPO-DIFF" } else { "ATTR-DIFF" };
                                 format!("{kind} {}", e.chars().take(110).collect::<String>())
                             }
                         },

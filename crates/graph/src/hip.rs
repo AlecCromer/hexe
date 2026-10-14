@@ -52,6 +52,7 @@ pub fn read_cpio(b: &[u8]) -> Result<Vec<CpioEntry>, HipError> {
         let (hdr, newc) = match magic {
             b"070707" => (76usize, false),
             b"070701" | b"070702" => (110usize, true),
+            b"MIME-V" if at == 0 => return err("MIME-encoded .hip (text/MIME wrapper) is not supported"),
             _ => return err(format!("not a cpio archive (magic {:?} at {at})", String::from_utf8_lossy(magic))),
         };
         let (namesize, filesize) = if newc {

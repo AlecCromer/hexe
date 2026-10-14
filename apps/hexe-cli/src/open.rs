@@ -48,7 +48,7 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
     for g in &imp.geos {
         let _ = writeln!(
             out,
-            "  /obj/{}: {} nodes, {} wires, display `{}`, {} unsupported{}, {} animated, {} notes",
+            "  /obj/{}: {} nodes, {} wires, display `{}`, {} unsupported{}, {} animated, {} dropped wires, {} notes",
             g.name,
             g.node_count,
             g.wire_count,
@@ -56,6 +56,7 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
             g.unsupported.len(),
             if g.unsupported.is_empty() { String::new() } else { format!(" [{}]", g.unsupported.join(" ")) },
             g.animated.len(),
+            g.dropped_wires,
             g.notes.len()
         );
     }
@@ -74,7 +75,7 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
             std::fs::write(&p, text).map_err(|e| format!("{p}: {e}"))?;
             report.push(serde_json::json!({
                 "geo": g.name, "container": g.container, "nodes": g.node_count, "wires": g.wire_count, "display": g.display,
-                "unsupported": g.unsupported, "animated": g.animated, "notes": g.notes
+                "unsupported": g.unsupported, "animated": g.animated, "dropped_wires": g.dropped_wires, "notes": g.notes
             }));
         }
         let doc = serde_json::json!({ "file": a.file, "frame": imp.frame, "fps": imp.fps, "skipped": imp.skipped, "geos": report });
