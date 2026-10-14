@@ -9,6 +9,7 @@
     clippy::unreachable
 )]
 mod endo;
+mod open;
 use hexe_graph::{ParamSpec, ParamValue};
 use std::fmt::Write as _;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -16,7 +17,32 @@ use std::process::ExitCode;
 
 /// Largest scene file `cook` reads (hostile input is the default).
 const MAX_SCENE_BYTES: u64 = 64 << 20;
-const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | convert <in> <out> | info <geo-file> | open <file.ens|.nmc|.nmb|.nma> [--out scene.json] [--geo out.geo] | endo-survey <Resources-dir> [--out md] | oracle <case> [input]";
+const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | convert <in> <out> | info <geo-file> | open <file.hip|.ens|.nmc|.nmb|.nma> [format flags] (open --help) | endo-survey <Resources-dir> [--out md] | oracle <case> [input]";
+
+/// `open --help` text: per-format flags.
+const OPEN_HELP: &str = "usage: hexe-cli open <file.hip|.ens|.nmc|.nmb|.nma> [format flags]
+  Houdini (.hip .hipnc .hiplc .hip.gz): [--geo N] [--scene-out F] [--cook-out F.geo] [--all-out DIR]
+  Endorphin (.ens .nmc .nmb .nma):      [--out scene.json] [--geo out.geo]";
+
+/// `open`: dispatch on the file extension (case-insensitive) to the Houdini or Endorphin reader.
+fn open_dispatch(args: &[String]) -> Result<String, String> {
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        return Ok(OPEN_HELP.to_string());
+    }
+    let is_hip = |a: &str| {
+        let l = a.to_ascii_lowercase();
+        [".hip", ".hipnc", ".hiplc", ".hip.gz"].iter().any(|e| l.ends_with(e))
+    };
+    // The file is the argument with a known extension (flag values like `--geo 3` never match).
+    if args.iter().any(|a| is_hip(a)) {
+        return open::open_cmd(args);
+    }
+    if args.iter().any(|a| endo::is_endo(a)) {
+        return endo::open_cmd(args);
+    }
+    let file = args.iter().find(|a| !a.starts_with('-')).ok_or_else(|| OPEN_HELP.to_string())?;
+    Err(format!("open: unknown extension on `{file}`\n{OPEN_HELP}"))
+}
 
 /// Largest geometry file `info` reads (hostile input is the default).
 const MAX_GEO_BYTES: u64 = 1 << 30;
@@ -229,7 +255,7 @@ fn dispatch(args: &[String]) -> Result<String, String> {
         Some("nodes") => Ok(nodes()),
         Some("convert") => convert(&args[1..]),
         Some("info") => info(&args[1..]),
-        Some("open") => endo::open_cmd(&args[1..]),
+        Some("open") => open_dispatch(&args[1..]),
         Some("endo-survey") => endo::survey_cmd(&args[1..]),
         Some("oracle") => match args.get(1) {
             Some(case) => oracle(case, args.get(2).map(String::as_str)),

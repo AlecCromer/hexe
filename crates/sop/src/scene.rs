@@ -88,6 +88,57 @@ impl Node<Detail> for EmptySource {
     }
 }
 
+/// Port names of an `unsupported:` node (cap 16 inputs).
+const PORT_NAMES: [&str; 16] = [
+    "input0", "input1", "input2", "input3", "input4", "input5", "input6", "input7", "input8", "input9", "input10", "input11",
+    "input12", "input13", "input14", "input15",
+];
+/// A node type hexe has no twin for (`"type": "unsupported:<houdini type>"`, e.g. from a `.hip` import): keeps the parms and the
+/// wiring so nothing is dropped, cooks to `CookError::Unsupported` naming the type.
+struct UnsupportedNode {
+    ty: String,
+    ports: Vec<InputSpec>,
+    specs: Vec<ParamSpec>,
+}
+impl UnsupportedNode {
+    fn build(ty: &str, given: &BTreeMap<String, Value>, ports: usize) -> (Self, ParamSet) {
+        let mut specs = Vec::new();
+        let mut set = ParamSet::new();
+        for (k, v) in given {
+            let pv = match v {
+                Value::Bool(b) => ParamValue::B(*b),
+                Value::Number(x) => match (whole(v), x.as_f64()) {
+                    (Some(i), _) if i32::try_from(i).is_ok() => ParamValue::I(i as i32),
+                    (_, Some(f)) if (f as f32).is_finite() => ParamValue::F(f as f32),
+                    _ => ParamValue::S(x.to_string()),
+                },
+                Value::String(s) => ParamValue::S(s.clone()),
+                Value::Array(a) if a.len() == 3 && a.iter().all(|c| c.as_f64().is_some_and(|f| (f as f32).is_finite())) => {
+                    ParamValue::V3([0, 1, 2].map(|i| a[i].as_f64().unwrap_or(0.0) as f32))
+                }
+                other => ParamValue::S(other.to_string()),
+            };
+            specs.push(ParamSpec::new(k, pv.clone()));
+            set = set.with(k, pv);
+        }
+        let ports = PORT_NAMES.iter().take(ports).map(|n| InputSpec { name: n }).collect();
+        (UnsupportedNode { ty: ty.to_string(), ports, specs }, set)
+    }
+}
+impl Node<Detail> for UnsupportedNode {
+    fn type_name(&self) -> &'static str {
+        "unsupported"
+    }
+    fn inputs(&self) -> &[InputSpec] {
+        &self.ports
+    }
+    fn params(&self) -> &[ParamSpec] {
+        &self.specs
+    }
+    fn cook(&self, _: &CookCtx, _: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
+        Err(CookError::Unsupported(format!("node type `{}` has no hexe twin", self.ty)))
+    }
+}
 /// Load with the built-in registry. Returns the graph and the display node (cook it with `graph.cook(id, time)`).
 pub fn load_scene(json: &str) -> Result<(Graph<Detail>, NodeId), SceneError> {
     let l = load_scene_with(json, &registry())?;
@@ -118,6 +169,17 @@ pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> 
         }
         if names.contains_key(&n.name) {
             return err(format!("duplicate node name `{}`", n.name));
+        }
+        if let Some(real) = n.ty.strip_prefix("unsupported:") {
+            let ports = def.edges.iter().filter(|e| e.2 == n.name).map(|e| e.3 + 1).max().unwrap_or(0);
+            if ports > PORT_NAMES.len() {
+                return err(format!("node `{}`: input {} beyond the {} ports of an unsupported node", n.name, ports - 1, PORT_NAMES.len()));
+            }
+            let (node, overrides) = UnsupportedNode::build(real, &n.params, ports);
+            let id = graph.add_boxed(Box::new(node), overrides).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
+            graph.rename(id, &n.name).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
+            names.insert(n.name.clone(), id);
+            continue;
         }
         let node: Box<SopNode> = reg
             .create(&n.ty)

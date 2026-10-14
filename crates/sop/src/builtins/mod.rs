@@ -101,7 +101,7 @@ mod name_sop;
 //
 mod normal_sop;
 //
-mod meshutil;
+pub(crate) mod meshutil;
 //
 mod selutil;
 //

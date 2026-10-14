@@ -349,7 +349,7 @@ pub(super) fn rebuild_w(
     Ok(out)
 }
 #[cfg(test)]
-pub(super) mod testkit {
+pub(crate) mod testkit {
     use crate::SopNode;
     use hexe_geo::Detail;
     use hexe_graph::{CookCtx, CookError, ParamSet};
@@ -422,10 +422,14 @@ pub(super) mod testkit {
     /// point/prim counts, `P` in index order (1e-5), every prim's point-id list verbatim (+ closedness), attribute NAME sets per
     /// class and group names per class. Differences come back as `Err(text)` so a test can also pin a KNOWN gap.
     pub fn houdini_twin(scene: &str, houdini_geo: &[u8]) -> Result<(), String> {
+        houdini_twin_at(scene, houdini_geo, 0.0)
+    }
+    /// `houdini_twin` with the cook time (seconds) chosen by the caller (`.hip` import: the file's saved frame).
+    pub fn houdini_twin_at(scene: &str, houdini_geo: &[u8], time: f32) -> Result<(), String> {
         use hexe_geo::{AttrClass, PrimKind, read_geo};
         let h = read_geo(houdini_geo).map_err(|e| format!("houdini.geo: {e:?}"))?;
         let (mut g, id) = crate::load_scene(scene).map_err(|e| format!("scene: {e:?}"))?;
-        let d = g.cook(id, 0.0).map_err(|e| format!("cook: {e:?}"))?;
+        let d = g.cook(id, time).map_err(|e| format!("cook: {e:?}"))?;
         if (d.point_count, d.prim_count(), d.vertex_count()) != (h.point_count, h.prim_count(), h.vertex_count()) {
             return Err(format!(
                 "counts hexe {}/{}/{} vs houdini {}/{}/{}",

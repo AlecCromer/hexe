@@ -1,0 +1,1556 @@
+{
+"add": {
+"add": [
+"all",
+"group",
+"skip",
+"sep",
+"attribute"
+]
+},
+"attribcopy": {
+"attrib": [
+"colorattrib",
+"uvattrib",
+"otherattrib"
+],
+"class": [
+"guess",
+"sameasgroup",
+"vertices",
+"points",
+"prims",
+"detail"
+],
+"destgrouptype": [
+"vertices",
+"points",
+"prims"
+],
+"matchbyattributemethod": [
+"byvalues",
+"toelement"
+],
+"srcgrouptype": [
+"vertices",
+"points",
+"prims"
+]
+},
+"attribcreate": {
+"class": [
+"detail",
+"primitive",
+"point",
+"vertex"
+],
+"grouptype": [
+"guess",
+"vertices",
+"edges",
+"points",
+"prims"
+],
+"precision": [
+"16",
+"32",
+"64"
+],
+"type": [
+"float",
+"int",
+"vector",
+"index"
+],
+"typeinfo": [
+"guess",
+"none",
+"point",
+"vector",
+"normal",
+"color",
+"quaternion"
+]
+},
+"attribnoise": {
+"class": [
+"detail",
+"prim",
+"point",
+"vertex"
+],
+"grouptype": [
+"guess",
+"vertices",
+"edges",
+"points",
+"prims"
+],
+"mode": [
+"add",
+"mult"
+],
+"signature": [
+"dim1",
+"dim3"
+]
+},
+"attribpromote": {
+"inclass": [
+"detail",
+"primitive",
+"point",
+"vertex"
+],
+"method": [
+"max",
+"min",
+"mean",
+"mode",
+"median",
+"sum",
+"sumsquare",
+"rms",
+"first",
+"last",
+"array"
+],
+"outclass": [
+"detail",
+"primitive",
+"point",
+"vertex"
+]
+},
+"attribrandomize": {
+"class": [
+"detail",
+"primitive",
+"point",
+"vertex"
+],
+"grouptype": [
+"guess",
+"vertices",
+"edges",
+"points",
+"prims"
+],
+"valuetype": [
+"float",
+"string"
+]
+},
+"attribswap": {
+"class#": [
+"detail",
+"primitive",
+"point",
+"vertex"
+],
+"method#": [
+"swap",
+"copy",
+"move"
+],
+"typeinfo#": [
+"source",
+"dest"
+]
+},
+"attribtransfer": {
+"dstgrouptype": [
+"primitive",
+"point"
+],
+"srcgrouptype": [
+"primitive",
+"point"
+]
+},
+"bend": {
+"bendmode": [
+"angle",
+"dir"
+],
+"bendscalemode_angle": [
+"none",
+"attrib"
+],
+"bendscalemode_dir": [
+"none",
+"attrib"
+],
+"grouptype": [
+"guess",
+"vertices",
+"edges",
+"points",
+"prims"
+],
+"lengthscalescalemode": [
+"none",
+"attrib"
+],
+"maskmode": [
+"maskoff",
+"maskon"
+],
+"squishscalemode": [
+"none",
+"attrib"
+],
+"taperaxes": [
+"x",
+"y"
+],
+"tapermode": [
+"linear",
+"smooth"
+],
+"taperscalemode": [
+"none",
+"attrib"
+],
+"twistscalemode": [
+"none",
+"attrib"
+],
+"upvectorcontrol": [
+"xaxis",
+"yaxis",
+"zaxis",
+"custom"
+]
+},
+"blast": {
+"grouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+]
+},
+"block_begin": {
+"method": [
+"feedback",
+"piece",
+"metadata",
+"input"
+]
+},
+"block_end": {
+"class": [
+"primitive",
+"point"
+],
+"itermethod": [
+"auto",
+"pieces",
+"count"
+],
+"method": [
+"feedback",
+"merge"
+]
+},
+"bound": {
+"boundtype": [
+"off",
+"on",
+"rectangle"
+],
+"grouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+],
+"orient": [
+"x",
+"y",
+"z"
+]
+},
+"box": {
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+],
+"type": [
+"poly",
+"polymesh",
+"mesh",
+"nurbs",
+"bezier",
+"points",
+"prim"
+]
+},
+"carve": {
+"extractop": [
+"xisoparm",
+"xpoint",
+"xprofile"
+],
+"onlybreakpoints": [
+"off",
+"on"
+],
+"usedomainu1attrib": [
+"constant",
+"attrib",
+"scale"
+],
+"usedomainu2attrib": [
+"constant",
+"attrib",
+"scale"
+],
+"usedomainv1attrib": [
+"constant",
+"attrib",
+"scale"
+],
+"usedomainv2attrib": [
+"constant",
+"attrib",
+"scale"
+]
+},
+"circle": {
+"arc": [
+"closed",
+"openarc",
+"closedarc",
+"slicedarc"
+],
+"orient": [
+"xy",
+"yz",
+"zx"
+],
+"type": [
+"prim",
+"poly",
+"nurbs",
+"bezier"
+]
+},
+"clip": {
+"clipop": [
+"above",
+"below",
+"both"
+]
+},
+"color": {
+"grouptype": [
+"guess",
+"vertices",
+"edges",
+"points",
+"prims"
+]
+},
+"connectivity": {
+"attribtype": [
+"int",
+"string"
+],
+"connecttype": [
+"point",
+"prim"
+]
+},
+"convert": {
+"fromtype": [
+"all",
+"sphere",
+"tube",
+"part",
+"metaball",
+"poly",
+"mesh",
+"bezCurve",
+"bezSurf",
+"nurbCurve",
+"nurbSurf",
+"pasteSurf",
+"circle",
+"tristrip",
+"trifan",
+"tribez",
+"volume",
+"polySoup",
+"vdb"
+],
+"pasteattrib": [
+"afeature",
+"abase"
+],
+"pastecoord": [
+"cfeature",
+"cbase"
+],
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+],
+"totype": [
+"poly",
+"mesh",
+"bezCurve",
+"bezSurf",
+"nurbCurve",
+"nurbSurf",
+"pasteSurf",
+"circle",
+"trimBezSurf",
+"trimNurbSurf",
+"tribez",
+"polySoup",
+"volume",
+"vdb"
+]
+},
+"copytopoints": {
+"pivot": [
+"origin",
+"centroid"
+],
+"viewportlod": [
+"full",
+"points",
+"box",
+"centroid",
+"hidden"
+]
+},
+"curve": {
+"method": [
+"cv",
+"breakpoints",
+"freehand"
+],
+"param": [
+"uniform",
+"chrdlen",
+"centrip"
+],
+"type": [
+"poly",
+"nurbs",
+"bezier",
+"points"
+]
+},
+"delete": {
+"boundtype": [
+"usebbox",
+"usebsphere"
+],
+"entity": [
+"primitive",
+"point",
+"edge"
+],
+"geotype": [
+"all",
+"bezierc",
+"bezier",
+"mesh",
+"Channel",
+"circle",
+"Hexahedron",
+"MetaSQuad",
+"meta",
+"nurbc",
+"nurb",
+"PackedAgent",
+"AlembicRef",
+"PackedDisk",
+"PackedDiskSequence",
+"PackedFragment",
+"PackedGeometry",
+"PackedUSD",
+"part",
+"poly",
+"polysoup",
+"sphere",
+"tetrahedron",
+"trifan",
+"tristrip",
+"tribez",
+"tube",
+"vdb",
+"volume"
+],
+"groupop": [
+"pattern",
+"range",
+"filter"
+],
+"negate": [
+"dele",
+"keep"
+]
+},
+"dissolve": {
+"invertsel": [
+"delete",
+"keep"
+]
+},
+"facet": {
+"cons": [
+"none",
+"points",
+"fpoints",
+"normals",
+"fnormals"
+],
+"grouptype": [
+"guess",
+"points",
+"prims"
+]
+},
+"file": {
+"filemode": [
+"auto",
+"read",
+"write",
+"none"
+],
+"loadtype": [
+"full",
+"infobbox",
+"info",
+"points",
+"delayed",
+"packedseq",
+"packedgeo"
+],
+"missingframe": [
+"error",
+"empty"
+],
+"packedviewedit": [
+"unchanged",
+"full",
+"points",
+"box",
+"centroid",
+"hidden"
+],
+"viewportlod": [
+"full",
+"points",
+"box",
+"centroid",
+"hidden"
+],
+"wrap": [
+"cycle",
+"clamp",
+"strick",
+"mirror"
+]
+},
+"fuse": {
+"gridround": [
+"nearest",
+"down",
+"up"
+],
+"gridtype": [
+"spacing",
+"lines",
+"pow2"
+],
+"grouppropagation": [
+"leastpointnumber",
+"union",
+"intersect"
+],
+"snaptype": [
+"average",
+"lowest",
+"highest"
+]
+},
+"grid": {
+"orient": [
+"xy",
+"yz",
+"zx"
+],
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+],
+"type": [
+"poly",
+"mesh",
+"nurbs",
+"bezier",
+"points",
+"polysoup"
+]
+},
+"group": {
+"boundtype": [
+"usebbox",
+"usebsphere",
+"usebobject",
+"usebvolume"
+],
+"cnvfromtype": [
+"primgroup",
+"ptgroup",
+"edgegroup"
+],
+"cnvtotype": [
+"primgroup",
+"ptgroup",
+"edgegroup"
+],
+"combineentity": [
+"guess",
+"points",
+"prims",
+"edges"
+],
+"entity": [
+"primitive",
+"point",
+"edge"
+],
+"geotype": [
+"all",
+"bezierc",
+"bezier",
+"mesh",
+"Channel",
+"circle",
+"Hexahedron",
+"MetaSQuad",
+"meta",
+"nurbc",
+"nurb",
+"PackedAgent",
+"AlembicRef",
+"PackedDisk",
+"PackedDiskSequence",
+"PackedFragment",
+"PackedGeometry",
+"PackedUSD",
+"part",
+"poly",
+"polysoup",
+"sphere",
+"tetrahedron",
+"trifan",
+"tristrip",
+"tribez",
+"tube",
+"vdb",
+"volume"
+],
+"groupop": [
+"grppattern",
+"grprange",
+"grpexpression"
+],
+"mergeop": [
+"replace",
+"union",
+"intersect",
+"subtract"
+],
+"not1": [
+"off",
+"on"
+],
+"not2": [
+"off",
+"on"
+],
+"not3": [
+"off",
+"on"
+],
+"not4": [
+"off",
+"on"
+],
+"op1": [
+"none",
+"or",
+"and",
+"xor",
+"sub"
+],
+"op2": [
+"none",
+"or",
+"and",
+"xor",
+"sub"
+],
+"op3": [
+"none",
+"or",
+"and",
+"xor",
+"sub"
+]
+},
+"groupcombine": {
+"grouptype#": [
+"guess",
+"points",
+"prims",
+"edges",
+"vertices"
+],
+"negate_a#": [
+"off",
+"on"
+],
+"negate_b#": [
+"off",
+"on"
+],
+"negate_c#": [
+"off",
+"on"
+],
+"negate_d#": [
+"off",
+"on"
+],
+"op_ab#": [
+"none",
+"or",
+"and",
+"xor",
+"sub"
+],
+"op_bc#": [
+"none",
+"or",
+"and",
+"xor",
+"sub"
+],
+"op_cd#": [
+"none",
+"or",
+"and",
+"xor",
+"sub"
+]
+},
+"groupcreate": {
+"boundtype": [
+"usebbox",
+"usebsphere",
+"usebobject",
+"usebvolume",
+"usebconvex"
+],
+"geotype": [
+"all",
+"bezierc",
+"bezier",
+"mesh",
+"Channel",
+"circle",
+"Hexahedron",
+"MetaSQuad",
+"meta",
+"nurbc",
+"nurb",
+"PackedAgent",
+"AlembicRef",
+"PackedDisk",
+"PackedDiskSequence",
+"PackedFragment",
+"PackedGeometry",
+"PackedUSD",
+"part",
+"poly",
+"polysoup",
+"sphere",
+"tetrahedron",
+"trifan",
+"tristrip",
+"tribez",
+"tube",
+"vdb",
+"volume"
+],
+"grouptype": [
+"primitive",
+"point",
+"edge",
+"vertex"
+],
+"mergeop": [
+"replace",
+"union",
+"intersect",
+"subtract"
+]
+},
+"groupdelete": {
+"grouptype#": [
+"any",
+"points",
+"prims",
+"edges",
+"vertices"
+],
+"selectiongrouptype": [
+"guess",
+"points",
+"prims",
+"edges",
+"vertices"
+]
+},
+"groupexpand": {
+"colgrouptype": [
+"auto",
+"edges",
+"points",
+"prims",
+"vertices"
+],
+"grouptype": [
+"auto",
+"vertices",
+"edges",
+"points",
+"prims"
+]
+},
+"groupinvert": {
+"grouptype": [
+"auto",
+"prims",
+"points",
+"edges",
+"vertices"
+]
+},
+"grouppromote": {
+"fromtype#": [
+"auto",
+"prims",
+"points",
+"edges",
+"vertices"
+],
+"totype#": [
+"prims",
+"points",
+"edges",
+"vertices"
+]
+},
+"knife": {
+"knifeop": [
+"above",
+"below",
+"both"
+]
+},
+"lattice": {
+"interptype": [
+"linear",
+"bezier"
+]
+},
+"line": {
+"type": [
+"poly",
+"nurbs",
+"bezier",
+"points"
+]
+},
+"matchsize": {
+"goal_x": [
+"same",
+"min",
+"center",
+"max"
+],
+"goal_y": [
+"same",
+"min",
+"center",
+"max"
+],
+"goal_z": [
+"same",
+"min",
+"center",
+"max"
+],
+"grouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+],
+"justify_x": [
+"none",
+"min",
+"center",
+"max"
+],
+"justify_y": [
+"none",
+"min",
+"center",
+"max"
+],
+"justify_z": [
+"none",
+"min",
+"center",
+"max"
+],
+"justifytarget": [
+"origin",
+"input",
+"explicit",
+"auto"
+],
+"refgrouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+],
+"scale_axis": [
+"x",
+"y",
+"z",
+"min",
+"perimeter",
+"area",
+"volume"
+],
+"sourcegrouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+],
+"stashmerge": [
+"replace",
+"pre",
+"post"
+]
+},
+"measure": {
+"curvetype": [
+"all",
+"concave",
+"conex"
+],
+"type": [
+"perimeter",
+"area",
+"curvature",
+"volume"
+]
+},
+"mirror": {
+"dirtype": [
+"direction",
+"xform"
+],
+"operation": [
+"all",
+"clip"
+],
+"reversenml": [
+"noreverse",
+"reverse",
+"reverseu",
+"reversev"
+]
+},
+"mountain": {
+"vex_numthreads": []
+},
+"name": {
+"class": [
+"primitive",
+"point",
+"vertex"
+]
+},
+"normal": {
+"grouptype": [
+"guess",
+"vertices",
+"edges",
+"points",
+"prims"
+],
+"type": [
+"typepoint",
+"typevertex",
+"typeprim",
+"typedetail"
+]
+},
+"peak": {
+"grouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+]
+},
+"platonic": {
+"orient": [
+"x",
+"y",
+"z"
+]
+},
+"polybevel": {
+"beveltype": [
+"flat",
+"lowround",
+"highround",
+"corner"
+],
+"entitytype": [
+"points",
+"edges"
+]
+},
+"polyextrude": {
+"consolidate": [
+"none",
+"perface",
+"all",
+"allperpoint"
+],
+"grst": [
+"srt",
+"str",
+"rst",
+"rts",
+"tsr",
+"trs"
+],
+"gxyz": [
+"xyz",
+"xzy",
+"yxz",
+"yzx",
+"zxy",
+"zyx"
+],
+"keepshared": [
+"off",
+"on",
+"average"
+],
+"localsym": [
+"symmxaxis",
+"symmyaxis",
+"symmnone"
+],
+"lrst": [
+"srt",
+"str",
+"rst",
+"rts",
+"tsr",
+"trs"
+],
+"lxyz": [
+"xyz",
+"xzy",
+"yxz",
+"yzx",
+"zxy",
+"zyx"
+]
+},
+"polyfill": {
+"fillmode": [
+"none",
+"tris",
+"trifan",
+"quadfan",
+"quads",
+"gridquads"
+]
+},
+"polyframe": {
+"entity": [
+"primitive",
+"point"
+]
+},
+"polysplit": {
+"pathtype": [
+"shortest",
+"quadcut"
+]
+},
+"ray": {
+"combinetype": [
+"average",
+"median",
+"shortest",
+"longest"
+],
+"dirmethod": [
+"vector",
+"normal",
+"attribute"
+],
+"entity": [
+"primitive",
+"point"
+],
+"method": [
+"minimum",
+"project"
+]
+},
+"resample": {
+"measure": [
+"arc",
+"chord"
+],
+"method": [
+"dist",
+"x",
+"y",
+"z"
+],
+"treatpolysas": [
+"straight",
+"subd",
+"interp"
+]
+},
+"reverse": {
+"vtxsort": [
+"samevertex",
+"reverse",
+"reverseu",
+"reversev",
+"swapuv",
+"shift"
+]
+},
+"revolve": {
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+],
+"type": [
+"closed",
+"openarc",
+"closedarc"
+]
+},
+"rop_geometry": {
+"trange": [
+"off",
+"normal",
+"on"
+],
+"xformtype": [
+"none",
+"world"
+]
+},
+"skin": {
+"closev": [
+"nonewv",
+"wv",
+"ifprimwv"
+],
+"skinops": [
+"all",
+"group",
+"skip"
+],
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+]
+},
+"smooth": {
+"applyto": [
+"ptpos",
+"uvattrib",
+"colorattrib",
+"otherattrib"
+]
+},
+"sort": {
+"primsort": [
+"none",
+"byx",
+"byy",
+"byz",
+"rev",
+"seed",
+"shif",
+"prox",
+"vector",
+"expression",
+"spatial",
+"attribute"
+],
+"ptsort": [
+"none",
+"vtxord",
+"byx",
+"byy",
+"byz",
+"rev",
+"seed",
+"shif",
+"prox",
+"vector",
+"expression",
+"spatial",
+"attribute",
+"primindex"
+]
+},
+"sphere": {
+"orient": [
+"x",
+"y",
+"z"
+],
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+],
+"type": [
+"prim",
+"poly",
+"polymesh",
+"mesh",
+"nurbs",
+"bezier",
+"polysoup"
+]
+},
+"split": {
+"grouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+]
+},
+"subdivide": {
+"algorithm": [
+"houdini",
+"mantra",
+"osdcc",
+"osdloop",
+"osdbilinear"
+],
+"closeholes": [
+"noclose",
+"pull",
+"stitch"
+],
+"creasemethod": [
+"uniform",
+"chaikin"
+],
+"fvarlinear": [
+"none",
+"corner",
+"corner1",
+"corner2",
+"sharp",
+"bilinear"
+],
+"surroundpoly": [
+"nodiv",
+"edges",
+"triangulate"
+],
+"trianglesubd": [
+"catclark",
+"smooth"
+],
+"vtxboundary": [
+"none",
+"edge",
+"corner"
+]
+},
+"sweep": {
+"cycle": [
+"all",
+"each",
+"cycle"
+],
+"skin": [
+"off",
+"on",
+"auto",
+"onpreserve",
+"autopreserve"
+]
+},
+"torus": {
+"orient": [
+"x",
+"y",
+"z"
+],
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+],
+"type": [
+"poly",
+"mesh",
+"nurbs",
+"bezier",
+"polysoup"
+]
+},
+"tube": {
+"orient": [
+"x",
+"y",
+"z"
+],
+"surftype": [
+"rows",
+"cols",
+"rowcol",
+"triangles",
+"quads",
+"alttriangles",
+"revtriangles"
+],
+"type": [
+"prim",
+"poly",
+"mesh",
+"nurbs",
+"bezier",
+"polysoup"
+]
+},
+"twist": {
+"op": [
+"twist",
+"bend",
+"shear",
+"taper",
+"ltaper",
+"squash"
+],
+"paxis": [
+"x",
+"y",
+"z"
+],
+"saxis": [
+"x",
+"y",
+"z"
+]
+},
+"uvlayout": {
+"packing": [
+"oneframe",
+"multiframes",
+"useudim",
+"currenttile"
+]
+},
+"uvproject": {
+"grouptype": [
+"vertices",
+"points"
+],
+"inittype": [
+"xy",
+"yz",
+"zx",
+"best"
+],
+"projtype": [
+"texture",
+"polar",
+"cylin",
+"torus",
+"wrap"
+],
+"rOrd": [
+"xyz",
+"xzy",
+"yxz",
+"yzx",
+"zxy",
+"zyx"
+],
+"xOrd": [
+"srt",
+"str",
+"rst",
+"rts",
+"tsr",
+"trs"
+]
+},
+"uvunwrap": {
+"layout": [
+"strip",
+"square"
+],
+"nplanes": [
+"planes4",
+"planes5",
+"planes6",
+"planes8"
+],
+"rOrd": [
+"xyz",
+"xzy",
+"yxz",
+"yzx",
+"zxy",
+"zyx"
+],
+"scale": [
+"none",
+"uniform",
+"stretch"
+]
+},
+"wrangle": {
+"class": [
+"detail",
+"primitive",
+"point",
+"vertex",
+"number"
+],
+"grouptype": [
+"guess",
+"vertices",
+"edges",
+"points",
+"prims"
+]
+},
+"xform": {
+"grouptype": [
+"guess",
+"breakpoints",
+"edges",
+"points",
+"prims"
+],
+"outputmerge": [
+"replace",
+"pre",
+"post"
+],
+"prexform_rOrd": [
+"xyz",
+"xzy",
+"yxz",
+"yzx",
+"zxy",
+"zyx"
+],
+"prexform_xOrd": [
+"srt",
+"str",
+"rst",
+"rts",
+"tsr",
+"trs"
+],
+"rOrd": [
+"xyz",
+"xzy",
+"yxz",
+"yzx",
+"zxy",
+"zyx"
+],
+"xOrd": [
+"srt",
+"str",
+"rst",
+"rts",
+"tsr",
+"trs"
+]
+}
+}

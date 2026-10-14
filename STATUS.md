@@ -47,3 +47,12 @@
 - Output geo: bones = open 2-pt polys (joint→parent); joint points attrs joint/jtype/character/parent/{twist,swing1,swing2}_{soft,hard}; body meshes = closed polys prim attrs kind/body/material/shape/mass/character; prim groups per kind + `char_<name>`; detail attrs endo_kind/endo_gravity/endo_behaviours/endo_animation/endo_poses (JSON). Default ground = 1 quad.
 - Proof: proof/h41/{Balcony,Car_Hit,Gymnast_Rings,Sword_Play}.png (installed /Applications/Hexe.app `--render` over `open --geo` output, environment group blasted).
 - OPEN: rest pose only (anim quats/Poses not applied); .nmb blobs undecoded; File/Mesh geometry = placeholder box; Sphyl/Cylinder axis + Cuboid extents conventions inferred; UI File>Open route is source-only until next Tauri build; mass of File/Mesh bodies = 0.
+
+---
+
+# STATUS — h40 (.hip reader, branch h40/hip)
+
+- `io.hip-read` (partial): `crates/graph/src/hip.rs` cpio odc/newc + gzip → IR; `crates/sop/src/hip_import.rs` IR → hexe scenes (per /obj geo); `hexe-cli open <f.hip> [--out dir]`; Tauri File→Open (`Session::graph_load` routes .hip/.hipnc/.hiplc/.hip.gz → first geo, no UI rebuild).
+- Corpus 12 Houdini 20.5 help/files hips (`nodes/sop/**` ships 0 hips) → fixtures/hip/MANIFEST.md: parse 12/12 FULL; cook 25 geos = 13 MATCH / 5 HEXE-ERR / 7 UNSUPPORTED-NODE (hython `oracle/houdini/hip-twin.py`); files with ≥1 MATCH 7/12, fully MATCH 5/12. 11/13 MATCH = 1-node object geos.
+- Gaps (ordered by corpus hits): `copy` stamp, for-each block_begin/end, `point` SOP, `grouprange`, `material`, `object_merge`, HDAs (log_spiral, color_falloff), wrangle `relbbox`, tube non-poly.
+- Not oracle-covered: MIME-wrapped hips (error), animated parms (value at save time).

@@ -1783,3 +1783,19 @@ evidence = [
   "apps/hexe-cli/tests/endo.rs::survey_counts_a_synthetic_corpus_and_reports_bad_files",
 ]
 notes = "H41, clean-room from data (oracle/endorphin/SURVEY.md: 207/207 sample files parse, 156 element names, 657 (element,attr) pairs). Container zlib->XML, floats hex IEEE twin `b<attr>`. Reader crates/geo/src/endorphin.rs (own capped XML parser + miniz_oxide inflate; every typed struct keeps its raw subtree); builder endorphin_geo.rs; read_any/file SOP/convert/info/cook accept the 4 extensions (read-only). Geometry = REST POSE only: joint rotation channels (scene Animation quats) + Poses are carried as detail JSON, NOT applied; scene root translation = first key of root.tx/ty/tz. Axis conventions measured off the limbs (Sphyl/Cylinder along local Z, Cuboid = full extents) — no vendor ground truth, UNVERIFIED. Mass = density x analytic volume (File/Mesh inertial = 0). NOT decoded: .nmb behaviour blobs (opaque text-encoded `cc` attrs, kept raw + RefNames only), Geometry type File/Mesh (5 cm placeholder box), constraints/events/IOSessions (raw only). No .nmp/.nmw/.nmm/.nme in the sample install. UI: File>Open routes .ens/.nmc to a file SOP (apps/hexe-tauri/ui/src/main.ts; takes effect on next app build, NOT rebuilt here)."
+[[feature]]
+id = "io.hip-read"
+title = "Read Houdini .hip / .hipnc / .hiplc / .hip.gz scenes"
+area = "B"
+tier = "P1"
+status = "partial"
+commands = ["open"]
+evidence = [
+  "crates/graph/tests/hip_tests.rs::hip_cpio_members_equal_hexpand_contents",
+  "crates/graph/tests/hip_tests.rs::hip_gzip_and_plain_parse_identically",
+  "crates/graph/tests/hip_tests.rs::hip_corpus_parse_12",
+  "crates/sop/src/hip_import.rs::hip_authored_chain_matches_hython",
+  "crates/sop/src/hip_import.rs::hip_unsupported_node_is_kept_wired_and_cooks_to_unsupported",
+  "crates/sop/src/hip_import.rs::hip_hostile_inputs_are_errors",
+]
+notes = "H40: cpio (odc/newc) + gzip reader -> HipScene IR -> hexe scenes (one per /obj geo with SOPs); no-twin SOPs kept as `unsupported:<type>` (wired, parms kept, cook = Unsupported); `hexe-cli open` + Tauri graph_load (.hip route). Corpus fixtures/hip/MANIFEST.md: 12 Houdini-20.5 help/files hips parse 12/12 full graph; cook vs hython 13 MATCH / 5 HEXE-ERR / 7 UNSUPPORTED-NODE over 25 geo containers (hython twin, install-gated). NOT: MIME-wrapped hips (explicit error), HDA/digital-asset internals, subnets/TOP/VOP networks (skipped, listed), keyframes (value at save time, flagged animated), for-each blocks, hexe twins with fewer input ports than Houdini (dropped_wires reported)."
