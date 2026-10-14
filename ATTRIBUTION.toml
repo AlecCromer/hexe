@@ -156,3 +156,11 @@ author = "Nyari (paloptic)"
 source = "Hexe.app window screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
 licence = "MIT"
 sha256 = "58fd343ced074783efd23d27eba07270dd31fbd6fe936500514c00fa3ab03334"
+
+[[asset]]
+path = "proof/h42/installed.png"
+title = "h42 installed Hexe.app Balcony screenshot"
+author = "Nyari (paloptic)"
+source = "Hexe.app window screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "46163a76c0e4dd1922783c47fc48ab2d79a2622abbaa7957982c88788673b41c"
