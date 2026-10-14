@@ -140,3 +140,19 @@ author = "Nyari (paloptic)"
 source = "hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
 licence = "MIT"
 sha256 = "b4bae0898d82d5a54564a1a25df12a596ebb96efdc2afeef392d8adb4fdc0cee"
+
+[[asset]]
+path = "proof/h4x/app.png"
+title = "h4x rebuilt Hexe.app launch screenshot"
+author = "Nyari (paloptic)"
+source = "Hexe.app window screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "d877551ac34bc6952a119b93b37ca3de2d5f35afe3ee8c15bd3fd6a5504e6e98"
+
+[[asset]]
+path = "proof/h42-balcony-after.png"
+title = "h42 viewport Balcony draw via debug server (timer fallback)"
+author = "Nyari (paloptic)"
+source = "Hexe.app window screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "58fd343ced074783efd23d27eba07270dd31fbd6fe936500514c00fa3ab03334"
