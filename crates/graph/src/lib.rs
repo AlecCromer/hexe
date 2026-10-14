@@ -11,6 +11,7 @@
 )]
 
 mod graph;
+pub mod hip;
 mod node;
 mod param;
 

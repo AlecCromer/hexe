@@ -1233,6 +1233,7 @@ dependencies = [
  "hexe-geo",
  "hexe-graph",
  "hexe-sop",
+ "serde_json",
  "sop-motion",
 ]
 
@@ -1251,6 +1252,9 @@ dependencies = [
 [[package]]
 name = "hexe-graph"
 version = "0.1.0"
+dependencies = [
+ "miniz_oxide 0.8.9",
+]
 
 [[package]]
 name = "hexe-sop"
