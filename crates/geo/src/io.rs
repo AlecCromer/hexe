@@ -1,6 +1,6 @@
 //! Extension-dispatched file IO: `read_any` / `write_any`.
 //! Read: `.geo .bgeo .bgeo.sc` -> `read_geo` (sniffs), `.obj`, `.ply`. Write: `.geo` (JSON), `.bgeo` (binary JSON), `.obj`, `.ply`
-//! (ascii); `.bgeo.sc` (blosc) is read-only.
+//! (ascii); `.bgeo.sc` (blosc) is read-only. Also read-only: Endorphin `.ens .nmc .nmb .nma` -> rest-pose geometry (`endorphin_geo`).
 //! Reads are size-capped by `MAX_BYTES` before the file is loaded.
 use crate::error::check_len;
 use crate::*;
@@ -11,6 +11,7 @@ enum Kind {
     Geo,
     Obj,
     Ply,
+    Endorphin,
 }
 fn kind_of(path: &Path) -> Result<Kind, GeoError> {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_ascii_lowercase();
@@ -21,9 +22,11 @@ fn kind_of(path: &Path) -> Result<Kind, GeoError> {
         Ok(Kind::Obj)
     } else if ext(".ply") {
         Ok(Kind::Ply)
+    } else if [".ens", ".nmc", ".nmb", ".nma"].iter().any(|e| ext(e)) {
+        Ok(Kind::Endorphin)
     } else {
         Err(GeoError::Unsupported(format!(
-            "{}: unknown geometry extension (.geo .bgeo .bgeo.sc .obj .ply)",
+            "{}: unknown geometry extension (.geo .bgeo .bgeo.sc .obj .ply .ens .nmc .nmb .nma)",
             path.display()
         )))
     }
@@ -41,6 +44,7 @@ pub fn read_any(path: impl AsRef<Path>) -> Result<Detail, GeoError> {
         Kind::Geo => read_geo(&bytes),
         Kind::Obj => read_obj(&bytes),
         Kind::Ply => read_ply(&bytes),
+        Kind::Endorphin => Ok(crate::endorphin_geo::document_detail(&crate::endorphin::read_endorphin(&bytes)?)),
     }
 }
 pub fn write_any(path: impl AsRef<Path>, d: &Detail) -> Result<(), GeoError> {
@@ -51,6 +55,7 @@ pub fn write_any(path: impl AsRef<Path>, d: &Detail) -> Result<(), GeoError> {
         Kind::Geo => return Err(GeoError::Unsupported("writing blosc-compressed .bgeo.sc (use .bgeo or .geo)".into())),
         Kind::Obj => write_obj(d)?,
         Kind::Ply => write_ply(d)?,
+        Kind::Endorphin => return Err(GeoError::Unsupported("Endorphin files are read-only".into())),
     };
     std::fs::write(path, bytes).map_err(|e| io(path, e))
 }

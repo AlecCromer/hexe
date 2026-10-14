@@ -7,7 +7,7 @@
 //! Axis conventions measured off the shipped limbs: Sphyl/Cylinder run along local Z (Sphyl p1 = cylinder length, p0 = radius),
 //! Cuboid params are full extents. Rest pose only: joint rotation channels are carried in `endo_animation`, not applied.
 use crate::endorphin::{Character, Document, Geometry, Limits, Node, Scene, Xf};
-use crate::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
+use crate::{AttrClass, AttrData, Attribute, Detail, Group, TypeInfo};
 use serde_json::Value;
 
 const SIDES: usize = 10;
@@ -254,6 +254,26 @@ impl B {
         d.add_attr(str_attr("shape", pr, &c.shape));
         d.add_attr(str_attr("character", pr, &c.character));
         d.add_attr(f32_attr("mass", pr, c.mass));
+        // Prim groups for blast/selection: one per kind (`bone collision inertial ground`) and one per character (`char_<name>`).
+        let mut keys: Vec<(String, Vec<bool>)> = Vec::new();
+        for (i, (k, ch)) in c.kind.iter().zip(&c.character).enumerate() {
+            for name in [k.clone(), if ch.is_empty() { String::new() } else { format!("char_{ch}") }] {
+                if name.is_empty() {
+                    continue;
+                }
+                let at = match keys.iter().position(|(n, _)| *n == name) {
+                    Some(a) => a,
+                    None => {
+                        keys.push((name, vec![false; c.kind.len()]));
+                        keys.len() - 1
+                    }
+                };
+                if let Some(m) = keys.get_mut(at).and_then(|(_, m)| m.get_mut(i)) {
+                    *m = true;
+                }
+            }
+        }
+        d.groups.extend(keys.into_iter().map(|(name, mask)| Group { name, class: pr, mask }));
         d.add_attr(str_attr("joint", pt, &c.pj));
         d.add_attr(str_attr("jtype", pt, &c.pjtype));
         d.add_attr(str_attr("character", pt, &c.pchar));
@@ -283,12 +303,6 @@ fn nodes_json<'a>(ns: impl Iterator<Item = &'a Node>) -> String {
 
 fn scene_detail(s: &Scene) -> Detail {
     let mut b = B::default();
-    if s.use_default_ground {
-        b.ground(10.0, 10);
-    }
-    if let Some(e) = &s.environment {
-        b.character(e, None);
-    }
     for c in &s.characters {
         let g = |p: &str| s.channel0(&c.name, p);
         let root = match (g("root.tx"), g("root.ty"), g("root.tz")) {
@@ -296,6 +310,14 @@ fn scene_detail(s: &Scene) -> Detail {
             _ => None,
         };
         b.character(c, root);
+    }
+    if s.use_default_ground {
+        // Default ground = one y=0 quad sized to the content (1.25x its horizontal reach, 2..40 m).
+        let reach = b.d.p().iter().map(|p| p[0].abs().max(p[2].abs())).fold(0.0f32, f32::max);
+        b.ground((reach * 1.25).clamp(2.0, 40.0), 1);
+    }
+    if let Some(e) = &s.environment {
+        b.character(e, None);
     }
     let mut d = b.finish();
     detail_str(&mut d, "endo_kind", "scene");

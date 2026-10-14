@@ -1,6 +1,6 @@
 //! `endo-survey <Resources-dir> [--out SURVEY.md]` and `open <file.ens|.nmc|.nmb|.nma> [--out scene.json]`.
 //! Clean-room from data: the survey is the vocabulary of the sample corpus, nothing else is consulted.
-use hexe_geo::endorphin::{self, Vocab};
+use hexe_geo::endorphin::{self, Document, Vocab};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -207,4 +207,70 @@ pub fn survey_cmd(args: &[String]) -> Result<String, String> {
         }
         None => Ok(md),
     }
+}
+
+/// `.ens .nmc .nmb .nma` (case-insensitive).
+pub fn is_endo(path: &str) -> bool {
+    let l = path.to_ascii_lowercase();
+    [".ens", ".nmc", ".nmb", ".nma"].iter().any(|e| l.ends_with(e))
+}
+
+/// One-node graph (`file` SOP -> the absolute Endorphin path, display on it): the file SOP reads Endorphin via `read_any`.
+pub fn scene_json(file: &str) -> Result<String, String> {
+    let abs = std::fs::canonicalize(file).map_err(|e| format!("{file}: {e}"))?;
+    Ok(format!(
+        "{{\"nodes\":[{{\"name\":\"endo\",\"type\":\"file\",\"params\":{{\"file\":{:?}}}}}],\"display\":\"endo\"}}\n",
+        abs.display().to_string()
+    ))
+}
+
+/// `open <file> [--out scene.json] [--geo out.geo]`: read an Endorphin file, write the hexe graph (and optionally the geometry).
+pub fn open_cmd(args: &[String]) -> Result<String, String> {
+    let (mut file, mut out, mut geo) = (None, None, None);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--out" | "-o" => out = Some(it.next().ok_or("open: --out needs a path")?.clone()),
+            "--geo" => geo = Some(it.next().ok_or("open: --geo needs a path")?.clone()),
+            f if f.starts_with('-') => return Err(format!("open: unknown option `{f}`")),
+            p if file.is_none() => file = Some(p.to_string()),
+            x => return Err(format!("open: unexpected argument `{x}`")),
+        }
+    }
+    let file = file.ok_or("usage: hexe-cli open <file.ens|.nmc|.nmb|.nma> [--out scene.json] [--geo out.geo]")?;
+    if !is_endo(&file) {
+        return Err(format!("open: `{file}` is not .ens/.nmc/.nmb/.nma"));
+    }
+    let bytes = read_capped(Path::new(&file))?;
+    let doc = endorphin::read_endorphin(&bytes).map_err(|e| format!("{file}: {e}"))?;
+    let d = hexe_geo::endorphin_geo::document_detail(&doc);
+    let stem = Path::new(&file).file_stem().and_then(|s| s.to_str()).unwrap_or("endorphin").replace(' ', "_");
+    let out = out.unwrap_or_else(|| format!("{stem}.hexe.json"));
+    std::fs::write(&out, scene_json(&file)?).map_err(|e| format!("{out}: {e}"))?;
+    if let Some(g) = &geo {
+        hexe_geo::write_any(g, &d).map_err(|e| format!("{g}: {e}"))?;
+    }
+    let (kind, chars, joints, bodies, behaviours) = match &doc {
+        Document::Scene(s) => {
+            let cs: Vec<_> = s.characters.iter().chain(s.environment.iter()).collect();
+            (
+                "scene",
+                cs.len(),
+                cs.iter().map(|c| c.joints.len()).sum(),
+                cs.iter().map(|c| c.bodies.len()).sum(),
+                s.behaviours.len(),
+            )
+        }
+        Document::Character(c) => ("character", 1, c.joints.len(), c.bodies.len(), 0),
+        Document::Behaviour(_) => ("behaviour", 0, 0, 0, 1),
+        Document::Pose(_) => ("pose", 0, 0, 0, 0),
+        Document::Unknown(_) => ("unknown", 0, 0, 0, 0),
+    };
+    let (lo, hi) = d.bbox();
+    Ok(format!(
+        "opened {kind} {file}: {chars} characters, {joints} joints, {bodies} bodies, {behaviours} behaviours -> {} points, {} prims, bbox {lo:?}..{hi:?}; graph {out}{}\n",
+        d.point_count,
+        d.prim_count(),
+        geo.map(|g| format!(", geo {g}")).unwrap_or_default()
+    ))
 }

@@ -185,3 +185,17 @@ fn scene_detail_for_real_scenes_is_non_empty_and_finite() {
         );
     }
 }
+
+#[test]
+fn scene_detail_groups_split_kinds_and_characters() {
+    use super::endorphin_geo::document_detail;
+    use crate::AttrClass;
+    let Some(root) = resources() else { return };
+    let Ok(bytes) = std::fs::read(root.join("Scenes/Sample Scenes/Balcony.ens")) else { return };
+    let d = document_detail(&read_endorphin(&bytes).unwrap());
+    for g in ["bone", "collision", "ground", "char_character01", "char_background"] {
+        let grp = d.group(AttrClass::Prim, g).unwrap_or_else(|| panic!("group {g}"));
+        assert_eq!(grp.mask.len(), d.prim_count() as usize);
+        assert!(grp.mask.iter().any(|&m| m), "{g} empty");
+    }
+}
