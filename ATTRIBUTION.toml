@@ -164,3 +164,27 @@ author = "Nyari (paloptic)"
 source = "Hexe.app window screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
 licence = "MIT"
 sha256 = "46163a76c0e4dd1922783c47fc48ab2d79a2622abbaa7957982c88788673b41c"
+
+[[asset]]
+path = "proof/h43/balcony_frame0.png"
+title = "h43 scene pose proof (balcony_frame0)"
+author = "Nyari (paloptic)"
+source = "hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "bf87ff2633026702da198364356aac9f112c26fedb8beebd75e4770a333dfe2c"
+
+[[asset]]
+path = "proof/h43/keyed_catchrope_f1.png"
+title = "h43 scene pose proof (keyed_catchrope_f1)"
+author = "Nyari (paloptic)"
+source = "hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "c3973fe21d02b14d4bcd61664371ead6a824c4535beda27e7c2aa627267b7ff4"
+
+[[asset]]
+path = "proof/h43/keyed_catchrope_f120.png"
+title = "h43 scene pose proof (keyed_catchrope_f120)"
+author = "Nyari (paloptic)"
+source = "hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "998517d29da0ebe9c5b54cd0632929ab8e75de44da9e8b6e037c8e8197542285"

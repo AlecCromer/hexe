@@ -22,3 +22,6 @@
 | asset | proof/h42/installed.png | Nyari (paloptic) | Hexe.app window screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
 | fetched | three | mrdoob and three.js contributors | https://github.com/mrdoob/three.js (npm three@0.180.0) | MIT |
 | fetched | earcut | Mapbox | https://github.com/mapbox/earcut (npm earcut@3.2.4) | ISC |
+| asset | proof/h43/balcony_frame0.png | Nyari (paloptic) | hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
+| asset | proof/h43/keyed_catchrope_f1.png | Nyari (paloptic) | hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
+| asset | proof/h43/keyed_catchrope_f120.png | Nyari (paloptic) | hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
