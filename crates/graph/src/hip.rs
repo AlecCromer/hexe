@@ -441,7 +441,16 @@ mod tests {
         let mut o = Vec::new();
         let h = format!(
             "070707{:06o}{:06o}{:06o}{:06o}{:06o}{:06o}{:06o}{:011o}{:06o}{:011o}",
-            1, 1, 0o644, 0, 0, 1, 0, 0, name.len() + 1, data.len()
+            1,
+            1,
+            0o644,
+            0,
+            0,
+            1,
+            0,
+            0,
+            name.len() + 1,
+            data.len()
         );
         o.extend_from_slice(h.as_bytes());
         o.extend_from_slice(name.as_bytes());
@@ -453,7 +462,19 @@ mod tests {
         let mut o = Vec::new();
         let h = format!(
             "070701{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}",
-            1, 0o644, 0, 0, 1, 0, data.len(), 0, 0, 0, 0, name.len() + 1, 0
+            1,
+            0o644,
+            0,
+            0,
+            1,
+            0,
+            data.len(),
+            0,
+            0,
+            0,
+            0,
+            name.len() + 1,
+            0
         );
         o.extend_from_slice(h.as_bytes());
         o.extend_from_slice(name.as_bytes());
@@ -517,7 +538,10 @@ mod tests {
         a.extend(odc("obj/geo1/box1.parm", b"{\nversion 0.8\nsize\t[ 0\tlocks=0 ]\t(\t2\t2\t2\t)\n}\n"));
         a.extend(odc("obj/geo1/box1.def", b"flags =  lock off display off render off\ninputs\n{\n}\n"));
         a.extend(odc("obj/geo1/xf.init", b"type = xform\n"));
-        a.extend(odc("obj/geo1/xf.def", b"position 1 2\nflags =  lock off display on render on bypass on\ninputs\n{\n0 \t\"box1\" 0 1\n}\n"));
+        a.extend(odc(
+            "obj/geo1/xf.def",
+            b"position 1 2\nflags =  lock off display on render on bypass on\ninputs\n{\n0 \t\"box1\" 0 1\n}\n",
+        ));
         a.extend(odc("TRAILER!!!", b""));
         let s = read_hip(&a).unwrap();
         assert_eq!(s.frame(), 25.0);

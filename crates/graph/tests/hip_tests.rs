@@ -6,7 +6,8 @@ const CHAIN: &[u8] = include_bytes!("../../../fixtures/hip/authored-chain.hip");
 const CHAIN_GZ: &[u8] = include_bytes!("../../../fixtures/hip/authored-chain.hip.gz");
 /// Member list written by the real `hexpand authored-chain.hip` (`.contents`).
 const CHAIN_CONTENTS: &str = include_str!("../../../fixtures/hip/authored-chain.contents");
-const HOUDINI: &str = "/Applications/Houdini/Houdini20.5.487/Frameworks/Houdini.framework/Versions/20.5/Resources/houdini/";
+const HOUDINI: &str =
+    "/Applications/Houdini/Houdini20.5.487/Frameworks/Houdini.framework/Versions/20.5/Resources/houdini/";
 /// The 12 corpus files (`fixtures/hip/MANIFEST.md`), relative to `HOUDINI`.
 const CORPUS: [&str; 12] = [
     "help/files/expression_cookbook/AnimationCycleExample.hip",
@@ -60,7 +61,9 @@ fn hip_corpus_parse_12() {
         let bytes = std::fs::read(&path).unwrap();
         let scene = read_hip(&bytes).unwrap_or_else(|e| panic!("{rel}: {e}"));
         let entries = read_cpio(&bytes).unwrap();
-        let depth2 = |n: &str, ext: &str| n.strip_suffix(ext).is_some_and(|p| p.starts_with("obj/") && p.matches('/').count() == 2);
+        let depth2 = |n: &str, ext: &str| {
+            n.strip_suffix(ext).is_some_and(|p| p.starts_with("obj/") && p.matches('/').count() == 2)
+        };
         let nodes = entries.iter().filter(|e| depth2(&e.name, ".init")).count();
         let mut wires = 0;
         for e in entries.iter().filter(|e| depth2(&e.name, ".def")) {
@@ -71,7 +74,8 @@ fn hip_corpus_parse_12() {
             }
         }
         let got_nodes: usize = scene.networks.iter().map(|n| n.nodes.len()).sum();
-        let got_wires: usize = scene.networks.iter().flat_map(|n| &n.nodes).map(|n| n.inputs.iter().flatten().count()).sum();
+        let got_wires: usize =
+            scene.networks.iter().flat_map(|n| &n.nodes).map(|n| n.inputs.iter().flatten().count()).sum();
         println!("{rel}: nodes {got_nodes}/{nodes} wires {got_wires}/{wires}");
         assert_eq!((got_nodes, got_wires), (nodes, wires), "{rel}");
         ok += 1;
@@ -82,7 +86,9 @@ fn hip_corpus_parse_12() {
 /// Every `.hip*` of the install parses, except the MIME-wrapped variant (reported as such, never a panic).
 #[test]
 fn hip_install_wide_parse() {
-    let Ok(out) = std::process::Command::new("find").args(["/Applications/Houdini", "-name", "*.hip*"]).output() else { return };
+    let Ok(out) = std::process::Command::new("find").args(["/Applications/Houdini", "-name", "*.hip*"]).output() else {
+        return;
+    };
     let (mut ok, mut mime) = (0, 0);
     for p in String::from_utf8_lossy(&out.stdout).lines() {
         let Ok(b) = std::fs::read(p) else { continue };

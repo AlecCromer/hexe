@@ -349,7 +349,15 @@ impl Session {
     pub fn graph_load(&mut self, path: &str) -> Result<(), String> {
         let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
         check_scene_size(path, meta.len())?;
-        let json = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+        let json = if hexe_sop::is_hip_path(path) {
+            // File -> Open on a Houdini .hip: first /obj geo container with SOPs (no-twin nodes load as `unsupported:<type>`).
+            let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+            let imp = hexe_sop::import_hip(&bytes).map_err(|e| format!("{path}: {e}"))?;
+            let g = imp.geos.first().ok_or_else(|| format!("{path}: no /obj geo network with SOP nodes"))?;
+            serde_json::to_string(&g.scene).map_err(|e| e.to_string())?
+        } else {
+            std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?
+        };
         let l =
             hexe_sop::load_scene_with_base(&json, &self.reg, Path::new(path).parent()).map_err(|e| e.to_string())?;
         self.graph = l.graph;
@@ -1243,6 +1251,19 @@ mod tests {
         assert_eq!((g.nodes.len(), g.display), (1, Some(b)), "display falls back to a live node");
         assert!(s.node_remove(pe).is_err());
         assert!(s.node_add("no-such-sop", 0.0, 0.0).is_err());
+    }
+
+    /// H40: File -> Open routes a Houdini `.hip` through the importer (4 nodes, 3 wires, merge1 displayed).
+    #[test]
+    fn load_hip_opens_houdini_scene() {
+        let mut s = Session::new();
+        let p = format!("{}/../../../fixtures/hip/authored-chain.hip", env!("CARGO_MANIFEST_DIR"));
+        s.graph_load(&p).expect("hip loads");
+        let g = s.graph_get();
+        assert_eq!((g.nodes.len(), g.edges.len()), (4, 3));
+        assert!(g.display.is_some());
+        assert_eq!(s.cook().error, None);
+        assert!(s.graph_load("/nonexistent/x.hip").is_err());
     }
 
     #[test]

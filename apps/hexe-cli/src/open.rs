@@ -44,7 +44,15 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
     let bytes = std::fs::read(&a.file).map_err(|e| format!("{}: {e}", a.file))?;
     let imp = hexe_sop::import_hip(&bytes).map_err(|e| e.to_string())?;
     let mut out = String::new();
-    let _ = writeln!(out, "{}: frame {} @ {} fps, {} geo network(s), {} other container(s) skipped", a.file, imp.frame, imp.fps, imp.geos.len(), imp.skipped.len());
+    let _ = writeln!(
+        out,
+        "{}: frame {} @ {} fps, {} geo network(s), {} other container(s) skipped",
+        a.file,
+        imp.frame,
+        imp.fps,
+        imp.geos.len(),
+        imp.skipped.len()
+    );
     for g in &imp.geos {
         let _ = writeln!(
             out,
@@ -80,7 +88,8 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
         }
         let doc = serde_json::json!({ "file": a.file, "frame": imp.frame, "fps": imp.fps, "skipped": imp.skipped, "geos": report });
         let p = format!("{dir}/import.json");
-        std::fs::write(&p, serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?).map_err(|e| format!("{p}: {e}"))?;
+        std::fs::write(&p, serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("{p}: {e}"))?;
         let _ = writeln!(out, "wrote {} scene(s) + import.json -> {dir}", imp.geos.len());
     }
     if a.scene_out.is_some() || a.cook_out.is_some() {
@@ -94,7 +103,11 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
             let time = ((imp.frame - 1.0) / imp.fps.max(1.0)) as f32;
             let (bytes, points, prims) = crate::cook_scene_range(&json, time, None, None)?;
             std::fs::write(p, bytes).map_err(|e| format!("{p}: {e}"))?;
-            let _ = writeln!(out, "cooked `{}` display `{}` at t={time}: {points} points, {prims} prims -> {p}", g.name, g.display);
+            let _ = writeln!(
+                out,
+                "cooked `{}` display `{}` at t={time}: {points} points, {prims} prims -> {p}",
+                g.name, g.display
+            );
         }
     }
     if a.scene_out.is_none() && a.cook_out.is_none() && a.all_out.is_none() {

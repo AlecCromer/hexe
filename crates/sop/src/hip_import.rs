@@ -110,13 +110,15 @@ fn convert(ty: &str, spec: &ParamSpec, p: &HipParm) -> Result<Option<Value>, Str
         }),
         ParamValue::Menu(_) => match first.plain() {
             HipValue::Num(x) => ParamValue::Menu(*x as u32),
-            HipValue::Str(s) => match spec.menu.iter().position(|(tok, _)| tok == s).or_else(|| menu_position(ty, &spec.name, s)) {
-                Some(i) => ParamValue::Menu(i as u32),
-                None => match s.parse::<u32>() {
-                    Ok(i) => ParamValue::Menu(i),
-                    Err(_) => return Err(format!("menu token `{s}` unknown for {ty}.{}", spec.name)),
-                },
-            },
+            HipValue::Str(s) => {
+                match spec.menu.iter().position(|(tok, _)| tok == s).or_else(|| menu_position(ty, &spec.name, s)) {
+                    Some(i) => ParamValue::Menu(i as u32),
+                    None => match s.parse::<u32>() {
+                        Ok(i) => ParamValue::Menu(i),
+                        Err(_) => return Err(format!("menu token `{s}` unknown for {ty}.{}", spec.name)),
+                    },
+                }
+            }
             HipValue::Chan(..) => return Err("nested channel".into()),
         },
     };
@@ -199,7 +201,10 @@ fn import_network(reg: &Registry, net: &HipNetwork) -> GeoImport {
             if let Some(inp) = inp {
                 if i >= ports {
                     dropped_wires += 1;
-                    notes.push(format!("{}: input {i} from `{}` dropped (hexe `{}` has {ports} input port(s))", n.name, inp.src, n.ty));
+                    notes.push(format!(
+                        "{}: input {i} from `{}` dropped (hexe `{}` has {ports} input port(s))",
+                        n.name, inp.src, n.ty
+                    ));
                 } else if names.contains(inp.src.as_str()) {
                     edges.push(json!([inp.src, inp.output, n.name, i]));
                 } else {
@@ -324,7 +329,9 @@ mod tests {
         let mut todo = vec![start.to_string()];
         while let Some(n) = todo.pop() {
             if seen.insert(n.clone()) {
-                todo.extend(edges.iter().filter(|e| e[2] == n.as_str()).filter_map(|e| e[0].as_str().map(String::from)));
+                todo.extend(
+                    edges.iter().filter(|e| e[2] == n.as_str()).filter_map(|e| e[0].as_str().map(String::from)),
+                );
             }
         }
         seen
@@ -339,7 +346,10 @@ mod tests {
         for line in list.lines().filter(|l| !l.is_empty()) {
             let (id, path) = line.split_once('\t').unwrap();
             let name = path.rsplit('/').next().unwrap();
-            let imp = match std::fs::read(path).map_err(|e| e.to_string()).and_then(|b| import_hip(&b).map_err(|e| e.to_string())) {
+            let imp = match std::fs::read(path)
+                .map_err(|e| e.to_string())
+                .and_then(|b| import_hip(&b).map_err(|e| e.to_string()))
+            {
                 Ok(i) => i,
                 Err(e) => {
                     rows += &format!("{id}\t{name}\t-\t0\t0\tPARSE-ERR {e}\n");
@@ -348,18 +358,37 @@ mod tests {
             };
             for g in &imp.geos {
                 let up = upstream(&g.scene, &g.display);
-                let bad: Vec<&str> = g.unsupported.iter().filter(|u| up.contains(u.split(':').next().unwrap_or(""))).map(String::as_str).collect();
+                let bad: Vec<&str> = g
+                    .unsupported
+                    .iter()
+                    .filter(|u| up.contains(u.split(':').next().unwrap_or("")))
+                    .map(String::as_str)
+                    .collect();
                 let scene = serde_json::to_string(&g.scene).unwrap();
                 let verdict = if !bad.is_empty() {
-                    format!("UNSUPPORTED-NODE {}", bad.join(" ").replace(|c: char| c == ':', "/"))
+                    format!("UNSUPPORTED-NODE {}", bad.join(" ").replace(':', "/"))
                 } else {
                     match std::fs::read(format!("{dir}/{id}/{}.geo", g.name)) {
                         Err(_) => "NO-HOUDINI-GEO".to_string(),
                         Ok(h) => match houdini_twin_at(&scene, &h, time_of(&imp)) {
                             Ok(()) => "MATCH".to_string(),
-                            Err(e) if e.starts_with("cook:") => format!("HEXE-ERR {}", e.chars().take(110).collect::<String>()),
+                            Err(e) if e.starts_with("cook:") => {
+                                format!("HEXE-ERR {}", e.chars().take(110).collect::<String>())
+                            }
                             Err(e) => {
-                                let kind = if e.starts_with("scene:") { "LOAD-ERR" } else if g.animated.iter().any(|a| up.contains(a)) { "PARM-DIFF(animated)" } else if e.starts_with("counts") { "COUNT-DIFF" } else if e.starts_with("P[") { "P-DIFF" } else if e.starts_with("prim") { "TOPO-DIFF" } else { "ATTR-DIFF" };
+                                let kind = if e.starts_with("scene:") {
+                                    "LOAD-ERR"
+                                } else if g.animated.iter().any(|a| up.contains(a)) {
+                                    "PARM-DIFF(animated)"
+                                } else if e.starts_with("counts") {
+                                    "COUNT-DIFF"
+                                } else if e.starts_with("P[") {
+                                    "P-DIFF"
+                                } else if e.starts_with("prim") {
+                                    "TOPO-DIFF"
+                                } else {
+                                    "ATTR-DIFF"
+                                };
                                 format!("{kind} {}", e.chars().take(110).collect::<String>())
                             }
                         },
