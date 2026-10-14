@@ -51,7 +51,7 @@ pub use bjson::{bjson_to_value, read_geo_bjson, value_to_bjson, write_geo_bjson}
 pub use blosc::{read_geo_sc, sc_decompress};
 pub use error::GeoError;
 pub use gpd::read_geo_gpd;
-pub use io::{read_any, write_any};
+pub use io::{is_endorphin_path, read_any, read_any_at, read_endorphin_file, write_any};
 pub use json_read::read_geo_json;
 pub use json_write::write_geo_json;
 pub use obj::{read_obj, write_obj};

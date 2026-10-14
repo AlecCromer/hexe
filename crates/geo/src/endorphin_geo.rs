@@ -175,8 +175,9 @@ impl B {
         }
     }
 
-    fn character(&mut self, c: &Character, root_p: Option<[f32; 3]>) {
-        let w = c.world(root_p);
+    /// Place `c` at `place` (scene placement) with parent-local `locals` (rest, scene pose or keyed).
+    fn character(&mut self, c: &Character, locals: &[Xf], place: &Xf) {
+        let w: Vec<Xf> = c.world_of(locals).iter().map(|x| place.mul(x)).collect();
         let base = self.d.point_count;
         let r = self.d.add_points(c.joints.len() as u32);
         for (i, j) in c.joints.iter().enumerate() {
@@ -301,15 +302,10 @@ fn nodes_json<'a>(ns: impl Iterator<Item = &'a Node>) -> String {
     Value::Array(ns.map(Node::to_json).collect()).to_string()
 }
 
-fn scene_detail(s: &Scene) -> Detail {
+fn scene_detail(s: &Scene, t: f32) -> Detail {
     let mut b = B::default();
     for c in &s.characters {
-        let g = |p: &str| s.channel0(&c.name, p);
-        let root = match (g("root.tx"), g("root.ty"), g("root.tz")) {
-            (Some(x), Some(y), Some(z)) => Some([x, y, z]),
-            _ => None,
-        };
-        b.character(c, root);
+        b.character(c, &s.posed_locals(c, t), &c.xf);
     }
     if s.use_default_ground {
         // Default ground = one y=0 quad sized to the content (1.25x its horizontal reach, 2..40 m).
@@ -317,10 +313,12 @@ fn scene_detail(s: &Scene) -> Detail {
         b.ground((reach * 1.25).clamp(2.0, 40.0), 1);
     }
     if let Some(e) = &s.environment {
-        b.character(e, None);
+        b.character(e, &s.posed_locals(e, t), &e.xf);
     }
     let mut d = b.finish();
     detail_str(&mut d, "endo_kind", "scene");
+    d.add_attr(f32_attr("endo_time", AttrClass::Detail, vec![t]));
+    d.add_attr(f32_attr("endo_duration", AttrClass::Detail, vec![s.duration()]));
     d.add_attr(Attribute {
         name: "endo_gravity".into(),
         class: AttrClass::Detail,
@@ -339,13 +337,17 @@ fn scene_detail(s: &Scene) -> Detail {
     d
 }
 
-/// Rest-pose geometry + detail attrs for any opened Endorphin file.
+/// Scene pose at frame 0 (`t = 0`) + detail attrs for any opened Endorphin file.
 pub fn document_detail(doc: &Document) -> Detail {
+    document_detail_at(doc, 0.0)
+}
+/// Like `document_detail`; `t` seconds samples keyed scene channels (non-scene documents ignore it).
+pub fn document_detail_at(doc: &Document, t: f32) -> Detail {
     let mut d = match doc {
-        Document::Scene(s) => return scene_detail(s),
+        Document::Scene(s) => return scene_detail(s, t),
         Document::Character(c) => {
             let mut b = B::default();
-            b.character(c, None);
+            b.character(c, &c.rest_locals(), &Xf::default());
             let mut d = b.finish();
             detail_str(&mut d, "endo_kind", "character");
             d

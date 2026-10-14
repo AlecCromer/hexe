@@ -47,6 +47,25 @@ pub fn read_any(path: impl AsRef<Path>) -> Result<Detail, GeoError> {
         Kind::Endorphin => Ok(crate::endorphin_geo::document_detail(&crate::endorphin::read_endorphin(&bytes)?)),
     }
 }
+/// `true` for `.ens .nmc .nmb .nma` (time-sampled by `endo_time`).
+pub fn is_endorphin_path(path: impl AsRef<Path>) -> bool {
+    matches!(kind_of(path.as_ref()), Ok(Kind::Endorphin))
+}
+/// Size-capped read + parse of an Endorphin file (callers cache the `Document` and sample it with `document_detail_at`).
+pub fn read_endorphin_file(path: impl AsRef<Path>) -> Result<crate::endorphin::Document, GeoError> {
+    let path = path.as_ref();
+    let len = std::fs::metadata(path).map_err(|e| io(path, e))?.len();
+    check_len(usize::try_from(len).unwrap_or(usize::MAX))?;
+    crate::endorphin::read_endorphin(&std::fs::read(path).map_err(|e| io(path, e))?)
+}
+/// `read_any`, sampling keyed Endorphin scene channels at `t` seconds (other formats ignore `t`).
+pub fn read_any_at(path: impl AsRef<Path>, t: f32) -> Result<Detail, GeoError> {
+    let path = path.as_ref();
+    if is_endorphin_path(path) {
+        return Ok(crate::endorphin_geo::document_detail_at(&read_endorphin_file(path)?, t));
+    }
+    read_any(path)
+}
 pub fn write_any(path: impl AsRef<Path>, d: &Detail) -> Result<(), GeoError> {
     let path = path.as_ref();
     let bytes = match kind_of(path)? {

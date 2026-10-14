@@ -7,12 +7,14 @@
 use crate::SopNode;
 use hexe_geo::Detail;
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("file", ParamValue::S(String::new())).label("Geometry File"),
+        ParamSpec::new("endo_time", ParamValue::F(-1.0)).label("Endorphin Time (s, <0 = $T)").range(-1.0, 600.0),
         ParamSpec::new("missing", ParamValue::Menu(0))
             .label("Missing File")
             .menu(&[("error", "Report Error"), ("no_geometry", "No Geometry")]),
@@ -20,13 +22,18 @@ pub fn spec() -> Vec<ParamSpec> {
 }
 
 pub fn new() -> Box<SopNode> {
-    Box::new(FileSop { specs: spec(), cache: Mutex::new(None) })
+    Box::new(FileSop { specs: spec(), cache: Mutex::new(None), endo: Mutex::new(None), keyed: AtomicBool::new(false) })
 }
 
 type Key = (String, Option<SystemTime>, u64);
+/// Parsed Endorphin document + the last sampled detail `(time bits, detail)`, so a timeline scrub only re-poses.
+type EndoSlot = (Key, Arc<hexe_geo::endorphin::Document>, Option<(u32, Arc<Detail>)>);
 struct FileSop {
     specs: Vec<ParamSpec>,
     cache: Mutex<Option<(Key, Arc<Detail>)>>,
+    endo: Mutex<Option<EndoSlot>>,
+    /// Set once an Endorphin file was cooked: only then does the output depend on `ctx.time`.
+    keyed: AtomicBool,
 }
 
 impl Node<Detail> for FileSop {
@@ -38,6 +45,9 @@ impl Node<Detail> for FileSop {
     }
     fn params(&self) -> &[ParamSpec] {
         &self.specs
+    }
+    fn time_dependent(&self) -> bool {
+        self.keyed.load(Ordering::Relaxed)
     }
     fn cook(&self, ctx: &CookCtx, _: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
         let path =
@@ -55,6 +65,28 @@ impl Node<Detail> for FileSop {
             _ => return Err(CookError::Failed(format!("file not found: `{path}`"))),
         };
         let key: Key = (path.to_string(), meta.modified().ok(), meta.len());
+        if hexe_geo::is_endorphin_path(path) {
+            self.keyed.store(true, Ordering::Relaxed);
+            let endo_time = ctx.params.float("endo_time").unwrap_or(-1.0);
+            let t = if endo_time < 0.0 { ctx.time } else { endo_time };
+            let t = if t.is_finite() { t.max(0.0) } else { 0.0 };
+            let mut slot = self.endo.lock().map_err(|_| CookError::Failed("endorphin cache poisoned".into()))?;
+            if slot.as_ref().is_none_or(|(k, ..)| *k != key) {
+                let doc = hexe_geo::read_endorphin_file(path).map_err(|e| CookError::Failed(e.to_string()))?;
+                *slot = Some((key, Arc::new(doc), None));
+            }
+            let Some((_, doc, last)) = slot.as_mut() else {
+                return Err(CookError::Failed("endorphin cache empty".into()));
+            };
+            if let Some((bits, d)) = last
+                && *bits == t.to_bits()
+            {
+                return Ok(Arc::clone(d));
+            }
+            let d = Arc::new(hexe_geo::endorphin_geo::document_detail_at(doc, t));
+            *last = Some((t.to_bits(), Arc::clone(&d)));
+            return Ok(d);
+        }
         if let Ok(slot) = self.cache.lock()
             && let Some((k, d)) = slot.as_ref()
             && *k == key

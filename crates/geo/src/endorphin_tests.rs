@@ -199,3 +199,88 @@ fn scene_detail_groups_split_kinds_and_characters() {
         assert!(grp.mask.iter().any(|&m| m), "{g} empty");
     }
 }
+
+// ---------------------------------------------------------------- h43: scene pose, placement, timeline
+fn joint_world(d: &crate::Detail, name: &str, ch: &str) -> [f32; 3] {
+    use crate::{AttrClass, AttrData};
+    let str_of = |n: &str| match &d.attr(AttrClass::Point, n).unwrap().data {
+        AttrData::Str { idx, table } => idx.iter().map(|&i| table[i as usize].clone()).collect::<Vec<_>>(),
+        _ => panic!("str"),
+    };
+    let (j, c) = (str_of("joint"), str_of("character"));
+    let i = (0..j.len()).find(|&i| j[i] == name && c[i] == ch).unwrap_or_else(|| panic!("joint {ch}.{name}"));
+    d.p()[i]
+}
+fn close(a: [f32; 3], b: [f32; 3], tol: f32) -> bool {
+    a.iter().zip(&b).all(|(x, y)| (x - y).abs() <= tol)
+}
+const XF_I: &str = r#"<Vi x="1" y="0" z="0"/><Vj x="0" y="1" z="0"/><Vk x="0" y="0" z="1"/>"#;
+
+/// Hand-computed: place = Ry(90) at (10,0,5); root pose = Rz(90) at (0,2,0); child A rest (0.5,0,0).
+/// A_local_world = Rz90*(0.5,0,0)+(0,2,0) = (0,2.5,0); Ry90*(0,2.5,0)+(10,0,5) = (10,2.5,5).
+#[test]
+fn scene_pose_and_character_placement_apply_by_hand() {
+    use super::endorphin_geo::document_detail;
+    let xml = format!(
+        r#"<Scene useDefaultGround="false"><Characters><Character name="c1">
+<TransformMatrix><Vi x="0" y="0" z="-1"/><Vj x="0" y="1" z="0"/><Vk x="1" y="0" z="0"/><Vp x="10" y="0" z="5"/></TransformMatrix>
+<Skeleton name="root"><TransformMatrix>{XF_I}<Vp x="0" y="1" z="0"/></TransformMatrix><ChildJoints>
+<SkeletalJoint name="A"><TransformMatrix>{XF_I}<Vp x="0.5" y="0" z="0"/></TransformMatrix></SkeletalJoint></ChildJoints></Skeleton></Character></Characters>
+<Poses><Pose character="c1" refFrame="Parent"><Relationships><Relationship name="root"><TransformMatrix>
+<Vi x="0" y="1" z="0"/><Vj x="-1" y="0" z="0"/><Vk x="0" y="0" z="1"/><Vp x="0" y="2" z="0"/></TransformMatrix></Relationship></Relationships></Pose></Poses></Scene>"#
+    );
+    let doc = Document::from_node(parse_xml(&xml).unwrap());
+    let d = document_detail(&doc);
+    assert!(close(joint_world(&d, "root", "c1"), [10.0, 2.0, 5.0], 1e-5), "root = place*pose.p");
+    assert!(close(joint_world(&d, "A", "c1"), [10.0, 2.5, 5.0], 1e-5), "{:?}", joint_world(&d, "A", "c1"));
+    // without the Pose the rest chain gives root (10,1,5), A = root + Ry90*(0.5,0,0) = (10,1,4.5)
+    let Document::Scene(mut s) = doc else { panic!("scene") };
+    s.poses.clear();
+    let d = document_detail(&Document::Scene(s));
+    assert!(close(joint_world(&d, "A", "c1"), [10.0, 1.0, 4.5], 1e-5));
+}
+
+/// Keyed channels: A.tx 0.5 -> 1.5 over t 0..1, root.quat identity -> Rz(90). At t=0.5: root rot 45 deg, A.tx = 1.
+/// A world = (0,1,0) + Rz45*(1,0,0) = (cos45, 1+sin45, 0).
+#[test]
+fn keyed_channels_sample_by_time() {
+    use super::endorphin_geo::document_detail_at;
+    let h = std::f32::consts::FRAC_1_SQRT_2;
+    let xml = format!(
+        r#"<Scene useDefaultGround="false"><Characters><Character name="c1"><Skeleton name="root"><TransformMatrix>{XF_I}<Vp x="0" y="1" z="0"/></TransformMatrix><ChildJoints>
+<SkeletalJoint name="A"><TransformMatrix>{XF_I}<Vp x="0.5" y="0" z="0"/></TransformMatrix></SkeletalJoint></ChildJoints></Skeleton></Character></Characters>
+<Animation refFrame="parent"><Channel name="c1.Joints.A.tx" type="linear"><Key x="0" y="0.5"/><Key x="1" y="1.5"/></Channel>
+<QuatChannel name="c1.root.quat" type="linear"><Key t="0" x="1" y="0" z="0" w="0"/><Key t="1" x="{h}" y="0" z="0" w="{h}"/></QuatChannel></Animation></Scene>"#
+    );
+    let doc = Document::from_node(parse_xml(&xml).unwrap());
+    let at = |t| joint_world(&document_detail_at(&doc, t), "A", "c1");
+    assert!(close(at(0.0), [0.5, 1.0, 0.0], 1e-5), "{:?}", at(0.0));
+    assert!(close(at(0.5), [h, 1.0 + h, 0.0], 1e-4), "{:?}", at(0.5));
+    assert!(close(at(1.0), [0.0, 2.5, 0.0], 1e-5), "{:?}", at(1.0));
+    assert!(close(at(9.0), at(1.0), 1e-6), "clamped past the last key");
+    let Document::Scene(s) = &doc else { panic!("scene") };
+    assert_eq!(s.duration(), 1.0);
+}
+
+/// Real Balcony: every character at its file placement; character02 root by hand from the XML:
+/// place Vp (0.6737,0,-3.7131) + Ry(-90)-ish basis (0,0,1),(0,1,0),(-1,0,0) applied to the pose root p (0.0027,0.5531,-0.444).
+#[test]
+fn balcony_characters_are_separated_and_posed() {
+    use super::endorphin_geo::document_detail;
+    let Some(root) = resources() else { return };
+    let Ok(bytes) = std::fs::read(root.join("Scenes/Sample Scenes/Balcony.ens")) else { return };
+    let d = document_detail(&read_endorphin(&bytes).unwrap());
+    let r: Vec<[f32; 3]> = (1..=4).map(|i| joint_world(&d, "root", &format!("character0{i}"))).collect();
+    assert!(close(r[1], [1.1177, 0.5531, -3.7104], 2e-3), "character02 root {:?}", r[1]);
+    for a in 0..4 {
+        for b in a + 1..4 {
+            let dist = (0..3).map(|k| (r[a][k] - r[b][k]).powi(2)).sum::<f32>().sqrt();
+            assert!(dist > 0.8, "character0{} and 0{} stacked: {dist}", a + 1, b + 1);
+        }
+    }
+    // character01 is placed 3 m up (placement y=3.0) + root ty 0.848
+    assert!((r[0][1] - 3.848).abs() < 5e-3, "{:?}", r[0]);
+    // posed, not T: character02's left knee is not at the rest offset below the hip
+    let (hip, knee) = (joint_world(&d, "LeftHipJoint", "character02"), joint_world(&d, "LeftKneeJoint", "character02"));
+    assert!((knee[1] - hip[1]).abs() < 0.3, "sitting thigh is ~horizontal: dy {}", knee[1] - hip[1]);
+}

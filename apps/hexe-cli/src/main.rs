@@ -1,4 +1,4 @@
-//! hexe-cli: `--version`, `cook <scene.json> --out <file.geo> [--time T]`, `nodes`, `info <geo>`, `oracle <case> [input]`.
+//! hexe-cli: `--version`, `cook <scene.json> --out <file.geo> [--time T | --frame N]`, `nodes`, `info <geo>`, `oracle <case> [input]`.
 //! Every command runs behind `catch_unwind` (AGENTS.md §4); every failure is one stderr line + exit 1.
 #![deny(
     clippy::unwrap_used,
@@ -17,7 +17,7 @@ use std::process::ExitCode;
 
 /// Largest scene file `cook` reads (hostile input is the default).
 const MAX_SCENE_BYTES: u64 = 64 << 20;
-const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | convert <in> <out> | info <geo-file> | open <file.hip|.ens|.nmc|.nmb|.nma> [format flags] (open --help) | endo-survey <Resources-dir> [--out md] | oracle <case> [input]";
+const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T | --frame N] | nodes | convert <in> <out> | info <geo-file> | open <file.hip|.ens|.nmc|.nmb|.nma> [format flags] (open --help) | endo-survey <Resources-dir> [--out md] | oracle <case> [input]";
 
 /// `open --help` text: per-format flags.
 const OPEN_HELP: &str = "usage: hexe-cli open <file.hip|.ens|.nmc|.nmb|.nma> [format flags]
@@ -174,6 +174,18 @@ fn parse_cook(args: &[String]) -> Result<CookArgs, String> {
         match a.as_str() {
             "--out" | "-o" => out = Some(it.next().ok_or("cook: --out needs a path")?.clone()),
             "--frames" => frames = Some(parse_frames(it.next().ok_or("cook: --frames needs A-B[xS]")?)?),
+            // `--frame N`: timeline $F (1-based) -> time = (N-1)/fps, the same mapping the app timeline uses.
+            "--frame" => {
+                let v = it.next().ok_or("cook: --frame needs a number")?;
+                let n = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --frame `{v}`"))?;
+                time = (n - 1.0) / hexe_graph::DEFAULT_FPS;
+            }
+            // `--frame N`: timeline $F (1-based) -> time = (N-1)/fps, the mapping the app timeline uses.
+            "--frame" => {
+                let v = it.next().ok_or("cook: --frame needs a number")?;
+                let n = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --frame `{v}`"))?;
+                time = (n - 1.0) / hexe_graph::DEFAULT_FPS;
+            }
             "--time" => {
                 let v = it.next().ok_or("cook: --time needs a number")?;
                 time = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --time `{v}`"))?;
@@ -184,7 +196,7 @@ fn parse_cook(args: &[String]) -> Result<CookArgs, String> {
         }
     }
     Ok(CookArgs {
-        scene: scene.ok_or("usage: hexe-cli cook <scene.json> --out <file.geo> [--time T]")?,
+        scene: scene.ok_or("usage: hexe-cli cook <scene.json> --out <file.geo> [--time T | --frame N]")?,
         out: out.ok_or("cook: --out <file.geo> is required")?,
         time,
         frames,

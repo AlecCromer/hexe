@@ -336,6 +336,22 @@ impl Xf {
     }
 }
 
+impl Xf {
+    /// Rotation matrix of the unit quaternion `(w, x, y, z)` as basis columns (column-vector convention, like `rot`).
+    pub fn from_quat(q: [f32; 4]) -> Xf {
+        let n = q.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if !n.is_finite() || n < 1e-12 {
+            return Xf::default();
+        }
+        let [w, x, y, z] = q.map(|v| v / n);
+        Xf {
+            i: [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y + w * z), 2.0 * (x * z - w * y)],
+            j: [2.0 * (x * y - w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z + w * x)],
+            k: [2.0 * (x * z + w * y), 2.0 * (y * z - w * x), 1.0 - 2.0 * (x * x + y * y)],
+            p: [0.0; 3],
+        }
+    }
+}
 /// `<Geometry type="Sphyl|Sphere|Cylinder|Cuboid|File|Mesh" param0..>`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Geometry {
@@ -449,6 +465,8 @@ pub struct Character {
     pub type_name: Option<String>,
     pub joints: Vec<Joint>,
     pub bodies: Vec<Body>,
+    /// Scene placement: the `<Character>`'s own `TransformMatrix` (world = placement x joint chain). Identity for a bare `<Skeleton>`.
+    pub xf: Xf,
     /// The whole `<Character>` (or bare `<Skeleton>`) subtree, unabridged.
     pub raw: Node,
 }
@@ -461,6 +479,7 @@ impl Character {
             type_name: n.attr("typeName").map(str::to_string),
             joints: Vec::new(),
             bodies: Vec::new(),
+            xf: if n.tag == "Character" { Xf::from_node(n).unwrap_or_default() } else { Xf::default() },
             raw: n.clone(),
         };
         let skel = if n.tag == "Skeleton" { Some(n) } else { n.child("Skeleton") };
@@ -474,6 +493,23 @@ impl Character {
     }
     pub fn body(&self, name: &str) -> Option<&Body> {
         self.bodies.iter().find(|b| b.name == name)
+    }
+    /// Rest joint-local transforms (`<Joint>`'s own `TransformMatrix`), in joint order.
+    pub fn rest_locals(&self) -> Vec<Xf> {
+        self.joints.iter().map(|j| j.xf).collect()
+    }
+    /// Joint world transforms from parent-local `locals` (joint order): chain product, no placement.
+    pub fn world_of(&self, locals: &[Xf]) -> Vec<Xf> {
+        let mut w: Vec<Xf> = Vec::with_capacity(self.joints.len());
+        for (idx, j) in self.joints.iter().enumerate() {
+            let local = locals.get(idx).copied().unwrap_or(j.xf);
+            let x = match j.parent.and_then(|p| w.get(p)) {
+                Some(pw) => pw.mul(&local),
+                None => local,
+            };
+            w.push(x);
+        }
+        w
     }
     /// Joint world transforms (rest pose; `root_p` overrides the root joint's translation).
     pub fn world(&self, root_p: Option<[f32; 3]>) -> Vec<Xf> {
@@ -604,6 +640,33 @@ pub struct Channel {
 }
 
 impl Channel {
+    /// Linear sample at `t` seconds (clamped to the first/last key). Scalar -> 1 value; quat -> `(w, x, y, z)`, shortest-arc nlerp.
+    /// Key `t` is in seconds (corpus: 1/30 s spacing). NB the file names quat attrs `bx by bz bw` but the order on disk is `w x y z`
+    /// (worked example in SURVEY.md "Scene pose").
+    pub fn sample(&self, t: f32) -> Option<Vec<f32>> {
+        let n = self.keys.len();
+        let need = if self.quat { 5 } else { 2 };
+        if n == 0 || self.keys.iter().any(|k| k.len() < need) {
+            return None;
+        }
+        let vals = |k: &Vec<f32>| -> Vec<f32> { k[1..need].to_vec() };
+        let (first, last) = (&self.keys[0], &self.keys[n - 1]);
+        if !t.is_finite() || t <= first[0] || n == 1 {
+            return Some(vals(first));
+        }
+        if t >= last[0] {
+            return Some(vals(last));
+        }
+        let hi = self.keys.iter().position(|k| k[0] > t)?;
+        let (a, b) = (&self.keys[hi - 1], &self.keys[hi]);
+        let span = b[0] - a[0];
+        let u = if span > 1e-9 { (t - a[0]) / span } else { 1.0 };
+        let (va, mut vb) = (vals(a), vals(b));
+        if self.quat && va.iter().zip(&vb).map(|(x, y)| x * y).sum::<f32>() < 0.0 {
+            vb.iter_mut().for_each(|v| *v = -*v);
+        }
+        Some(va.iter().zip(&vb).map(|(x, y)| x + (y - x) * u).collect())
+    }
     /// Value at the first key (a scalar channel's `y`).
     pub fn first_value(&self) -> Option<f32> {
         let k = self.keys.first()?;
@@ -674,6 +737,49 @@ impl Scene {
             channels,
             raw: n.clone(),
         }
+    }
+    /// Parent-local joint transforms of `c` at `t` seconds. Rule (SURVEY.md "Scene pose"), per joint, later wins:
+    /// rig rest `TransformMatrix` < scene `Poses/Pose[character=c]/Relationship[name=joint]` (full parent-local matrix)
+    /// < timeline channels `c.Joints.<joint>.{quat,tx,ty,tz}` or `c.<joint>.{...}` (root = `c.root.*`) sampled at `t`.
+    pub fn posed_locals(&self, c: &Character, t: f32) -> Vec<Xf> {
+        let pose = self
+            .poses
+            .iter()
+            .find(|p| p.character == c.name && (p.ref_frame.is_empty() || p.ref_frame.eq_ignore_ascii_case("parent")));
+        let by_name: std::collections::HashMap<&str, &Channel> = self
+            .channels
+            .iter()
+            .filter(|ch| ch.name.starts_with(c.name.as_str()))
+            .map(|ch| (ch.name.as_str(), ch))
+            .collect();
+        c.joints
+            .iter()
+            .map(|j| {
+                let mut x = j.xf;
+                if let Some(Some(px)) =
+                    pose.and_then(|p| p.relationships.iter().find(|(n, _)| *n == j.name)).map(|(_, x)| x)
+                {
+                    x = *px;
+                }
+                for pre in [format!("{}.Joints.{}.", c.name, j.name), format!("{}.{}.", c.name, j.name)] {
+                    let get = |leaf: &str| by_name.get(format!("{pre}{leaf}").as_str()).and_then(|ch| ch.sample(t));
+                    if let Some(q) = get("quat").filter(|q| q.len() == 4) {
+                        let r = Xf::from_quat([q[0], q[1], q[2], q[3]]);
+                        (x.i, x.j, x.k) = (r.i, r.j, r.k);
+                    }
+                    for (axis, leaf) in ["tx", "ty", "tz"].into_iter().enumerate() {
+                        if let (Some(v), Some(slot)) = (get(leaf).and_then(|v| v.first().copied()), x.p.get_mut(axis)) {
+                            *slot = v;
+                        }
+                    }
+                }
+                x
+            })
+            .collect()
+    }
+    /// Last key time (seconds) over every channel; 0 when nothing is keyed beyond one key.
+    pub fn duration(&self) -> f32 {
+        self.channels.iter().filter_map(|c| c.keys.last().and_then(|k| k.first().copied())).fold(0.0f32, f32::max)
     }
     /// First-key scalar of `<character>.<path>` (e.g. `character01`, `root.ty`).
     pub fn channel0(&self, character: &str, path: &str) -> Option<f32> {
