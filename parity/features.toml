@@ -1765,3 +1765,20 @@ evidence = [
   "crates/sop/src/builtins/edgedivide_sop.rs::edgedivide_matches_hython",
 ]
 notes = "H39: insert max(numdivs-1,1) points on polygon edges given as pA-B tokens (token order = direction); per-prim copies in direction order unless sharedpoints; floats interpolated, ints copied from edge start; applytoall + empty selection = every edge (pinned from hython probe with an empty edge group; literal nonexistent token errors in Houdini, so no twin row). Houdini-oracle (real 20.5): sop-edgedivide + -rev3 + -shared + -two + -bound MATCH incl. attribute values. NOT modelled: edge-group names/output, connectpoints, closepath, vertex attrs (Unsupported)."
+
+[[feature]]
+id = "io.hip-read"
+title = "Read Houdini .hip / .hipnc / .hiplc / .hip.gz scenes"
+area = "B"
+tier = "P1"
+status = "partial"
+commands = ["open"]
+evidence = [
+  "crates/graph/tests/hip_tests.rs::hip_cpio_members_equal_hexpand_contents",
+  "crates/graph/tests/hip_tests.rs::hip_gzip_and_plain_parse_identically",
+  "crates/graph/tests/hip_tests.rs::hip_corpus_parse_12",
+  "crates/sop/src/hip_import.rs::hip_authored_chain_matches_hython",
+  "crates/sop/src/hip_import.rs::hip_unsupported_node_is_kept_wired_and_cooks_to_unsupported",
+  "crates/sop/src/hip_import.rs::hip_hostile_inputs_are_errors",
+]
+notes = "H40: cpio (odc/newc) + gzip reader -> HipScene IR -> hexe scenes (one per /obj geo with SOPs); no-twin SOPs kept as `unsupported:<type>` (wired, parms kept, cook = Unsupported); `hexe-cli open` + Tauri graph_load (.hip route). Corpus fixtures/hip/MANIFEST.md: 12 Houdini-20.5 help/files hips parse 12/12 full graph; cook vs hython 13 MATCH / 5 HEXE-ERR / 7 UNSUPPORTED-NODE over 25 geo containers (hython twin, install-gated). NOT: MIME-wrapped hips (explicit error), HDA/digital-asset internals, subnets/TOP/VOP networks (skipped, listed), keyframes (value at save time, flagged animated), for-each blocks, hexe twins with fewer input ports than Houdini (dropped_wires reported)."

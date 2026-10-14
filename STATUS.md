@@ -40,3 +40,12 @@
 - `trail` BLOCKED: needs time-history cook API. `align`, `bulge` open.
 - Oracle 2026-10-14: MATCH 155 / STAT-PASS 12 / TOPO-DIFF 1 (boolean start vertex) / HEXE-ERR 1 (sop-motion-hitreact: gaia-motion venv python missing on box = env, not engine) over N=169.
 - ci GREEN (12 steps) after clippy fixes 9af5672; parity OK 103 rows.
+
+---
+
+# STATUS — h40 (.hip reader, branch h40/hip)
+
+- `io.hip-read` (partial): `crates/graph/src/hip.rs` cpio odc/newc + gzip → IR; `crates/sop/src/hip_import.rs` IR → hexe scenes (per /obj geo); `hexe-cli open <f.hip> [--out dir]`; Tauri File→Open (`Session::graph_load` routes .hip/.hipnc/.hiplc/.hip.gz → first geo, no UI rebuild).
+- Corpus 12 Houdini 20.5 help/files hips (`nodes/sop/**` ships 0 hips) → fixtures/hip/MANIFEST.md: parse 12/12 FULL; cook 25 geos = 13 MATCH / 5 HEXE-ERR / 7 UNSUPPORTED-NODE (hython `oracle/houdini/hip-twin.py`); files with ≥1 MATCH 7/12, fully MATCH 5/12. 11/13 MATCH = 1-node object geos.
+- Gaps (ordered by corpus hits): `copy` stamp, for-each block_begin/end, `point` SOP, `grouprange`, `material`, `object_merge`, HDAs (log_spiral, color_falloff), wrangle `relbbox`, tube non-poly.
+- Not oracle-covered: MIME-wrapped hips (error), animated parms (value at save time).
