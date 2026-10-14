@@ -144,3 +144,44 @@ fn endorphin_gravity_and_ground_read_from_a_real_scene() {
     assert!(s.characters[0].bodies.iter().all(|b| b.mass().is_some()));
     assert!(!s.behaviours.is_empty() && !s.channels.is_empty());
 }
+
+#[test]
+fn character_detail_has_skeleton_bodies_mass_and_round_trips() {
+    use super::endorphin_geo::document_detail;
+    use crate::{AttrClass, AttrData, read_geo, write_geo_json};
+    let xml = r#"<Character name="c"><MetaBodies><MetaBody name="M"><TransformMatrix><Vi bx="3f800000"/><Vj by="3f800000"/><Vk bz="3f800000"/></TransformMatrix>
+<CollisionSurface name="cs" material="steel"><Geometry type="Sphyl" bparam0="3dcccccd" bparam1="3f000000"/></CollisionSurface>
+<InertialBody><Geometry type="Cuboid" bparam0="40000000" bparam1="3f800000" bparam2="3f800000"/><Inertia density="3.0"/></InertialBody></MetaBody></MetaBodies>
+<Skeleton name="root" metaBody="M"><ChildJoints><SkeletalJoint name="j1"><SoftLimits btwistSize="3f800000"/></SkeletalJoint></ChildJoints></Skeleton></Character>"#;
+    let doc = Document::from_node(parse_xml(xml).unwrap());
+    let d = document_detail(&doc);
+    assert!(d.prim_count() > 10 && d.point_count > 10);
+    let kind = d.attr(AttrClass::Prim, "kind").unwrap();
+    let AttrData::Str { idx, table } = &kind.data else { panic!("str") };
+    assert_eq!(idx.len(), d.prim_count() as usize);
+    assert!(table.contains(&"bone".to_string()) && table.contains(&"collision".to_string()));
+    let AttrData::F32(m) = &d.attr(AttrClass::Prim, "mass").unwrap().data else { panic!("f32") };
+    assert!(m.iter().filter(|&&x| x == 6.0).count() > 10, "mass = 3 x 2 x 1 x 1 on every collision prim");
+    let AttrData::F32(ts) = &d.attr(AttrClass::Point, "twist_soft").unwrap().data else { panic!("f32") };
+    assert_eq!(ts[1], 1.0);
+    assert!(d.attr(AttrClass::Detail, "endo_kind").is_some());
+    let back = read_geo(write_geo_json(&d).as_slice()).unwrap();
+    assert_eq!((back.point_count, back.prim_count()), (d.point_count, d.prim_count()));
+}
+
+#[test]
+fn scene_detail_for_real_scenes_is_non_empty_and_finite() {
+    use super::endorphin_geo::document_detail;
+    use crate::AttrClass;
+    let Some(root) = resources() else { return };
+    for n in ["Balcony", "Car Hit", "Gymnast Rings", "Sword Play"] {
+        let Ok(bytes) = std::fs::read(root.join(format!("Scenes/Sample Scenes/{n}.ens"))) else { continue };
+        let d = document_detail(&read_endorphin(&bytes).unwrap());
+        assert!(d.prim_count() > 500, "{n}: {}", d.prim_count());
+        assert!(d.p().iter().all(|p| p.iter().all(|v| v.is_finite())), "{n}: non-finite P");
+        assert!(
+            d.attr(AttrClass::Detail, "endo_behaviours").is_some()
+                && d.attr(AttrClass::Detail, "endo_gravity").is_some()
+        );
+    }
+}
