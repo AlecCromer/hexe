@@ -6,7 +6,7 @@ Reproduce: `hython oracle/houdini/run_all.py` (re-records every Houdini side in 
 
 Rules: counts = points/prims/vertices. Attribs = per-class name sets + point/prim groups. P compared in index order, tol 1e-4. **Permutation is only classified, never passed**: ORDER-DIFF = same P multiset, different order. Hexe `.geo` is loaded back INTO Houdini for the summary (so a loadable file is checked too). Rows with oracle `stat` (houdini.json) get STAT-PASS / STAT-FAIL instead (parity/README.md). Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF > ORDER-DIFF > P-DIFF > MATCH (P-DIFF = point multisets differ; TOPO-DIFF = same P order but prim point lists / closedness differ; WINDING-DIFF = same P order and every differing prim is the same cycle with the same first point run the other way (none left since H32)).
 
-Histogram: MATCH 144, STAT-PASS 12, TOPO-DIFF 1  (N=157)
+Histogram: MATCH 155, STAT-PASS 12, TOPO-DIFF 1, HEXE-ERR 1  (N=169)
 
 | sop | houdini pts/prims/vtx | hexe pts/prims/vtx | P | verdict | cause guess (one line) |
 |---|---|---|---|---|---|
@@ -15,6 +15,8 @@ Histogram: MATCH 144, STAT-PASS 12, TOPO-DIFF 1  (N=157)
 | sop-attribdelete | 9/4/16 | 9/4/16 | MATCH | MATCH | - |
 | sop-attribpromote | 9/4/16 | 9/4/16 | MATCH | MATCH | - (prim attr v present both) |
 | sop-attribrandomize | 4900/0/0 | 4900/0/0 | stat | STAT-PASS | disp_mean 0.481/0.4809(-0.0%) disp_std 0.1422/0.1383(-2.7%) |
+| sop-attribswap | 9/4/16 | 9/4/16 | MATCH | MATCH |  |
+| sop-attribswap-move | 9/4/16 | 9/4/16 | MATCH | MATCH |  |
 | sop-attribtransfer | 9/4/16 | 9/4/16 | MATCH | MATCH | - |
 | sop-bend | 5/1/5 | 5/1/5 | MATCH | MATCH | - (Houdini bend toward -X by default, twin sets hexe side=(-1,0,0); parm map is a best guess) |
 | sop-blast | 8/5/20 | 8/5/20 | MATCH | MATCH | - |
@@ -58,6 +60,11 @@ Histogram: MATCH 144, STAT-PASS 12, TOPO-DIFF 1  (N=157)
 | sop-dissolve-box | 8/4/20 | 8/4/20 | MATCH | MATCH |  |
 | sop-dissolve-regions | 16/6/30 | 16/6/30 | MATCH | MATCH |  |
 | sop-divide | 8/12/36 | 8/12/36 | MATCH | MATCH | zero-diff since H33: piece 0 replaces the prim in place, later pieces appended in REVERSE prim order, quad 2nd tri = (c,d,a). n>4 polys: Houdini ear order (observed, regular polys) NOT reproduced - hexe still fans |
+| sop-edgedivide | 11/4/18 | 11/4/18 | MATCH | MATCH |  |
+| sop-edgedivide-bound | 10/4/17 | 10/4/17 | MATCH | MATCH |  |
+| sop-edgedivide-rev3 | 13/4/20 | 13/4/20 | MATCH | MATCH |  |
+| sop-edgedivide-shared | 11/4/20 | 11/4/20 | MATCH | MATCH |  |
+| sop-edgedivide-two | 13/4/20 | 13/4/20 | MATCH | MATCH |  |
 | sop-facet | 24/6/24 | 24/6/24 | MATCH | MATCH | zero-diff since H33: unique_points keeps the first vertex of each point on its id, later vertices get new ids appended per source point in DESCENDING order (ascending vertex); 3x3 grid also probed |
 | sop-file | 6/8/24 | 6/8/24 | MATCH | MATCH | - |
 | sop-foreach | 6/0/0 | 6/0/0 | MATCH | MATCH | -  (piece order a,b,c merge gives P x=0,3,1,4,2,5 in both) |
@@ -71,6 +78,11 @@ Histogram: MATCH 144, STAT-PASS 12, TOPO-DIFF 1  (N=157)
 | sop-groupcreate-pattern | 6/2/8 | 6/2/8 | MATCH | MATCH |  |
 | sop-groupcreate-pointnormal | 4/1/4 | 4/1/4 | MATCH | MATCH |  |
 | sop-groupdelete | 8/6/24 | 8/6/24 | MATCH | MATCH | - |
+| sop-groupexpand | 16/9/36 | 16/9/36 | MATCH | MATCH |  |
+| sop-groupexpand-edge | 20/11/44 | 20/11/44 | MATCH | MATCH |  |
+| sop-groupexpand-pts | 25/16/64 | 25/16/64 | MATCH | MATCH |  |
+| sop-groupinvert | 8/3/12 | 8/3/12 | MATCH | MATCH |  |
+| sop-groupinvert-new | 8/3/12 | 8/3/12 | MATCH | MATCH |  |
 | sop-grouppromote | 8/6/24 | 8/6/24 | MATCH | MATCH | - (point group toppts both) |
 | sop-knife | 12/10/40 | 12/10/40 | MATCH | MATCH | same cut-point/prim order difference as clip (shared core); 12/10/40 equal, groups blanked in both |
 | sop-knife-below | 8/5/20 | 8/5/20 | MATCH | MATCH |  |
@@ -86,7 +98,7 @@ Histogram: MATCH 144, STAT-PASS 12, TOPO-DIFF 1  (N=157)
 | sop-matchsize | 8/6/24 | 8/6/24 | MATCH | MATCH | - (explicit target size/center, P equal) |
 | sop-measure | 8/6/24 | 8/6/24 | MATCH | MATCH | - (prim attr area present both (values not compared)) |
 | sop-merge | 17/10/40 | 17/10/40 | MATCH | MATCH | - |
-| sop-motion-hitreact | 24/23/46 | 24/23/46 | MATCH | MATCH | -  Houdini side = gaia::motion::1.0 HDA (hython 20.5.487, scene hit_reaction, seed 12, $F 30) vs hexe `motion` mode=hitreact (seed 12, 3 s, frame 30). Both spawn the SAME core CLI `gaia_motion.cli hitreact`, so this proves the two READERS (HDA python SOP skeleton vs sop-motion) agree - P max/dP/ 0.0, 24 pts/23 bone polylines/46 vtx, point `name` + detail `pelvis_z` equal - NOT that the sim equals a Houdini-native sim (no Houdini twin of the MuJoCo hit reaction exists). Needs gaia-motion endo checkout + venv; hitreact.py may change the sim -> re-record |
+| sop-motion-hitreact | 24/23/46 | - | - | HEXE-ERR | -  Houdini side = gaia::motion::1.0 HDA (hython 20.5.487, scene hit_reaction, seed 12, $F 30) vs hexe `motion` mode=hitreact (seed 12, 3 s, frame 30). Both spawn the SAME core CLI `gaia_motion.cli hitreact`, so this proves the two READERS (HDA python SOP skeleton vs sop-motion) agree - P max/dP/ 0.0, 24 pts/23 bone polylines/46 vtx, point `name` + detail `pelvis_z` equal - NOT that the sim equals a Houdini-native sim (no Houdini twin of the MuJoCo hit reaction exists). Needs gaia-motion endo checkout + venv; hitreact.py may change the sim -> re-record |
 | sop-mountain | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03882/0.04032(+3.9%) disp_std 0.03039/0.02925(-3.8%) |
 | sop-mountain-freq | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03881/0.03936(+1.4%) disp_std 0.03024/0.02902(-4.0%) |
 | sop-mountain-oct | 4900/4761/19044 | 4900/4761/19044 | stat | STAT-PASS | disp_mean 0.03635/0.03666(+0.9%) disp_std 0.02779/0.02749(-1.1%) |

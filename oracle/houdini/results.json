@@ -309,6 +309,152 @@
   "detail": "disp_mean 0.481/0.4809(-0.0%) disp_std 0.1422/0.1383(-2.7%)"
  },
  {
+  "sop": "sop-attribswap",
+  "houdini": [
+   9,
+   4,
+   16
+  ],
+  "hexe": [
+   9,
+   4,
+   16
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "Cd",
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "Cd",
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-attribswap-move",
+  "houdini": [
+   9,
+   4,
+   16
+  ],
+  "hexe": [
+   9,
+   4,
+   16
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
   "sop": "sop-attribtransfer",
   "houdini": [
    9,
@@ -3226,6 +3372,366 @@
   }
  },
  {
+  "sop": "sop-edgedivide",
+  "houdini": [
+   11,
+   4,
+   18
+  ],
+  "hexe": [
+   11,
+   4,
+   18
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-edgedivide-bound",
+  "houdini": [
+   10,
+   4,
+   17
+  ],
+  "hexe": [
+   10,
+   4,
+   17
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-edgedivide-rev3",
+  "houdini": [
+   13,
+   4,
+   20
+  ],
+  "hexe": [
+   13,
+   4,
+   20
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-edgedivide-shared",
+  "houdini": [
+   11,
+   4,
+   20
+  ],
+  "hexe": [
+   11,
+   4,
+   20
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-edgedivide-two",
+  "houdini": [
+   13,
+   4,
+   20
+  ],
+  "hexe": [
+   13,
+   4,
+   20
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P",
+     "h",
+     "k"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
   "sop": "sop-facet",
   "houdini": [
    24,
@@ -4058,6 +4564,346 @@
    8,
    6,
    24
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-groupexpand",
+  "houdini": [
+   16,
+   9,
+   36
+  ],
+  "hexe": [
+   16,
+   9,
+   36
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     2.5,
+     0.0,
+     2.5
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     2.5,
+     0.0,
+     2.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-groupexpand-edge",
+  "houdini": [
+   20,
+   11,
+   44
+  ],
+  "hexe": [
+   20,
+   11,
+   44
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-groupexpand-pts",
+  "houdini": [
+   25,
+   16,
+   64
+  ],
+  "hexe": [
+   25,
+   16,
+   64
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ],
+   "hexe": [
+    [
+     -5.0,
+     0.0,
+     -5.0
+    ],
+    [
+     5.0,
+     0.0,
+     5.0
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-groupinvert",
+  "houdini": [
+   8,
+   3,
+   12
+  ],
+  "hexe": [
+   8,
+   3,
+   12
+  ],
+  "p": "MATCH",
+  "flags": [],
+  "verdict": "MATCH",
+  "bbox": {
+   "houdini": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ],
+   "hexe": [
+    [
+     -0.5,
+     -0.5,
+     -0.5
+    ],
+    [
+     0.5,
+     0.5,
+     0.5
+    ]
+   ]
+  },
+  "prim_types": {
+   "houdini": [
+    "Polygon"
+   ],
+   "hexe": [
+    "Polygon"
+   ]
+  },
+  "attribs": {
+   "houdini": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   },
+   "hexe": {
+    "point": [
+     "P"
+    ],
+    "prim": [],
+    "vertex": [],
+    "detail": []
+   }
+  }
+ },
+ {
+  "sop": "sop-groupinvert-new",
+  "houdini": [
+   8,
+   3,
+   12
+  ],
+  "hexe": [
+   8,
+   3,
+   12
   ],
   "p": "MATCH",
   "flags": [],
@@ -5146,72 +5992,8 @@
    23,
    46
   ],
-  "hexe": [
-   24,
-   23,
-   46
-  ],
-  "p": "MATCH",
-  "flags": [],
-  "verdict": "MATCH",
-  "bbox": {
-   "houdini": [
-    [
-     -0.070359,
-     0.083754,
-     -0.537311
-    ],
-    [
-     0.885273,
-     0.927813,
-     0.205023
-    ]
-   ],
-   "hexe": [
-    [
-     -0.070359,
-     0.083754,
-     -0.537311
-    ],
-    [
-     0.885273,
-     0.927813,
-     0.205023
-    ]
-   ]
-  },
-  "prim_types": {
-   "houdini": [
-    "Polygon"
-   ],
-   "hexe": [
-    "Polygon"
-   ]
-  },
-  "attribs": {
-   "houdini": {
-    "point": [
-     "P",
-     "name"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": [
-     "pelvis_z"
-    ]
-   },
-   "hexe": {
-    "point": [
-     "P",
-     "name"
-    ],
-    "prim": [],
-    "vertex": [],
-    "detail": [
-     "pelvis_z"
-    ]
-   }
-  }
+  "verdict": "HEXE-ERR",
+  "detail": "cook rc=1: hexe-cli: node#0: cook failed: spawn /Users/pascaldisse/.gaia/cache/gaia-motion/venv/bin/python: No such file or directory (os error 2)"
  },
  {
   "sop": "sop-mountain",
