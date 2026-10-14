@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bounds, edgeSegments, fanTriangulate, filterTypes, wirePath } from "./geom";
+import { bounds, fitPositions, globMatch, edgeSegments, fanTriangulate, filterTypes, wirePath } from "./geom";
 
 test("fan triangulates quads and skips open/short/out-of-range prims", () => {
   const t = fanTriangulate([[0, 1, 2, 3], [0, 1], [0, 1, 2], [0, 1, 9]], [true, true, false, true], 4);
@@ -77,4 +77,26 @@ test("prim centroids + view-state label", () => {
   expect(Number.isNaN(c[3])).toBe(true);
   expect(viewState(false, true, true)).toBe("shaded +P +N");
   expect(viewState(true, false, false)).toBe("wire");
+});
+
+test("fit excludes prims in groups matching the glob param (the background slab), not hardcoded", () => {
+  // prim0 = 2 characters points near origin, prim1 = 100 m slab, prim2 shares point 1 with the slab
+  const pos = [0, 0, 0, 1, 2, 0, -50, 0, -50, 50, 0, 50];
+  const prims = [[0, 1], [2, 3], [1, 0]];
+  const groups = { char_character01: [0, 2], char_background: [1], ground: [] };
+  const full = bounds(fitPositions(pos, prims, groups, ""))!;
+  expect(full.max[0]).toBe(50);
+  const fit = bounds(fitPositions(pos, prims, groups, "*background*"))!;
+  expect(fit.min).toEqual([0, 0, 0]);
+  expect(fit.max).toEqual([1, 2, 0]);
+  expect(fit.radius).toBeLessThan(3);
+  // param: another pattern excludes another group; a non-matching pattern changes nothing
+  expect(bounds(fitPositions(pos, prims, groups, "char_char*"))!.max[0]).toBe(50);
+  expect(bounds(fitPositions(pos, prims, groups, "nomatch"))!.max[0]).toBe(50);
+  // comma / space separated list; everything excluded or no groups -> full extent (never an empty fit)
+  expect(fitPositions(pos, prims, groups, "*background*, char_character01")).toBe(pos);
+  expect(fitPositions(pos, prims, undefined, "*background*")).toBe(pos);
+  expect(globMatch("*BACKGROUND*", "char_background")).toBe(true);
+  expect(globMatch("char_?", "char_ab")).toBe(false);
+  expect(globMatch("a.b", "axb")).toBe(false);
 });

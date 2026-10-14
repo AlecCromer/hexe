@@ -110,6 +110,8 @@ pub struct CookResult {
     /// Point indices per prim.
     pub prims: Vec<Vec<u32>>,
     pub closed: Vec<bool>,
+    /// Prim groups: name -> ascending prim indices (the viewport's Fit excludes groups matching its `fitExclude` globs).
+    pub prim_groups: BTreeMap<String, Vec<u32>>,
     pub shapes: Vec<Shape>,
     /// rgb per prim CORNER (flattened `prims` order): vertex `Cd`, else point `Cd` via the corner's point, else prim `Cd`.
     /// `None` when the geometry has no V3 `Cd` at all.
@@ -983,7 +985,13 @@ pub fn flatten(d: &Detail) -> CookResult {
     }
     counts.prims = d.prim_count();
     let (cd, cd_point) = colors(d, &prims);
-    CookResult { positions, prims, closed, shapes, cd, cd_point, counts, error: None, error_node: None }
+    let prim_groups = d
+        .groups
+        .iter()
+        .filter(|g| g.class == hexe_geo::AttrClass::Prim)
+        .map(|g| (g.name.clone(), g.mask.iter().enumerate().filter(|(_, m)| **m).map(|(i, _)| i as u32).collect()))
+        .collect();
+    CookResult { positions, prims, closed, prim_groups, shapes, cd, cd_point, counts, error: None, error_node: None }
 }
 /// `Cd` (V3) for the viewport: per prim corner and per point, see `CookResult::cd`.
 fn colors(d: &Detail, prims: &[Vec<u32>]) -> (Option<Vec<f32>>, Option<Vec<f32>>) {

@@ -89,3 +89,31 @@ fn corpus_scene_opens_when_the_bottle_exists() {
     assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
     assert!(String::from_utf8_lossy(&r.stdout).contains("11 behaviours"));
 }
+
+/// `cook <scene.ens> --frame N` samples keyed channels at t = (N-1)/24: the joint moves along the key ramp, frame 1 = t 0.
+#[test]
+fn cook_frame_scrubs_keyed_scene_channels() {
+    let xi = r#"<Vi x="1" y="0" z="0"/><Vj x="0" y="1" z="0"/><Vk x="0" y="0" z="1"/>"#;
+    let f = work("keyed.ens");
+    std::fs::write(
+        &f,
+        format!(
+            r#"<Scene useDefaultGround="false"><Characters><Character name="c1"><Skeleton name="root"><TransformMatrix>{xi}<Vp x="0" y="1" z="0"/></TransformMatrix><ChildJoints><SkeletalJoint name="A"><TransformMatrix>{xi}<Vp x="0.5" y="0" z="0"/></TransformMatrix></SkeletalJoint></ChildJoints></Skeleton></Character></Characters><Animation refFrame="parent"><Channel name="c1.Joints.A.tx" type="linear"><Key x="0" y="1"/><Key x="2" y="3"/></Channel></Animation></Scene>"#
+        ),
+    )
+    .unwrap();
+    let ax = |frame: &str| {
+        let out = work(&format!("keyed_{frame}.geo"));
+        let r = bin().arg("cook").arg(&f).args(["--frame", frame, "--out"]).arg(&out).output().unwrap();
+        assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+        let d = hexe_geo::read_any(&out).unwrap();
+        // point 1 = joint A (root = 0)
+        d.p()[1][0]
+    };
+    assert!((ax("1") - 1.0).abs() < 1e-5);
+    assert!((ax("25") - 2.0).abs() < 1e-5, "frame 25 = t 1.0 s");
+    assert!((ax("49") - 3.0).abs() < 1e-5, "frame 49 = t 2.0 s (last key)");
+    assert!((ax("200") - 3.0).abs() < 1e-5, "clamped past the last key");
+    let r = bin().arg("cook").arg(&f).args(["--frame", "x", "--out", "/tmp/never.geo"]).output().unwrap();
+    assert_eq!(r.status.code(), Some(1));
+}

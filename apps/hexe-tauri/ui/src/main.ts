@@ -125,7 +125,8 @@ async function main(): Promise<void> {
   wire.addEventListener("change", () => viewport.setWireframe(wire.checked));
   $("ptsize").addEventListener("input", (e) => viewport.setPointSize(Number((e.target as HTMLInputElement).value)));
   $("pts").addEventListener("change", (e) => viewport.setPoints((e.target as HTMLInputElement).checked));
-    $("fit").addEventListener("click", () => viewport.fitCurrent());
+$("fit").addEventListener("click", () => viewport.fitCurrent());
+$<HTMLInputElement>("fitx").addEventListener("change", (e) => { viewport.setFitExclude((e.target as HTMLInputElement).value); viewport.fitCurrent(); });
     // viewport picking: selection lives here + in Rust (`selection_get`); the group button writes it into a new group SOP
     const grp = $<HTMLButtonElement>("grpsel"), pickBtn = $("pick");
     const syncPick = () => pickBtn.classList.toggle("on", viewport.pickMode);

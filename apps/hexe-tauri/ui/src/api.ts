@@ -18,7 +18,9 @@ export interface EdgeView { from: number; to: number; input: number }
 export interface GraphView { nodes: NodeView[]; edges: EdgeView[]; display: number | null }
 import type { Shape } from "./geom";
 export interface Cooked {
-  positions: number[]; prims: number[][]; closed: boolean[];
+positions: number[]; prims: number[][]; closed: boolean[];
+  /** prim group name -> prim indices (viewport Fit exclusion) */
+  prim_groups?: Record<string, number[]>;
   /** rgb per prim corner (prim order, corner order); absent when the geometry has no Cd */
   cd?: number[] | null;
   /** rgb per point, only when a point Cd exists (colours the points layer) */

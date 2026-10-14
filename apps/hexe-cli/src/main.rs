@@ -180,12 +180,6 @@ fn parse_cook(args: &[String]) -> Result<CookArgs, String> {
                 let n = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --frame `{v}`"))?;
                 time = (n - 1.0) / hexe_graph::DEFAULT_FPS;
             }
-            // `--frame N`: timeline $F (1-based) -> time = (N-1)/fps, the mapping the app timeline uses.
-            "--frame" => {
-                let v = it.next().ok_or("cook: --frame needs a number")?;
-                let n = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --frame `{v}`"))?;
-                time = (n - 1.0) / hexe_graph::DEFAULT_FPS;
-            }
             "--time" => {
                 let v = it.next().ok_or("cook: --time needs a number")?;
                 time = v.parse::<f32>().ok().filter(|t| t.is_finite()).ok_or(format!("cook: bad --time `{v}`"))?;

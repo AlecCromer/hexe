@@ -7,7 +7,7 @@ import { describe } from "./pick";
 import { CLICK_SLOP, clampSel, combine, inBox, nearest, projectAll } from "./pick";
 import { frameScheduler } from "./frame";
 import { cornerColors, cornerGeometry } from "./cd";
-import { bounds, capCheck, CAP_LABELS, CAP_LABEL_SCAN, edgeSegments, primCentroids, shapeWire, triangulate, triEstimate, viewState } from "./geom";
+import { bounds, fitPositions, capCheck, CAP_LABELS, CAP_LABEL_SCAN, edgeSegments, primCentroids, shapeWire, triangulate, triEstimate, viewState } from "./geom";
 
 /** Viewport tunables (egui `Style` parity). Colours are 0xRRGGBB; light = headlight ambient + diffuse*|N.V|. */
 export const STYLE = {
@@ -48,7 +48,11 @@ export class Viewport {
   private showN = false;
   private shown: Cooked | null = null;
   private primC = new Float32Array(0);
-  private bb: ReturnType<typeof bounds> = null;
+private bb: ReturnType<typeof bounds> = null;
+  /** Fit-only bounds (displayed geometry minus prims in groups matching `fitExclude`); `bb` stays the full extent. */
+  private fitBb: ReturnType<typeof bounds> = null;
+  /** Globs of prim groups Fit ignores (comma/space separated, empty = none): a param, not hardcoded. */
+  fitExclude = "*background*";
     private schedule = frameScheduler(() => this.render());
     private pickOn = false;
     private sel: number[] = [];
@@ -198,8 +202,8 @@ export class Viewport {
       });
     }
     this.mesh = this.open = this.wire = this.points = null;
-    this.bb = null;
-    this.primC = new Float32Array(0);
+this.bb = this.fitBb = null;
+this.primC = new Float32Array(0);
   }
   /** Replace the displayed geometry with a fresh cook and fit the camera. Returns draw-cap warnings (layers skipped, not frozen). */
   show(c: Cooked): string[] {
@@ -269,7 +273,8 @@ export class Viewport {
         this.content.add(this.points);
       }
       if (this.showN) this.primC = primCentroids(c.prims, c.positions);
-      this.bb = bounds(verts.length ? [...c.positions, ...verts] : c.positions);
+this.bb = bounds(verts.length ? [...c.positions, ...verts] : c.positions);
+      this.computeFitBb();
       this.applyVisibility();
       this.frame();
     }
@@ -405,9 +410,17 @@ export class Viewport {
       this.applyCam();
     }, { passive: false });
   }
+/** Recompute the Fit bounds from the shown cook + `fitExclude`. */
+  private computeFitBb(): void {
+    const c = this.shown;
+    this.fitBb = c && !c.error ? bounds(fitPositions(c.positions, c.prims, c.prim_groups, this.fitExclude)) : null;
+  }
+  /** Set the Fit exclusion globs and refit. */
+  setFitExclude(globs: string): void { this.fitExclude = globs; this.computeFitBb(); }
   private frame(): void {
-    if (!this.bb) return;
-    this.cam = fitCam(this.cam, this.bb);
+    const b = this.fitBb ?? this.bb;
+    if (!b) return;
+    this.cam = fitCam(this.cam, b);
     this.applyCam();
   }
   /** H / F / toolbar Fit: frame the displayed geometry (default camera when nothing is displayed). */

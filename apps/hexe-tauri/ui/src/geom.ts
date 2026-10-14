@@ -144,3 +144,24 @@ export function filterTypes(all: string[], q: string): string[] {
   const rank = (t: string) => (t.startsWith(s) ? 0 : t.includes(s) ? 1 : sub(t) ? 2 : 3);
   return all.filter((t) => rank(t) < 3).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
+
+/** Glob (`*` any run, `?` one char; case-insensitive) match of a whole group name. */
+export function globMatch(pattern: string, name: string): boolean {
+  const re = new RegExp("^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i");
+  return re.test(name);
+}
+/** Flat xyz of the points Fit should frame: points of prims NOT in any group matching a `exclude` glob (comma/space separated;
+* empty = exclude nothing). Points shared with a kept prim stay. Excluding every prim (or no group matching) falls back to all points. */
+export function fitPositions(positions: ArrayLike<number>, prims: number[][], groups: Record<string, number[]> | undefined, exclude: string): ArrayLike<number> {
+  const pats = exclude.split(/[\s,]+/).filter(Boolean);
+  if (!groups || !pats.length) return positions;
+  const drop = new Set<number>();
+  for (const [name, idx] of Object.entries(groups)) if (pats.some((p) => globMatch(p, name))) for (const i of idx) drop.add(i);
+  if (!drop.size) return positions;
+  const keep = new Set<number>();
+  prims.forEach((p, k) => { if (!drop.has(k)) for (const i of p) keep.add(i); });
+  if (!keep.size) return positions;
+  const out: number[] = [];
+  for (const i of [...keep].sort((a, b) => a - b)) if (i * 3 + 2 < positions.length) out.push(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+  return out.length ? out : positions;
+}
