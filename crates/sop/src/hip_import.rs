@@ -73,8 +73,14 @@ fn f(v: &HipValue) -> Result<f64, String> {
         HipValue::Chan(..) => Err("nested channel".into()),
     }
 }
+/// Houdini menu tokens per hexe type / parm (`oracle/houdini/hip-menus.py`, hython 20.5 introspection): token -> position.
+fn menu_position(ty: &str, parm: &str, token: &str) -> Option<usize> {
+    static MENUS: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+    let m = MENUS.get_or_init(|| serde_json::from_str(include_str!("hip_menus.json")).unwrap_or(Value::Null));
+    m.get(ty)?.get(parm)?.as_array()?.iter().position(|t| t.as_str() == Some(token))
+}
 /// Convert one parm tuple against a hexe spec; `Ok(None)` = equals the hexe default.
-fn convert(spec: &ParamSpec, p: &HipParm) -> Result<Option<Value>, String> {
+fn convert(ty: &str, spec: &ParamSpec, p: &HipParm) -> Result<Option<Value>, String> {
     let first = p.values.first().ok_or("empty tuple")?;
     let val = match &spec.default {
         ParamValue::F(_) => ParamValue::F(f(first)? as f32),
@@ -84,11 +90,16 @@ fn convert(spec: &ParamSpec, p: &HipParm) -> Result<Option<Value>, String> {
             HipValue::Num(x) => *x != 0.0,
             HipValue::Chan(..) => false,
         }),
-        ParamValue::V3(_) => {
-            if p.values.len() != 3 {
+        ParamValue::V3(def) => {
+            // 2-tuples (grid `size`) pad from the hexe default; longer ones are not a vec3.
+            if !(2..=3).contains(&p.values.len()) {
                 return Err(format!("tuple size {} for a vec3", p.values.len()));
             }
-            ParamValue::V3([f(&p.values[0])? as f32, f(&p.values[1])? as f32, f(&p.values[2])? as f32])
+            let mut c = *def;
+            for (slot, v) in c.iter_mut().zip(&p.values) {
+                *slot = f(v)? as f32;
+            }
+            ParamValue::V3(c)
         }
         ParamValue::S(_) => ParamValue::S(match first.plain() {
             HipValue::Str(s) => s.clone(),
@@ -97,11 +108,11 @@ fn convert(spec: &ParamSpec, p: &HipParm) -> Result<Option<Value>, String> {
         }),
         ParamValue::Menu(_) => match first.plain() {
             HipValue::Num(x) => ParamValue::Menu(*x as u32),
-            HipValue::Str(s) => match spec.menu.iter().position(|(tok, _)| tok == s) {
+            HipValue::Str(s) => match spec.menu.iter().position(|(tok, _)| tok == s).or_else(|| menu_position(ty, &spec.name, s)) {
                 Some(i) => ParamValue::Menu(i as u32),
                 None => match s.parse::<u32>() {
                     Ok(i) => ParamValue::Menu(i),
-                    Err(_) => return Err(format!("menu token `{s}` not in hexe menu")),
+                    Err(_) => return Err(format!("menu token `{s}` unknown for {ty}.{}", spec.name)),
                 },
             },
             HipValue::Chan(..) => return Err("nested channel".into()),
@@ -144,7 +155,7 @@ fn import_network(reg: &Registry, net: &HipNetwork) -> GeoImport {
                 for p in &n.parms {
                     match specs.iter().find(|s| s.name == p.name) {
                         None => no_twin.push(&p.name),
-                        Some(spec) => match convert(spec, p) {
+                        Some(spec) => match convert(&t, spec, p) {
                             Ok(Some(v)) => {
                                 params.insert(p.name.clone(), v);
                             }
@@ -251,5 +262,103 @@ mod tests {
             assert!(is_hip_path(p), "{p}");
         }
         assert!(!is_hip_path("a.json"));
+    }
+    use crate::builtins::meshutil::testkit::houdini_twin_at;
+    use std::collections::BTreeSet;
+    const CHAIN: &[u8] = include_bytes!("../../../fixtures/hip/authored-chain.hip");
+    const CHAIN_GZ: &[u8] = include_bytes!("../../../fixtures/hip/authored-chain.hip.gz");
+    const CHAIN_GEO: &[u8] = include_bytes!("../../../fixtures/hip/authored-chain.houdini.geo");
+    const UNSUP: &[u8] = include_bytes!("../../../fixtures/hip/authored-unsup.hip");
+    fn time_of(imp: &HipImport) -> f32 {
+        ((imp.frame - 1.0) / imp.fps) as f32
+    }
+    /// Authored `.hip` (box -> xform, grid, merge) imports, wires and cooks EQUAL to the real hython 20.5 cook of the same file.
+    #[test]
+    fn hip_authored_chain_matches_hython() {
+        let imp = import_hip(CHAIN).unwrap();
+        assert_eq!(imp.geos.len(), 1);
+        let g = &imp.geos[0];
+        assert_eq!((g.node_count, g.wire_count, g.display.as_str()), (4, 3, "merge1"));
+        assert!(g.unsupported.is_empty(), "{:?}", g.unsupported);
+        let scene = serde_json::to_string(&g.scene).unwrap();
+        houdini_twin_at(&scene, CHAIN_GEO, time_of(&imp)).expect("hexe == Houdini");
+    }
+    #[test]
+    fn hip_gzip_wrapper_imports_identically() {
+        let a = import_hip(CHAIN).unwrap();
+        let b = import_hip(CHAIN_GZ).unwrap();
+        assert_eq!(a.geos[0].scene, b.geos[0].scene);
+    }
+    /// A SOP with no hexe twin stays in the graph as `unsupported:<type>` with its parms and wire; it loads but cooks to Unsupported.
+    #[test]
+    fn hip_unsupported_node_is_kept_wired_and_cooks_to_unsupported() {
+        let imp = import_hip(UNSUP).unwrap();
+        let g = &imp.geos[0];
+        assert_eq!(g.unsupported, vec!["point1:point".to_string()]);
+        assert_eq!((g.node_count, g.wire_count), (2, 1));
+        let node = g.scene["nodes"].as_array().unwrap().iter().find(|n| n["name"] == "point1").unwrap();
+        assert_eq!(node["type"], "unsupported:point");
+        assert!(node["params"].as_object().is_some_and(|p| !p.is_empty()), "parms kept");
+        let (mut graph, id) = crate::load_scene(&serde_json::to_string(&g.scene).unwrap()).unwrap();
+        let e = graph.cook(id, 0.0).unwrap_err().to_string();
+        assert!(e.contains("point") && e.contains("no hexe twin"), "{e}");
+    }
+    #[test]
+    fn hip_hostile_inputs_are_errors() {
+        assert!(import_hip(b"").is_err());
+        assert!(import_hip(b"junk junk junk").is_err());
+        assert!(import_hip(&CHAIN[..CHAIN.len() / 2]).is_err());
+    }
+    fn upstream(scene: &Value, start: &str) -> BTreeSet<String> {
+        let edges = scene["edges"].as_array().cloned().unwrap_or_default();
+        let mut seen = BTreeSet::new();
+        let mut todo = vec![start.to_string()];
+        while let Some(n) = todo.pop() {
+            if seen.insert(n.clone()) {
+                todo.extend(edges.iter().filter(|e| e[2] == n.as_str()).filter_map(|e| e[0].as_str().map(String::from)));
+            }
+        }
+        seen
+    }
+    /// Corpus twin (hython-gated, NO-OP unless `HEXE_HIP_TWIN_DIR` is set): `<dir>/list.tsv` = `id<TAB>path`, `<dir>/<id>/<geo>.geo` from
+    /// `oracle/houdini/hip-twin.py`. Writes `<dir>/verdicts.tsv` (id, file, geo, nodes, wires, verdict). Never fails on a DIFF: honest table.
+    #[test]
+    fn hip_corpus_twin() {
+        let Ok(dir) = std::env::var("HEXE_HIP_TWIN_DIR") else { return };
+        let list = std::fs::read_to_string(format!("{dir}/list.tsv")).unwrap();
+        let mut rows = String::new();
+        for line in list.lines().filter(|l| !l.is_empty()) {
+            let (id, path) = line.split_once('\t').unwrap();
+            let name = path.rsplit('/').next().unwrap();
+            let imp = match std::fs::read(path).map_err(|e| e.to_string()).and_then(|b| import_hip(&b).map_err(|e| e.to_string())) {
+                Ok(i) => i,
+                Err(e) => {
+                    rows += &format!("{id}\t{name}\t-\t0\t0\tPARSE-ERR {e}\n");
+                    continue;
+                }
+            };
+            for g in &imp.geos {
+                let up = upstream(&g.scene, &g.display);
+                let bad: Vec<&str> = g.unsupported.iter().filter(|u| up.contains(u.split(':').next().unwrap_or(""))).map(String::as_str).collect();
+                let scene = serde_json::to_string(&g.scene).unwrap();
+                let verdict = if !bad.is_empty() {
+                    format!("UNSUPPORTED-NODE {}", bad.join(" ").replace(|c: char| c == ':', "/"))
+                } else {
+                    match std::fs::read(format!("{dir}/{id}/{}.geo", g.name)) {
+                        Err(_) => "NO-HOUDINI-GEO".to_string(),
+                        Ok(h) => match houdini_twin_at(&scene, &h, time_of(&imp)) {
+                            Ok(()) => "MATCH".to_string(),
+                            Err(e) if e.starts_with("cook:") => format!("HEXE-ERR {}", e.chars().take(110).collect::<String>()),
+                            Err(e) => {
+                                let kind = if g.animated.iter().any(|a| up.contains(a)) { "PARM-DIFF(animated)" } else if e.starts_with("counts") { "COUNT-DIFF" } else if e.starts_with("P[") { "P-DIFF" } else if e.starts_with("prim") { "TOPO-DIFF" } else { "ATTR-DIFF" };
+                                format!("{kind} {}", e.chars().take(110).collect::<String>())
+                            }
+                        },
+                    }
+                };
+                rows += &format!("{id}\t{name}\t{}\t{}\t{}\t{verdict}\n", g.name, g.node_count, g.wire_count);
+            }
+        }
+        std::fs::write(format!("{dir}/verdicts.tsv"), rows).unwrap();
     }
 }

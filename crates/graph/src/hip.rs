@@ -42,6 +42,12 @@ pub fn read_cpio(b: &[u8]) -> Result<Vec<CpioEntry>, HipError> {
     let mut at = 0usize;
     let mut out = Vec::new();
     loop {
+        // Old (H8-era) writers leave a stray newline / NUL after a member: tolerate up to 8 bytes of it.
+        let mut skipped = 0;
+        while skipped < 8 && matches!(b.get(at), Some(b'\n' | 0)) {
+            at += 1;
+            skipped += 1;
+        }
         let magic = b.get(at..at.saturating_add(6)).ok_or_else(|| HipError("cpio: truncated (no TRAILER)".into()))?;
         let (hdr, newc) = match magic {
             b"070707" => (76usize, false),
@@ -482,6 +488,11 @@ mod tests {
         a.truncate(a.len() - 3);
         assert!(read_cpio(&a).is_err());
         assert!(read_cpio(&a[..40]).is_err());
+        // stray newline between members (seen in Houdini 8 era files) is tolerated
+        let mut c = odc("a", b"12");
+        c.push(b'\n');
+        c.extend(odc("TRAILER!!!", b""));
+        assert_eq!(read_cpio(&c).unwrap().len(), 1);
         assert!(gunzip(b"\x1f\x8b\x08").is_err());
         assert!(read_hip(&[0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).is_err());
     }
