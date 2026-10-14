@@ -1,0 +1,173 @@
+{
+ "sop": "sop-attribswap",
+ "houdini": "20.5.487",
+ "note": "3x3 grid -> wrangle (Cd=(ptnum,0,1), f@h=P.x, i@k=ptnum) -> attribswap h <-> k (float <-> int storage swap); attribute values compared via houdini_values",
+ "points": 9,
+ "prims": 4,
+ "vertices": 16,
+ "attribs": {
+  "point": [
+   "Cd",
+   "P",
+   "h",
+   "k"
+  ],
+  "prim": [],
+  "vertex": [],
+  "detail": []
+ },
+ "attrib_types": {
+  "point:P": [
+   "Float",
+   3
+  ],
+  "point:h": [
+   "Int",
+   1
+  ],
+  "point:Cd": [
+   "Float",
+   3
+  ],
+  "point:k": [
+   "Float",
+   1
+  ]
+ },
+ "prim_types": [
+  "Polygon"
+ ],
+ "point_groups": [],
+ "prim_groups": [],
+ "bbox_min": [
+  -5.0,
+  0.0,
+  -5.0
+ ],
+ "bbox_max": [
+  5.0,
+  0.0,
+  5.0
+ ],
+ "P": [
+  [
+   -5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   0.0,
+   0.0,
+   -5.0
+  ],
+  [
+   5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   -5.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   5.0,
+   0.0,
+   0.0
+  ],
+  [
+   -5.0,
+   0.0,
+   5.0
+  ],
+  [
+   0.0,
+   0.0,
+   5.0
+  ]
+ ],
+ "P_all": [
+  [
+   -5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   0.0,
+   0.0,
+   -5.0
+  ],
+  [
+   5.0,
+   0.0,
+   -5.0
+  ],
+  [
+   -5.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   5.0,
+   0.0,
+   0.0
+  ],
+  [
+   -5.0,
+   0.0,
+   5.0
+  ],
+  [
+   0.0,
+   0.0,
+   5.0
+  ],
+  [
+   5.0,
+   0.0,
+   5.0
+  ]
+ ],
+ "prim_pts": [
+  [
+   0,
+   1,
+   4,
+   3
+  ],
+  [
+   1,
+   2,
+   5,
+   4
+  ],
+  [
+   3,
+   4,
+   7,
+   6
+  ],
+  [
+   4,
+   5,
+   8,
+   7
+  ]
+ ],
+ "prim_closed": [
+  true,
+  true,
+  true,
+  true
+ ]
+}

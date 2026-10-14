@@ -1,0 +1,9 @@
+{
+"nodes": [
+{ "name": "g", "type": "grid", "params": { "rows": 3, "cols": 3 } },
+{ "name": "w", "type": "wrangle", "params": { "snippet": "@Cd = set(@ptnum, 0, 1); f@h = @P.x; i@k = @ptnum;" } },
+{ "name": "sw", "type": "attribswap", "params": { "srcattribs1": "h", "dstattribs1": "k" } }
+],
+"edges": [["g", 0, "w", 0], ["w", 0, "sw", 0]],
+"display": "sw"
+}

@@ -1730,3 +1730,19 @@ evidence = [
   "crates/sop/src/builtins/groupexpand_sop.rs::groupexpand_matches_hython",
 ]
 notes = "H39: grow a prim group (share point | share edge) or point group (edge neighbours) by numsteps into outputgroup (in place when equal to group); empty group = all, missing/wrong-class group = passthrough. Houdini-oracle (real 20.5, 5x5 grid): sop-groupexpand + -edge + -pts MATCH. NOT modelled (Unsupported): vertex/edge groups, floodfill, step attrib, normal / connectivity / color-group constraints."
+
+[[feature]]
+id = "sop-attribswap"
+title = "Attribute Swap SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["attribswap"]
+evidence = [
+  "crates/sop/src/builtins/attribswap_sop.rs::swap_exchanges_data_and_keeps_type_info_by_name",
+  "crates/sop/src/builtins/attribswap_sop.rs::copy_move_and_missing_partner",
+  "crates/sop/src/builtins/attribswap_sop.rs::noops_and_rows",
+  "crates/sop/src/builtins/attribswap_sop.rs::hostile_params",
+  "crates/sop/src/builtins/attribswap_sop.rs::attribswap_matches_hython",
+]
+notes = "H39: swap | copy | move whole attributes between two names (class detail|prim|point|vertex, rows 1..4, single name or *? glob per side, typeinfo source|dest). Swap exchanges data AND storage type; one side missing = copy. Houdini-oracle (real 20.5): sop-attribswap (float<->int h<->k) + sop-attribswap-move MATCH incl. attribute values (houdini_values). UNVERIFIED: copy/move with missing source (passthrough), globs matching several names, vertex/detail classes, type-info propagation (not visible in .geo names)"

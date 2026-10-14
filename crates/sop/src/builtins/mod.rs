@@ -117,6 +117,8 @@ mod polyframe_sop;
 //
 mod pointjitter_sop;
 //
+mod attribswap_sop;
+//
 mod groupexpand_sop;
 //
 mod groupinvert_sop;
@@ -274,6 +276,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("polybevel", polybevel_sop::spec, polybevel_sop::new);
     //
     r.register("pointjitter", pointjitter_sop::spec, pointjitter_sop::new);
+    //
+    r.register("attribswap", attribswap_sop::spec, attribswap_sop::new);
     //
     r.register("groupexpand", groupexpand_sop::spec, groupexpand_sop::new);
     //
