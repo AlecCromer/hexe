@@ -40,8 +40,13 @@ fn open_dispatch(args: &[String]) -> Result<String, String> {
     if args.iter().any(|a| endo::is_endo(a)) {
         return endo::open_cmd(args);
     }
-    let file = args.iter().find(|a| !a.starts_with('-')).ok_or_else(|| OPEN_HELP.to_string())?;
-    Err(format!("open: unknown extension on `{file}`\n{OPEN_HELP}"))
+    let file = args
+        .iter()
+        .find(|a| !a.starts_with('-'))
+        .ok_or("usage: hexe-cli open <file.hip|.ens|.nmc|.nmb|.nma> [format flags] (open --help)")?;
+    Err(format!(
+        "open: unknown extension on `{file}` (houdini: .hip .hipnc .hiplc .hip.gz [--geo --scene-out --cook-out --all-out]; endorphin: .ens .nmc .nmb .nma [--out --geo])"
+    ))
 }
 
 /// Largest geometry file `info` reads (hostile input is the default).

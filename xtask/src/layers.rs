@@ -45,6 +45,7 @@ pub const TABLE: &[(&str, Class)] = &[
     // ("testkit", Class::Testkit),
     ("cli", Class::Exempt),
     ("tauri", Class::Exempt),
+    ("tauri-debug-server", Class::Exempt), // vendored under third_party/
     ("xtask", Class::Exempt),
 ];
 /// Workspace crates a standalone crate may use, e.g. `("cos", &["filters", "geom"])`.
