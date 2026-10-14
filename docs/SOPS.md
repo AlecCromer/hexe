@@ -37,7 +37,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300` (proof PNGs
 | [divide](#divide) | 1 | 8 | shipped (sop-divide) | `divide.json` |
 | [edgedivide](#edgedivide) | 1 | 7 | shipped (sop-edgedivide) | `edgedivide.json` |
 | [facet](#facet) | 1 | 6 | shipped (sop-facet) | none |
-| [file](#file) | 0 | 2 | shipped (sop-file) | via `file-rop.json` |
+| [file](#file) | 0 | 3 | shipped (sop-file) | via `file-rop.json` |
 | [fuse](#fuse) | 1 | 3 | shipped (sop-fuse) | `fuse.json` |
 | [grid](#grid) | 0 | 12 | shipped (sop-grid) | via `attrib-family.json` |
 | [group](#group) | 1 | 10 | shipped (sop-group) | via `group-blast.json` |
@@ -91,7 +91,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300` (proof PNGs
 | [wrangle](#wrangle) | 1 | 2 | shipped (sop-wrangle) | `wrangle.json` |
 | [xform](#xform) | 1 | 13 | shipped (sop-transform) | via `boolean.json` |
 
-Totals: 83 SOPs · 69 with an example (43 dedicated + 26 via) · parity 83 shipped / 0 partial / 0 planned / 0 no-row · 707 params in total.
+Totals: 83 SOPs · 69 with an example (43 dedicated + 26 via) · parity 83 shipped / 0 partial / 0 planned / 0 no-row · 708 params in total.
 Gaps: 14 SOP w/o example.
 
 ## Parameters
@@ -603,6 +603,7 @@ Inputs: none.
 | param | label | type | default | range / menu |
 |---|---|---|---|---|
 | `file` | Geometry File | string | `""` |  |
+| `endo_time` | Endorphin Time (s, <0 = $T) | float | `-1` | -1 … 600 |
 | `missing` | Missing File | menu | `error` | error · no_geometry |
 
 ### fuse
