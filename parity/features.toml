@@ -1746,3 +1746,20 @@ evidence = [
   "crates/sop/src/builtins/attribswap_sop.rs::attribswap_matches_hython",
 ]
 notes = "H39: swap | copy | move whole attributes between two names (class detail|prim|point|vertex, rows 1..4, single name or *? glob per side, typeinfo source|dest). Swap exchanges data AND storage type; one side missing = copy. Houdini-oracle (real 20.5): sop-attribswap (float<->int h<->k) + sop-attribswap-move MATCH incl. attribute values (houdini_values). UNVERIFIED: copy/move with missing source (passthrough), globs matching several names, vertex/detail classes, type-info propagation (not visible in .geo names)"
+
+[[feature]]
+id = "sop-edgedivide"
+title = "Edge Divide SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["edgedivide"]
+evidence = [
+  "crates/sop/src/builtins/edgedivide_sop.rs::explicit_edge_gives_each_prim_its_own_midpoint",
+  "crates/sop/src/builtins/edgedivide_sop.rs::divisions_direction_shared_and_boundary",
+  "crates/sop/src/builtins/edgedivide_sop.rs::all_edges_and_passthrough",
+  "crates/sop/src/builtins/edgedivide_sop.rs::attributes_interpolate_ints_copy",
+  "crates/sop/src/builtins/edgedivide_sop.rs::hostile_params",
+  "crates/sop/src/builtins/edgedivide_sop.rs::edgedivide_matches_hython",
+]
+notes = "H39: insert max(numdivs-1,1) points on polygon edges given as pA-B tokens (token order = direction); per-prim copies in direction order unless sharedpoints; floats interpolated, ints copied from edge start; applytoall + empty selection = every edge (pinned from hython probe with an empty edge group; literal nonexistent token errors in Houdini, so no twin row). Houdini-oracle (real 20.5): sop-edgedivide + -rev3 + -shared + -two + -bound MATCH incl. attribute values. NOT modelled: edge-group names/output, connectpoints, closepath, vertex attrs (Unsupported)."
