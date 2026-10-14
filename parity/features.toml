@@ -29,8 +29,10 @@ id = "example.ui-window"
 title = "Example: main window with the first real panel"
 area = "C"
 tier = "P1"
-status = "planned"
-notes = "stub window only"
+status = "shipped"
+commands = []
+evidence = ["apps/hexe-tauri/src-tauri/src/lib.rs::window_size_env_parses_and_rejects_nonsense", "apps/hexe-tauri/src-tauri/src/cli.rs::render_flags"]
+notes = "H39: the stub window is long gone: apps/hexe-tauri (Tauri 2) ships four real panes in ui/index.html (viewport three.js, params, spreadsheet, network graph) + timeline/pick/group toolbar; PORT-TODO.md 41/41 [x], 0 open; headless --render proof PNGs in apps/hexe-tauri/proof/. UNVERIFIED in this lane: no live app launch / screenshot of all four panes (static check of index.html + PORT-TODO + proof PNG only; app rebuild is trunk's job); evidence = Rust tests of the shell (window size, CLI render flags), UI logic tests are bun tests in ui/src/*.test.ts (not ledger-citable, no `fn`)."
 
 [[feature]]
 id = "geo-read-ascii"
