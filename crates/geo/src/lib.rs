@@ -13,9 +13,9 @@ mod bgeo_legacy;
 mod bgeo_legacy_tests;
 mod bjson;
 #[cfg(test)]
-mod bjson_tests;
-#[cfg(test)]
 mod bjson_golden_tests;
+#[cfg(test)]
+mod bjson_tests;
 #[cfg(test)]
 mod bjson_write_tests;
 mod blosc;

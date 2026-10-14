@@ -33,7 +33,11 @@ fn bgeo_counts_and_p_equal_geo_twin() {
     assert_eq!(NAMES.len(), HOU.len());
     for (n, pts, prims, verts) in HOU {
         let (_, b, t) = load(n);
-        assert_eq!((b.point_count, b.prim_count(), b.vertex_count()), (pts, prims, verts), "{n}: bgeo vs Houdini counts");
+        assert_eq!(
+            (b.point_count, b.prim_count(), b.vertex_count()),
+            (pts, prims, verts),
+            "{n}: bgeo vs Houdini counts"
+        );
         assert_eq!(
             (b.point_count, b.prim_count(), b.vertex_count()),
             (t.point_count, t.prim_count(), t.vertex_count()),
@@ -80,8 +84,16 @@ fn writer_round_trips_all_shipped_fixtures() {
         let back = read_geo(&out).unwrap_or_else(|e| panic!("{n}: reread: {e}"));
         assert_eq!(back, d, "{n}: Detail round trip");
         assert_eq!(write_geo_bjson(&back).unwrap(), out, "{n}: second write byte-stable");
-        assert_eq!(bjson_to_value(&out).unwrap(), serde_json::from_slice::<serde_json::Value>(&write_geo_json(&d)).unwrap(), "{n}: value tree vs ASCII writer");
-        assert_eq!((back.point_count, back.prim_count(), back.vertex_count()), (t.point_count, t.prim_count(), t.vertex_count()), "{n}: twin counts");
+        assert_eq!(
+            bjson_to_value(&out).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(&write_geo_json(&d)).unwrap(),
+            "{n}: value tree vs ASCII writer"
+        );
+        assert_eq!(
+            (back.point_count, back.prim_count(), back.vertex_count()),
+            (t.point_count, t.prim_count(), t.vertex_count()),
+            "{n}: twin counts"
+        );
         assert_eq!(back.p(), t.p(), "{n}: P == twin");
         // Houdini's own value tree re-encodes losslessly through our value encoder
         let tree = bjson_to_value(&orig).unwrap();

@@ -173,7 +173,8 @@ fn installed_legacy_files_do_not_panic() {
 #[test]
 fn installed_legacy_files_match_houdini_counts() {
     let want: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(root().join("bgeo-legacy/counts.json")).expect("counts.json")).expect("json");
+        serde_json::from_slice(&std::fs::read(root().join("bgeo-legacy/counts.json")).expect("counts.json"))
+            .expect("json");
     let base = std::path::Path::new("/Applications/Houdini/Houdini20.5.487");
     let mut stack = vec![base.to_path_buf()];
     let (mut checked, mut failed) = (0, Vec::new());
