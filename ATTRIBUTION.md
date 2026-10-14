@@ -13,5 +13,9 @@
 | asset | apps/hexe-tauri/proof/endorphin-ui-catch-fall-F200.png | Nyari (paloptic) | hexe --render of examples (sop-motion, MuJoCo), original work | MIT |
 | asset | apps/hexe-tauri/proof/endorphin-ui-catch-fall-F90.png | Nyari (paloptic) | hexe --render of examples (sop-motion, MuJoCo), original work | MIT |
 | asset | apps/hexe-tauri/proof/endorphin-ui-stagger-F90.png | Nyari (paloptic) | hexe --render of examples (sop-motion, MuJoCo), original work | MIT |
+| asset | proof/h41/Balcony.png | Nyari (paloptic) | hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
+| asset | proof/h41/Car_Hit.png | Nyari (paloptic) | hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
+| asset | proof/h41/Gymnast_Rings.png | Nyari (paloptic) | hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
+| asset | proof/h41/Sword_Play.png | Nyari (paloptic) | hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files) | MIT |
 | fetched | three | mrdoob and three.js contributors | https://github.com/mrdoob/three.js (npm three@0.180.0) | MIT |
 | fetched | earcut | Mapbox | https://github.com/mapbox/earcut (npm earcut@3.2.4) | ISC |

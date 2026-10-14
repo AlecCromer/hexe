@@ -108,3 +108,35 @@ author = "Nyari (paloptic)"
 source = "hexe --render of examples (sop-motion, MuJoCo), original work"
 licence = "MIT"
 sha256 = "58d94f675e2d416f8e4e4ee207bfb510fbe5ae846a43830984166f1e2cd706b2"
+
+[[asset]]
+path = "proof/h41/Balcony.png"
+title = "h41 Endorphin scene rest-pose render (Balcony)"
+author = "Nyari (paloptic)"
+source = "hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "7cff452cd3de705019d5c6860126056ff497eba5829903cc6ffc04dbb16cea4b"
+
+[[asset]]
+path = "proof/h41/Car_Hit.png"
+title = "h41 Endorphin scene rest-pose render (Car_Hit)"
+author = "Nyari (paloptic)"
+source = "hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "7ced389fd7e4aa2acaf7c64044ff07db116c554772ee8ecb21da4ab610b5f99e"
+
+[[asset]]
+path = "proof/h41/Gymnast_Rings.png"
+title = "h41 Endorphin scene rest-pose render (Gymnast_Rings)"
+author = "Nyari (paloptic)"
+source = "hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "18260694d52432932e38205efd724af6e7ad2b2232c05067526d51a02c081010"
+
+[[asset]]
+path = "proof/h41/Sword_Play.png"
+title = "h41 Endorphin scene rest-pose render (Sword_Play)"
+author = "Nyari (paloptic)"
+source = "hexe --render of hexe-cli open output; geometry read from a locally installed Endorphin sample scene (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "b4bae0898d82d5a54564a1a25df12a596ebb96efdc2afeef392d8adb4fdc0cee"

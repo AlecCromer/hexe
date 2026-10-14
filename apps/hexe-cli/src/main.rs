@@ -8,6 +8,7 @@
     clippy::todo,
     clippy::unreachable
 )]
+mod endo;
 use hexe_graph::{ParamSpec, ParamValue};
 use std::fmt::Write as _;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -15,7 +16,7 @@ use std::process::ExitCode;
 
 /// Largest scene file `cook` reads (hostile input is the default).
 const MAX_SCENE_BYTES: u64 = 64 << 20;
-const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | convert <in> <out> | info <geo-file> | oracle <case> [input]";
+const USAGE: &str = "usage: hexe-cli --version | cook <scene.json> --out <file.geo> [--time T] | nodes | convert <in> <out> | info <geo-file> | open <file.ens|.nmc|.nmb|.nma> [--out scene.json] [--geo out.geo] | endo-survey <Resources-dir> [--out md] | oracle <case> [input]";
 
 /// Largest geometry file `info` reads (hostile input is the default).
 const MAX_GEO_BYTES: u64 = 1 << 30;
@@ -165,7 +166,12 @@ fn cook(args: &[String]) -> Result<String, String> {
     if meta.len() > MAX_SCENE_BYTES {
         return Err(format!("{}: scene larger than {MAX_SCENE_BYTES} bytes", a.scene));
     }
-    let json = std::fs::read_to_string(&a.scene).map_err(|e| format!("{}: {e}", a.scene))?;
+    // Endorphin files cook directly: a one-node `file` graph over the opened rest-pose geometry.
+    let json = if endo::is_endo(&a.scene) {
+        endo::scene_json(&a.scene)?
+    } else {
+        std::fs::read_to_string(&a.scene).map_err(|e| format!("{}: {e}", a.scene))?
+    };
     let (bytes, points, prims) = cook_scene_range(&json, a.time, std::path::Path::new(&a.scene).parent(), a.frames)?;
     std::fs::write(&a.out, bytes).map_err(|e| format!("{}: {e}", a.out))?;
     Ok(format!("cooked {points} points, {prims} prims -> {}\n", a.out))
@@ -223,6 +229,8 @@ fn dispatch(args: &[String]) -> Result<String, String> {
         Some("nodes") => Ok(nodes()),
         Some("convert") => convert(&args[1..]),
         Some("info") => info(&args[1..]),
+        Some("open") => endo::open_cmd(&args[1..]),
+        Some("endo-survey") => endo::survey_cmd(&args[1..]),
         Some("oracle") => match args.get(1) {
             Some(case) => oracle(case, args.get(2).map(String::as_str)),
             None => Err("usage: hexe-cli oracle <case> [input]".into()),

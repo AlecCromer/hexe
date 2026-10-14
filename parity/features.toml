@@ -1765,3 +1765,21 @@ evidence = [
   "crates/sop/src/builtins/edgedivide_sop.rs::edgedivide_matches_hython",
 ]
 notes = "H39: insert max(numdivs-1,1) points on polygon edges given as pA-B tokens (token order = direction); per-prim copies in direction order unless sharedpoints; floats interpolated, ints copied from edge start; applytoall + empty selection = every edge (pinned from hython probe with an empty edge group; literal nonexistent token errors in Houdini, so no twin row). Houdini-oracle (real 20.5): sop-edgedivide + -rev3 + -shared + -two + -bound MATCH incl. attribute values. NOT modelled: edge-group names/output, connectpoints, closepath, vertex attrs (Unsupported)."
+
+[[feature]]
+id = "io.endorphin-read"
+title = "Open Endorphin 2.x files (.ens .nmc .nmb .nma) as rest-pose hexe geometry"
+area = "B"
+tier = "P2"
+status = "partial"
+commands = ["open", "endo-survey"]
+evidence = [
+  "crates/geo/src/endorphin_tests.rs::endorphin_corpus_parses_completely",
+  "crates/geo/src/endorphin_tests.rs::bfloat_decodes_hex_ieee",
+  "crates/geo/src/endorphin_tests.rs::hostile_xml_errors_not_panics",
+  "crates/geo/src/endorphin_tests.rs::character_detail_has_skeleton_bodies_mass_and_round_trips",
+  "crates/geo/src/endorphin_tests.rs::scene_detail_for_real_scenes_is_non_empty_and_finite",
+  "apps/hexe-cli/tests/endo.rs::open_writes_a_file_sop_graph_and_geo_that_cook_reads_back",
+  "apps/hexe-cli/tests/endo.rs::survey_counts_a_synthetic_corpus_and_reports_bad_files",
+]
+notes = "H41, clean-room from data (oracle/endorphin/SURVEY.md: 207/207 sample files parse, 156 element names, 657 (element,attr) pairs). Container zlib->XML, floats hex IEEE twin `b<attr>`. Reader crates/geo/src/endorphin.rs (own capped XML parser + miniz_oxide inflate; every typed struct keeps its raw subtree); builder endorphin_geo.rs; read_any/file SOP/convert/info/cook accept the 4 extensions (read-only). Geometry = REST POSE only: joint rotation channels (scene Animation quats) + Poses are carried as detail JSON, NOT applied; scene root translation = first key of root.tx/ty/tz. Axis conventions measured off the limbs (Sphyl/Cylinder along local Z, Cuboid = full extents) — no vendor ground truth, UNVERIFIED. Mass = density x analytic volume (File/Mesh inertial = 0). NOT decoded: .nmb behaviour blobs (opaque text-encoded `cc` attrs, kept raw + RefNames only), Geometry type File/Mesh (5 cm placeholder box), constraints/events/IOSessions (raw only). No .nmp/.nmw/.nmm/.nme in the sample install. UI: File>Open routes .ens/.nmc to a file SOP (apps/hexe-tauri/ui/src/main.ts; takes effect on next app build, NOT rebuilt here)."

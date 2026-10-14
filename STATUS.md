@@ -40,3 +40,10 @@
 - `trail` BLOCKED: needs time-history cook API. `align`, `bulge` open.
 - Oracle 2026-10-14: MATCH 155 / STAT-PASS 12 / TOPO-DIFF 1 (boolean start vertex) / HEXE-ERR 1 (sop-motion-hitreact: gaia-motion venv python missing on box = env, not engine) over N=169.
 - ci GREEN (12 steps) after clippy fixes 9af5672; parity OK 103 rows.
+---
+# STATUS — h41 (Open Endorphin files, branch h41/endo, 2026-10-14)
+- Corpus (CrossOver bottle, endorphin 2.5.2 Resources): 65 .ens, 52 .nma, 47 .nmb, 43 .nmc (41 `Character` + 2 bare `Skeleton` roots); NO .nmp/.nmw/.nmm/.nme present (task listed 67/44/5/2/1). 207/207 parse. Vocabulary: 156 element names, 657 (element, attr) pairs → oracle/endorphin/SURVEY.md (generated: `hexe-cli endo-survey <Resources> --out oracle/endorphin/SURVEY.md`).
+- Code: crates/geo/src/endorphin.rs (inflate, xml, bfloat, typed Scene/Character/Joint/Body/Behaviour/Pose/Channel, raw trees kept), endorphin_geo.rs (rest-pose Detail), io.rs (`read_any` .ens .nmc .nmb .nma read-only), apps/hexe-cli/src/endo.rs (`open`, `endo-survey`; `cook <file.ens>` direct).
+- Output geo: bones = open 2-pt polys (joint→parent); joint points attrs joint/jtype/character/parent/{twist,swing1,swing2}_{soft,hard}; body meshes = closed polys prim attrs kind/body/material/shape/mass/character; prim groups per kind + `char_<name>`; detail attrs endo_kind/endo_gravity/endo_behaviours/endo_animation/endo_poses (JSON). Default ground = 1 quad.
+- Proof: proof/h41/{Balcony,Car_Hit,Gymnast_Rings,Sword_Play}.png (installed /Applications/Hexe.app `--render` over `open --geo` output, environment group blasted).
+- OPEN: rest pose only (anim quats/Poses not applied); .nmb blobs undecoded; File/Mesh geometry = placeholder box; Sphyl/Cylinder axis + Cuboid extents conventions inferred; UI File>Open route is source-only until next Tauri build; mass of File/Mesh bodies = 0.
