@@ -127,15 +127,11 @@ fn expand_points(d: &Detail, mut sel: Vec<bool>, steps: i32) -> Vec<bool> {
         for &(a, b) in &edges {
             let (sa, sb) =
                 (sel.get(a as usize).copied().unwrap_or(false), sel.get(b as usize).copied().unwrap_or(false));
-            if sa {
-                if let Some(n) = next.get_mut(b as usize) {
-                    *n = true;
-                }
+            if sa && let Some(n) = next.get_mut(b as usize) {
+                *n = true;
             }
-            if sb {
-                if let Some(n) = next.get_mut(a as usize) {
-                    *n = true;
-                }
+            if sb && let Some(n) = next.get_mut(a as usize) {
+                *n = true;
             }
         }
         if next == sel {

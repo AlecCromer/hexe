@@ -169,10 +169,10 @@ impl Node<Detail> for EdgeDivide {
             seq.clear();
             for i in (0..d.prims.len()).filter(|&i| is_poly(i)) {
                 for (a, b) in walk(i) {
-                    if let Some(&e) = order.iter().find(|&&(x, y)| key(x, y) == key(a, b)) {
-                        if !seq.iter().any(|&(x, y)| key(x, y) == key(e.0, e.1)) {
-                            seq.push(if e == (a, b) || e == (b, a) { e } else { (a, b) });
-                        }
+                    if let Some(&e) = order.iter().find(|&&(x, y)| key(x, y) == key(a, b))
+                        && !seq.iter().any(|&(x, y)| key(x, y) == key(e.0, e.1))
+                    {
+                        seq.push(if e == (a, b) || e == (b, a) { e } else { (a, b) });
                     }
                 }
             }

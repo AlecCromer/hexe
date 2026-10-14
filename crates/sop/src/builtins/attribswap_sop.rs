@@ -83,7 +83,7 @@ fn apply(d: &mut Detail, class: AttrClass, method: u32, keep_dst_info: bool, src
             }
         }
         // swap with one side missing = copy of the existing one to the missing name
-        (Some(_), None, 0 | 1 | 2) | (None, Some(_), 0) => {
+        (Some(_), None, 0..=2) | (None, Some(_), 0) => {
             let from = si.or(di).unwrap_or(0);
             let to_name = if si.is_some() { dst } else { src };
             let mut a = d.attrs[from].clone();
