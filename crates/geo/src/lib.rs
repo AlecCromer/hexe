@@ -22,6 +22,9 @@ mod blosc;
 #[cfg(test)]
 mod blosc_tests;
 mod detail;
+pub mod endorphin;
+#[cfg(test)]
+mod endorphin_tests;
 mod error;
 #[cfg(test)]
 mod fidelity_tests;

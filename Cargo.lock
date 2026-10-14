@@ -1244,6 +1244,7 @@ version = "0.1.0"
 name = "hexe-geo"
 version = "0.1.0"
 dependencies = [
+ "miniz_oxide 0.9.1",
  "serde_json",
  "toml 0.9.12+spec-1.1.0",
 ]
