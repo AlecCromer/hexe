@@ -41,6 +41,13 @@
 - Oracle 2026-10-14: MATCH 155 / STAT-PASS 12 / TOPO-DIFF 1 (boolean start vertex) / HEXE-ERR 1 (sop-motion-hitreact: gaia-motion venv python missing on box = env, not engine) over N=169.
 - ci GREEN (12 steps) after clippy fixes 9af5672; parity OK 103 rows.
 ---
+# STATUS — h40+h41 trunk (merged 2026-10-14)
+- hip: 12/12 parse; cook vs hython 13 MATCH / 25 geos; 5/12 files fully MATCH. endorphin: 207/207 parse, rest-pose only, .nmb opaque.
+- `hexe-cli open <file.hip|.ens|.nmc|.nmb|.nma> [format flags]` = ONE dispatch by extension (case-insens): .hip/.hipnc/.hiplc/.hip.gz → open::open_cmd [--geo N --scene-out --cook-out --all-out]; .ens/.nmc/.nmb/.nma → endo::open_cmd [--out --geo]; unknown ext → 1-line error listing both; `open --help` prints per-format flags. (h40 line above `open <f.hip> [--out dir]` superseded.)
+- vendored third_party/tauri-debug-server: clippy-clean + registered Exempt in xtask layers. ci GREEN 12 steps.
+
+---
+
 # STATUS — h41 (Open Endorphin files, branch h41/endo, 2026-10-14)
 - Corpus (CrossOver bottle, endorphin 2.5.2 Resources): 65 .ens, 52 .nma, 47 .nmb, 43 .nmc (41 `Character` + 2 bare `Skeleton` roots); NO .nmp/.nmw/.nmm/.nme present (task listed 67/44/5/2/1). 207/207 parse. Vocabulary: 156 element names, 657 (element, attr) pairs → oracle/endorphin/SURVEY.md (generated: `hexe-cli endo-survey <Resources> --out oracle/endorphin/SURVEY.md`).
 - Code: crates/geo/src/endorphin.rs (inflate, xml, bfloat, typed Scene/Character/Joint/Body/Behaviour/Pose/Channel, raw trees kept), endorphin_geo.rs (rest-pose Detail), io.rs (`read_any` .ens .nmc .nmb .nma read-only), apps/hexe-cli/src/endo.rs (`open`, `endo-survey`; `cook <file.ens>` direct).
