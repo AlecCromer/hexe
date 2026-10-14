@@ -167,3 +167,54 @@ fn installed_legacy_files_do_not_panic() {
         eprintln!("legacy {n}: {r}");
     }
 }
+
+/// H39: Houdini itself (hython `oracle/houdini/bgeo-legacy-counts.py`) loaded every legacy install file -> `fixtures/bgeo-legacy/counts.json`.
+/// Reader counts + P bbox must equal Houdini's. No-op per file when the Houdini install is absent.
+#[test]
+fn installed_legacy_files_match_houdini_counts() {
+    let want: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root().join("bgeo-legacy/counts.json")).expect("counts.json")).expect("json");
+    let base = std::path::Path::new("/Applications/Houdini/Houdini20.5.487");
+    let mut stack = vec![base.to_path_buf()];
+    let (mut checked, mut failed) = (0, Vec::new());
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_symlink() {
+            } else if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|x| x == "bgeo") {
+                let name = p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let Some(w) = want.get(&name) else { continue };
+                let Ok(bytes) = std::fs::read(&p) else { continue };
+                if !bytes.starts_with(b"BgeoV") {
+                    continue;
+                }
+                let d = match read_geo(&bytes) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        failed.push(format!("{name}: {e}"));
+                        continue;
+                    }
+                };
+                let n = |k: &str| w[k].as_u64().unwrap_or(u64::MAX);
+                let got = (u64::from(d.point_count), u64::from(d.prim_count()), u64::from(d.vertex_count()));
+                assert_eq!(got, (n("points"), n("prims"), n("vertices")), "{name}: points/prims/vertices vs Houdini");
+                let (lo, hi) = d.bbox();
+                let bb = w["bbox"].as_array().expect("bbox");
+                // Houdini's bbox includes quadric extents (sphere/tube/circle/metaball); the point bbox only matches without them
+                let quadric = w["prim_types"].as_array().is_some_and(|t| {
+                    t.iter().any(|x| matches!(x.as_str(), Some("Sphere" | "Tube" | "Circle" | "Metaball")))
+                });
+                for (i, v) in lo.iter().chain(hi.iter()).enumerate().filter(|_| !quadric) {
+                    let x = bb[i].as_f64().expect("f");
+                    assert!((f64::from(*v) - x).abs() < 1e-3, "{name}: bbox[{i}] {v} vs {x}");
+                }
+                checked += 1;
+            }
+        }
+    }
+    eprintln!("legacy files == Houdini counts: {checked}; failures {failed:?}");
+    assert!(failed.is_empty(), "{failed:?}");
+}

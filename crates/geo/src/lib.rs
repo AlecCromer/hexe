@@ -15,6 +15,8 @@ mod bjson;
 #[cfg(test)]
 mod bjson_tests;
 #[cfg(test)]
+mod bjson_golden_tests;
+#[cfg(test)]
 mod bjson_write_tests;
 mod blosc;
 #[cfg(test)]
