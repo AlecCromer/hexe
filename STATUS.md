@@ -48,6 +48,9 @@
 
 ---
 
+# STATUS — h43 (scene pose, branch h43/pose, 2026-10-14)
+- Endorphin scene pose rule: rig rest ← `<Poses>` full parent-local matrix ← `<Animation>` channel; Character.TransformMatrix places each character (oracle/endorphin/SCENE_POSE.md); quat order on disk = wxyz; keys sampled via file SOP `endo_time` (s, <0 = $T); viewport Fit excludes groups matching `fitExclude` glob (default `*background*`) so characters frame separated.
+
 # STATUS — h42 (viewport, branch h42/viewport, 2026-10-14)
 - Hidden-window rAF pause → frameScheduler rAF∨timer 50 ms default (ui/src/frame.ts + tests); proof/h42-balcony-after.png. Fit still counts `char_background` slab = open.
 
