@@ -1,0 +1,54 @@
+{
+ "nodes": [
+  {
+   "name": "box1",
+   "type": "box"
+  },
+  {
+   "name": "ga",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "a",
+    "basegroup": "0-2"
+   }
+  },
+  {
+   "name": "inv",
+   "type": "groupinvert",
+   "params": {
+    "group": "a",
+    "grouptype": 1
+   }
+  },
+  {
+   "name": "bl",
+   "type": "blast",
+   "params": {
+    "group": "a",
+    "grouptype": 1,
+    "negate": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "box1",
+   0,
+   "ga",
+   0
+  ],
+  [
+   "ga",
+   0,
+   "inv",
+   0
+  ],
+  [
+   "inv",
+   0,
+   "bl",
+   0
+  ]
+ ],
+ "display": "bl"
+}

@@ -1698,3 +1698,19 @@ evidence = [
   "crates/sop/src/builtins/attribrandomize_sop.rs::attribrandomize_stat_matches_houdini_fixture",
 ]
 notes = "h38 census SOP, STATISTICAL twin (STAT-PASS, Houdini RNG not reproducible). hython probe 4900-pt grid: uniform default 0..1 (mean .5 std .2887), min/max per component, scale multiplies the draw, normal = median + stddev * N(0,1) (std .998-1.02 measured), operation set/add on P and new Cd (Color, size 3). Hexe: float attrs (dims 1-4) class detail/prim/point/vertex, ops set/add/min/max/mult, constant/uniform/normal, splitmix64 stream keyed by seed+element+component. GAPS (Unsupported): bernoulli, uniformdiscrete, uniformorient, uniformball, exponential, lognormal, cauchy, ramp, discrete, allsame, seedattrib, int/string attrs, grouptype; Houdini constant-distribution result on P not understood (std 2.9, not probed further). Houdini-oracle (real 20.5, h38): sop-attribrandomize STAT-PASS (P add uniform +-0.5, mean/std of |P-base| within 5 %)."
+
+[[feature]]
+id = "sop-groupinvert"
+title = "Group Invert SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["groupinvert"]
+evidence = [
+  "crates/sop/src/builtins/groupinvert_sop.rs::in_place_inversion_flips_the_mask",
+  "crates/sop/src/builtins/groupinvert_sop.rs::newname_keeps_the_source",
+  "crates/sop/src/builtins/groupinvert_sop.rs::wrong_class_empty_and_missing_are_passthrough",
+  "crates/sop/src/builtins/groupinvert_sop.rs::hostile_params",
+  "crates/sop/src/builtins/groupinvert_sop.rs::groupinvert_matches_hython",
+]
+notes = "H39: complement of a group; empty newname = invert in place, newname = new group + source kept; grouptype auto|prims|points|vertices (edges Unsupported); empty/missing group = passthrough (Houdini only warns). Houdini-oracle (real 20.5): sop-groupinvert + sop-groupinvert-new MATCH. UNVERIFIED: globs matching several groups, same name in several classes under auto."
