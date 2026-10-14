@@ -1,0 +1,60 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "grid",
+   "params": {
+    "rows": 5,
+    "cols": 5
+   }
+  },
+  {
+   "name": "gs",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "s",
+    "grouptype": 0,
+    "basegroup": "5"
+   }
+  },
+  {
+   "name": "ex",
+   "type": "groupexpand",
+   "params": {
+    "outputgroup": "o",
+    "group": "s",
+    "grouptype": 4
+   }
+  },
+  {
+   "name": "bl",
+   "type": "blast",
+   "params": {
+    "group": "o",
+    "grouptype": 1,
+    "negate": true
+   }
+  }
+ ],
+ "edges": [
+  [
+   "g",
+   0,
+   "gs",
+   0
+  ],
+  [
+   "gs",
+   0,
+   "ex",
+   0
+  ],
+  [
+   "ex",
+   0,
+   "bl",
+   0
+  ]
+ ],
+ "display": "bl"
+}

@@ -1714,3 +1714,19 @@ evidence = [
   "crates/sop/src/builtins/groupinvert_sop.rs::groupinvert_matches_hython",
 ]
 notes = "H39: complement of a group; empty newname = invert in place, newname = new group + source kept; grouptype auto|prims|points|vertices (edges Unsupported); empty/missing group = passthrough (Houdini only warns). Houdini-oracle (real 20.5): sop-groupinvert + sop-groupinvert-new MATCH. UNVERIFIED: globs matching several groups, same name in several classes under auto."
+
+[[feature]]
+id = "sop-groupexpand"
+title = "Group Expand SOP"
+area = "A"
+tier = "P2"
+status = "shipped"
+commands = ["groupexpand"]
+evidence = [
+  "crates/sop/src/builtins/groupexpand_sop.rs::prim_expansion_by_point_and_by_edge",
+  "crates/sop/src/builtins/groupexpand_sop.rs::point_expansion_follows_edges",
+  "crates/sop/src/builtins/groupexpand_sop.rs::in_place_zero_steps_empty_group_and_passthrough",
+  "crates/sop/src/builtins/groupexpand_sop.rs::unsupported_and_hostile",
+  "crates/sop/src/builtins/groupexpand_sop.rs::groupexpand_matches_hython",
+]
+notes = "H39: grow a prim group (share point | share edge) or point group (edge neighbours) by numsteps into outputgroup (in place when equal to group); empty group = all, missing/wrong-class group = passthrough. Houdini-oracle (real 20.5, 5x5 grid): sop-groupexpand + -edge + -pts MATCH. NOT modelled (Unsupported): vertex/edge groups, floodfill, step attrib, normal / connectivity / color-group constraints."

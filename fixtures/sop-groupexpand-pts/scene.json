@@ -1,0 +1,45 @@
+{
+ "nodes": [
+  {
+   "name": "g",
+   "type": "grid",
+   "params": {
+    "rows": 5,
+    "cols": 5
+   }
+  },
+  {
+   "name": "gs",
+   "type": "groupcreate",
+   "params": {
+    "groupname": "s",
+    "grouptype": 1,
+    "basegroup": "7"
+   }
+  },
+  {
+   "name": "ex",
+   "type": "groupexpand",
+   "params": {
+    "outputgroup": "o",
+    "group": "s",
+    "grouptype": 3
+   }
+  }
+ ],
+ "edges": [
+  [
+   "g",
+   0,
+   "gs",
+   0
+  ],
+  [
+   "gs",
+   0,
+   "ex",
+   0
+  ]
+ ],
+ "display": "ex"
+}
