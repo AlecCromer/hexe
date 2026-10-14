@@ -48,6 +48,11 @@
 
 ---
 
+# STATUS — h42 (viewport, branch h42/viewport, 2026-10-14)
+- Hidden-window rAF pause → frameScheduler rAF∨timer 50 ms default (ui/src/frame.ts + tests); proof/h42-balcony-after.png. Fit still counts `char_background` slab = open.
+
+---
+
 # STATUS — h41 (Open Endorphin files, branch h41/endo, 2026-10-14)
 - Corpus (CrossOver bottle, endorphin 2.5.2 Resources): 65 .ens, 52 .nma, 47 .nmb, 43 .nmc (41 `Character` + 2 bare `Skeleton` roots); NO .nmp/.nmw/.nmm/.nme present (task listed 67/44/5/2/1). 207/207 parse. Vocabulary: 156 element names, 657 (element, attr) pairs → oracle/endorphin/SURVEY.md (generated: `hexe-cli endo-survey <Resources> --out oracle/endorphin/SURVEY.md`).
 - Code: crates/geo/src/endorphin.rs (inflate, xml, bfloat, typed Scene/Character/Joint/Body/Behaviour/Pose/Channel, raw trees kept), endorphin_geo.rs (rest-pose Detail), io.rs (`read_any` .ens .nmc .nmb .nma read-only), apps/hexe-cli/src/endo.rs (`open`, `endo-survey`; `cook <file.ens>` direct).
