@@ -21,6 +21,7 @@
 - Failing fixtures: none in bjson set. Legacy BgeoV: 7/7 read (H13+H39), counts + P bbox == Houdini (fixtures/bgeo-legacy/counts.json, hython bgeo-legacy-counts.py); bgeo_binary_reads un-ignored.
 - fixtures/bgeo-bjson/: 8 files (axis cross ctrl-box ctrl-disc-xy ctrl-planes-xy sg_geolight simple_sphere tree0) + MANIFEST rows; golden tests (H39): crates/geo/src/bjson_golden_tests.rs vs hython-saved .geo twins (counts + vertex map + P max|dP| 0).
 - Prim types seen: p_r 42, c_r 90, run 16 (PackedGeometry 55, Mesh/NURBMesh/Circle/Sphere/Tube/Bezier/NURBCurve/PackedDisk) — only polygon/curve runs mapped to Detail; others pass-through/unverified.
+- Writer round trip on the 8 fixtures: bjson_golden_tests::writer_round_trips_all_shipped_fixtures (H39).
 - TODO: 84-fixture target unmeasured.
 
 ---

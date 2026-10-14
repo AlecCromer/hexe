@@ -68,3 +68,23 @@ fn bgeo_attribute_names_equal_geo_twin() {
         assert_eq!(k(&b), k(&t), "{n}: attribute set");
     }
 }
+
+/// H39: writer round trip on the 8 shipped fixtures: bgeo -> Detail -> write_geo_bjson -> Detail identical; value tree identical;
+/// re-write is byte-stable; counts + P still equal the Houdini twin.
+#[test]
+fn writer_round_trips_all_shipped_fixtures() {
+    for n in NAMES {
+        let (orig, d, t) = load(n);
+        let out = write_geo_bjson(&d).unwrap_or_else(|e| panic!("{n}: write: {e}"));
+        assert!(out.starts_with(&[0x7f, b'N', b'S', b'J', b'b']), "{n}: magic");
+        let back = read_geo(&out).unwrap_or_else(|e| panic!("{n}: reread: {e}"));
+        assert_eq!(back, d, "{n}: Detail round trip");
+        assert_eq!(write_geo_bjson(&back).unwrap(), out, "{n}: second write byte-stable");
+        assert_eq!(bjson_to_value(&out).unwrap(), serde_json::from_slice::<serde_json::Value>(&write_geo_json(&d)).unwrap(), "{n}: value tree vs ASCII writer");
+        assert_eq!((back.point_count, back.prim_count(), back.vertex_count()), (t.point_count, t.prim_count(), t.vertex_count()), "{n}: twin counts");
+        assert_eq!(back.p(), t.p(), "{n}: P == twin");
+        // Houdini's own value tree re-encodes losslessly through our value encoder
+        let tree = bjson_to_value(&orig).unwrap();
+        assert_eq!(bjson_to_value(&value_to_bjson(&tree).unwrap()).unwrap(), tree, "{n}: tree re-encode");
+    }
+}
