@@ -5,6 +5,7 @@ import { clip, type Cam, defaultCam, dolly, dragDolly, eye, fit as fitCam, FOV, 
 import type { Cooked } from "./api";
 import { describe } from "./pick";
 import { CLICK_SLOP, clampSel, combine, inBox, nearest, projectAll } from "./pick";
+import { frameScheduler } from "./frame";
 import { cornerColors, cornerGeometry } from "./cd";
 import { bounds, capCheck, CAP_LABELS, CAP_LABEL_SCAN, edgeSegments, primCentroids, shapeWire, triangulate, triEstimate, viewState } from "./geom";
 
@@ -48,7 +49,7 @@ export class Viewport {
   private shown: Cooked | null = null;
   private primC = new Float32Array(0);
   private bb: ReturnType<typeof bounds> = null;
-    private raf = 0;
+    private schedule = frameScheduler(() => this.render());
     private pickOn = false;
     private sel: number[] = [];
     private hi: THREE.Points | null = null;
@@ -114,8 +115,7 @@ export class Viewport {
     this.draw();
   }
   private draw(): void {
-    cancelAnimationFrame(this.raf);
-    this.raf = requestAnimationFrame(() => this.render());
+    this.schedule();
   }
     private render(w = this.host.clientWidth, h = this.host.clientHeight): void {
       const r = this.renderer, g = STYLE.gizmoPx;
