@@ -188,3 +188,11 @@ author = "Nyari (paloptic)"
 source = "hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
 licence = "MIT"
 sha256 = "998517d29da0ebe9c5b54cd0632929ab8e75de44da9e8b6e037c8e8197542285"
+
+[[asset]]
+path = "proof/h43/installed.png"
+title = "h43 scene pose proof (installed)"
+author = "Nyari (paloptic)"
+source = "hexe --render / Hexe.app screenshot; Endorphin sample scene geometry (third-party sample data, rights unclear: proof render only, do not redistribute the scene files)"
+licence = "MIT"
+sha256 = "66d2348237e0e2a36cab624cd1cd5aab2e5041ff8213288e71f394d797227829"
