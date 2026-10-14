@@ -39,10 +39,10 @@ fn read_capped(p: &Path) -> Result<Vec<u8>, String> {
 fn attr_cell(t: &endorphin::TagStat) -> String {
     let mut cells = Vec::new();
     for (a, n) in &t.attrs {
-        if let Some(rest) = a.strip_prefix('b') {
-            if t.attrs.contains_key(rest) {
-                continue; // listed as the `(+hex)` twin of its decimal sibling
-            }
+        if let Some(rest) = a.strip_prefix('b')
+            && t.attrs.contains_key(rest)
+        {
+            continue; // listed as the `(+hex)` twin of its decimal sibling
         }
         let twin = t.attrs.contains_key(&format!("b{a}"));
         cells.push(format!("{a}{}\u{d7}{n}", if twin { "(+hex)" } else { "" }));

@@ -146,7 +146,17 @@ async function main(): Promise<void> {
   const path = $<HTMLInputElement>("path");
   const open = async () => {
     try {
-      graph = await api.graphLoad(path.value.trim());
+      const p = path.value.trim();
+      if (/\.(ens|nmc|nmb|nma)$/i.test(p)) {
+        // Endorphin file: one `file` SOP over it (hexe-geo read_any opens .ens/.nmc as rest-pose geometry).
+        await api.graphNew();
+        const id = await api.nodeAdd("file", 0, 0);
+        await api.nodeSetParam(id, "file", p);
+        await api.setDisplay(id);
+        graph = await api.graphGet();
+      } else {
+        graph = await api.graphLoad(p);
+      }
       net.selectNode(null);
       net.setGraph(graph);
       await recook();
