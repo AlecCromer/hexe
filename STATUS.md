@@ -30,3 +30,13 @@
 
 - Oracle row `sop-motion-hitreact` (oracle/houdini/sop-motion-hitreact.py): hexe `motion` mode=hitreact seed 12 f30 vs gaia-motion HDA `gaia::motion::1.0` hit_reaction cooked in hython 20.5.487 → MATCH (24/23/46, max|dP| 0.0, name + pelvis_z equal). Histogram 144 MATCH / 12 STAT-PASS / 1 TOPO-DIFF (N=157).
 - OPEN: reader-vs-reader only (both read the same MuJoCo CLI sim, no Houdini-native twin of the hit reaction); scene motion_root = `$GAIA_MOTION_ROOT` (env, default `~/projects/gaia-motion` main); re-record if hitreact.py changes seed-12 f30. Details: gaia-motion docs/STATUS.md.
+
+---
+
+# STATUS — h39 (trunk 2026-10-14)
+
+- SOPs shipped (hython-twin MATCH): groupinvert, groupexpand, attribswap, edgedivide. Registry = 84 types (`hexe-cli nodes`, SOPS.md regen).
+- bgeo: bjson decoder + legacy BgeoV reader + writer round trip closed (see h1/bgeo above).
+- `trail` BLOCKED: needs time-history cook API. `align`, `bulge` open.
+- Oracle 2026-10-14: MATCH 155 / STAT-PASS 12 / TOPO-DIFF 1 (boolean start vertex) / HEXE-ERR 1 (sop-motion-hitreact: gaia-motion venv python missing on box = env, not engine) over N=169.
+- ci GREEN (12 steps) after clippy fixes 9af5672; parity OK 103 rows.

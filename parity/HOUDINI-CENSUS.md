@@ -15,6 +15,10 @@ Six-SOP target, 4 shipped in the 90 min budget (all hython-twin MATCH, bit-for-b
 
 Candidate list check: polyextrude, resample, fuse, clip, ray, peak, sort, normal, attribpromote, blast, delete, matchsize, knife, mirror, twist, subdivide, polyreduce, polybevel were ALREADY in hexe; `carve` and `lattice` were the only truly missing ones from the user list.
 
+## h39 implemented
+
+groupinvert, groupexpand, attribswap, edgedivide (hython-twin MATCH; ledger rows sop-groupinvert|groupexpand|attribswap(-move)|edgedivide) + bgeo reader/writer close (STATUS h1/bgeo). `trail` BLOCKED: needs time-history cook API (no frame history in cook ctx). `align`, `bulge` open. Group counts below are the h36 snapshot (not re-tallied).
+
 ## Left (next picks, by Houdini docs popularity)
 
 carve, lattice, polyframe, dissolve, clean, polysplit, edgedivide, split, trail, attribrandomize, attribswap, groupcreate/groupexpand/groupinvert, name, pointjitter, align, bulge, tube type=prim, torus/tube Mesh prim.
@@ -29,10 +33,10 @@ Method notes: classification into groups is keyword/list based (one-off script, 
 | distinct SOP names | 1025 |
 | hidden / legacy (Houdini `hidden()` flag = deprecated or internal) | 152 |
 | visible (non-hidden) SOP names | 873 |
-| hexe registered types | 68 |
-| hexe covers visible Houdini SOPs | 64 (7.3% of visible) |
+| hexe registered types | 84 (h39; `hexe-cli nodes` = 806 lines, 84 type headers) |
+| hexe covers visible Houdini SOPs | 78 by census name (8.9% of visible; 64 at h36) |
 | hexe covers hidden/legacy names | 3 (group, knife, twist) |
-| hexe-only / renamed | `wrangle` = Houdini `attribwrangle`; `motion` = hexe-only (no Houdini SOP) |
+| hexe-only / renamed | `wrangle` = Houdini `attribwrangle`; `motion` = hexe-only (no Houdini SOP); `boolean` = namespaced in Houdini (not a bare census key) |
 
 ## By group (visible SOPs)
 
