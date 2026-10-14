@@ -42,3 +42,6 @@ Never /tmp · never `pkill -f` · one live test at a time · each lane own workt
 ## Layout
 `crates/*` libs (layers in `xtask/src/layers.rs` TABLE) · `apps/hexe-tauri` Tauri app (egui retired; backlog PORT-TODO.md) · `apps/hexe-cli` CLI + oracle entry · `xtask/` gates · `parity/` ledger · `fixtures/` oracle cases · `spec/` prose spec · `perf/` budgets.
 Commands: `cargo xtask ci|layers|assets|parity|oracle|perf|size|deny|leakscan|version|boolstart`.
+
+## 10. Vendored deps / worktrees
+`third_party/tauri-debug-server` = vendored from gaia-daemon `src-tauri/crates/tauri-debug-server` @7b7804a1 → path dep `../../../third_party/…` resolves from main checkout AND any `wt/*` worktree. NEVER symlink `wt/gaia-daemon` / never path-dep outside repo. `wt/` must stay empty of non-worktree entries (CI assets step scans it). Re-vendor = rsync from gaia-daemon, bump sha here.
