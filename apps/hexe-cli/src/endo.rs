@@ -124,9 +124,10 @@ pub fn survey(root: &Path) -> Result<String, String> {
         o,
         "## Container\n\n- zlib stream (`78 01`) -> UTF-8 XML, one root element. Same container for every extension.\n- Floats: attribute pairs `x=\"0.95\"` (decimal, lossy) + `bx=\"3f735159\"` (hex IEEE-754 single, exact). The reader prefers the hex twin (`(+hex)` below). Some attributes are hex-only (`bparam0`, `brestitution`, ...).\n- `TransformMatrix` = `Vi Vj Vk` basis columns + `Vp` translation, each `x y z`. Joint matrices are parent-local; MetaBody matrices are joint-local.\n- `.nmb` roots are `<cc>` with opaque text-encoded blobs in attributes (`vw`, `lo`, ...): NOT decoded (unknown); only `RefNames` and attribute names are read.\n"
     );
-    let _ = writeln!(
-        o,
-        "## Files\n\n| ext | files | parsed | root elements | elements | inflated MB |\n|---|---|---|---|---|---|"
+let _ = writeln!(o, "{}", include_str!("../../../oracle/endorphin/SCENE_POSE.md"));
+let _ = writeln!(
+o,
+"## Files\n\n| ext | files | parsed | root elements | elements | inflated MB |\n|---|---|---|---|---|---|"
     );
     let (mut tot_f, mut tot_ok) = (0, 0);
     let mut all = Vocab::default();
