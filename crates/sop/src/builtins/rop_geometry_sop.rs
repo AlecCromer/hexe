@@ -1,3 +1,4 @@
+//! DOC-VERIFIED vs Houdini 20.5 help `out/geometry.txt`, tests/rop_geometry_semantics.rs (write + reload == input; not a recorded row).
 //! ROP Geometry Output (`rop_geometry`, `rop-geometry`): cooking writes input 0 to `sopoutput` (format by extension via
 //! `hexe_geo::write_any`: `.geo` JSON, `.bgeo` binary JSON, `.obj`, `.ply`) and passes the input through.
 //!
