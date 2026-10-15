@@ -27,9 +27,9 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300` (proof PNGs
 | [circle](#circle) | 0 | 9 | shipped (sop-circle) | via `curves.json` |
 | [clean](#clean) | 1 | 18 | shipped (sop-clean) | none |
 | [clip](#clip) | 1 | 8 | shipped (sop-clip) | `clip.json` |
-| [color](#color) | 1 | 5 | shipped (sop-color) | `color.json` |
+| [color](#color) | 1 | 7 | shipped (sop-color) | `color.json` |
 | [connectivity](#connectivity) | 1 | 2 | shipped (sop-connectivity) | `connectivity.json` |
-| [convert](#convert) | 1 | 9 | shipped (sop-convert) | `convert.json` |
+| [convert](#convert) | 1 | 10 | shipped (sop-convert) | `convert.json` |
 | [copytopoints](#copytopoints) | 2 | 8 | shipped (sop-copytopoints) | `copytopoints.json` |
 | [curve](#curve) | 0 | 7 | shipped (sop-curve) | via `curves.json` |
 | [delete](#delete) | 1 | 11 | shipped (sop-delete) | `delete.json` |
@@ -53,7 +53,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300` (proof PNGs
 | [matchsize](#matchsize) | 2 | 9 | shipped (sop-matchsize) | `matchsize.json` |
 | [measure](#measure) | 1 | 3 | shipped (sop-measure) | `measure.json` |
 | [merge](#merge) | 4 | 0 | shipped (sop-merge) | via `connectivity.json` |
-| [mirror](#mirror) | 1 | 8 | shipped (sop-mirror) | `mirror.json` |
+| [mirror](#mirror) | 1 | 10 | shipped (sop-mirror) | `mirror.json` |
 | [mountain](#mountain) | 1 | 15 | shipped (sop-mountain) | `mountain.json` |
 | [name](#name) | 1 | 21 | shipped (sop-name) | `name.json` |
 | [normal](#normal) | 1 | 4 | shipped (sop-normal) | `normal.json` |
@@ -91,7 +91,7 @@ Render: `hexe-tauri examples/<f>.json --render <png> --size 480x300` (proof PNGs
 | [wrangle](#wrangle) | 1 | 2 | shipped (sop-wrangle) | `wrangle.json` |
 | [xform](#xform) | 1 | 13 | shipped (sop-transform) | via `boolean.json` |
 
-Totals: 83 SOPs · 69 with an example (43 dedicated + 26 via) · parity 83 shipped / 0 partial / 0 planned / 0 no-row · 708 params in total.
+Totals: 83 SOPs · 69 with an example (43 dedicated + 26 via) · parity 83 shipped / 0 partial / 0 planned / 0 no-row · 713 params in total.
 Gaps: 14 SOP w/o example.
 
 ## Parameters
@@ -462,7 +462,9 @@ Inputs: input0.
 |---|---|---|---|---|
 | `group` | Group | string | `""` |  |
 | `class` | Class | menu | `point` | point · vertex · prim · detail |
-| `colortype` | Color Type | menu | `constant` | constant · random |
+| `deleteallcolorattribs` | Delete All Existing Color Attributes | bool | `false` |  |
+| `enable` | Set Color Attribute | bool | `true` |  |
+| `colortype` | Color Type | menu | `constant` | constant · random · bbox |
 | `color` | Color | vec3 | `[1, 1, 1]` |  |
 | `seed` | Seed | float | `0` | 0 … 10 |
 
@@ -489,6 +491,7 @@ Inputs: input0.
 | `lodu` | LOD U (Columns x) | float | `1` | 0.1 … 8 |
 | `lodv` | LOD V (Rows x) | float | `1` | 0.1 … 8 |
 | `capfan` | Tube Caps As Pole Fans | bool | `false` |  |
+| `keeporiginal` | Preserve Original | bool | `false` |  |
 | `spheremode` | Sphere Tessellation | menu | `icosphere` | icosphere · latlong |
 
 ### copytopoints
@@ -869,6 +872,8 @@ Inputs: input0.
 | `reverse` | Reverse Polygons | bool | `true` |  |
 | `consolidate` | Consolidate Seam Points | bool | `false` |  |
 | `consolidatetol` | Tolerance | float | `0.001` | 0 … 1 |
+| `createoutputgroup` | Create Output Group | bool | `false` |  |
+| `outputgroup` | Output Group | string | `""` |  |
 
 ### mountain
 
