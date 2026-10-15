@@ -9,15 +9,25 @@ LAW: hexe = ours, Houdini = recorded oracle only. Default `cargo xtask oracle --
 | TOPO-DIFF | 1 | 1 | sop-boolean: 4 split polys, start vertex (see boolean-topo.md) |
 | HEXE-ERR | 1 | 1 | sop-motion-hitreact: hexe cook needs `~/.gaia/cache/gaia-motion/venv/bin/python` (missing here), env not geometry |
 | NO-ORACLE | 0 | 0 | none in corpus run |
+| DOC-VERIFIED | (6 SOPs, separate table below, not in the 174 rows) | | doc-semantics tests, no recorded Houdini |
 pass = 167/169 · partial = 0 · diff = 1 · env-blocked = 1. Semantically identical to the earlier hython run (`results.json` 174/174 rows equal).
 Live proof: `compare.py --live-houdini sop-box sop-boolean sop-grid` (hython license-blocked) → `{'NO-ORACLE': 3}`, rc 0.
 
 ## SOPs with NO recorded corpus (registry = 84 types, `hexe-cli nodes`)
 **6 of 84** have no `fixtures/sop-*` row: `attribcreate` `color` `convert` `mirror` `polyreduce` `rop_geometry`.
-- `convert`: only file-format twins in `parity/ref/convert/` (not a SOP cook oracle)
+**State `DOC-VERIFIED`** (new, branch `parity/six-sops-nohou`): NOT Houdini-recorded. Oracle = (a) Houdini 20.5 help text `nodes.zip:sop/<name>.txt` (read-only text; no hython/licence/Houdini runtime), (b) related recorded rows, (c) hexe invariants; asserted by `crates/sop/tests/<name>_semantics.rs` (>= 3 cases: defaults, non-default, edge). Weaker than MATCH: proves documented semantics, never numeric identity (RNG streams, tessellation layout, QEM tie-breaks stay unverified).
+| SOP | state | tests | builtin changed | doc facts NOT modelled |
+|---|---|---|---|---|
+| mirror | DOC-VERIFIED | `mirror_semantics.rs` (7) | yes: Keep Original off drops unselected prims+points; `createoutputgroup`/`outputgroup` | Operation=Clip, dirtype=Transform (t/r), unshared-edge-only consolidate, reverse U/V |
+| attribcreate | DOC-VERIFIED | `attribcreate_semantics.rs` (6) | yes: type qualifier guess-from-name for float N/Cd/v/up | Existing Name modes, array types, local vars, info block, precision |
+| color | DOC-VERIFIED | `color_semantics.rs` (6) | yes: `bbox` colortype, `deleteallcolorattribs`, `enable` | Ramp-from-attribute type, Random stream != Houdini |
+| convert | DOC-VERIFIED | `convert_semantics.rs` (5) | yes: `keeporiginal` (Preserve Original) | Group, divisions U/V/trim, order, paste coords/attrs, interpolate-through-hulls, volume offset, mesh lifting |
+| polyreduce | DOC-VERIFIED | `polyreduce_semantics.rs` (5) | no | Group, preserve quads, equalize lengths, seam weights, hard points/edges, visibility; boundary is HARD (Houdini: weight) so targets can hit a boundary floor |
+| rop_geometry | DOC-VERIFIED | `rop_geometry_semantics.rs` (4) | no | background save, `$N`/`$NRENDER` vars |
+- `convert`: also file-format twins in `parity/ref/convert/` (not a SOP cook oracle)
 - `polyreduce`: branch `p1/polyreduce`, no recorded Houdini side on main
 - `rop_geometry`: out of oracle scope by design (not a `sop-*` ledger row)
-- `attribcreate` `color` `mirror`: no twin script `oracle/houdini/sop-*.py` at all
+- `attribcreate` `color` `mirror`: no twin script `oracle/houdini/sop-*.py`
 Non-gating extra corpora: `parity/ref/boolean` (61 files), `parity/ref/polybevel`, `parity/ref/smooth-probes`, `parity/ref/uvlayout`.
 
 ## Thin corpus (exactly 1 recorded case, default params only) — 42 types
