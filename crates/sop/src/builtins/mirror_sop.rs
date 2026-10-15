@@ -1,12 +1,13 @@
 //! Mirror SOP (token `mirror`): reflect geometry across a plane.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
+//! # Semantics (DOC-VERIFIED vs Houdini 20.5 help `sop/mirror.txt`, tests/mirror_semantics.rs; no recorded Houdini row)
 //! Plane = through `origin + normalize(dir) * dist`, normal `normalize(dir)`; `dir` of zero length = `BadParam`.
 //! `group` = primitive pattern (as in the `group` SOP; empty = every prim; a prim-less point cloud mirrors all points).
 //! * `keepOriginal` (on): output = the input unchanged + a reflected copy of the selected prims (and the points they use,
 //!   fresh points; every attribute and group follows the source element).
-//! * `keepOriginal` off: the points used by the selected prims are reflected IN PLACE (points shared with unselected prims
-//!   move too); no new elements.
+//! * `keepOriginal` off: "only the selected geometry will remain": unselected prims (and points only they used) are dropped,
+//!   the selected prims' points are reflected IN PLACE; no new elements.
+//! * `createoutputgroup` (off) + `outputgroup`: prim group holding exactly the mirrored prims.
 //! * `reverse` (on): reflected closed polygons get their vertex order reversed so the winding / normal stays consistent.
 //! * `consolidate` (off, keep-original only): a copied point within `consolidatetol` of the plane reuses its original point
 //!   (welds the seam).
@@ -32,6 +33,8 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("reverse", ParamValue::B(true)).label("Reverse Polygons"),
         ParamSpec::new("consolidate", ParamValue::B(false)).label("Consolidate Seam Points"),
         ParamSpec::new("consolidatetol", ParamValue::F(0.001)).label("Tolerance").range(0.0, 1.0),
+        ParamSpec::new("createoutputgroup", ParamValue::B(false)).label("Create Output Group"),
+        ParamSpec::new("outputgroup", ParamValue::S(String::new())).label("Output Group"),
     ]
 }
 
@@ -65,6 +68,10 @@ impl Node<Detail> for Mirror {
         let (keep, reverse, consolidate) =
             (toggle(p, "keepOriginal")?, toggle(p, "reverse")?, toggle(p, "consolidate")?);
         let tol = float(p, "consolidatetol")?;
+        let (make_grp, grp_name) = (toggle(p, "createoutputgroup")?, p.string("outputgroup").unwrap_or_default().trim());
+        if make_grp && (grp_name.is_empty() || grp_name.contains(char::is_whitespace)) {
+            return Err(bad("`outputgroup` must be one non-empty token when `createoutputgroup` is on".to_string()));
+        }
         if tol < 0.0 {
             return Err(bad("`consolidatetol` must be >= 0"));
         }
@@ -103,9 +110,16 @@ impl Node<Detail> for Mirror {
         }
 
         // points
-        let mut point_src: Vec<Vec<usize>> = (0..np).map(|i| vec![i]).collect();
-        let mut out_pos = pos.clone();
-        let mut newidx: Vec<usize> = (0..np).collect();
+        // keep off (Houdini: "only the selected geometry will remain"): drop unselected prims + the points they alone used
+        let drop_rest = !keep && !cloud;
+        let mut point_src: Vec<Vec<usize>> = (0..np).filter(|&i| !drop_rest || used[i]).map(|i| vec![i]).collect();
+        let mut out_pos: Vec<V3> = (0..np).filter(|&i| !drop_rest || used[i]).map(|i| pos[i]).collect();
+        let mut newidx: Vec<usize> = if drop_rest {
+            let mut r = 0;
+            (0..np).map(|i| { let v = r; r += usize::from(used[i]); v }).collect()
+        } else {
+            (0..np).collect()
+        };
         let mut ref_pts: Vec<usize> = Vec::new();
         for i in (0..np).filter(|&i| used[i]) {
             let q = pos[i];
@@ -118,8 +132,8 @@ impl Node<Detail> for Mirror {
                 out_pos.push(reflect(q));
                 point_src.push(vec![i]);
             } else {
-                out_pos[i] = reflect(q);
-                ref_pts.push(i);
+                out_pos[newidx[i]] = reflect(q);
+                ref_pts.push(newidx[i]);
             }
             if out_pos.len() as u64 > MAX_ELEMS {
                 return Err(failed(OP, "too many points"));
@@ -129,7 +143,10 @@ impl Node<Detail> for Mirror {
         // prims: (source prim, reflected?)
         let mut order: Vec<(usize, bool)> = Vec::new();
         for q in 0..src.prims.len() {
-            order.push((q, !keep && sel.get(q).copied().unwrap_or(false)));
+            let selected = sel.get(q).copied().unwrap_or(false);
+            if keep || selected || !drop_rest {
+                order.push((q, !keep && selected));
+            }
         }
         if keep {
             order.extend((0..src.prims.len()).filter(|&q| sel.get(q).copied().unwrap_or(false)).map(|q| (q, true)));
@@ -137,7 +154,9 @@ impl Node<Detail> for Mirror {
         let (mut vertex_point, mut vert_src, mut prims, mut prim_src) =
             (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let mut ref_verts: Vec<usize> = Vec::new();
+        let mut order_mir: Vec<bool> = Vec::new();
         for (q, mir) in order {
+            order_mir.push(mir);
             let pr = &src.prims[q];
             let mut vs: Vec<usize> = prim_verts(src, pr).collect();
             if mir && reverse && matches!(pr.kind, PrimKind::Poly { closed: true }) {
@@ -160,8 +179,14 @@ impl Node<Detail> for Mirror {
             prims.push(Prim { kind: pr.kind.clone(), verts: u32::try_from(start).unwrap_or(0)..end });
             prim_src.push(Some(q));
         }
+        let mirrored_prims: Vec<bool> = order_mir;
         let rm = Remap { point_src, vert_src, prim_src };
         let mut out = rebuild(OP, src, vertex_point, prims, &rm, to_f32(OP, &out_pos)?)?;
+        if make_grp {
+            let g = hexe_geo::Group { name: grp_name.to_string(), class: AttrClass::Prim, mask: mirrored_prims };
+            out.groups.retain(|x| !(x.class == AttrClass::Prim && x.name == g.name));
+            out.groups.push(g);
+        }
         for a in out.attrs.iter_mut() {
             let idx = match a.class {
                 AttrClass::Point if a.name != "P" => &ref_pts,
@@ -216,7 +241,7 @@ mod tests {
         assert_eq!(got[0], ("group", ParamValue::S(String::new())));
         assert_eq!(got[2], ("dir", ParamValue::V3([0.0, 1.0, 0.0])));
         assert_eq!(got[4], ("keepOriginal", ParamValue::B(true)));
-        assert_eq!(got.len(), 8);
+        assert_eq!(got.len(), 10);
     }
 
     #[test]
