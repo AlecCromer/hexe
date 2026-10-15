@@ -1,0 +1,76 @@
+# libHoudiniGEO.dylib (Houdini 20.5.487, x86_64) GU_Boolean::extractVirtualPolys @ 0x1e50e10 — first 60 insns (objdump -d --macho --arch x86_64; addresses = nm -C file offsets)
+ 1e50e10: 55 pushq %rbp
+ 1e50e11: 48 89 e5 movq %rsp, %rbp
+ 1e50e14: 41 57 pushq %r15
+ 1e50e16: 41 56 pushq %r14
+ 1e50e18: 41 55 pushq %r13
+ 1e50e1a: 41 54 pushq %r12
+ 1e50e1c: 53 pushq %rbx
+ 1e50e1d: 48 81 ec 08 01 00 00 subq $0x108, %rsp
+ 1e50e24: 44 89 cb movl %r9d, %ebx
+ 1e50e27: 44 89 85 38 ff ff ff movl %r8d, -0xc8(%rbp)
+ 1e50e2e: 41 89 cd movl %ecx, %r13d
+ 1e50e31: 48 89 95 60 ff ff ff movq %rdx, -0xa0(%rbp)
+ 1e50e38: 48 89 75 b8 movq %rsi, -0x48(%rbp)
+ 1e50e3c: 48 89 7d c8 movq %rdi, -0x38(%rbp)
+ 1e50e40: e8 55 bc cc 07 callq 0x9b1ca9a ## symbol stub for: __Z14UTgetInterruptv
+ 1e50e45: 48 89 45 a8 movq %rax, -0x58(%rbp)
+ 1e50e49: 48 85 c0 testq %rax, %rax
+ 1e50e4c: 74 53 je 0x1e50ea1
+ 1e50e4e: 45 85 ed testl %r13d, %r13d
+ 1e50e51: 48 8d 0d 7b ac 06 08 leaq 0x806ac7b(%rip), %rcx ## literal pool for: "Detriangulating"
+ 1e50e58: 48 8d 35 84 ac 06 08 leaq 0x806ac84(%rip), %rsi ## literal pool for: "Generating Triangles"
+ 1e50e5f: 48 0f 45 f1 cmovneq %rcx, %rsi
+ 1e50e63: 4c 8d 45 b4 leaq -0x4c(%rbp), %r8
+ 1e50e67: 48 89 c7 movq %rax, %rdi
+ 1e50e6a: 31 d2 xorl %edx, %edx
+ 1e50e6c: 31 c9 xorl %ecx, %ecx
+ 1e50e6e: e8 a1 cf cc 07 callq 0x9b1de14 ## symbol stub for: __ZN12UT_Interrupt7opStartEPKciiPi
+ 1e50e73: 85 c0 testl %eax, %eax
+ 1e50e75: 0f 95 45 b0 setne -0x50(%rbp)
+ 1e50e79: 0f 84 2c 15 00 00 je 0x1e523ab
+ 1e50e7f: 48 8b 7d a8 movq -0x58(%rbp), %rdi
+ 1e50e83: 48 85 ff testq %rdi, %rdi
+ 1e50e86: 74 1d je 0x1e50ea5
+ 1e50e88: be ff ff ff ff movl $0xffffffff, %esi
+ 1e50e8d: e8 70 cf cc 07 callq 0x9b1de02 ## symbol stub for: __ZN12UT_Interrupt11opInterruptEi
+ 1e50e92: 85 c0 testl %eax, %eax
+ 1e50e94: 75 44 jne 0x1e50eda
+ 1e50e96: 80 7d b0 00 cmpb $0x0, -0x50(%rbp)
+ 1e50e9a: 75 09 jne 0x1e50ea5
+ 1e50e9c: e9 0a 15 00 00 jmp 0x1e523ab
+ 1e50ea1: c6 45 b0 01 movb $0x1, -0x50(%rbp)
+ 1e50ea5: 48 8b 7d c8 movq -0x38(%rbp), %rdi
+ 1e50ea9: 48 8b 75 b8 movq -0x48(%rbp), %rsi
+ 1e50ead: 48 8b 95 60 ff ff ff movq -0xa0(%rbp), %rdx
+ 1e50eb4: e8 67 d4 ff ff callq __ZN10GU_Boolean19assignSubsetIndicesER14SubsetIndexMapRK8UT_ArrayIN11GU_Delaun
+ 1e50eb9: 80 7d b0 00 cmpb $0x0, -0x50(%rbp)
+ 1e50ebd: 0f 84 e8 14 00 00 je 0x1e523ab
+ 1e50ec3: 48 8b 7d a8 movq -0x58(%rbp), %rdi
+ 1e50ec7: 48 85 ff testq %rdi, %rdi
+ 1e50eca: 74 21 je 0x1e50eed
+ 1e50ecc: be ff ff ff ff movl $0xffffffff, %esi
+ 1e50ed1: e8 2c cf cc 07 callq 0x9b1de02 ## symbol stub for: __ZN12UT_Interrupt11opInterruptEi
+ 1e50ed6: 85 c0 testl %eax, %eax
+ 1e50ed8: 74 09 je 0x1e50ee3
+ 1e50eda: c6 45 b0 00 movb $0x0, -0x50(%rbp)
+ 1e50ede: e9 c8 14 00 00 jmp 0x1e523ab
+ 1e50ee3: 80 7d b0 00 cmpb $0x0, -0x50(%rbp)
+ 1e50ee7: 0f 84 be 14 00 00 je 0x1e523ab
+ 1e50eed: 4c 8b 75 b8 movq -0x48(%rbp), %r14
+ 1e50ef1: 49 63 46 3c movslq 0x3c(%r14), %rax
+
+# comparator GU_Boolean::classifyTrisIntoVirtualPolys::$_4 @ 0x1e5f720 (hedge_data sort): first 12
+ 1e5f720: 55 pushq %rbp
+ 1e5f721: 48 89 e5 movq %rsp, %rbp
+ 1e5f724: 8b 42 08 movl 0x8(%rdx), %eax
+ 1e5f727: 39 46 08 cmpl %eax, 0x8(%rsi)
+ 1e5f72a: 75 57 jne 0x1e5f783
+ 1e5f72c: f3 0f 10 46 0c movss 0xc(%rsi), %xmm0
+ 1e5f731: 0f 2e 42 0c ucomiss 0xc(%rdx), %xmm0
+ 1e5f735: 75 51 jne 0x1e5f788
+ 1e5f737: 7a 4f jp 0x1e5f788
+ 1e5f739: 48 8b 06 movq (%rsi), %rax
+ 1e5f73c: 48 8b 0f movq (%rdi), %rcx
+ 1e5f73f: 4c 8b 91 20 03 00 00 movq 0x320(%rcx), %r10
+ 1e5f746: 48 89 c6 movq %rax, %rsi
