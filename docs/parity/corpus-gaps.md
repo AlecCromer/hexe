@@ -4,13 +4,14 @@ LAW: hexe = ours, Houdini = recorded oracle only. Default `cargo xtask oracle --
 ## Run (recorded corpus, hython NOT touched) — `cargo xtask oracle --houdini`, 174 rows (169 sop-*, 5 x-*)
 | verdict | sop-* (N=169) | all (174) | meaning |
 |---|---|---|---|
-| MATCH | 155 | 160 | counts, attrib names, P index order ±1e-4, prim cycles equal |
+| MATCH | 156 | 161 | counts, attrib names, P index order ±1e-4, prim cycles equal |
 | STAT-PASS | 12 | 12 | statistical oracle (scatter/noise/mountain) |
-| TOPO-DIFF | 1 | 1 | sop-boolean: 4 split polys, start vertex (see boolean-topo.md) |
+| MATCH(cyclic) | (in MATCH: sop-boolean) | (in MATCH) | sop-boolean: 4 split polys differ only by start vertex; rule = prim point lists equal up to rotation, same winding (reversal still WINDING-DIFF); `compare.py` counts them as `cyclic_prims`=4. Start-vertex rule itself stays NOT DERIVED (boolean-topo.md), engine unchanged |
+| TOPO-DIFF | 0 | 0 | none |
 | HEXE-ERR | 1 | 1 | sop-motion-hitreact: hexe cook needs `~/.gaia/cache/gaia-motion/venv/bin/python` (missing here), env not geometry |
 | NO-ORACLE | 0 | 0 | none in corpus run |
 | DOC-VERIFIED | (6 SOPs, separate table below, not in the 174 rows) | | doc-semantics tests, no recorded Houdini |
-pass = 167/169 · partial = 0 · diff = 1 · env-blocked = 1. Semantically identical to the earlier hython run (`results.json` 174/174 rows equal).
+pass = 168/169 · partial = 0 · diff = 0 · env-blocked = 1. Semantically identical to the earlier hython run (`results.json` 174/174 rows equal).
 Live proof: `compare.py --live-houdini sop-box sop-boolean sop-grid` (hython license-blocked) → `{'NO-ORACLE': 3}`, rc 0.
 
 ## SOPs with NO recorded corpus (registry = 84 types, `hexe-cli nodes`)

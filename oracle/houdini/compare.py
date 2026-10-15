@@ -6,6 +6,7 @@ LAW: Houdini is a recorded oracle only. hython runs ONLY behind --live-houdini (
 A sop with no recorded houdini.json (or none with points) is NO-ORACLE too (corpus gap).
 -> oracle/houdini/results.json + docs/HOUDINI-ORACLE.md
 Verdict priority: NO-ORACLE > HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF (same P order + prim cycles, direction reversed) > ORDER-DIFF (same P multiset, other order) > P-DIFF > MATCH.
+Cyclic: prim point lists equal up to rotation of the start vertex (same winding) = MATCH, counted as res.cyclic_prims; reversal is never passed.
 Strict: permutation is only CLASSIFIED (ORDER-DIFF), never passed as MATCH. P tolerance 1e-4.
 STAT mode (houdini.json `oracle`="stat", see parity/README.md, metrics in statoracle.py): RNG/noise streams are not reproducible, so distributions are compared instead of P:
 count exact, bbox min/max per axis +-2 % of the Houdini extent, mean nearest-neighbour distance +-5 %, P std per axis +-5 %, attribute names exact
@@ -119,12 +120,17 @@ def cmp_one(s):
             res["p_maxdev_nearest"] = round(worst, 6)
     res["p"] = pstate
     if pstate == "MATCH":
-        # topology: per prim, same point-id cycle; a cycle with the same first point run the OTHER way is WINDING-DIFF
+        # topology: per prim, same point-id cycle (rotation of the start vertex allowed = MATCH(cyclic), counted in cyclic_prims); a cycle with the same first point run the OTHER way is WINDING-DIFF
         # (hexe is counter-clockwise, Houdini clockwise, see docs/HOUDINI-ORACLE.md); anything else is TOPO-DIFF; also closedness.
         ht, xt = H["prim_pts"], X["prim_pts"]
-        bad = wind = 0
+        bad = wind = cyc = 0
         for u, v in zip(ht, xt):
             if u == v:
+                continue
+            # MATCH(cyclic): same vertex cycle, same winding, rotated start vertex (Houdini start vertex of split polys is
+            # a function of its internal triangulation order, docs/parity/boolean-topo.md) -> not a topology difference
+            if len(u) == len(v) and u and v[:1] and u.count(v[0]) == 1 and (lambda k: u[k:] + u[:k] == v)(u.index(v[0])):
+                cyc += 1
                 continue
             if len(u) == len(v) and u and v == [u[0]] + u[:0:-1]:
                 wind += 1
@@ -136,6 +142,8 @@ def cmp_one(s):
         elif wind:
             flags.append("WINDING-DIFF")
             res["winding_prims"] = wind
+        if cyc:
+            res["cyclic_prims"] = cyc  # verdict stays MATCH (rule: equal up to rotation, same winding)
     if pstate in ("ORDER-DIFF", "P-DIFF"):
         flags.append(pstate)
     res["flags"] = flags

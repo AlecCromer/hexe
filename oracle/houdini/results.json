@@ -58,12 +58,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -127,13 +127,13 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "v"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -197,13 +197,13 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "v"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -269,6 +269,7 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "w"
@@ -276,8 +277,7 @@
     "prim": [
      "v"
     ],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -370,6 +370,7 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "Cd",
      "P",
@@ -377,8 +378,7 @@
      "k"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -443,14 +443,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "h",
      "k"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -514,13 +514,13 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "v"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -583,12 +583,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -651,12 +651,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -673,11 +673,9 @@
    42
   ],
   "p": "MATCH",
-  "topo_bad_prims": 4,
-  "flags": [
-   "TOPO-DIFF"
-  ],
-  "verdict": "TOPO-DIFF",
+  "cyclic_prims": 4,
+  "flags": [],
+  "verdict": "MATCH",
   "bbox": {
    "houdini": [
     [
@@ -722,12 +720,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -790,12 +788,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -860,14 +858,14 @@
     ]
    },
    "hexe": {
+    "detail": [
+     "xform"
+    ],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": [
-     "xform"
-    ]
+    "vertex": []
    }
   }
  },
@@ -930,12 +928,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -998,12 +996,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1066,12 +1064,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1134,12 +1132,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1202,12 +1200,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1270,12 +1268,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1338,12 +1336,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1406,12 +1404,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1474,12 +1472,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1542,12 +1540,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1610,12 +1608,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1678,12 +1676,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1746,12 +1744,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1814,12 +1812,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1882,12 +1880,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -1950,12 +1948,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2018,12 +2016,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2086,12 +2084,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2154,12 +2152,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2224,14 +2222,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [
      "class"
     ],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2294,12 +2292,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2362,12 +2360,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2430,12 +2428,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2498,12 +2496,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2566,12 +2564,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2634,12 +2632,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2702,12 +2700,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2770,12 +2768,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2838,12 +2836,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2906,12 +2904,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -2974,12 +2972,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3042,12 +3040,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3090,12 +3088,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3158,12 +3156,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3226,12 +3224,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3294,12 +3292,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3362,12 +3360,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3432,14 +3430,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "h",
      "k"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3504,14 +3502,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "h",
      "k"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3576,14 +3574,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "h",
      "k"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3648,14 +3646,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "h",
      "k"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3720,14 +3718,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "h",
      "k"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3791,13 +3789,13 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "N",
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -3863,6 +3861,7 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "Cd",
      "P"
@@ -3870,8 +3869,7 @@
     "prim": [],
     "vertex": [
      "N"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -3931,13 +3929,13 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "name"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4000,12 +3998,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4068,12 +4066,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4136,12 +4134,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4204,12 +4202,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4272,12 +4270,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4340,12 +4338,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4408,12 +4406,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4476,12 +4474,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4544,12 +4542,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4612,12 +4610,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4680,12 +4678,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4748,12 +4746,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4816,12 +4814,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4884,12 +4882,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -4952,12 +4950,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5020,12 +5018,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5088,12 +5086,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5156,12 +5154,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5224,12 +5222,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5292,12 +5290,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5360,12 +5358,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5428,12 +5426,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5496,12 +5494,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5564,12 +5562,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5632,12 +5630,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5700,12 +5698,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5768,12 +5766,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5836,12 +5834,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5906,14 +5904,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [
      "area"
     ],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -5976,12 +5974,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6137,14 +6135,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [
      "name"
     ],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6208,13 +6206,13 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "tag"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6360,14 +6358,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "N"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -6430,12 +6428,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6498,12 +6496,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6566,12 +6564,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6634,12 +6632,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6702,12 +6700,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6770,12 +6768,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6838,12 +6836,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -6906,12 +6904,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7001,12 +6999,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7069,12 +7067,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7137,12 +7135,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7205,12 +7203,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7273,12 +7271,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7341,12 +7339,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7411,14 +7409,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "N",
      "P",
      "tangentu"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7484,6 +7482,7 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "N",
      "P",
@@ -7491,8 +7490,7 @@
      "tangentv"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7558,6 +7556,7 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "N",
      "P",
@@ -7565,8 +7564,7 @@
      "tangentv"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7632,6 +7630,7 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P",
      "nn",
@@ -7639,8 +7638,7 @@
      "tv"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7706,6 +7704,7 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "N",
      "P",
@@ -7713,8 +7712,7 @@
      "tangentv"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7777,12 +7775,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7845,12 +7843,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7913,12 +7911,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -7981,12 +7979,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8049,12 +8047,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8117,12 +8115,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8185,12 +8183,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8253,12 +8251,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8321,12 +8319,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8391,14 +8389,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -8463,14 +8461,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -8535,14 +8533,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -8607,14 +8605,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -8817,12 +8815,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8885,12 +8883,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -8953,12 +8951,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9021,12 +9019,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9089,12 +9087,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9157,12 +9155,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9225,12 +9223,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9293,12 +9291,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9361,12 +9359,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9429,12 +9427,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9493,12 +9491,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9561,12 +9559,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9629,12 +9627,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9697,12 +9695,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9765,12 +9763,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9833,12 +9831,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9901,12 +9899,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -9969,12 +9967,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10037,12 +10035,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10105,12 +10103,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10173,12 +10171,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10241,12 +10239,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10309,12 +10307,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10377,12 +10375,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10445,12 +10443,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10513,12 +10511,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10581,12 +10579,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10649,12 +10647,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10717,12 +10715,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -10790,16 +10788,16 @@
     ]
    },
    "hexe": {
+    "detail": [
+     "coverage",
+     "numnonpacked"
+    ],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": [
-     "coverage",
-     "numnonpacked"
     ]
    }
   }
@@ -10868,16 +10866,16 @@
     ]
    },
    "hexe": {
+    "detail": [
+     "coverage",
+     "numnonpacked"
+    ],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": [
-     "coverage",
-     "numnonpacked"
     ]
    }
   }
@@ -10943,14 +10941,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -11015,14 +11013,14 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
     "vertex": [
      "uv"
-    ],
-    "detail": []
+    ]
    }
   }
  },
@@ -11081,12 +11079,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -11149,12 +11147,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -11217,12 +11215,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -11285,12 +11283,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -11353,12 +11351,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  },
@@ -11421,12 +11419,12 @@
     "detail": []
    },
    "hexe": {
+    "detail": [],
     "point": [
      "P"
     ],
     "prim": [],
-    "vertex": [],
-    "detail": []
+    "vertex": []
    }
   }
  }
