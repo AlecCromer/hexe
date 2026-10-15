@@ -1,6 +1,7 @@
 //! Convert SOP (token `convert`): change primitive representation. Polygon <-> polyline, analytic sphere / tube -> polygons.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
+//! # Semantics (DOC-VERIFIED vs Houdini 20.5 help `sop/convert.txt`, tests/convert_semantics.rs; no recorded row)
+//! * `keeporiginal` B off (doc "Preserve Original"): output = input + converted copy appended.
 //! * `fromtype` menu `all` (0, default) | `poly` (1) | `polyline` (2) | `sphere` (3) | `tube` (4): only prims of that kind
 //!   are converted, everything else passes through untouched. `totype` menu `polygon` (0, default) | `polyline` (1).
 //! * `totype = polygon`: a `Polyline` prim becomes a `Poly`: if its last corner repeats its first (>= 4 corners, the form
@@ -71,13 +72,37 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("lodu", ParamValue::F(1.0)).label("LOD U (Columns x)").range(0.1, 8.0),
         ParamSpec::new("lodv", ParamValue::F(1.0)).label("LOD V (Rows x)").range(0.1, 8.0),
         ParamSpec::new("capfan", ParamValue::B(false)).label("Tube Caps As Pole Fans"),
+ParamSpec::new("keeporiginal", ParamValue::B(false)).label("Preserve Original"),
         ParamSpec::new("spheremode", ParamValue::Menu(0))
             .label("Sphere Tessellation")
             .menu(&[("icosphere", "Icosphere (Houdini)"), ("latlong", "Lat-long grid")]),
     ]
 }
 pub fn new() -> Box<SopNode> {
-    Box::new(Convert { specs: spec() })
+    Box::new(KeepOriginal(Convert { specs: spec() }))
+}
+/// Doc "Preserve Original: retains original geometry along with converted geometry": input first, converted appended.
+struct KeepOriginal(Convert);
+impl Node<Detail> for KeepOriginal {
+    fn type_name(&self) -> &'static str {
+        self.0.type_name()
+    }
+    fn inputs(&self) -> &[InputSpec] {
+        self.0.inputs()
+    }
+    fn params(&self) -> &[ParamSpec] {
+        self.0.params()
+    }
+    fn cook(&self, ctx: &CookCtx, inputs: &[Arc<Detail>]) -> Result<Arc<Detail>, CookError> {
+        let out = self.0.cook(ctx, inputs)?;
+        if !ctx.params.toggle("keeporiginal").unwrap_or(false) {
+            return Ok(out);
+        }
+        let Some(src) = inputs.first() else { return Ok(out) };
+        let mut d = (**src).clone();
+        d.merge(&out);
+        Ok(Arc::new(d))
+    }
 }
 struct Convert {
     specs: Vec<ParamSpec>,
