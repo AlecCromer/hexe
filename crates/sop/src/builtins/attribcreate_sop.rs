@@ -1,6 +1,6 @@
 //! Attribute Create SOP (token `attribcreate`): creates (or overwrites) up to `MAX_SLOTS` attributes with constant values.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
+//! # Semantics (DOC-VERIFIED vs Houdini 20.5 help `sop/attribcreate.txt`, tests/attribcreate_semantics.rs; no recorded row)
 //! `numattr` (1, 0..=4) slots; slot `i` is `name{i}` `class{i}` (point | vertex | prim | detail) `type{i}` (float | int |
 //! vector | string) `size{i}` (float / int tuple size 1..=4; vector is always 3) `value{i}v1..4` (numeric; int values round half away
 //! from zero) `string{i}` and `writevalues{i}` (on; off creates the attribute with defaults only). A slot with an EMPTY
@@ -8,7 +8,7 @@
 //! `group` (all slots): pattern over the slot's class (point / vertex / prim; ignored for detail), grammar as in the
 //! `group` SOP; empty = every element. Unselected elements keep the existing same-name attribute value when it has the
 //! same shape, else the default (0 / unset string). Float size 2/3/4 -> `V2`/`V3`/`V4`, other sizes `FN`; int size 1
-//! -> `I32` else `IN`. Type info: vector -> Vector, except `N` -> Normal, `Cd` -> Color; point `P` keeps Point and must be
+//! -> `I32` else `IN`. Type info = doc "Guess from name" for float / vector: size-3 `N` -> Normal, `Cd` (3|4) -> Color, `v` / `up` -> Vector, vector type -> Vector, else None; point `P` keeps Point and must be
 //! a size-3 float / vector. Not modelled: `default{i}` multiparm, index (string-indexed) type, per-slot groups.
 use super::attribs::{base_for, copy_elem, set_attr};
 use super::group_sop::{bad, parse_pattern};
@@ -166,11 +166,13 @@ impl Node<Detail> for AttribCreate {
             }
             let type_info = match out.attr(class, name) {
                 Some(x) if super::attribs::same_shape(&x.data, &data) => x.type_info,
-                _ => match (name, ty) {
-                    ("P", _) => TypeInfo::Point,
-                    ("N", 2) => TypeInfo::Normal,
-                    ("Cd", 2) => TypeInfo::Color,
-                    (_, 2) => TypeInfo::Vector,
+                // doc "Guess from name": N -> Normal, Cd -> Color, v / up -> Vector, else None (float / vector types only)
+                _ => match (name, ty, value.tuple_size()) {
+                    ("P", _, _) => TypeInfo::Point,
+                    ("N", 0 | 2, 3) => TypeInfo::Normal,
+                    ("Cd", 0 | 2, 3 | 4) => TypeInfo::Color,
+                    ("v" | "up", 0 | 2, 3) => TypeInfo::Vector,
+                    (_, 2, _) => TypeInfo::Vector,
                     _ => TypeInfo::None,
                 },
             };
