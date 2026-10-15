@@ -11,10 +11,11 @@
 //! (class, name) attribute set exact. `stat-disp` (needs `base = "<file>"`, the cook's input): point count exact, mean and std of |P - base| +-5 %,
 //! attribute set exact. Mirror of `oracle/houdini/statoracle.py`; keep both tolerance sets in sync.
 //! `stat-uv` (UV layout, parity/README.md): island count exact, per-island uv bbox size and total uv area (coverage) +-5 %, layout extent +-5 %; packing order not compared.
-//! `cargo xtask oracle --houdini [compare.py args]`: the REAL-Houdini comparison instead (AGENTS section 2 python exception):
+//! `cargo xtask oracle --houdini [compare.py args]`: the RECORDED-corpus comparison instead (no Houdini needed; AGENTS section 2 python exception):
 //! builds the debug `hexe-cli`, runs `oracle/houdini/compare.py --hexe-cli <it> [args]` (hexe cook of every
-//! `fixtures/sop-*/scene.json` vs the committed `houdini.json`; hython only loads hexe's `.geo` back) then
-//! `oracle/houdini/report.py` -> `docs/HOUDINI-ORACLE.md`. Re-record the Houdini side with `hython oracle/houdini/run_all.py`.
+//! `fixtures/sop-*/scene.json` summarised by `hexe-cli oracle summary`, vs the committed `houdini.json`; a sop without recorded corpus = `NO-ORACLE`)
+//! `--live-houdini` (explicit opt-in, implies the above): hython loads hexe's `.geo` back into Houdini for the summary; hython failing = `NO-ORACLE` rows, run continues.
+//! Then `oracle/houdini/report.py` -> `docs/HOUDINI-ORACLE.md`. Re-record the Houdini side with `hython oracle/houdini/run_all.py`.
 use crate::{Res, baseline, parity, root};
 use serde::Deserialize;
 use std::collections::BTreeSet;
@@ -407,6 +408,7 @@ fn run_houdini(args: &[String]) -> Res {
     }
     let bin = crate::target_dir().join("debug").join(format!("hexe-cli{}", std::env::consts::EXE_SUFFIX));
     let dir = root.join("oracle").join("houdini");
+    // `--houdini` = recorded corpus (no hython); `--live-houdini` is forwarded to compare.py and is the ONLY path that shells hython
     let rest: Vec<&String> = args.iter().filter(|a| a.as_str() != "--houdini").collect();
     let st = Command::new("python3")
         .arg(dir.join("compare.py"))
@@ -427,7 +429,7 @@ fn run_houdini(args: &[String]) -> Res {
     if st.success() { Ok(()) } else { Err(format!("report.py failed ({st})")) }
 }
 pub fn run(args: &[String]) -> Res {
-    if args.iter().any(|a| a == "--houdini") {
+    if args.iter().any(|a| a == "--houdini" || a == "--live-houdini") {
         return run_houdini(args);
     }
     let root = root();

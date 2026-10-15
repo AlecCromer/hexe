@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Oracle comparator (oracle tooling, not product code).
-  compare.py [--hexe-cli PATH] [--hython PATH] [--work DIR] [sop-id ...]
-steps: (1) hexe-cli cook fixtures/<sop>/scene.json -> DIR/<sop>.geo  (2) hython summarize_hexe.py DIR  (3) compare vs fixtures/<sop>/houdini.json
+  compare.py [--hexe-cli PATH] [--live-houdini] [--hython PATH] [--work DIR] [sop-id ...]
+steps: (1) hexe-cli cook fixtures/<sop>/scene.json -> DIR/<sop>.geo  (2) hexe-cli oracle summary DIR/<sop>.geo -> DIR/<sop>.json (NO Houdini)  (3) compare vs the RECORDED corpus fixtures/<sop>/houdini.json
+LAW: Houdini is a recorded oracle only. hython runs ONLY behind --live-houdini (step 2 = hython summarize_hexe.py, also checks the .geo loads in Houdini); if it is unavailable/fails the row says NO-ORACLE (never HEXE-ERR) and the run continues.
+A sop with no recorded houdini.json (or none with points) is NO-ORACLE too (corpus gap).
 -> oracle/houdini/results.json + docs/HOUDINI-ORACLE.md
-Verdict priority: HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF (same P order + prim cycles, direction reversed) > ORDER-DIFF (same P multiset, other order) > P-DIFF > MATCH.
+Verdict priority: NO-ORACLE > HOUDINI-ERR > HEXE-ERR > COUNT-DIFF > ATTRIB-DIFF > TOPO-DIFF > WINDING-DIFF (same P order + prim cycles, direction reversed) > ORDER-DIFF (same P multiset, other order) > P-DIFF > MATCH.
 Strict: permutation is only CLASSIFIED (ORDER-DIFF), never passed as MATCH. P tolerance 1e-4.
 STAT mode (houdini.json `oracle`="stat", see parity/README.md, metrics in statoracle.py): RNG/noise streams are not reproducible, so distributions are compared instead of P:
 count exact, bbox min/max per axis +-2 % of the Houdini extent, mean nearest-neighbour distance +-5 %, P std per axis +-5 %, attribute names exact
@@ -18,6 +20,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--hexe-cli", default=os.path.join(os.environ.get("CARGO_TARGET_DIR", os.path.expanduser("~/.gaia/cache/hexe/target-h30")), "debug", "hexe-cli"))
 ap.add_argument("--hython", default="/Applications/Houdini/Houdini20.5.487/Frameworks/Houdini.framework/Versions/Current/Resources/bin/hython")
 ap.add_argument("--work", default=os.path.expanduser("~/.gaia/cache/hexe/scratch/h31/hexe-out"))
+ap.add_argument("--live-houdini", action="store_true", help="summarise hexe output with hython (loads the .geo back into Houdini); default = recorded corpus only, hexe-cli oracle summary")
 ap.add_argument("--skip-cook", action="store_true")
 ap.add_argument("sops", nargs="*")
 a = ap.parse_args()
@@ -32,7 +35,15 @@ if not a.skip_cook:
                 os.remove(p)
         r = subprocess.run([a.hexe_cli, "cook", os.path.join(ROOT, "fixtures", s, "scene.json"), "--out", out, "--time", "0"], capture_output=True, text=True, timeout=60)
         cook[s] = (r.returncode, (r.stderr or r.stdout).strip())
-    subprocess.run(["timeout", "120", a.hython, os.path.join(HERE, "summarize_hexe.py"), a.work], check=False, capture_output=True)
+    if a.live_houdini:
+        subprocess.run(["timeout", "120", a.hython, os.path.join(HERE, "summarize_hexe.py"), a.work], check=False, capture_output=True)
+    else:
+        for s in sops:
+            geo = os.path.join(a.work, s + ".geo")
+            if cook[s][0] == 0 and os.path.exists(geo):
+                r = subprocess.run([a.hexe_cli, "oracle", "summary", geo], capture_output=True, text=True, timeout=60)
+                if r.returncode == 0:
+                    open(geo[:-4] + ".json", "w").write(r.stdout)
 
 
 def close(p, q):
@@ -44,17 +55,23 @@ def cmp_one(s):
     H = json.load(open(hj)) if os.path.exists(hj) else {"error": "no houdini.json"}
     res = {"sop": s}
     if "error" in H or "points" not in H:
-        res.update(verdict="HOUDINI-ERR", detail=H.get("error", "?"))
+        if "error" not in H:
+            res.update(verdict="NO-ORACLE", detail="no recorded corpus (fixtures/%s/houdini.json)" % s)
+        else:
+            res.update(verdict="HOUDINI-ERR", detail=H["error"])
         return res
     res["houdini"] = [H["points"], H["prims"], H["vertices"]]
     xj = os.path.join(a.work, s + ".json")
     rc, msg = cook.get(s, (0, ""))
+    if rc == 0 and not os.path.exists(xj) and a.live_houdini:
+        res.update(verdict="NO-ORACLE", detail="live hython produced no summary (unavailable/license?)")
+        return res
     if rc != 0 or not os.path.exists(xj):
         res.update(verdict="HEXE-ERR", detail="cook rc=%s: %s" % (rc, msg[:300]))
         return res
     X = json.load(open(xj))
-    if "load_error" in X:
-        res.update(verdict="HEXE-ERR", detail="hexe .geo not loadable in Houdini: " + X["load_error"])
+    if "load_error" in X:  # live-houdini only: Houdini could not load it -> no oracle verdict possible, not a hexe failure
+        res.update(verdict="NO-ORACLE", detail="live Houdini could not load hexe .geo: " + X["load_error"])
         return res
     res["hexe"] = [X["points"], X["prims"], X["vertices"]]
     if H.get("oracle") == "stat":

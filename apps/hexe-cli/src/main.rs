@@ -100,8 +100,69 @@ fn oracle(case: &str, input: Option<&str>) -> Result<String, String> {
                 .map_err(|e| e.to_string())?;
             hexe_core::parse_len(&text).map(|n| format!("{n}\n")).map_err(|e| e.to_string())
         }
+        // Houdini-free twin of `oracle/houdini/_common.py summarize()` run on a hexe `.geo` (no hython load-back).
+        "summary" => oracle_summary(input.ok_or("oracle summary: needs a .geo path")?),
         other => Err(format!("oracle: case `{other}` has no implementation yet")),
     }
+}
+
+/// Same JSON keys/rounding (6 decimals) as `_common.summarize()`; prim type names are hou.primType names.
+fn oracle_summary(path: &str) -> Result<String, String> {
+    use hexe_geo::{AttrClass, PrimKind};
+    let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
+    if meta.len() > MAX_GEO_BYTES {
+        return Err(format!("{path}: larger than {MAX_GEO_BYTES} bytes"));
+    }
+    let d = hexe_geo::read_geo(&std::fs::read(path).map_err(|e| format!("{path}: {e}"))?)
+        .map_err(|e| format!("{path}: {e}"))?;
+    const CAP: usize = 5000;
+    let r6 = |x: f32| (f64::from(x) * 1e6).round() / 1e6;
+    let p_all: Vec<[f64; 3]> = d.p().iter().take(CAP).map(|p| [r6(p[0]), r6(p[1]), r6(p[2])]).collect();
+    let names = |c: AttrClass| {
+        let mut v: Vec<&str> = d.attrs.iter().filter(|a| a.class == c).map(|a| a.name.as_str()).collect();
+        v.sort_unstable();
+        v
+    };
+    let groups = |c: AttrClass| {
+        let mut v: Vec<&str> = d.groups.iter().filter(|g| g.class == c).map(|g| g.name.as_str()).collect();
+        v.sort_unstable();
+        v
+    };
+    let mut prim_types = std::collections::BTreeSet::new();
+    let (mut prim_pts, mut closed) = (Vec::new(), Vec::new());
+    for pr in d.prims.iter().take(CAP) {
+        let (ty, c) = match &pr.kind {
+            PrimKind::Poly { closed } => ("Polygon", *closed),
+            PrimKind::Polyline => ("Polygon", false),
+            PrimKind::Sphere { .. } => ("Sphere", true),
+            PrimKind::Tube { .. } => ("Tube", true),
+            PrimKind::Volume => ("Volume", true),
+            PrimKind::PackedRef => ("PackedPrim", true),
+            PrimKind::BezierCurve { closed, .. } => ("BezierCurve", *closed),
+            PrimKind::NurbsCurve { closed, .. } => ("NURBSCurve", *closed),
+            PrimKind::BezierSurf { .. } => ("BezierSurface", true),
+            PrimKind::NurbsSurf { .. } => ("NURBSSurface", true),
+            PrimKind::Unknown { ty, .. } => (ty.as_str(), true),
+        };
+        prim_types.insert(ty.to_string());
+        closed.push(c);
+        prim_pts.push(pr.verts.clone().filter_map(|v| d.vertex_point.get(v as usize).copied()).collect::<Vec<u32>>());
+    }
+    let (lo, hi) = d.bbox();
+    let bb = |v: [f32; 3]| [r6(v[0]), r6(v[1]), r6(v[2])];
+    let empty = d.p().is_empty();
+    let v = serde_json::json!({
+        "points": d.point_count, "prims": d.prim_count(), "vertices": d.vertex_count(),
+        "attribs": {"point": names(AttrClass::Point), "prim": names(AttrClass::Prim), "vertex": names(AttrClass::Vertex), "detail": names(AttrClass::Detail)},
+        "prim_types": prim_types, "point_groups": groups(AttrClass::Point), "prim_groups": groups(AttrClass::Prim),
+        "bbox_min": if empty { serde_json::Value::Null } else { serde_json::json!(bb(lo)) },
+        "bbox_max": if empty { serde_json::Value::Null } else { serde_json::json!(bb(hi)) },
+        "P": p_all.iter().take(8).collect::<Vec<_>>(), "P_all": p_all, "prim_pts": prim_pts, "prim_closed": closed,
+    });
+    Ok(format!(
+        "{v}
+"
+    ))
 }
 
 /// Built-in SOPs + the hexe-native `motion` node (same set as the desktop app's palette, `hexe-tauri` `app_registry`).
@@ -345,6 +406,26 @@ mod tests {
         assert!(cook_scene(r#"{"nodes":[],"display":"q"}"#, 0.0).is_err());
         assert!(dispatch(&s(&["cook", "/nonexistent/scene.json", "--out", "x.geo"])).is_err());
         assert!(dispatch(&s(&["bogus"])).is_err());
+    }
+
+    #[test]
+    fn oracle_summary_matches_houdini_summary_shape() {
+        let dir = std::env::temp_dir().join("hexe_oracle_summary_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let geo = dir.join("box.geo");
+        let mut d = hexe_geo::Detail::default();
+        d.add_points(3);
+        *d.p_mut() = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        d.add_poly(&[0, 1, 2], true);
+        std::fs::write(&geo, hexe_geo::write_geo_json(&d)).unwrap();
+        let out = dispatch(&s(&["oracle", "summary", geo.to_str().unwrap()])).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!((v["points"].as_u64(), v["prims"].as_u64(), v["vertices"].as_u64()), (Some(3), Some(1), Some(3)));
+        assert_eq!(v["prim_pts"], serde_json::json!([[0, 1, 2]]));
+        assert_eq!(v["prim_types"], serde_json::json!(["Polygon"]));
+        assert_eq!(v["prim_closed"], serde_json::json!([true]));
+        assert_eq!(v["attribs"]["point"], serde_json::json!(["P"]));
+        assert!(dispatch(&s(&["oracle", "summary"])).is_err());
     }
 
     #[test]
