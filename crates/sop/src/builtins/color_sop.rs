@@ -1,6 +1,6 @@
 //! Color SOP (token `color`): writes the `Cd` colour attribute, constant or random per element.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
+//! # Semantics (DOC-VERIFIED vs Houdini 20.5 help `sop/color.txt`, tests/color_semantics.rs; no recorded row)
 //! * `class` (point | vertex | prim | detail; default point): which `Cd` is written.
 //! * `colortype`: `constant` writes `color` (default 1,1,1); `random` writes per element three independent uniform
 //!   [0,1) channels from splitmix64(seed, element, channel) - deterministic per `seed` (F, default 0), NOT Houdini's stream.
@@ -9,7 +9,9 @@
 //!
 //! Output attribute: `V3` `Cd` with type info Color; other classes' `Cd` untouched. Absent input -> empty `Detail`.
 //!
-//! Not modelled: ramp / attribute-remap colour types, alpha, `overridecd`.
+//! * `colortype` `bbox` (2): Cd = element position normalised into the input bbox (flat axis -> 0). `deleteallcolorattribs` (off)
+//!   removes every-class `Cd` first; `enable` (on) off = no colour written (delete-only use).
+//! Not modelled: ramp-from-attribute colour type, alpha, `overridecd`.
 use super::attribs::{class_param, set_attr};
 use super::group_sop::{bad, parse_pattern};
 use crate::SopNode;
@@ -20,6 +22,7 @@ use std::sync::Arc;
 const WHO: &str = "color";
 const CONSTANT: u32 = 0;
 const RANDOM: u32 = 1;
+const BBOX: u32 = 2;
 
 pub fn spec() -> Vec<ParamSpec> {
     vec![
@@ -30,9 +33,11 @@ pub fn spec() -> Vec<ParamSpec> {
             ("prim", "Primitive"),
             ("detail", "Detail"),
         ]),
+        ParamSpec::new("deleteallcolorattribs", ParamValue::B(false)).label("Delete All Existing Color Attributes"),
+        ParamSpec::new("enable", ParamValue::B(true)).label("Set Color Attribute"),
         ParamSpec::new("colortype", ParamValue::Menu(CONSTANT))
             .label("Color Type")
-            .menu(&[("constant", "Constant"), ("random", "Random")]),
+            .menu(&[("constant", "Constant"), ("random", "Random"), ("bbox", "Bounding Box")]),
         ParamSpec::new("color", ParamValue::V3([1.0; 3])).label("Color"),
         ParamSpec::new("seed", ParamValue::F(0.0)).label("Seed").range(0.0, 10.0),
     ]
@@ -75,30 +80,78 @@ impl Node<Detail> for Color {
         let pat = p.string("group").ok_or_else(|| bad(WHO, "`group` missing or not a string"))?;
         let class = class_param(p, "class", WHO)?;
         let ty = p.menu("colortype").ok_or_else(|| bad(WHO, "`colortype` missing or not a menu"))?;
-        if ty != CONSTANT && ty != RANDOM {
+        if ty > BBOX {
             return Err(bad(WHO, format!("`colortype`: menu index {ty} out of range")));
         }
         let color = p.vec3("color").ok_or_else(|| bad(WHO, "`color` missing or not a vector"))?;
         let seed = p.float("seed").filter(|s| s.is_finite()).ok_or_else(|| bad(WHO, "`seed` missing or not finite"))?;
+        let del = p.toggle("deleteallcolorattribs").ok_or_else(|| bad(WHO, "`deleteallcolorattribs` missing or not a toggle"))?;
+        let enable = p.toggle("enable").ok_or_else(|| bad(WHO, "`enable` missing or not a toggle"))?;
         let Some(src) = inputs.first() else { return Ok(Arc::default()) };
-        let n = src.class_len(class);
-        let sel = if class == AttrClass::Detail { None } else { parse_pattern(src, class, pat, WHO)? };
-        let mut cd: Vec<[f32; 3]> = match src.attr(class, "Cd").map(|a| &a.data) {
+        if !del && !enable {
+            return Ok(Arc::clone(src));
+        }
+        let mut out = (**src).clone();
+        if del {
+            out.attrs.retain(|a| a.name != "Cd");
+        }
+        if !enable {
+            return Ok(Arc::new(out));
+        }
+        let n = out.class_len(class);
+        let sel = if class == AttrClass::Detail { None } else { parse_pattern(&out, class, pat, WHO)? };
+        let mut cd: Vec<[f32; 3]> = match out.attr(class, "Cd").map(|a| &a.data) {
             Some(AttrData::V3(v)) if v.len() == n => v.clone(),
             _ => vec![[1.0; 3]; n],
         };
+        // bounding-box colour: element position normalised into the input bbox (a flat axis maps to 0)
+        let (lo, hi) = out.bbox();
+        let norm = |q: [f32; 3]| -> [f32; 3] {
+            let f = |k: usize| if hi[k] > lo[k] { (q[k] - lo[k]) / (hi[k] - lo[k]) } else { 0.0 };
+            [f(0), f(1), f(2)]
+        };
+        let elem_pos = |i: usize| -> [f32; 3] {
+            let pts: Vec<usize> = match class {
+                AttrClass::Point => vec![i],
+                AttrClass::Vertex => out.vertex_point.get(i).map(|&p| p as usize).into_iter().collect(),
+                AttrClass::Prim => out.prims.get(i).map_or_else(Vec::new, |pr| {
+                    (pr.verts.start..pr.verts.end)
+                        .filter_map(|v| out.vertex_point.get(v as usize))
+                        .map(|&p| p as usize)
+                        .collect()
+                }),
+                _ => Vec::new(),
+            };
+            if pts.is_empty() {
+                return [(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5];
+            }
+            let mut c = [0.0f32; 3];
+            for &pt in &pts {
+                let q = out.p().get(pt).copied().unwrap_or([0.0; 3]);
+                for k in 0..3 {
+                    c[k] += q[k] / pts.len() as f32;
+                }
+            }
+            c
+        };
         let seed_bits = seed.to_bits();
-        for (i, slot) in cd.iter_mut().enumerate() {
+        let mut fresh: Vec<(usize, [f32; 3])> = Vec::new();
+        for i in 0..cd.len() {
             if sel.as_ref().is_some_and(|m| !m.get(i).copied().unwrap_or(false)) {
                 continue;
             }
-            *slot = if ty == RANDOM {
-                [unit(seed_bits, i, 0), unit(seed_bits, i, 1), unit(seed_bits, i, 2)]
-            } else {
-                color
-            };
+            fresh.push((
+                i,
+                match ty {
+                    RANDOM => [unit(seed_bits, i, 0), unit(seed_bits, i, 1), unit(seed_bits, i, 2)],
+                    BBOX => norm(elem_pos(i)),
+                    _ => color,
+                },
+            ));
         }
-        let mut out = (**src).clone();
+        for (i, c) in fresh {
+            cd[i] = c;
+        }
         set_attr(&mut out, Attribute { name: "Cd".into(), class, data: AttrData::V3(cd), type_info: TypeInfo::Color });
         Ok(Arc::new(out))
     }
@@ -129,6 +182,8 @@ mod tests {
             [
                 ("group", PV::S(String::new())),
                 ("class", PV::Menu(0)),
+                ("deleteallcolorattribs", PV::B(false)),
+                ("enable", PV::B(true)),
                 ("colortype", PV::Menu(0)),
                 ("color", PV::V3([1.0; 3])),
                 ("seed", PV::F(0.0))
