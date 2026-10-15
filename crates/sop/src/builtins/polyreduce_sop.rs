@@ -1,6 +1,7 @@
 //! PolyReduce SOP (token `polyreduce`): reduce polygon count by Garland-Heckbert quadric error metric.
 //!
-//! # Semantics (UNVERIFIED vs Houdini: hython blocked; analytical oracle only)
+//! # Semantics (DOC-VERIFIED vs Houdini 20.5 help `sop/polyreduce.txt`, tests/polyreduce_semantics.rs: topology invariants; no recorded row.
+//! Boundary is HARD here, a weight in Houdini, so a target can hit a boundary floor)
 //! * `target` menu percentage(0)|finalcount(1); `percentage` F 50 (0..=100) OR `finalcount` I (>=0): target final prim count.
 //!   100% = input Arc shared. `preserveboundary` B on (default): boundary edges never collapsed.
 //! * Quadric error metric (Garland-Heckbert): per-vertex 4×4 Q from face planes sum_{a,b,c,d} K K^T where plane ax+by+cz+d=0,

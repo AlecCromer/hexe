@@ -51,10 +51,14 @@ fn defaults_reduce_to_at_most_half_the_prims_and_stay_manifold() {
 #[test]
 fn percentage_and_count_targets() {
     let s = sheet();
-    let q = cook("polyreduce", &[("percentage", PV::F(25.0))], Some(&s)).unwrap();
+    // hexe preserves boundary edges hard (Houdini: a weight), 48 fixed boundary points floor the sheet; free boundary reaches 25%
+    let q = cook("polyreduce", &[("percentage", PV::F(25.0)), ("preserveboundary", PV::B(false))], Some(&s)).unwrap();
     assert!(q.prims.len() <= 36 && !q.prims.is_empty(), "25%: got {}", q.prims.len());
     invariants(&q);
-    let c = cook("polyreduce", &[("target", PV::Menu(1)), ("finalcount", PV::I(40))], Some(&s)).unwrap();
+    let hard = cook("polyreduce", &[("percentage", PV::F(25.0))], Some(&s)).unwrap();
+    assert!(hard.prims.len() < 72 && hard.prims.len() >= q.prims.len(), "hard boundary: still reduces, floor above free");
+    invariants(&hard);
+    let c = cook("polyreduce", &[("target", PV::Menu(1)), ("finalcount", PV::I(40)), ("preserveboundary", PV::B(false))], Some(&s)).unwrap();
     assert!(c.prims.len() <= 40 && !c.prims.is_empty(), "count 40: got {}", c.prims.len());
     invariants(&c);
     // 100% keeps everything (nothing to reduce)
