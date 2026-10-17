@@ -8,3 +8,15 @@ dist/
 target/
 file-rop-out.*
 __pycache__/
+docs/proof/*.bmp
+docs/proof/*.ppm
+docs/proof/*.raw
+build/
+out/
+node_modules/
+.venv/
+*.log
+dump/
+frames/
+run*/
+*.ips
