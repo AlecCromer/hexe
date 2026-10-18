@@ -1,0 +1,14 @@
+[package]
+name = "endo-sim"
+description = "hexe: passive-ragdoll physics for Endorphin scenes (rapier3d, f32): Sim::from_scene / step / pose"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+hexe-geo = { workspace = true }
+rapier3d = { version = "0.35", default-features = false, features = ["dim3", "f32", "std"] }
+
+[lints]
+workspace = true
