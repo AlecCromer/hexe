@@ -1379,6 +1379,7 @@ dependencies = [
 name = "hexe-sop"
 version = "0.1.0"
 dependencies = [
+ "endo-sim",
  "glam 0.30.10",
  "hexe-geo",
  "hexe-graph",
