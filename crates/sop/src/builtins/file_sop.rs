@@ -5,7 +5,7 @@
 //! `file` param changes re-reads; a recook with an untouched file reuses the parse. The graph itself only recooks a dirty
 //! node, so a file edited on disk is picked up on the next recook, not live (UNVERIFIED vs Houdini's file watcher).
 use crate::SopNode;
-use hexe_geo::Detail;
+use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -83,7 +83,15 @@ impl Node<Detail> for FileSop {
             {
                 return Ok(Arc::clone(d));
             }
-            let d = Arc::new(hexe_geo::endorphin_geo::document_detail_at(doc, t));
+            let mut d = hexe_geo::endorphin_geo::document_detail_at(doc, t);
+            // downstream `endosim` finds the scene again through this path
+            d.add_attr(Attribute {
+                name: "endo_file".into(),
+                class: AttrClass::Detail,
+                data: AttrData::Str { idx: vec![0], table: vec![path.to_string()] },
+                type_info: TypeInfo::None,
+            });
+            let d = Arc::new(d);
             *last = Some((t.to_bits(), Arc::clone(&d)));
             return Ok(d);
         }

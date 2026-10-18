@@ -1799,3 +1799,17 @@ evidence = [
   "crates/sop/src/hip_import.rs::hip_hostile_inputs_are_errors",
 ]
 notes = "H40: cpio (odc/newc) + gzip reader -> HipScene IR -> hexe scenes (one per /obj geo with SOPs); no-twin SOPs kept as `unsupported:<type>` (wired, parms kept, cook = Unsupported); `hexe-cli open` + Tauri graph_load (.hip route). Corpus fixtures/hip/MANIFEST.md: 12 Houdini-20.5 help/files hips parse 12/12 full graph; cook vs hython 13 MATCH / 5 HEXE-ERR / 7 UNSUPPORTED-NODE over 25 geo containers (hython twin, install-gated). NOT: MIME-wrapped hips (explicit error), HDA/digital-asset internals, subnets/TOP/VOP networks (skipped, listed), keyframes (value at save time, flagged animated), for-each blocks, hexe twins with fewer input ports than Houdini (dropped_wires reported)."
+
+[[feature]]
+id = "sop-endosim"
+title = "EndoSim SOP [hexe-native]: passive-ragdoll physics of an Endorphin scene, scrubbed by $F (no Houdini counterpart)"
+area = "A"
+tier = "N/A"
+status = "partial"
+commands = ["endosim"]
+evidence = [
+  "crates/endo-sim/src/tests.rs::mini_scene_falls_onto_the_ground_and_stays_finite",
+  "crates/endo-sim/src/tests.rs::balcony_standing_characters_fall_monotonically_without_nan",
+  "crates/sop/src/builtins/endosim_sop.rs::tests::frame_scrubs_the_simulation",
+]
+notes = "h44, hexe-native (tag): no Houdini oracle. Crate endo-sim = rapier3d 0.35 f32: one dynamic body per MetaBody (Sphyl/Sphere/Cylinder/Cuboid, File/Mesh -> bbox capsule), spherical joints with hard (else soft) limits centred on the posed start configuration (twist about joint X), fixed joints where no limits, environment + default ground static, same-character collisions off. endosim SOP: input = file SOP on a .ens (found via detail attr endo_file), param frame 0 = follow timeline $F (frame F = F-1 steps of 1/fps), poses cached per frame (scrub back = replay). PASSIVE RAGDOLL ONLY: behaviours / balance / catch-fall muscles / drives are NOT simulated. UNVERIFIED vs the real Endorphin engine (rapier is not NaturalMotion's solver; limits are half-ranges about the start pose)."

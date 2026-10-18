@@ -16,6 +16,7 @@ hexe-geo = { path = "crates/geo", version = "0.1.0" }
 hexe-graph = { path = "crates/graph", version = "0.1.0" }
 hexe-sop = { path = "crates/sop", version = "0.1.0" }
 hexe-vex = { path = "crates/vex", version = "0.1.0" }
+endo-sim = { path = "crates/endo-sim", version = "0.1.0" }
 sop-motion = { path = "crates/sop-motion", version = "0.1.0" }
 glam = "0.30"
 

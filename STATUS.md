@@ -1,3 +1,10 @@
+# STATUS — h44 (Endorphin simulation, branch h44/endo-sim, 2026-10-18)
+- PASSIVE RAGDOLL ONLY: behaviours / balance / catch-fall muscle controllers / drives are OUT of scope and NOT simulated; characters fall + slump under gravity within joint limits. (Behaviour mode of `motion` SOP unchanged.)
+- crates/endo-sim (rapier3d 0.35 f32, L1): `Sim::from_scene(&Scene)`, `step(dt)` (substeps <= 1/120), `pose() -> Vec<CharPose{name, world: Vec<Xf>}>`, `root_y(name)`. One dynamic body per MetaBody (Sphyl/Sphere/Cylinder/Cuboid; File/Mesh -> bbox capsule; mass = density x inertial volume), spherical joints (hard else soft limits, symmetric half-ranges about the start pose, twist about joint X) / fixed where no limits, Environment bodies static, default ground = static slab top y=0, same-character collisions off. Balcony: 151 bodies, 108 joints.
+- `endosim` SOP (crates/sop): input file SOP on .ens (via detail attr `endo_file`), param `frame` 0 = follow `$F` (frame F = F-1 steps of 1/fps), poses cached per frame, scrub back = replay; restart on file/fps change. Output = endorphin_geo::scene_detail_posed.
+- UI: Play/Stop button beside the timeline (ui/src/play.ts wall-clock clock, frame scheduler = rAF + timer fallback; slider/box touch stops). `hexe-cli open <scene.ens>` graph = file -> endosim.
+- OPEN/UNVERIFIED: rapier is not NaturalMotion's solver (no tuned stiffness/damping, no soft-limit springs, twist axis inferred from limb data); seated characters rest on the set only via their own start pose; Play/Stop button logic bun-tested (Player clock) but not clicked in a live window; render proof uses graph file->endosim->blast(char_background ground) so Fit frames the characters.
+---
 # STATUS: app = Tauri (T2a)
 
 - Desktop app = `apps/hexe-tauri` (Tauri 2: Rust commands over hexe-graph + vite/TS UI, three.js viewport). egui `apps/hexe` DELETED (last at 805b5aa).
