@@ -117,3 +117,31 @@ fn cook_frame_scrubs_keyed_scene_channels() {
     let r = bin().arg("cook").arg(&f).args(["--frame", "x", "--out", "/tmp/never.geo"]).output().unwrap();
     assert_eq!(r.status.code(), Some(1));
 }
+
+/// `open <scene.ens>` writes file -> endosim (display on the sim); the graph cooks and frame 40 differs from frame 1 (the body fell).
+#[test]
+fn open_scene_graph_is_file_into_endosim_and_the_sim_runs() {
+    let xi = r#"<Vi x="1" y="0" z="0"/><Vj x="0" y="1" z="0"/><Vk x="0" y="0" z="1"/>"#;
+    let f = work("simscene.ens");
+    std::fs::write(
+        &f,
+        format!(
+            r#"<Scene useDefaultGround="true"><Characters><Character name="c1"><Skeleton name="root" metaBody="B"><TransformMatrix>{xi}<Vp x="0" y="2" z="0"/></TransformMatrix></Skeleton><MetaBodies><MetaBody name="B"><CollisionSurface><Geometry type="Sphere" param0="0.2"/></CollisionSurface><InertialBody><Geometry type="Sphere" param0="0.2"/><Inertia density="1000"/></InertialBody></MetaBody></MetaBodies></Character></Characters></Scene>"#
+        ),
+    )
+    .unwrap();
+    let scene = work("simscene.json");
+    let r = bin().arg("open").arg(&f).arg("--out").arg(&scene).output().unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    let json = std::fs::read_to_string(&scene).unwrap();
+    assert!(json.contains("\"type\":\"endosim\"") && json.contains("\"display\":\"sim\""), "{json}");
+    let y = |frame: &str| {
+        let out = work(&format!("simscene_{frame}.geo"));
+        let r = bin().arg("cook").arg(&scene).args(["--frame", frame, "--out"]).arg(&out).output().unwrap();
+        assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+        hexe_geo::read_any(&out).unwrap().p()[0][1]
+    };
+    let (y1, y40) = (y("1"), y("40"));
+    assert!((y1 - 2.0).abs() < 1e-3, "frame 1 = start pose: {y1}");
+    assert!(y40 < 0.4 && y40 > 0.0, "frame 40 rests on the ground: {y40}");
+}

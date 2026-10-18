@@ -7,6 +7,8 @@ import { Network } from "./network";
 import { renderParams, showCookError } from "./params";
 import { Spreadsheet } from "./sheet";
 import { Viewport } from "./viewport";
+import { frameScheduler } from "./frame";
+import { Player } from "./play";
 import "./shell";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -220,13 +222,41 @@ $<HTMLInputElement>("fitx").addEventListener("change", (e) => { viewport.setFitE
     showFrame(cur, fps);
     await recook();
   };
-  frameSlider.addEventListener("input", () => void scrub(frameSlider.value));
-  frameBox.addEventListener("change", () => void scrub(frameBox.value));
+  // Play / Stop: advance `$F` at the timeline fps against the wall clock (frames are dropped when a cook is slower than 1/fps);
+  // the frame scheduler is rAF with a timer fallback, so playback also runs in an occluded window. Touching the slider/box stops it.
+  const playBtn = $<HTMLButtonElement>("play");
+  const player = new Player();
+  let playBusy = false;
+  const playTick = frameScheduler(() => void (async () => {
+    if (!player.running) return;
+    const [cur] = await api.timelineGet();
+    const want = player.frameAt(performance.now());
+    if (want !== cur && !playBusy) {
+      playBusy = true;
+      try { await scrub(String(want)); } finally { playBusy = false; }
+    }
+    if (player.running) playTick();
+  })());
+  const setPlaying = async (on: boolean) => {
+    if (on === player.running) return;
+    if (on) {
+      const [cur, fps] = await api.timelineGet();
+      player.start(cur, performance.now(), fps);
+      playBtn.textContent = "Stop";
+      playTick();
+    } else {
+      player.stop();
+      playBtn.textContent = "Play";
+    }
+  };
+  playBtn.addEventListener("click", () => void setPlaying(!player.running));
+  frameSlider.addEventListener("input", () => { void setPlaying(false); void scrub(frameSlider.value); });
+  frameBox.addEventListener("change", () => { void setPlaying(false); void scrub(frameBox.value); });
   { const [f, fps] = await api.timelineGet(); showFrame(f, fps); }
   const start = await api.startupScene();
   if (start) { path.value = start; await open(); } else { await refresh(); showParams(); }
   // proof / test door (read by the T1 proof script): drive the real param pane through the DOM
-    (window as unknown as Record<string, unknown>).__hexe = { select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, setFrame: scrub, open: async (p: string) => { path.value = p; await open(); } };
+    (window as unknown as Record<string, unknown>).__hexe = { select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, setFrame: scrub, play: setPlaying, open: async (p: string) => { path.value = p; await open(); } };
     const job = await api.renderRequest();
     if (job) await headlessRender(job);
 }

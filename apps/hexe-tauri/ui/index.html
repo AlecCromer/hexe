@@ -20,6 +20,7 @@
 <button id="fit" title="H / F">Fit</button><input id="fitx" value="*background*" size="11" title="Fit ignores prim groups matching these globs (comma separated, empty = none)" />
 <span class="sep"></span>
 <label id="timeline" title="timeline $F: the display cook runs at time = ($F - 1) / fps (motion SOP scrubs its clip)">F <input type="number" id="frame" min="1" max="1000000" step="1" value="1" /> <input type="range" id="frameslider" min="1" max="360" value="1" /> <span id="fpslab">30 fps</span></label>
+<button id="play" title="Play: advance $F at the timeline fps (the endosim SOP runs its physics as $F moves); Stop halts">Play</button>
 <button id="pick" title="S (viewport hover): pick points - click / drag-box">Pick</button>
 <button id="grpsel" title="new group SOP from the picked points" disabled>Group from selection</button>
         <span id="status"></span>
