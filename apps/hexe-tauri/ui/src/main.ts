@@ -18,6 +18,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { type Nav, navBack, navForward, navStart, navVisit } from "./navhist";
 import { frameScheduler } from "./frame";
 import { Player } from "./play";
+import { objectMatrix, type ObjXform } from "./objxform";
 import "./shell";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -109,13 +110,18 @@ function syncObjects(): void {
 
 /** each drawn Null's indicator: its display cook (the current object's = the last cook) as line pairs */
 let nullSeq = 0;
+/** latest object-param fetch for the pane (a slower earlier one must not paint over it) */
+let objParamSeq = 0;
 async function refreshNulls(): Promise<void> {
   const seq = ++nullSeq;
   const out = [];
   for (const n of net.nulls) {
     if (!n.drawn) continue;
     const c = n.name === net.current ? lastCook : await api.cookObject(n.name).catch(() => null);
-    out.push({ at: n.at, selected: n.selected, lines: c && !c.error ? linePairs(c) : null });
+    // its Transform tab (Rust-stored object params) places the indicator: Houdini's object matrix
+    const v = await api.objectParams(n.name).then(([, vals]) => vals, () => null);
+    const m = v ? objectMatrix(v as ObjXform) : null;
+    out.push({ at: m ? [m[12], m[13], m[14]] as [number, number, number] : n.at, m, selected: n.selected, lines: c && !c.error ? linePairs(c) : null });
   }
   if (seq === nullSeq) viewport.setNulls(out);
 }
@@ -168,10 +174,16 @@ function showObjectParams(): void {
   else $("opbar").replaceChildren();
   const nul = net.nulls.find((o) => o.selected);
   if (!net.objectSelected && nul) {
-    const head = Object.assign(document.createElement("div"), { className: "phead" });
-    head.append(Object.assign(document.createElement("span"), { className: "phead-ty", textContent: "Null" }), Object.assign(document.createElement("b"), { textContent: nul.name }));
-    const at = Object.assign(document.createElement("div"), { className: "hint", textContent: `Placed at (${nul.at.map((v) => +v.toFixed(4)).join(", ")}). Double-click it in the network to edit its control (Uniform Scale = indicator size) and point1. Its Transform parameters are not in hexe yet.` });
-    host.replaceChildren(head, at);
+    // the Null object's own parameters (Houdini Transform / Render / Misc tabs), stored in Rust with the object
+    const seq = ++objParamSeq;
+    void api.objectParams(nul.name).then(([specs, values]) => {
+      if (seq !== objParamSeq) return;
+      const view: NodeView = { id: -1, type: "null", name: nul.name, x: 0, y: 0, inputs: [], required: 0, bypass: false, params: values };
+      renderParams(host, view, { type: "null", label: "Null", inputs: [], required: 0, params: specs }, async (_id, parm, value) => {
+        await api.objectSetParam(nul.name, parm, value);
+        void refreshNulls();
+      });
+    }, (e) => say(msg(e), true));
     return;
   }
   if (!net.objectSelected) {
@@ -248,6 +260,8 @@ async function shelfAdd(type: string): Promise<void> {
     if (!at) { say("Null: placement cancelled"); return; }
     const o = await net.addNull(at);
     if (!o) return;
+    // the click position is its Translate (Houdini places the Null object there)
+    if (at.some((c) => c !== 0)) await api.objectSetParam(o.name, "t", at).catch((e) => say(msg(e), true));
     syncObjects();
     showParams();
     say(`placed ${o.name} at (${at.map((v) => +v.toFixed(3)).join(", ")})`);

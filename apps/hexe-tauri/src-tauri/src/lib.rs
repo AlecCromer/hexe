@@ -267,6 +267,19 @@ fn objects_info(app: State<App>) -> model::ObjInfoList {
     let s = app.lock();
     (s.objects_info(), s.object_name().to_string())
 }
+/// Object-level parameters (a Null's Transform / Render / Misc tabs): specs + current values.
+#[tauri::command]
+fn object_params(
+    app: State<App>,
+    name: String,
+) -> Res<(Vec<model::ParamInfo>, std::collections::BTreeMap<String, Value>)> {
+    app.lock().object_params(&name)
+}
+/// Set one object-level parameter (checked against the object kind's specs).
+#[tauri::command]
+fn object_set_param(app: State<App>, name: String, parm: String, value: Value) -> Res<()> {
+    app.lock().object_set_param(&name, &parm, &value)
+}
 /// Delete a Geometry object and its network.
 #[tauri::command]
 fn object_remove(app: State<App>, name: String) -> Res<()> {
@@ -409,6 +422,8 @@ pub fn run() {
             set_display,
             set_bypass,
             objects_info,
+            object_params,
+            object_set_param,
             undo,
             redo,
             copy_nodes,

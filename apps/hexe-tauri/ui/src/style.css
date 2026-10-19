@@ -150,6 +150,19 @@ input[type=checkbox] { padding: 0; }
 .hint { color: var(--dim); padding: 6px 0; }
 .phead { display: flex; gap: 8px; align-items: baseline; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--edge); }
 .phead b { font-size: 13px; } .phead span { color: var(--dim); }
+/* parameter pane gear (Houdini: above the parameter list) + its menu; folder tabs (Transform / Render / Misc) */
+.pcogmenu { margin-left: auto; align-self: center; }
+.pcog { display: grid; place-items: center; width: 22px; height: 20px; padding: 0; background: none; border: 1px solid transparent; border-radius: 3px; }
+.pcog:hover, .pcogmenu.open .pcog { background: #4a4a4a; border-color: #5a5a5a; }
+.pcog svg { width: 15px; height: 15px; fill: #cfcfcf; fill-rule: evenodd; }
+.pcog svg circle { fill: #2b2b2b; }
+.mdrop.cogdrop { left: auto; right: 0; min-width: 300px; }
+.mdrop hr.msep { border: 0; border-top: 1px solid #555; margin: 4px 0; }
+.mi .msub { margin-left: auto; font-size: 10px; color: var(--dim); }
+.pfold { display: flex; gap: 1px; margin: 4px 0 0; border-bottom: 1px solid var(--edge); }
+.pftab { padding: 4px 14px; font-size: 13px; color: #cfcfcf; background: #3a3a3a; border: 1px solid #2c2c2c; border-bottom: 0; border-radius: 3px 3px 0 0; }
+.pftab.on { background: #4b4b4b; color: #fff; }
+.ppage { padding-top: 8px; }
 .prow { display: grid; grid-template-columns: 98px 1fr; gap: 6px; align-items: center; margin: 3px 0; }
 .prow > label { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pctl { display: flex; gap: 4px; align-items: center; min-width: 0; }

@@ -132,6 +132,46 @@ export function showCookError(node: number | null, text: string | null): void {
   paintCookError();
 }
 
+/** Houdini's parameter-pane gear menu (above the parameter list). `null` = a separator; items without `run` are shown
+ *  disabled with a "not in hexe yet" tooltip (said, not faked). */
+type CogItem = { label: string; run?: () => void; sub?: boolean } | null;
+export const COG_ITEMS = [
+  "Edit Parameter Interface...", "Edit Rendering Properties...", "Edit Standard Node Properties...", "Edit Deletion Script...", "Edit Comments...", null,
+  "Revert Parameter Interface", "Delete All Spare Parameters", "Add Spare Input", null,
+  "Add Visualizer", "Attached Visualizers...", null,
+  "Legacy Presets", "Revert to Factory Defaults", "Revert to and Restore Factory Defaults", "Override Factory Defaults for This Session", "Type Properties...",
+] as const;
+const COG_SUB = new Set(["Add Visualizer", "Legacy Presets"]);
+let openCog: HTMLElement | null = null;
+function closeCog(): void { openCog?.classList.remove("open"); openCog = null; }
+document.addEventListener("mousedown", (e) => { if (openCog && !openCog.contains(e.target as Node)) closeCog(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCog(); });
+function cogMenu(actions: Record<string, () => void>): HTMLElement {
+  const items: CogItem[] = COG_ITEMS.map((l) => (l === null ? null : { label: l, run: actions[l], sub: COG_SUB.has(l) }));
+  const drop = el("div", { className: "mdrop cogdrop" });
+  for (const it of items) {
+    if (!it) { drop.append(el("hr", { className: "msep" })); continue; }
+    const b = el("button", { className: "mi", textContent: it.label, disabled: !it.run });
+    if (it.sub) b.append(el("span", { className: "msub", textContent: "▶" }));
+    if (!it.run) b.title = "Not in hexe yet";
+    b.dataset.cog = it.label;
+    b.addEventListener("click", () => { closeCog(); it.run?.(); });
+    drop.append(b);
+  }
+  const btn = el("button", { className: "pcog", title: "Parameter options" });
+  btn.innerHTML = `<svg viewBox="0 0 20 20"><path d="M8.6 1.5h2.8l.4 2.3 1.6.7 1.9-1.4 2 2-1.4 1.9.7 1.6 2.3.4v2.8l-2.3.4-.7 1.6 1.4 1.9-2 2-1.9-1.4-1.6.7-.4 2.3H8.6l-.4-2.3-1.6-.7-1.9 1.4-2-2 1.4-1.9-.7-1.6-2.3-.4V8.6l2.3-.4.7-1.6-1.4-1.9 2-2 1.9 1.4 1.6-.7z"/><circle cx="10" cy="10" r="2.6"/></svg>`;
+  const wrap = el("div", { className: "menu pcogmenu" }, btn, drop);
+  btn.addEventListener("click", () => {
+    const was = openCog === wrap;
+    closeCog();
+    if (!was) { wrap.classList.add("open"); openCog = wrap; }
+  });
+  return wrap;
+}
+
+/** last tab shown per node type (Houdini keeps the folder you were on) */
+const activeTab = new Map<string, string>();
+
 export function renderParams(host: HTMLElement, node: NodeView | null, type: NodeType | undefined, set: SetParam): void {
   host.replaceChildren();
   shown = { node: -1, editors: [] };
@@ -139,15 +179,49 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
     host.append(el("div", { className: "hint", textContent: "Select a node in the network to edit its parameters." }));
     return;
   }
-  // Houdini header: type icon · Type label · node name (id in the tooltip)
+  // Houdini header: type icon · Type label · node name (id in the tooltip) · gear menu on the right
   const ico = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   ico.setAttribute("viewBox", "0 0 24 24");
   ico.setAttribute("class", "phead-ico");
   ico.innerHTML = nodeIcon(node.type);
-  host.append(el("div", { className: "phead", title: `${node.type} · #${node.id}` }, ico, el("span", { className: "phead-ty", textContent: labelOf(node.type) }), el("b", { textContent: node.name })));
+  const revert = async () => {
+    for (const p of type.params) {
+      const cur = node.params[p.name] ?? p.default;
+      if (JSON.stringify(cur) === JSON.stringify(p.default)) continue;
+      node.params[p.name] = p.default;
+      await set(node.id, p.name, p.default).catch(() => {});
+    }
+    renderParams(host, node, type, set);
+  };
+  const cog = cogMenu({ "Revert to Factory Defaults": () => void revert() });
+  host.append(el("div", { className: "phead", title: `${node.type} · #${node.id}` }, ico, el("span", { className: "phead-ty", textContent: labelOf(node.type) }), el("b", { textContent: node.name }), cog));
   if (!type.params.length) host.append(el("div", { className: "hint", textContent: "No parameters." }));
   shown.node = node.id;
+  // Houdini folders: untabbed params first, then a tab bar; only the active tab's rows show
+  const tabs = [...new Set(type.params.map((p) => p.folder).filter((f): f is string => !!f))];
+  const pages = new Map<string, HTMLElement>();
+  if (tabs.length) {
+    const want = activeTab.get(type.type);
+    const on = want && tabs.includes(want) ? want : tabs[0];
+    const bar = el("div", { className: "pfold" });
+    for (const t of tabs) {
+      const page = el("div", { className: "ppage" });
+      page.dataset.tab = t;
+      page.hidden = t !== on;
+      pages.set(t, page);
+      const b = el("button", { className: t === on ? "pftab on" : "pftab", textContent: t });
+      b.dataset.tab = t;
+      b.addEventListener("click", () => {
+        activeTab.set(type.type, t);
+        for (const [k, pg] of pages) pg.hidden = k !== t;
+        for (const x of bar.children) x.classList.toggle("on", (x as HTMLElement).dataset.tab === t);
+      });
+      bar.append(b);
+    }
+    pages.set("", bar); // appended after the untabbed rows
+  }
   for (const p of type.params) {
+    const target = (p.folder && pages.get(p.folder)) || host;
     const value = node.params[p.name] ?? p.default;
     const code = !!p.language && p.kind === "string";
     const row = el("div", { className: code ? "prow code" : "prow" }, el("label", { textContent: code ? `${p.label} (${p.language})` : p.label, title: p.name }));
@@ -160,7 +234,7 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
       });
     };
     if (node.type === "add" && p.name === "points") {
-      host.append(...pointList(String(value), commit));
+      target.append(...pointList(String(value), commit));
       continue;
     }
     if (code) {
@@ -168,8 +242,10 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
       shown.editors.push(ed);
       row.append(ed.el);
     } else row.append(control(p, value, commit));
-    host.append(row);
+    target.append(row);
   }
+  const bar = pages.get("");
+  if (bar) { pages.delete(""); host.append(bar, ...pages.values()); }
   paintCookError();
 }
 

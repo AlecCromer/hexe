@@ -36,6 +36,8 @@ pub struct ParamInfo {
     pub language: Option<String>,
     /// Allowed values of a string param (dropdown, e.g. the wrangle's `class` = Run Over); empty = free text.
     pub choices: Vec<String>,
+    /// Pane tab (Houdini folder) the param sits on; `None` = untabbed.
+    pub folder: Option<String>,
 }
 
 /// One menu choice: `value` is the `ParamValue::Menu` index, `token` the stable scene-file name, `label` the UI text.
@@ -182,11 +184,145 @@ struct ObjMeta {
     pos: Option<[f32; 2]>,
     display: bool,
     selectable: bool,
+    /// Object-level parameters that differ from their default (`object_specs`: a Null's Transform / Render / Misc).
+    params: BTreeMap<String, ParamValue>,
 }
 impl Default for ObjMeta {
     fn default() -> Self {
-        ObjMeta { kind: "geo".into(), net: None, pos: None, display: true, selectable: true }
+        ObjMeta { kind: "geo".into(), net: None, pos: None, display: true, selectable: true, params: BTreeMap::new() }
     }
+}
+
+/// Object-level parameters of an object kind, Houdini 20.5 names / defaults / menus / tabs (hython dump of the `null`
+/// OBJ's parm templates). Only the Null has them so far; Geometry / subnet objects: none yet.
+pub fn object_specs(kind: &str) -> Vec<ParamSpec> {
+    if kind != "null" {
+        return Vec::new();
+    }
+    let (t, r, m) = ("Transform", "Render", "Misc");
+    let v3 = |n: &str, l: &str, d: [f32; 3], hi: f32, tab: &str| {
+        ParamSpec::new(n, ParamValue::V3(d)).label(l).range(0.0, hi).folder(tab)
+    };
+    let f =
+        |n: &str, l: &str, d: f32, tab: &str| ParamSpec::new(n, ParamValue::F(d)).label(l).range(0.0, 10.0).folder(tab);
+    let b = |n: &str, l: &str, d: bool, tab: &str| ParamSpec::new(n, ParamValue::B(d)).label(l).folder(tab);
+    let s = |n: &str, l: &str, tab: &str| ParamSpec::new(n, ParamValue::S(String::new())).label(l).folder(tab);
+    let menu = |n: &str, l: &str, items: &[(&str, &str)], tab: &str| {
+        ParamSpec::new(n, ParamValue::Menu(0)).label(l).menu(items).folder(tab)
+    };
+    vec![
+        menu(
+            "xOrd",
+            "Transform Order",
+            &[
+                ("srt", "Scale Rot Trans"),
+                ("str", "Scale Trans Rot"),
+                ("rst", "Rot Scale Trans"),
+                ("rts", "Rot Trans Scale"),
+                ("tsr", "Trans Scale Rot"),
+                ("trs", "Trans Rot Scale"),
+            ],
+            t,
+        ),
+        menu(
+            "rOrd",
+            "Rotate Order",
+            &[
+                ("xyz", "Rx Ry Rz"),
+                ("xzy", "Rx Rz Ry"),
+                ("yxz", "Ry Rx Rz"),
+                ("yzx", "Ry Rz Rx"),
+                ("zxy", "Rz Rx Ry"),
+                ("zyx", "Rz Ry Rx"),
+            ],
+            t,
+        ),
+        v3("t", "Translate", [0.0; 3], 10.0, t),
+        v3("r", "Rotate", [0.0; 3], 360.0, t),
+        v3("s", "Scale", [1.0; 3], 10.0, t),
+        v3("p", "Pivot Translate", [0.0; 3], 10.0, t),
+        v3("pr", "Pivot Rotate", [0.0; 3], 10.0, t),
+        f("scale", "Uniform Scale", 1.0, t),
+        menu(
+            "pre_xform",
+            "Modify Pre-Transform",
+            &[
+                ("clean", "Clean Transform"),
+                ("cleantrans", "Clean Translates"),
+                ("cleanrot", "Clean Rotates"),
+                ("cleanscales", "Clean Scales"),
+                ("extract", "Extract Pre-transform"),
+                ("reset", "Reset Pre-transform"),
+            ],
+            t,
+        ),
+        b("keeppos", "Keep Position When Parenting", false, t),
+        b("childcomp", "Child Compensation", false, t),
+        b("constraints_on", "Enable Constraints", false, t),
+        s("constraints_path", "Constraints", t),
+        b("tdisplay", "Display", false, r),
+        ParamSpec::new("display", ParamValue::I(1)).label("Display").range(0.0, 1.0).folder(r),
+        b("renderspace", "Output transform as render space (RIB/IFD)", false, r),
+        b("use_dcolor", "Set Wireframe Color", true, m),
+        ParamSpec::new("dcolor", ParamValue::V3([0.0, 0.75, 0.0])).label("Wireframe Color").range(0.0, 1.0).folder(m),
+        b("picking", "Viewport Selecting Enabled", true, m),
+        s("pickscript", "Select Script", m),
+        b("caching", "Cache Object Transform", true, m),
+        f("geoscale", "Display Uniform Scale", 1.0, m),
+        v3("geosize", "Display Scale", [1.0; 3], 10.0, m),
+        v3("geocenter", "Display Center", [0.0; 3], 10.0, m),
+        v3("georotate", "Display Rotate", [0.0; 3], 10.0, m),
+        menu("displayicon", "Display", &[("icon", "Icon"), ("axis", "Axis"), ("iconandaxis", "Icon and Axis")], m),
+        menu(
+            "controltype",
+            "Control Type",
+            &[
+                ("null", "Null"),
+                ("circles", "Circles"),
+                ("box", "Box"),
+                ("planes", "Planes"),
+                ("nullandcircles", "Null and Circles"),
+                ("nullandbox", "Null and Box"),
+                ("nullandplanes", "Null and Planes"),
+                ("custom", "Custom"),
+            ],
+            m,
+        ),
+        s("geocustom", "Display Custom", m),
+        menu(
+            "orientation",
+            "Orientation",
+            &[
+                ("xyz", "All planes"),
+                ("x", "YZ plane"),
+                ("y", "ZX plane"),
+                ("z", "XY plane"),
+                ("xy", "YZ, ZX planes"),
+                ("xz", "YZ, XY planes"),
+                ("yz", "ZX, XY planes"),
+            ],
+            m,
+        ),
+        b("shadedmode", "Shaded Mode", false, m),
+    ]
+}
+
+/// Object parameter `name` = JSON `v`, checked against `kind`'s specs (finite, right type, menu in range).
+fn object_param(kind: &str, name: &str, v: &Value) -> Result<(ParamSpec, ParamValue), String> {
+    let spec = object_specs(kind)
+        .into_iter()
+        .find(|s| s.name == name)
+        .ok_or_else(|| format!("{kind} object has no parameter `{name}`"))?;
+    let val = param_from_json(&spec.default, v).map_err(|e| format!("{name}: {e}"))?;
+    if !val.is_acceptable() {
+        return Err(format!("{name}: not a finite / acceptable value"));
+    }
+    if let ParamValue::Menu(i) = val
+        && i as usize >= spec.menu.len()
+    {
+        return Err(format!("{name}: menu index {i} out of range (0..{})", spec.menu.len()));
+    }
+    Ok((spec, val))
 }
 
 /// `objects_info`: every object + the current one's name.
@@ -309,6 +445,18 @@ fn obj_meta(o: &Value) -> Result<ObjMeta, String> {
     }
     m.display = o.get("display").and_then(Value::as_bool).unwrap_or(true);
     m.selectable = o.get("selectable").and_then(Value::as_bool).unwrap_or(true);
+    if let Some(ps) = o.get("params").filter(|p| !p.is_null()) {
+        let ps = ps.as_object().ok_or("params: not an object")?;
+        if ps.len() > 256 {
+            return Err("params: more than 256".into());
+        }
+        for (k, v) in ps {
+            let (spec, val) = object_param(&m.kind, k, v)?;
+            if val != spec.default {
+                m.params.insert(k.clone(), val);
+            }
+        }
+    }
     Ok(m)
 }
 
@@ -418,6 +566,7 @@ fn param_info(s: &ParamSpec) -> ParamInfo {
             .collect(),
         language: s.language.clone(),
         choices: s.choices.clone(),
+        folder: s.folder.clone(),
     }
 }
 
@@ -593,6 +742,10 @@ impl Session {
                         o["pos"] = serde_json::json!(m.pos);
                         o["display"] = Value::Bool(m.display);
                         o["selectable"] = Value::Bool(m.selectable);
+                        if !m.params.is_empty() {
+                            o["params"] =
+                                Value::Object(m.params.iter().map(|(k, v)| (k.clone(), param_json(v))).collect());
+                        }
                         if m.kind == "subnet" {
                             o["notes"] = serde_json::json!(ui.notes);
                         }
@@ -760,6 +913,34 @@ impl Session {
                 }
             })
             .collect()
+    }
+
+    /// Object-level parameters of object `name`: specs (with tabs) + every value (defaults filled in).
+    pub fn object_params(&self, name: &str) -> Result<(Vec<ParamInfo>, BTreeMap<String, Value>), String> {
+        if !self.objects().iter().any(|o| o == name) {
+            return Err(format!("no object `{name}`"));
+        }
+        let m = self.meta.get(name).cloned().unwrap_or_default();
+        let specs = object_specs(&m.kind);
+        let values =
+            specs.iter().map(|s| (s.name.clone(), param_json(m.params.get(&s.name).unwrap_or(&s.default)))).collect();
+        Ok((specs.iter().map(param_info).collect(), values))
+    }
+
+    /// Set object `name`'s parameter `parm` (a Null's Translate, ...); a value equal to the default is dropped.
+    pub fn object_set_param(&mut self, name: &str, parm: &str, value: &Value) -> Result<(), String> {
+        if !self.objects().iter().any(|o| o == name) {
+            return Err(format!("no object `{name}`"));
+        }
+        let kind = self.meta.get(name).map_or_else(|| "geo".to_string(), |m| m.kind.clone());
+        let (spec, val) = object_param(&kind, parm, value)?;
+        let m = self.meta.entry(name.to_string()).or_default();
+        if val == spec.default {
+            m.params.remove(parm);
+        } else {
+            m.params.insert(parm.to_string(), val);
+        }
+        Ok(())
     }
 
     /// A Null object's network (Houdini): `control` (the viewport indicator, display flag) and `point1`, an Add SOP
@@ -2542,6 +2723,77 @@ mod tests {
         assert!(c.positions.chunks(3).any(|p| p == [3.0, 0.0, 0.0]));
         assert!(s.object_add_kind("x", "camera", None).is_err(), "unknown kind");
         assert!(s.object_add_kind("x", "geo", Some("null1")).is_err(), "a Null is no container");
+    }
+
+    #[test]
+    fn null_object_transform_params_default_set_and_round_trip() {
+        let mut s = Session::new();
+        s.node_add("box", 0.0, 0.0).expect("box");
+        s.object_add_kind("null1", "null", None).expect("null");
+        let (specs, vals) = s.object_params("null1").expect("params");
+        // Houdini 20.5 Null OBJ: Transform tab first, with its defaults
+        let tr: Vec<&str> =
+            specs.iter().filter(|p| p.folder.as_deref() == Some("Transform")).map(|p| p.name.as_str()).collect();
+        assert_eq!(
+            tr,
+            [
+                "xOrd",
+                "rOrd",
+                "t",
+                "r",
+                "s",
+                "p",
+                "pr",
+                "scale",
+                "pre_xform",
+                "keeppos",
+                "childcomp",
+                "constraints_on",
+                "constraints_path"
+            ]
+        );
+        assert!(
+            specs.iter().any(|p| p.folder.as_deref() == Some("Render"))
+                && specs.iter().any(|p| p.folder.as_deref() == Some("Misc"))
+        );
+        assert_eq!(
+            (vals["t"].clone(), vals["s"].clone(), vals["scale"].clone()),
+            (serde_json::json!([0.0, 0.0, 0.0]), serde_json::json!([1.0, 1.0, 1.0]), Value::from(1.0))
+        );
+        assert_eq!(
+            (vals["xOrd"].clone(), vals["rOrd"].clone(), vals["keeppos"].clone()),
+            (Value::from(0), Value::from(0), Value::Bool(false))
+        );
+        assert_eq!(specs.iter().find(|p| p.name == "xOrd").expect("xOrd").menu[0].label, "Scale Rot Trans");
+        // set, save, reload
+        s.object_set_param("null1", "t", &serde_json::json!([1.5, 2, -3])).expect("t");
+        s.object_set_param("null1", "rOrd", &Value::from(5)).expect("rOrd");
+        let dir = std::env::temp_dir().join(format!("hexe-nullparms-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let out = dir.join("n.json");
+        s.graph_save(&out.to_string_lossy()).expect("save");
+        let mut t = Session::new();
+        t.graph_load(&out.to_string_lossy()).expect("reload");
+        let (_, v2) = t.object_params("null1").expect("params");
+        assert_eq!((v2["t"].clone(), v2["rOrd"].clone()), (serde_json::json!([1.5, 2.0, -3.0]), Value::from(5)));
+        // back to the default = not stored
+        t.object_set_param("null1", "t", &serde_json::json!([0, 0, 0])).expect("reset");
+        assert!(!t.meta["null1"].params.contains_key("t"));
+        // hostile: unknown object / parm, wrong type, NaN, menu out of range, a geo has no object parms yet
+        assert!(t.object_set_param("nope", "t", &serde_json::json!([0, 0, 0])).is_err());
+        assert!(t.object_set_param("null1", "bogus", &Value::from(1)).is_err());
+        assert!(t.object_set_param("null1", "t", &Value::from("x")).is_err());
+        assert!(t.object_set_param("null1", "scale", &serde_json::json!(f64::NAN)).is_err());
+        assert!(t.object_set_param("null1", "xOrd", &Value::from(6)).is_err());
+        assert!(t.object_set_param("geo1", "t", &serde_json::json!([0, 0, 0])).is_err());
+        // a file with a bad object param is refused, not half-loaded
+        std::fs::write(
+            &out,
+            r#"{"hexe_objects":1,"objects":[{"name":"n","kind":"null","scene":null,"params":{"t":"oops"}}]}"#,
+        )
+        .expect("write");
+        assert!(Session::new().graph_load(&out.to_string_lossy()).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

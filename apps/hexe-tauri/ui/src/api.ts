@@ -11,6 +11,8 @@ export interface ParamInfo {
   language: string | null;
   /** allowed values of a string param (dropdown, e.g. wrangle Run Over) */
   choices: string[];
+  /** pane tab (Houdini folder) it sits on; null = untabbed */
+  folder: string | null;
 }
 export interface NodeType { type: string; label: string; inputs: string[]; /** inputs 0..required must be wired; the rest are optional */ required: number; params: ParamInfo[] }
 export interface NodeView {
@@ -106,6 +108,9 @@ export const api = {
     objectEnter: (name: string) => invoke<GraphView>("object_enter", { name }),
     /** new empty object / rename: a taken name is numbered up; both return the final name */
     objectAdd: (name: string, kind: ObjKind = "geo", net: string | null = null) => invoke<string>("object_add", { name, kind, net }),
+  /** object-level params (a Null's Transform / Render / Misc tabs): specs + current values */
+  objectParams: (name: string) => invoke<[ParamInfo[], Record<string, PVal>]>("object_params", { name }),
+  objectSetParam: (name: string, parm: string, value: PVal) => invoke<void>("object_set_param", { name, parm, value }),
     /** every object: kind, container (`net`), file position, flags, a container's sticky notes; + the current one */
     objectsInfo: () => invoke<[ObjInfo[], string]>("objects_info"),
     objectRemove: (name: string) => invoke<void>("object_remove", { name }),

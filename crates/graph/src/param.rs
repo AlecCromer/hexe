@@ -50,6 +50,8 @@ pub struct ParamSpec {
     pub language: Option<String>,
     /// Allowed values of a string parameter (UI hint: drawn as a dropdown; the node still validates in `cook`). Empty = free text.
     pub choices: Vec<String>,
+    /// Parameter-pane tab it sits on (Houdini folder, e.g. `Transform`); `None` = no tabs. UI hint only.
+    pub folder: Option<String>,
 }
 
 impl ParamSpec {
@@ -62,6 +64,7 @@ impl ParamSpec {
             menu: Vec::new(),
             language: None,
             choices: Vec::new(),
+            folder: None,
         }
     }
     #[must_use]
@@ -85,6 +88,12 @@ impl ParamSpec {
     #[must_use]
     pub fn choices(mut self, values: &[&str]) -> Self {
         self.choices = values.iter().map(|v| (*v).to_string()).collect();
+        self
+    }
+    /// Put the parameter on pane tab `folder` (Houdini folder name).
+    #[must_use]
+    pub fn folder(mut self, folder: &str) -> Self {
+        self.folder = Some(folder.to_string());
         self
     }
     #[must_use]

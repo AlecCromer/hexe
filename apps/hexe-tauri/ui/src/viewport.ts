@@ -645,7 +645,8 @@ this.bb = bounds(verts.length ? [...c.positions, ...verts] : c.positions);
      *  cook failed: a plain RGB axes cross 0.5 long) at the Null's position; selected ones in the selection yellow. */
     /** last `setNulls` input (F frames the selected ones) */
     private nullState: { at: [number, number, number]; selected: boolean; lines: number[] | null }[] = [];
-    setNulls(nulls: { at: [number, number, number]; selected: boolean; lines: number[] | null }[]): void {
+    /** `m` = the Null object's transform (Houdini row-vector matrix, row-major = three.js `fromArray`); else placed at `at` */
+    setNulls(nulls: { at: [number, number, number]; m?: number[] | null; selected: boolean; lines: number[] | null }[]): void {
       this.nullState = nulls;
       for (const o of [...this.nullGroup.children]) {
         this.nullGroup.remove(o);
@@ -666,7 +667,8 @@ this.bb = bounds(verts.length ? [...c.positions, ...verts] : c.positions);
         g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
         const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false }));
         l.renderOrder = 15;
-        l.position.set(...n.at);
+        if (n.m && n.m.length === 16 && n.m.every(Number.isFinite)) { l.matrixAutoUpdate = false; l.matrix.fromArray(n.m); }
+        else l.position.set(...n.at);
         this.nullGroup.add(l);
       }
       this.draw();
