@@ -22,6 +22,26 @@
 //!   wrangle in the HDA (always "all") and are ignored here too.
 //! * Float on an int scalar casts the attribute to float first. An existing attribute of the wrong type / size leaves
 //!   the geometry unchanged (Houdini warns).
+//! * `outlierviz` (float / int, outlier distribution): the range branch (pattern value type, not specific values) also
+//!   writes int attribute `outlierattrib` = 1 for elements that landed in the outlier band, 0 otherwise (elements
+//!   outside `group` keep an existing value, else 0); other value types write nothing.
+//!
+//! # Parms
+//! Every Houdini 20.5 parm tuple of the three HDAs is declared under its tuple name (pinned against the hython dump
+//! `fixtures/sop-attribadjust/parms.json`), so a saved `.hip` drops nothing. Float tuples of 2 or 3 components are `V3`
+//! (`startpos`, `endpos`, colour `singlevalue` / `initvalue` / `basecolor` / `clampminvalue` / `clampmaxvalue` /
+//! `default`, ramp keys `colorrampNc`; the 2-tuples `remapattrib_range`, `randr` .. `randval` = (min, max, unused)).
+//! Declared but never read:
+//! * UI only: folders (`folderN`, `xn__`, multiparm `folder3_N` / `folder3_N_2`), separators (`sepparm`, `sepparm2`),
+//!   the compute-range buttons, `gammapresets` (a preset menu writing `gamma`), `colorpalette` (ramp presets),
+//!   `deleteblendattrib`, and the component scope menus (see above).
+//! * Only used by unsupported modes, which cook to `Unsupported`: noise (`basis`, `locationattrib`, `element*`,
+//!   `offset*`, `usenoiseexpression`, `noiseexpression`, `vex_cwdpath`, `animated`, `pulseduration`, `fractal`, `oct`,
+//!   `lac`, `rough`, `disp`, `dispesize`, `gflow`, `flowrot`, `accuml`, `accumg`), colour map (`cmap*`,
+//!   `componentscope_cmap`, `srccolorspace`, `uvattrib`, `t`, `r`, `scale`, `scaletype`, `s`, `p`), units
+//!   (`attribunit`, `parmunit`, `unitscale`, `unitoffset`), colour specific values (`colorN`, `colorschemeN`, `weightN`,
+//!   the scheme angles / distances), colour blending (`blendspace`), attribute-driven colour correction (`*attrib`,
+//!   `deleteallccattrib`).
 //!
 //! Not modelled (-> `Unsupported("unsupported: <parm>=<value>")`): `noise` and `cmap` value types, unit conversion,
 //! vector targets of the float SOP (length / component adjust), list-of-values entries, ramp bases other than constant /
@@ -29,7 +49,7 @@
 //! driven colour correction, spatial patterns on primitive / detail class, a missing helper attribute (blend /
 //! separation / adjustment / remap).
 use super::group_sop::parse_pattern;
-use super::meshutil::{bad, float, int, menu, toggle};
+use super::meshutil::{bad, float, int, menu, toggle, v3};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
@@ -219,11 +239,7 @@ fn sample_discrete(w: &[f32], u: f32) -> usize {
 // ---------------------------------------------------------------- params
 
 fn num(v: f64, is_int: bool) -> ParamValue {
-    if is_int {
-        ParamValue::I(v as i32)
-    } else {
-        ParamValue::F(v as f32)
-    }
+    if is_int { ParamValue::I(v as i32) } else { ParamValue::F(v as f32) }
 }
 fn unsup(op: &str, parm: &str, value: impl std::fmt::Display) -> CookError {
     CookError::Unsupported(format!("{op}: unsupported: {parm}={value}"))
@@ -239,6 +255,113 @@ fn b(name: &str) -> ParamSpec {
 }
 fn m(name: &str, v: u32, items: &[(&str, &str)]) -> ParamSpec {
     ParamSpec::new(name, ParamValue::Menu(v)).menu(items)
+}
+/// A Houdini parm tuple of 2 or 3 floats (2-tuples use the first two slots; the third is unused).
+fn v3s(name: &str, v: [f32; 3]) -> ParamSpec {
+    ParamSpec::new(name, ParamValue::V3(v))
+}
+fn ip(name: &str, v: i32) -> ParamSpec {
+    ParamSpec::new(name, ParamValue::I(v))
+}
+
+const XFORM_MENU: &str = "BUTTONS_decompose_transforms";
+const NOISE_EXPR: &str =
+    "// Parameters to modify:\n// Location Attribute - pos\n// Element Size - elementsize\n// Offset - offset\n\n";
+const NOISE_BASIS: [(&str, &str); 12] = [
+    ("value_fast", "Fast"),
+    ("sparse", "Sparse Convolution"),
+    ("alligator", "Alligator"),
+    ("perlin", "Perlin"),
+    ("flow", "Perlin Flow"),
+    ("simplex", "Simplex"),
+    ("worleyFA", "Worley Cellular F1"),
+    ("worleyFB", "Worley Cellular F2-F1"),
+    ("mworleyFA", "Manhattan Cellular F1"),
+    ("mworleyFB", "Manhattan Cellular F2-F1"),
+    ("cworleyFA", "Chebyshev Cellular F1"),
+    ("cworleyFB", "Chebyshev Cellular F2-F1"),
+];
+const SCHEMES: [(&str, &str); 8] = [
+    ("const", "Constant"),
+    ("comp", "Complementary"),
+    ("twoanalog", "Two Analogous"),
+    ("fouranalog", "Four Analogous"),
+    ("triadic", "Triadic"),
+    ("tetradic", "Tetradic"),
+    ("fiveshades", "Five Shades"),
+    ("fivetints", "Five Tints"),
+];
+/// Houdini folder / separator names of each HDA (UI only: declared so a saved `.hip` keeps them, never read).
+const FLOAT_FOLDERS: [&str; 15] = [
+    "folder1", "folder7", "xn__", "folder4", "folder0", "folder5", "folder9", "folder8", "folder2", "folder10",
+    "folder11", "folder12", "folder13", "folder3", "folder6",
+];
+const INT_FOLDERS: [&str; 13] = [
+    "folder1", "folder4", "folder0", "folder5", "folder9", "folder8", "folder2", "folder13", "folder10", "folder11",
+    "folder12", "folder3", "folder6",
+];
+const COLOR_FOLDERS: [&str; 15] = [
+    "folder0", "folder13", "folder1", "folder4", "folder5", "folder9", "folder8", "folder6", "folder7", "folder12",
+    "folder10", "folder2", "folder14", "folder3", "folder11",
+];
+
+/// Parms hexe declares but never reads (module doc): UI folders / separator / buttons, and the noise / colour-map
+/// settings, which only matter for `valuetype` noise / cmap (cook -> `Unsupported`).
+fn ignored_specs(folders: &[&str], sep: &str, color: bool, t: f32) -> Vec<ParamSpec> {
+    let mut v: Vec<ParamSpec> = folders.iter().map(|n| ip(n, 0)).collect();
+    v.extend([s(sep, ""), ip("bbox_computerange", 0), ip("remapattrib_computerange", 0)]);
+    v.extend([
+        s("cmap", "$HH/pic/Mandril.pic").label("Color Map"),
+        m("cmapmode", 0, &[("path", "File"), ("attrib", "Attribute")]).label("Color Map Source"),
+        s("cmapattrib", "path").label("Color Map Attribute"),
+        s("cmapchannel", "").label("Channel"),
+    ]);
+    v.push(if color {
+        s("componentscope_cmap", "111")
+    } else {
+        m("componentscope_cmap", 3, &[("r", "R"), ("g", "G"), ("b", "B"), ("a", "A")])
+    });
+    v.extend([
+        v3s("cmapborder", [0.0; 3]).label("Border Color"),
+        m("srccolorspace", 0, &[("auto", "Automatic"), ("linear", "Linear")]).label("Source Color Space"),
+        s("cmapwrap", "repeat").label("Wrap"),
+        s("uvattrib", "uv").label("UV Attribute"),
+        v3s("t", [t, t, 0.0]).label("Translate"),
+        f("r", 0.0).label("Rotate"),
+        f("scale", 1.0).label("Uniform Scale"),
+        s("scaletype", XFORM_MENU),
+        v3s("s", [1.0, 1.0, 0.0]).label("Scale"),
+        v3s("p", [0.5, 0.5, 0.0]).label("Pivot"),
+        m("basis", 5, &NOISE_BASIS).label("Noise Type"),
+        s("locationattrib", "P").label("Location Attribute"),
+        f("elementsize", 1.0).label("Element Size"),
+        s("elementsizetype", XFORM_MENU),
+        v3s("elementscale", [1.0; 3]).label("Element Scale"),
+        f("offset", 0.0).label("Offset"),
+        s("offsettype", XFORM_MENU),
+        v3s("offsetv", [0.0; 3]).label("Offset"),
+        b("usenoiseexpression").label("Use Noise Expression"),
+        s("noiseexpression", NOISE_EXPR).label("Noise Expression"),
+        s("vex_cwdpath", ".").label("Evaluation Node Path"),
+        b("animated").label("Animated"),
+        f("pulseduration", 1.0).label("Pulse Duration"),
+        m(
+            "fractal",
+            1,
+            &[("none", "None"), ("fBm", "Standard (fBm)"), ("mfT", "Terrain (mfT)"), ("hmfT", "Hybrid (hmfT)")],
+        )
+        .label("Fractal Type"),
+        f("oct", 3.0).label("Max Octaves"),
+        f("lac", 2.01234).label("Lacunarity"),
+        f("rough", 0.5).label("Roughness"),
+        f("disp", 0.0).label("Displacement"),
+        f("dispesize", 1.0).label("Displacement Element Size"),
+        f("gflow", 0.0).label("Global Flow"),
+        f("flowrot", 0.0).label("Flow Rotation"),
+        b("accuml").label("Accumulate Local"),
+        b("accumg").label("Accumulate Global"),
+    ]);
+    v
 }
 
 fn head(attrib: &str, color: bool) -> Vec<ParamSpec> {
@@ -260,26 +383,24 @@ fn head(attrib: &str, color: bool) -> Vec<ParamSpec> {
     v.push(m("class", 0, &CLASSES).label("Class"));
     v
 }
-fn pattern_specs(seed: i32) -> Vec<ParamSpec> {
+fn pattern_specs() -> Vec<ParamSpec> {
     let mut v = vec![
         m("randmethod", 0, &[("ppnum", "Element Number"), ("custom", "Custom Attribute")]).label("Seed Method"),
         s("randattrib", "id").label("Seed Attribute"),
-        ParamSpec::new("randomseed", ParamValue::I(seed)).label("Seed"),
+        // template default 0 (Houdini's OnCreated script then picks a per-session seed, saved in the .hip)
+        ParamSpec::new("randomseed", ParamValue::I(0)).label("Seed"),
     ];
-    for (n, d) in [("startpos", [0.0, 0.0, 0.0]), ("endpos", [5.0, 0.0, 0.0])] {
-        for (a, x) in ["x", "y", "z"].iter().zip(d) {
-            v.push(f(&format!("{n}{a}"), x).label(n));
-        }
-    }
     v.extend([
+        v3s("startpos", [0.0; 3]).label("Start Position"),
+        v3s("endpos", [5.0, 0.0, 0.0]).label("End Position"),
         m("bounddir", 0, &[("x", "X"), ("y", "Y"), ("z", "Z")]).label("Direction"),
         b("doboundmin").label("Bound Min"),
         f("boundmin", 0.0).label("Bound Min"),
         b("doboundmax").label("Bound Max"),
         f("boundmax", 1.0).label("Bound Max"),
         s("remapattrib", "mask").label("Remap Attribute"),
-        f("remapattrib_rangemin", 0.0).label("Range Min"),
-        f("remapattrib_rangemax", 1.0).label("Range Max"),
+        // Houdini 2-tuple `remapattrib_rangemin` / `remapattrib_rangemax`
+        v3s("remapattrib_range", [0.0, 1.0, 0.0]).label("Range"),
         m("remapattrib_rangemode", 0, &[("clamp", "Clamp"), ("cycle", "Cycle")]).label("Range Mode"),
     ]);
     v
@@ -292,9 +413,8 @@ fn ramp_specs(name: &str, keys: &[(f32, [f32; 3])], color: bool) -> Vec<ParamSpe
         let n = k + 1;
         v.push(f(&format!("{name}{n}pos"), pos));
         if color {
-            for (c, x) in ["cr", "cg", "cb"].iter().zip(val) {
-                v.push(f(&format!("{name}{n}{c}"), x));
-            }
+            // Houdini tuple `<name>Nc` = `<name>Ncr` / `cg` / `cb`
+            v.push(v3s(&format!("{name}{n}c"), val));
         } else {
             v.push(f(&format!("{name}{n}value"), val[0]));
         }
@@ -304,7 +424,7 @@ fn ramp_specs(name: &str, keys: &[(f32, [f32; 3])], color: bool) -> Vec<ParamSpe
 }
 
 fn scalar_spec(is_int: bool) -> Vec<ParamSpec> {
-    let (attrib, seed, oseed, maxv) = if is_int { ("variant", 30, 14, 9.0) } else { ("pscale", 40, 3, 1.0) };
+    let (attrib, maxv) = if is_int { ("variant", 9.0) } else { ("pscale", 1.0) };
     let mut v = head(attrib, false);
     if !is_int {
         v.push(
@@ -338,7 +458,7 @@ fn scalar_spec(is_int: bool) -> Vec<ParamSpec> {
         m("outlieroperation", 0, &[("add", "Additive"), ("mult", "Multiplicative")]).label("Outlier Operation"),
         m("outlierside", 0, &[("above", "Above Max Value"), ("below", "Below Min Value"), ("both", "Both")])
             .label("Outlier Side"),
-        ParamSpec::new("outlierseed", ParamValue::I(oseed)).label("Outlier Seed"),
+        ParamSpec::new("outlierseed", ParamValue::I(0)).label("Outlier Seed"),
         b("outlierviz").label("Outlier Attribute"),
         s("outlierattrib", "outlier").label("Outlier Attribute Name"),
         b("enablestepping").label("Stepping"),
@@ -354,8 +474,9 @@ fn scalar_spec(is_int: bool) -> Vec<ParamSpec> {
         v.push(m(&format!("valuetype{i}"), 0, &[("const", "Constant"), ("list", "List of Values")]));
         v.push(f(&format!("weight{i}"), 1.0).label("Weight"));
         v.push(s(&format!("values{i}"), "").label("Values"));
+        v.push(ip(&format!("folder3_{i}"), 0));
     }
-    v.extend(pattern_specs(seed));
+    v.extend(pattern_specs());
     v.extend([
         b("enable_postprocess").label("Post-Process"),
         b("doclampmin").label("Clamp Min"),
@@ -365,6 +486,18 @@ fn scalar_spec(is_int: bool) -> Vec<ParamSpec> {
         b("dodefault").label("Set Default"),
         ParamSpec::new("default", num(0.0, is_int)).label("Default"),
     ]);
+    if is_int {
+        v.extend(ignored_specs(&INT_FOLDERS, "sepparm", false, 0.0));
+    } else {
+        // unit conversion (any `unitsettings` but none -> Unsupported)
+        v.extend([
+            s("attribunit", "0").label("Attribute Unit"),
+            s("parmunit", "1").label("Parameter Unit"),
+            f("unitscale", 1.0).label("Unit Scale"),
+            f("unitoffset", 0.0).label("Unit Offset"),
+        ]);
+        v.extend(ignored_specs(&FLOAT_FOLDERS, "sepparm2", false, 0.5));
+    }
     v
 }
 pub fn float_spec() -> Vec<ParamSpec> {
@@ -385,9 +518,7 @@ pub fn color_spec() -> Vec<ParamSpec> {
             &[("const", "Constant"), ("colorattrib", "Color Attribute"), ("floatattrib", "Float Attribute")],
         )
         .label("Initial Value From"),
-        f("initvaluer", 1.0),
-        f("initvalueg", 1.0),
-        f("initvalueb", 1.0),
+        v3s("initvalue", [1.0; 3]).label("Initial Value"),
         s("initcolorattrib", "Cd"),
         s("componentscope_initcolor", "111"),
         s("initfloatattrib", "pscale"),
@@ -396,15 +527,12 @@ pub fn color_spec() -> Vec<ParamSpec> {
         m("operation", 1, &COLOR_OPS).label("Operation"),
         m("valuetype", 0, &VALUETYPES).label("Value"),
         m("rangemethod", 1, &COLOR_RANGES).label("Range"),
-        f("singlevaluer", 1.0),
-        f("singlevalueg", 1.0),
-        f("singlevalueb", 1.0),
+        v3s("singlevalue", [1.0; 3]).label("Value"),
         m("randomcolormodel", 0, &[("rgb", "RGB"), ("hsv", "HSV")]).label("Color Model"),
         b("dobasecolor").label("Base Color"),
-        f("basecolorr", 1.0),
-        f("basecolorg", 1.0),
-        f("basecolorb", 1.0),
+        v3s("basecolor", [1.0; 3]).label("Base Color"),
     ]);
+    // Houdini 2-tuples `<n>min` / `<n>max`
     for (n, lo, hi) in [
         ("randr", 0.0, 1.0),
         ("randg", 0.0, 1.0),
@@ -413,8 +541,7 @@ pub fn color_spec() -> Vec<ParamSpec> {
         ("randsat", 0.0, 1.0),
         ("randval", 0.0, 1.0),
     ] {
-        v.push(f(&format!("{n}min"), lo));
-        v.push(f(&format!("{n}max"), hi));
+        v.push(v3s(n, [lo, hi, 0.0]).label(n));
     }
     v.extend(ramp_specs(
         "colorramp",
@@ -427,14 +554,30 @@ pub fn color_spec() -> Vec<ParamSpec> {
         ],
         true,
     ));
+    v.push(s("colorpalette", "none").label("Color Palette"));
+    v.push(ParamSpec::new("nvalues", ParamValue::I(1)).label("Number of Values"));
+    // specific colours (`rangemethod` specific -> Unsupported): declared, never read
+    for i in 0..MAX_VALUES {
+        v.extend([
+            ip(&format!("folder3_{i}_2"), 0),
+            v3s(&format!("color{i}"), [1.0; 3]).label("Color"),
+            m(&format!("colorscheme{i}"), 0, &SCHEMES).label("Color Scheme"),
+            f(&format!("weight{i}"), 1.0).label("Weight"),
+            f(&format!("twoanalogangle{i}"), 30.0),
+            f(&format!("fouranalogangle{i}"), 30.0),
+            f(&format!("triadicangle{i}"), 120.0),
+            f(&format!("tetradicangle{i}"), 45.0),
+            f(&format!("fiveshadesdist{i}"), 1.0),
+            f(&format!("fivetintsdist{i}"), 1.0),
+        ]);
+    }
     v.extend([
-        ParamSpec::new("nvalues", ParamValue::I(1)).label("Number of Values"),
         s("adjustmentattrib", "").label("Adjustment Attribute"),
         s("componentscope_adjustmentattrib", "111"),
         f("adjustmentattribgain", 1.0).label("Gain"),
         f("adjustmentattribbrightness", 0.0).label("Brightness"),
     ]);
-    v.extend(pattern_specs(36));
+    v.extend(pattern_specs());
     v.push(b("enable_cc").label("Color Correction"));
     for (n, d) in [
         ("hueshift", 0.0),
@@ -456,24 +599,23 @@ pub fn color_spec() -> Vec<ParamSpec> {
         v.push(s(&format!("{n}attrib"), attr));
     }
     v.extend([
+        // UI preset menu that sets `gamma` (its callback); never read
+        m("gammapresets", 0, &[("1", "1"), ("2.2", "2.2"), ("0.454545", "1/2.2")]).label("Gamma Presets"),
         b("deleteallccattrib"),
         b("enable_postprocess").label("Post-Process"),
+        // UI action strip of the blend attribute (not wired in the HDA)
+        s("deleteblendattrib", "SOP_delete"),
         b("doclampmin").label("Clamp Min"),
-        f("clampminvaluer", 0.0),
-        f("clampminvalueg", 0.0),
-        f("clampminvalueb", 0.0),
+        v3s("clampminvalue", [0.0; 3]).label("Clamp Min"),
         b("doclampmax").label("Clamp Max"),
-        f("clampmaxvaluer", 1.0),
-        f("clampmaxvalueg", 1.0),
-        f("clampmaxvalueb", 1.0),
+        v3s("clampmaxvalue", [1.0; 3]).label("Clamp Max"),
         b("docomplement").label("Complement"),
         b("dodefault").label("Set Default"),
-        f("defaultr", 1.0),
-        f("defaultg", 1.0),
-        f("defaultb", 1.0),
+        v3s("default", [1.0; 3]).label("Default"),
         b("dotypeinfo").label("Set Type Info"),
         m("typeinfo", 1, &[("none", "None"), ("color", "Color")]).label("Type Info"),
     ]);
+    v.extend(ignored_specs(&COLOR_FOLDERS, "sepparm", true, 0.5));
     v
 }
 
@@ -489,18 +631,68 @@ pub fn color_new() -> Box<SopNode> {
 
 // ---------------------------------------------------------------- shared evaluation
 
-fn ff(p: &ParamSet, n: &str) -> Result<f32, CookError> {
-    Ok(float(p, n)? as f32)
-}
-/// Int or float parm as f64 (int SOP parms are ints, float SOP parms floats).
-fn numf(p: &ParamSet, n: &str) -> Result<f64, CookError> {
-    match p.get(n) {
-        Some(ParamValue::I(v)) => Ok(f64::from(*v)),
-        _ => float(p, n),
+/// Strict parm ranges of the HDAs (Houdini clamps the evaluated value; hython `minIsStrict` / `maxIsStrict`).
+fn strict(n: &str) -> (f64, f64) {
+    const INF: f64 = f64::INFINITY;
+    match n {
+        "blendweight" => (0.0, 1.0),
+        "outlierpercent" => (0.0, 100.0),
+        "stepsize"
+        | "outlierrange"
+        | "randomseed"
+        | "outlierseed"
+        | "adjustmentattribgain"
+        | "adjustmentattribbrightness"
+        | "gain"
+        | "contrast"
+        | "brightness"
+        | "val"
+        | "sat" => (0.0, INF),
+        _ if n.starts_with("weight") => (0.0, INF),
+        _ => (-INF, INF),
     }
 }
-fn v3p(p: &ParamSet, n: &str) -> Result<[f32; 3], CookError> {
-    Ok([ff(p, &format!("{n}x"))?, ff(p, &format!("{n}y"))?, ff(p, &format!("{n}z"))?])
+/// A float tuple parm (V3; 2-tuples use slots 0 and 1), strict ranges per component (colour `singlevalue` /
+/// `initvalue`: minimum 0).
+fn c3(p: &ParamSet, n: &str) -> Result<[f32; 3], CookError> {
+    let lo = if matches!(n, "singlevalue" | "initvalue") { 0.0 } else { f64::NEG_INFINITY };
+    Ok(v3(p, n)?.map(|x| x.max(lo) as f32))
+}
+fn ff(p: &ParamSet, n: &str) -> Result<f32, CookError> {
+    let (lo, hi) = strict(n);
+    Ok(float(p, n)?.clamp(lo, hi) as f32)
+}
+/// Int or float parm as f64 (int SOP parms are ints, float SOP parms floats), strict ranges applied.
+fn numf(p: &ParamSet, n: &str) -> Result<f64, CookError> {
+    let (lo, hi) = strict(n);
+    match p.get(n) {
+        Some(ParamValue::I(v)) => Ok(f64::from(*v).clamp(lo, hi)),
+        _ => Ok(float(p, n)?.clamp(lo, hi)),
+    }
+}
+/// Seed parms (strict minimum 0).
+fn seed(p: &ParamSet, n: &str) -> Result<i32, CookError> {
+    Ok(int(p, n)?.max(0))
+}
+/// SYSrint: `floor(x + 0.5)`.
+fn rint(x: f32) -> i32 {
+    (x + 0.5).floor() as i32
+}
+/// VEX float `%` (floor modulo for a positive divisor).
+fn fmod1(x: f32) -> f32 {
+    x - x.floor()
+}
+/// SYSsafepow: a negative base takes the rounded exponent, `0^y` = 1 only for `y == 0`.
+fn safepow(x: f32, y: f32) -> f32 {
+    if x > 0.0 {
+        x.powf(y)
+    } else if x < 0.0 {
+        x.powi(rint(y))
+    } else if y == 0.0 {
+        1.0
+    } else {
+        0.0
+    }
 }
 
 struct Ramp {
@@ -515,11 +707,7 @@ impl Ramp {
         let mut keys = Vec::with_capacity(n as usize);
         for k in 1..=n as usize {
             let pos = ff(p, &format!("{name}{k}pos"))?;
-            let val = if color {
-                [ff(p, &format!("{name}{k}cr"))?, ff(p, &format!("{name}{k}cg"))?, ff(p, &format!("{name}{k}cb"))?]
-            } else {
-                [ff(p, &format!("{name}{k}value"))?; 3]
-            };
+            let val = if color { c3(p, &format!("{name}{k}c"))? } else { [ff(p, &format!("{name}{k}value"))?; 3] };
             let basis = menu(p, &format!("{name}{k}interp"))?;
             keys.push((pos, val, basis));
         }
@@ -588,7 +776,7 @@ fn scalar_attr(op: &str, src: &Detail, class: AttrClass, parm: &str, name: &str)
 fn vec3_attr(src: &Detail, class: AttrClass, name: &str) -> Option<Vec<[f32; 3]>> {
     match src.attr(class, name).map(|a| &a.data) {
         Some(AttrData::V3(v)) => Some(v.clone()),
-        Some(AttrData::FN { size: 3, data }) => Some(data.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()),
+        Some(AttrData::FN { size: 3, data }) => Some(data.as_chunks::<3>().0.to_vec()),
         _ => None,
     }
 }
@@ -634,7 +822,7 @@ impl Pattern {
         };
         let mut pt = Pattern {
             vt,
-            seed: int(p, "randomseed")? as f32,
+            seed: seed(p, "randomseed")? as f32,
             sep,
             pos: Vec::new(),
             a: [0.0; 3],
@@ -649,13 +837,13 @@ impl Pattern {
             VT_RAND => {}
             VT_REMAP => {
                 pt.remap = scalar_attr(op, src, class, "remapattrib", &attr_name(p, "remapattrib")?)?;
-                pt.lo = ff(p, "remapattrib_rangemin")?;
-                pt.hi = ff(p, "remapattrib_rangemax")?;
+                let r = c3(p, "remapattrib_range")?;
+                (pt.lo, pt.hi) = (r[0], r[1]);
                 pt.cycle = menu(p, "remapattrib_rangemode")? == 1;
             }
             VT_LINE | VT_RADIAL => {
                 pt.pos = positions(op, src, class, vt)?;
-                let (s0, e0) = (v3p(p, "startpos")?, v3p(p, "endpos")?);
+                let (s0, e0) = (c3(p, "startpos")?, c3(p, "endpos")?);
                 pt.a = s0;
                 let d = [e0[0] - s0[0], e0[1] - s0[1], e0[2] - s0[2]];
                 let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
@@ -697,11 +885,7 @@ impl Pattern {
             VT_RAND => rand1(&[self.separation(i), self.seed]),
             VT_REMAP => {
                 let v = self.remap.get(i).copied().unwrap_or(0.0);
-                if self.cycle {
-                    efit(v, self.lo, self.hi, 0.0, 1.0) % 1.0
-                } else {
-                    fit(v, self.lo, self.hi, 0.0, 1.0)
-                }
+                if self.cycle { fmod1(efit(v, self.lo, self.hi, 0.0, 1.0)) } else { fit(v, self.lo, self.hi, 0.0, 1.0) }
             }
             VT_LINE => fit(dot(q, self.bdir), self.lo, self.hi, 0.0, 1.0),
             VT_RADIAL => {
@@ -728,16 +912,18 @@ struct Range {
     step: Option<f64>,
 }
 impl Range {
-    fn read(op: &str, p: &ParamSet) -> Result<Range, CookError> {
+    fn read(op: &str, p: &ParamSet, is_int: bool) -> Result<Range, CookError> {
+        // the integer SOP's outlier range has a strict minimum of 1
+        let omin = if is_int { 1.0 } else { 0.0 };
         let distrib = menu(p, "distribinrange")?;
         Ok(Range {
             distrib,
             ramp: if distrib == 1 { Ramp::read(op, p, "remapramp", false)? } else { Ramp { keys: Vec::new() } },
             pct: ff(p, "outlierpercent")?,
-            orange: ff(p, "outlierrange")?,
+            orange: ff(p, "outlierrange")?.max(omin),
             omult: menu(p, "outlieroperation")? == 1,
             side: menu(p, "outlierside")?,
-            oseed: int(p, "outlierseed")?,
+            oseed: seed(p, "outlierseed")?,
             step: if toggle(p, "enablestepping")? { Some(numf(p, "stepsize")?) } else { None },
         })
     }
@@ -785,11 +971,7 @@ enum Target {
 
 impl Scalar {
     fn op(&self) -> &'static str {
-        if self.is_int {
-            "attribadjustinteger"
-        } else {
-            "attribadjustfloat"
-        }
+        if self.is_int { "attribadjustinteger" } else { "attribadjustfloat" }
     }
 }
 
@@ -836,7 +1018,7 @@ impl Node<Detail> for Scalar {
         let (cminv, cmaxv) = (numf(p, "clampminvalue")?, numf(p, "clampmaxvalue")?);
         let default = if toggle(p, "dodefault")? { numf(p, "default")? } else { 0.0 };
         let (ascale, aoff) = (ff(p, "adjustmentattribscale")?, ff(p, "adjustmentattriboffset")?);
-        let range = Range::read(op, p)?;
+        let range = Range::read(op, p, self.is_int)?;
         let spec_vals =
             if adjust && vt != VT_CONST && vt != VT_ATTRIB && rm == 3 { Some(specific(op, p)?) } else { None };
         let Some(src) = inputs.first() else { return Ok(Arc::default()) };
@@ -882,6 +1064,25 @@ impl Node<Detail> for Scalar {
             Vec::new()
         };
         let weight = |i: usize| if bmode == 1 { battr.get(i).copied().unwrap_or(0.0) } else { bw };
+        // outlier attribute: written by the range branch only (a pattern value type, not specific values)
+        let outlier_name = if needs_pattern && spec_vals.is_none() && range.distrib == 2 && toggle(p, "outlierviz")? {
+            let on = attr_name(p, "outlierattrib")?;
+            if on == name {
+                return Err(unsup(op, "outlierattrib", format!("{on} (same as the adjusted attribute)")));
+            }
+            Some(on)
+        } else {
+            None
+        };
+        let mut flags: Vec<i32> = match outlier_name.as_deref().map(|on| src.attr(class, on).map(|a| &a.data)) {
+            None | Some(None) => vec![0; n],
+            Some(Some(AttrData::I32(v))) => v.clone(),
+            Some(Some(AttrData::IN { size: 1, data })) => data.clone(),
+            Some(Some(_)) => {
+                return Err(unsup(op, "outlierattrib", "existing attribute of another type / size"));
+            }
+        };
+        flags.resize(n, 0);
         let data = match target {
             Target::Floats(mut cur) => {
                 cur.resize(n, default as f32);
@@ -905,7 +1106,13 @@ impl Node<Detail> for Scalar {
                                 let d = pt.distrib(i);
                                 match &spec_vals {
                                     Some((vals, ws)) => vals.get(sample_discrete(ws, d)).copied().unwrap_or(0.0) as f32,
-                                    None => float_range(&range, d, pt.separation(i), lo, hi),
+                                    None => {
+                                        let (v, o) = float_range(&range, d, pt.separation(i), lo, hi);
+                                        if let Some(fl) = flags.get_mut(i) {
+                                            *fl = i32::from(o);
+                                        }
+                                        v
+                                    }
                                 }
                             }
                             _ => single as f32,
@@ -940,7 +1147,7 @@ impl Node<Detail> for Scalar {
                 cur.resize(n, round_half_up(default));
                 let min_val = if rm < 2 { round_half_up(minv) } else { round_half_up(midv - rangev * 0.5) };
                 let width = if rm == 0 { round_half_up(maxv - minv) } else { round_half_up(rangev) };
-                let seed = int(p, "randomseed")? as f32;
+                let seed = seed(p, "randomseed")? as f32;
                 for (i, x) in cur.iter_mut().enumerate() {
                     if !sel.get(i).copied().unwrap_or(false) {
                         continue;
@@ -949,9 +1156,7 @@ impl Node<Detail> for Scalar {
                     let mut out = orig;
                     if adjust {
                         let value = match (vt, &pattern) {
-                            (VT_ATTRIB, _) => {
-                                (adj.get(i).copied().unwrap_or(0.0) * ascale + aoff).round_ties_even() as i32
-                            }
+                            (VT_ATTRIB, _) => rint(adj.get(i).copied().unwrap_or(0.0) * ascale + aoff),
                             (_, Some(pt)) => {
                                 let l_id = match &pt.sep {
                                     Some(v) => v.get(i).copied().unwrap_or(0.0) as i32,
@@ -960,11 +1165,7 @@ impl Node<Detail> for Scalar {
                                 let random = vt == VT_RAND;
                                 let irand = if random { fhash(&[l_id as f32, seed]) as i32 } else { 0 };
                                 let frand = if random {
-                                    if spec_vals.is_some() {
-                                        rand1(&[irand as f32])
-                                    } else {
-                                        0.0
-                                    }
+                                    if spec_vals.is_some() { rand1(&[irand as f32]) } else { 0.0 }
                                 } else {
                                     pt.distrib(i)
                                 };
@@ -974,7 +1175,11 @@ impl Node<Detail> for Scalar {
                                     }
                                     None => {
                                         let r = IntRand { use_flt: !random, irand, frand, l_id };
-                                        int_range(&range, &r, min_val, width)
+                                        let (v, o) = int_range(&range, &r, min_val, width);
+                                        if let Some(fl) = flags.get_mut(i) {
+                                            *fl = i32::from(o);
+                                        }
+                                        v
                                     }
                                 }
                             }
@@ -993,7 +1198,7 @@ impl Node<Detail> for Scalar {
                     }
                     if blend {
                         let dlt = out.wrapping_sub(orig) as f32;
-                        out = orig.wrapping_add((weight(i) * dlt).round_ties_even() as i32);
+                        out = orig.wrapping_add(rint(weight(i) * dlt));
                     }
                     if post {
                         if cmin {
@@ -1014,14 +1219,19 @@ impl Node<Detail> for Scalar {
             _ => TypeInfo::None,
         };
         out.add_attr(Attribute { name, class, data, type_info });
+        if let Some(on) = outlier_name {
+            let type_info = src.attr(class, &on).map_or(TypeInfo::None, |a| a.type_info);
+            out.add_attr(Attribute { name: on, class, data: AttrData::I32(flags), type_info });
+        }
         Ok(Arc::new(out))
     }
 }
 
-/// aa_getRangeValue (float): outlier band, remap ramp, stepping, fit into [lo, hi].
-fn float_range(r: &Range, d: f32, sep: f32, lo: f32, hi: f32) -> f32 {
+/// aa_getRangeValue (float): outlier band, remap ramp, stepping, fit into [lo, hi]; also whether the element is an outlier.
+fn float_range(r: &Range, d: f32, sep: f32, lo: f32, hi: f32) -> (f32, bool) {
     let (mut lo, mut hi, mut dd) = (lo, hi, d);
-    if r.distrib == 2 && rand1(&[sep, r.oseed.wrapping_add(1) as f32]) < r.pct * 0.01 {
+    let outlier = r.distrib == 2 && rand1(&[sep, r.oseed.wrapping_add(1) as f32]) < r.pct * 0.01;
+    if outlier {
         let above = r.side == 0 || (r.side == 2 && d > 0.5);
         let below = r.side == 1 || (r.side == 2 && d <= 0.5);
         let span = if r.omult { r.orange * (hi - lo) } else { r.orange };
@@ -1042,10 +1252,11 @@ fn float_range(r: &Range, d: f32, sep: f32, lo: f32, hi: f32) -> f32 {
     if r.distrib == 1 {
         dd = r.ramp.eval(d)[0];
     }
-    match r.step {
+    let v = match r.step {
         Some(s) => stepping(dd, lo, hi, s as f32),
         None => fit01(dd, lo, hi),
-    }
+    };
+    (v, outlier)
 }
 
 struct IntRand {
@@ -1054,18 +1265,17 @@ struct IntRand {
     frand: f32,
     l_id: i32,
 }
-/// aa_getRangeValue (int): `irand mod width` (or a float distribution scaled), outliers, ramp, stepping.
-fn int_range(r: &Range, x: &IntRand, min_val: i32, range_width: i32) -> i32 {
+/// aa_getRangeValue (int): `irand mod width` (or a float distribution scaled), outliers, ramp, stepping; also whether
+/// the element is an outlier.
+fn int_range(r: &Range, x: &IntRand, min_val: i32, range_width: i32) -> (i32, bool) {
     let mut new_min = min_val;
     let mut width = range_width.wrapping_add(1);
+    let mut outlier = false;
     if r.distrib == 2 {
         let [ox, oy] = vrand::<2>(&[r.oseed as f32, x.l_id as f32]);
         if ox < r.pct * 0.01 {
-            width = if r.omult {
-                (r.orange * range_width as f32).round_ties_even() as i32
-            } else {
-                r.orange.round_ties_even() as i32
-            };
+            outlier = true;
+            width = if r.omult { rint(r.orange * range_width as f32) } else { rint(r.orange) };
             if r.side == 0 || (r.side == 2 && oy > 0.5) {
                 new_min = new_min.wrapping_add(range_width).wrapping_add(1);
             } else {
@@ -1077,9 +1287,9 @@ fn int_range(r: &Range, x: &IntRand, min_val: i32, range_width: i32) -> i32 {
     let span = width.wrapping_sub(1) as f32;
     let mut val = if r.distrib == 1 {
         let rv = if x.use_flt { x.frand } else { modw(x.irand) as f32 / span };
-        (r.ramp.eval(rv)[0] * span).round_ties_even() as i32
+        rint(r.ramp.eval(rv)[0] * span)
     } else if x.use_flt {
-        (x.frand * span).round_ties_even() as i32
+        rint(x.frand * span)
     } else {
         modw(x.irand)
     };
@@ -1087,7 +1297,7 @@ fn int_range(r: &Range, x: &IntRand, min_val: i32, range_width: i32) -> i32 {
         let s = s as i32;
         val = val.checked_div(s).unwrap_or(0).wrapping_mul(s);
     }
-    new_min.wrapping_add(val)
+    (new_min.wrapping_add(val), outlier)
 }
 
 // ---------------------------------------------------------------- color
@@ -1096,9 +1306,6 @@ struct Color {
     specs: Vec<ParamSpec>,
 }
 
-fn c3(p: &ParamSet, n: &str) -> Result<[f32; 3], CookError> {
-    Ok([ff(p, &format!("{n}r"))?, ff(p, &format!("{n}g"))?, ff(p, &format!("{n}b"))?])
-}
 fn map3(a: [f32; 3], b: [f32; 3], f: impl Fn(f32, f32) -> f32) -> [f32; 3] {
     [f(a[0], b[0]), f(a[1], b[1]), f(a[2], b[2])]
 }
@@ -1164,7 +1371,7 @@ impl Cc {
         }
         if let Some(g) = self.gamma {
             let e = 1.0 / g;
-            c = c.map(|x| x.powf(e));
+            c = c.map(|x| safepow(x, e));
         }
         c
     }
@@ -1184,8 +1391,7 @@ impl RandColor {
         let mut lo = [0.0; 3];
         let mut hi = [0.0; 3];
         for (k, n) in names.iter().enumerate() {
-            lo[k] = ff(p, &format!("{n}min"))?;
-            hi[k] = ff(p, &format!("{n}max"))?;
+            [lo[k], hi[k], _] = c3(p, n)?;
         }
         if hsv {
             lo[0] = efit(lo[0], -180.0, 180.0, -0.5, 0.5);
@@ -1196,7 +1402,7 @@ impl RandColor {
     }
     fn eval(&self, sep: f32, seed: f32) -> [f32; 3] {
         const GOLDEN: f32 = 0.618_034;
-        let r = vrand::<3>(&[sep, seed]).map(|x| (x + GOLDEN) % 1.0);
+        let r = vrand::<3>(&[sep, seed]).map(|x| fmod1(x + GOLDEN));
         let fitc = |v: [f32; 3], base: [f32; 3]| {
             [
                 fit01(v[0], base[0] + self.lo[0], base[0] + self.hi[0]),
@@ -1332,7 +1538,8 @@ impl Node<Detail> for Color {
             }
             (true, _) => {
                 let v = scalar_attr(op, src, class, "initfloatattrib", &attr_name(p, "initfloatattrib")?)?;
-                Some(v.into_iter().map(|x| [x; 3]).collect())
+                // the wrangle's (unwired) float scope is "100": red only
+                Some(v.into_iter().map(|x| [x, 0.0, 0.0]).collect())
             }
         };
         for (i, x) in cur.iter_mut().enumerate() {
@@ -1407,10 +1614,29 @@ mod tests {
     fn input() -> Detail {
         hexe_geo::read_geo(&std::fs::read(format!("{FX}input.geo")).expect("input.geo")).expect("geo")
     }
-    /// Houdini parm values (menus as tokens) -> hexe params by the spec's kind.
+    fn parm_table() -> Value {
+        serde_json::from_str(&std::fs::read_to_string(format!("{FX}parms.json")).expect("parms.json")).expect("json")
+    }
+    /// Houdini component parm name (`startposx`) -> (tuple name, component index), from the hython parm table.
+    fn component(ty: &str, k: &str) -> Option<(String, usize)> {
+        static TABLE: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+        let t = TABLE.get_or_init(parm_table);
+        t["types"][ty].as_array()?.iter().find_map(|r| {
+            let comps = r["comps"].as_array()?;
+            let i = comps.iter().position(|c| c == k)?;
+            (comps.len() > 1).then(|| (r["name"].as_str().unwrap_or_default().to_string(), i))
+        })
+    }
+    /// Houdini parm values (menus as tokens, tuple components by their own names) -> hexe params by the spec's kind.
     fn params(n: &SopNode, parms: &serde_json::Map<String, Value>) -> ParamSet {
         let mut p = defaults(n);
         for (k, v) in parms {
+            if let Some((tuple, i)) = component(n.type_name(), k) {
+                let mut c = p.vec3(&tuple).unwrap_or_else(|| panic!("no hexe V3 {tuple} for {k}"));
+                c[i] = v.as_f64().expect("num") as f32;
+                p = p.with(&tuple, ParamValue::V3(c));
+                continue;
+            }
             let spec = n.params().iter().find(|s| &s.name == k).unwrap_or_else(|| panic!("no hexe parm {k}"));
             let pv = match (&spec.default, v) {
                 (ParamValue::Menu(_), Value::String(t)) => ParamValue::Menu(
@@ -1460,6 +1686,24 @@ mod tests {
                 }
             };
             let (cl, an) = (class(c["class"].as_str().expect("class")), c["attrib"].as_str().expect("attrib"));
+            if let Some(o) = c.get("outlier") {
+                let on = o["name"].as_str().expect("outlier name");
+                match (out.attr(cl, on).map(|a| &a.data), o["missing"] == true) {
+                    (None, true) => {}
+                    (Some(AttrData::I32(got)), false) => {
+                        let want: Vec<i32> = o["values"]
+                            .as_array()
+                            .expect("values")
+                            .iter()
+                            .map(|x| x.as_i64().expect("int") as i32)
+                            .collect();
+                        if *got != want {
+                            fails.push(format!("{name}: outlier {on} hexe {got:?} houdini {want:?}"));
+                        }
+                    }
+                    (d, m) => fails.push(format!("{name}: outlier {on}: hexe {d:?}, houdini missing={m}")),
+                }
+            }
             if c["unchanged"] == true {
                 if out.attr(cl, an) != base.attr(cl, an) {
                     fails.push(format!("{name}: expected unchanged"));
@@ -1513,32 +1757,35 @@ mod tests {
 
     /// Houdini 20.5 `oracle/houdini/attribadjust/sop_attribadjust_cases.py` (`f_*`): constant / attribute / random
     /// (seeded, custom seed attribute, uniform / remap ramp / outliers / stepping / specific values) / line / radial /
-    /// bbox / remap-attribute values, every operation, blend, clamp, int cast, wrong type, defaults, all four classes.
+    /// bbox / remap-attribute values, every operation, blend, clamp, int cast, wrong type, defaults, all four classes,
+    /// outlier attribute (`outlierviz`: range branch only, existing attribute kept outside the group).
     #[test]
     fn float_cases_match_houdini() {
-        assert!(check_cases("attribadjustfloat") >= 30);
+        assert!(check_cases("attribadjustfloat") >= 41);
     }
     /// `i_*`: integer random (`random_fhash mod width`, min/max, min+range, mid+-range rounding), ramp, outliers, stepping,
     /// line, attribute (rint), specific values, blend, clamp, primitive class, wrong type, new attribute in a group.
     #[test]
     fn integer_cases_match_houdini() {
-        assert!(check_cases("attribadjustinteger") >= 18);
+        assert!(check_cases("attribadjustinteger") >= 22);
     }
     /// `c_*`: constant / random RGB / HSV (with base colour) / ramp (random, line) / attribute values, all 11 operations,
     /// colour correction, clamp + complement, pre-process initial value, HSV round trip, new attribute default + type.
     #[test]
     fn color_cases_match_houdini() {
-        assert!(check_cases("attribadjustcolor") >= 25);
+        assert!(check_cases("attribadjustcolor") >= 27);
     }
 
     #[test]
     fn vex_rand_matches_recorded_values() {
-        // hython: rand(0) .. rand(2), rand(0, 40), rand(0.1), vector rand(3) and random_fhash(0, 30)
-        assert_eq!(rand1(&[0.0]), 0.417_231_8);
-        assert_eq!(rand1(&[1.0]), 0.002_925_157_5);
-        assert_eq!(rand1(&[0.0, 40.0]), 0.603_710_17);
-        assert_eq!(rand1(&[0.1]), 0.879_700_2);
-        assert_eq!(vrand::<3>(&[3.0]), [0.262_380_48, 0.736_549_6, 0.116_141_44]);
+        // hython (float bit patterns): rand(0), rand(1), rand(0, 40), rand(0.1), rand(3); vector rand(3); random_fhash
+        assert_eq!(rand1(&[0.0]).to_bits(), 1_054_187_368);
+        assert_eq!(rand1(&[1.0]).to_bits(), 994_030_592);
+        assert_eq!(rand1(&[0.0, 40.0]).to_bits(), 1_058_704_576);
+        assert_eq!(rand1(&[0.1]).to_bits(), 1_063_334_920);
+        let v = vrand::<3>(&[3.0]);
+        assert_eq!(v[0].to_bits(), 1_048_991_420);
+        assert!((v[1] - 0.736_549_6).abs() < 1e-7 && (v[2] - 0.116_141_44).abs() < 1e-7, "{v:?}");
         assert_eq!(fhash(&[0.0, 30.0]) as i32, 431_185_554);
         assert_eq!(fhash(&[2.0, 30.0]) as i32, -1_300_907_755);
     }
@@ -1552,6 +1799,67 @@ mod tests {
         assert!(near(hsv2rgb([0.2, 0.5, 0.9]), [0.81, 0.9, 0.45]));
         assert!(near(hsv2rgb([1.5, -0.2, 0.4]), [0.4; 3]));
         assert!(near(hsv2rgb([0.9, 0.8, 0.1]), [0.1, 0.02, 0.068]));
+    }
+
+    /// `parms.json` (hython 20.5 dump of every parm tuple, multiparm / ramp at 8 instances): each Houdini tuple is a
+    /// hexe parm of the matching kind and default, and hexe declares nothing Houdini does not have, so importing a `.hip`
+    /// never reports "parms without hexe twin" for these nodes.
+    #[test]
+    fn specs_declare_every_houdini_parm() {
+        let t = parm_table();
+        assert_eq!(t["max_instances"].as_u64(), Some(MAX_KEYS as u64));
+        assert_eq!(MAX_KEYS, MAX_VALUES);
+        let mut fails = Vec::new();
+        for ty in ["attribadjustfloat", "attribadjustinteger", "attribadjustcolor"] {
+            let n = node(ty);
+            let rows = t["types"][ty].as_array().expect("rows");
+            let houdini: Vec<&str> = rows.iter().map(|r| r["name"].as_str().expect("name")).collect();
+            for spec in n.params() {
+                if !houdini.contains(&spec.name.as_str()) {
+                    fails.push(format!("{ty}: hexe-only parm {}", spec.name));
+                }
+            }
+            for r in rows {
+                let name = r["name"].as_str().expect("name");
+                let Some(spec) = n.params().iter().find(|s| s.name == name) else {
+                    fails.push(format!("{ty}: Houdini parm {name} not declared"));
+                    continue;
+                };
+                let comps = r["comps"].as_array().map_or(0, Vec::len);
+                let kind = r["kind"].as_str().expect("kind");
+                let d = &r["default"];
+                let num = |i: usize| d.get(i).and_then(Value::as_f64);
+                // ramp key instances carry synthetic values (the ramp default is checked through its key count)
+                let ramp_key = ["remapramp", "colorramp"]
+                    .iter()
+                    .any(|p| name.strip_prefix(p).is_some_and(|x| x.starts_with(|c: char| c.is_ascii_digit())));
+                let ok = match (kind, &spec.default) {
+                    ("Float", ParamValue::V3(v)) if (2..=3).contains(&comps) => {
+                        ramp_key || (0..comps).all(|i| num(i).is_some_and(|x| (x as f32 - v[i]).abs() < 1e-6))
+                    }
+                    ("Float", ParamValue::F(v)) if comps == 1 => ramp_key || num(0).is_some_and(|x| x as f32 == *v),
+                    ("Int", ParamValue::I(v)) if comps == 1 => num(0).is_some_and(|x| x as i32 == *v),
+                    ("Toggle", ParamValue::B(v)) => d.as_bool() == Some(*v),
+                    ("String", ParamValue::S(v)) => d.get(0).and_then(Value::as_str) == Some(v.as_str()),
+                    ("Menu", ParamValue::Menu(v)) => {
+                        let toks: Vec<&str> =
+                            r["menu"].as_array().expect("menu").iter().map(|x| x.as_str().expect("tok")).collect();
+                        let ours: Vec<&str> = spec.menu.iter().map(|x| x.0.as_str()).collect();
+                        toks == ours && (ramp_key || d.as_u64() == Some(u64::from(*v)))
+                    }
+                    // string-valued menus (token toggles, script-generated items) are kept as their saved string
+                    ("Menu", ParamValue::S(_)) => r["menu_type"] != "Normal" || r["menu_script"] == true,
+                    ("Ramp" | "Folder", ParamValue::I(v)) => d.as_i64() == Some(i64::from(*v)),
+                    ("FolderSet" | "Button", ParamValue::I(0)) => true,
+                    ("Separator", ParamValue::S(v)) => v.is_empty(),
+                    _ => false,
+                };
+                if !ok {
+                    fails.push(format!("{ty}.{name}: Houdini {kind} x{comps} default {d} vs hexe {:?}", spec.default));
+                }
+            }
+        }
+        assert!(fails.is_empty(), "{} mismatches:\n{}", fails.len(), fails.join("\n"));
     }
 
     fn grid() -> Detail {
@@ -1636,5 +1944,86 @@ mod tests {
             ("distribinrange", ParamValue::Menu(0)),
         ];
         assert!(run(&*it, d, &z).is_ok());
+    }
+
+    /// Hostile values in the tuple / ignored / outlier parms: errors or `Unsupported`, never a panic or a silent guess.
+    #[test]
+    fn hostile_tuple_ignored_and_outlier_parms() {
+        let (fl, it, co) = (float_new(), int_new(), color_new());
+        let nan3 = ParamValue::V3([f32::NAN, 0.0, f32::INFINITY]);
+        for n in [&fl, &it, &co] {
+            let n = &**n;
+            // non-finite tuples where they are read -> BadParam
+            for (vt, parm) in [(VT_LINE, "startpos"), (VT_RADIAL, "endpos"), (VT_REMAP, "remapattrib_range")] {
+                let r = run(n, grid(), &[("valuetype", ParamValue::Menu(vt)), (parm, nan3.clone())]);
+                assert!(matches!(r, Err(CookError::BadParam(_)) | Err(CookError::Unsupported(_))), "{parm}: {r:?}");
+            }
+            // ignored parms with garbage values change nothing while their mode is off
+            let junk = [
+                ("oct", ParamValue::F(f32::NAN)),
+                ("basis", ParamValue::Menu(999)),
+                ("cmap", ParamValue::S("\0/../..".into())),
+                ("t", nan3.clone()),
+                ("elementscale", nan3.clone()),
+                ("folder3", ParamValue::I(-7)),
+                ("bbox_computerange", ParamValue::I(i32::MAX)),
+                ("noiseexpression", ParamValue::S("@P = 1/0;".into())),
+            ];
+            let base = run(n, grid(), &[]).expect("default cook");
+            assert_eq!(run(n, grid(), &junk).expect("ignored parms"), base);
+            // ... and their modes stay Unsupported
+            for vt in [VT_NOISE, VT_CMAP] {
+                let r = run(n, grid(), &[("valuetype", ParamValue::Menu(vt)), ("basis", ParamValue::Menu(2))]);
+                assert!(matches!(r, Err(CookError::Unsupported(_))), "{r:?}");
+            }
+        }
+        // float units: any unit mode is Unsupported whatever the unit parms hold
+        let units = [("unitsettings", ParamValue::Menu(4)), ("unitscale", ParamValue::F(f32::NAN))];
+        assert!(matches!(run(&*fl, grid(), &units), Err(CookError::Unsupported(_))));
+        // colour specific values / garbage schemes: Unsupported
+        let spec = [
+            ("valuetype", ParamValue::Menu(VT_RAND)),
+            ("rangemethod", ParamValue::Menu(2)),
+            ("colorscheme0", ParamValue::Menu(99)),
+            ("color0", nan3.clone()),
+        ];
+        assert!(matches!(run(&*co, grid(), &spec), Err(CookError::Unsupported(_))));
+        assert!(run(&*co, grid(), &[("randhue", nan3.clone())]).is_ok(), "unused while not random");
+        let rnd = [("valuetype", ParamValue::Menu(VT_RAND)), ("rangemethod", ParamValue::Menu(0))];
+        assert!(run(&*co, grid(), &[rnd[0].clone(), rnd[1].clone(), ("randr", nan3.clone())]).is_err());
+        assert!(run(&*co, grid(), &[("colorramp1c", nan3.clone()), ("valuetype", ParamValue::Menu(VT_RAND))]).is_err());
+        // outlier attribute: bad name, same as the target, existing of another type
+        let out = |extra: (&'static str, ParamValue)| {
+            [
+                ("valuetype", ParamValue::Menu(VT_RAND)),
+                ("distribinrange", ParamValue::Menu(2)),
+                ("outlierpercent", ParamValue::F(1e9)),
+                ("outlierviz", ParamValue::B(true)),
+                extra,
+            ]
+        };
+        for n in [&fl, &it] {
+            let n = &**n;
+            assert!(matches!(
+                run(n, grid(), &out(("outlierattrib", ParamValue::S("a b".into())))),
+                Err(CookError::BadParam(_))
+            ));
+            let same = n.params().iter().find(|s| s.name == "attrib").map(|s| s.default.clone()).expect("attrib");
+            assert!(matches!(run(n, grid(), &out(("outlierattrib", same))), Err(CookError::Unsupported(_))));
+            let mut d = grid();
+            d.add_attr(Attribute {
+                name: "outlier".into(),
+                class: AttrClass::Point,
+                data: AttrData::F32(vec![0.5; 9]),
+                type_info: TypeInfo::None,
+            });
+            assert!(matches!(run(n, d, &out(("group", ParamValue::S(String::new())))), Err(CookError::Unsupported(_))));
+            // percent clamped to 100: every element is an outlier
+            let o = run(n, grid(), &out(("outlierseed", ParamValue::I(-5)))).expect("cooks");
+            assert_eq!(o.attr(AttrClass::Point, "outlier").map(|a| &a.data), Some(&AttrData::I32(vec![1; 9])));
+            // outlierviz off / not the outlier distribution: no attribute
+            let o = run(n, grid(), &out(("distribinrange", ParamValue::Menu(0)))).expect("cooks");
+            assert!(o.attr(AttrClass::Point, "outlier").is_none());
+        }
     }
 }

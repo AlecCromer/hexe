@@ -225,6 +225,16 @@ pub fn scene_json(file: &str) -> Result<String, String> {
     ))
 }
 
+/// Graph `open` writes for a scene (.ens): `file` SOP -> `endosim` SOP (passive-ragdoll physics, scrubbed by the timeline `$F`),
+/// display on the sim. Everything else (.nmc/.nmb/.nma) stays the one-node rest-pose `scene_json`.
+pub fn scene_json_sim(file: &str) -> Result<String, String> {
+    let abs = std::fs::canonicalize(file).map_err(|e| format!("{file}: {e}"))?;
+    Ok(format!(
+        "{{\"nodes\":[{{\"name\":\"endo\",\"type\":\"file\",\"params\":{{\"file\":{:?}}}}},{{\"name\":\"sim\",\"type\":\"endosim\",\"params\":{{}}}}],\"edges\":[[\"endo\",0,\"sim\",0]],\"display\":\"sim\"}}\n",
+        abs.display().to_string()
+    ))
+}
+
 /// `open <file> [--out scene.json] [--geo out.geo]`: read an Endorphin file, write the hexe graph (and optionally the geometry).
 pub fn open_cmd(args: &[String]) -> Result<String, String> {
     let (mut file, mut out, mut geo) = (None, None, None);
@@ -247,7 +257,8 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
     let d = hexe_geo::endorphin_geo::document_detail(&doc);
     let stem = Path::new(&file).file_stem().and_then(|s| s.to_str()).unwrap_or("endorphin").replace(' ', "_");
     let out = out.unwrap_or_else(|| format!("{stem}.hexe.json"));
-    std::fs::write(&out, scene_json(&file)?).map_err(|e| format!("{out}: {e}"))?;
+    std::fs::write(&out, if matches!(doc, Document::Scene(_)) { scene_json_sim(&file)? } else { scene_json(&file)? })
+        .map_err(|e| format!("{out}: {e}"))?;
     if let Some(g) = &geo {
         hexe_geo::write_any(g, &d).map_err(|e| format!("{g}: {e}"))?;
     }

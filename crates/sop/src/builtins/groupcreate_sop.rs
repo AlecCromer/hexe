@@ -190,7 +190,8 @@ struct Region {
 impl Region {
     fn contains(&self, q: V3) -> bool {
         if self.sphere {
-            self.h.iter().all(|&r| r > 0.0) && (0..3).map(|k| ((q[k] - self.c[k]) / self.h[k]).powi(2)).sum::<f64>() <= 1.0
+            self.h.iter().all(|&r| r > 0.0)
+                && (0..3).map(|k| ((q[k] - self.c[k]) / self.h[k]).powi(2)).sum::<f64>() <= 1.0
         } else {
             (0..3).all(|k| (q[k] - self.c[k]).abs() <= self.h[k])
         }
@@ -239,18 +240,18 @@ impl Region {
     }
 }
 
-type Edge = [u32; 2];
-fn ekey([a, b]: Edge) -> (u32, u32) {
+pub(super) type Edge = [u32; 2];
+pub(super) fn ekey([a, b]: Edge) -> (u32, u32) {
     (a.min(b), a.max(b))
 }
 /// The mesh edges (module docs): ordered list + per-prim corner-order segments (degenerate ones kept as `None` so the
 /// `NeM` index stays the corner index).
-struct EdgeTable {
-    list: Vec<Edge>,
+pub(super) struct EdgeTable {
+    pub(super) list: Vec<Edge>,
     set: HashSet<(u32, u32)>,
     per_prim: Vec<Vec<Option<Edge>>>,
 }
-fn edge_table(d: &Detail) -> EdgeTable {
+pub(super) fn edge_table(d: &Detail) -> EdgeTable {
     let mut t = EdgeTable { list: Vec::new(), set: HashSet::new(), per_prim: Vec::with_capacity(d.prims.len()) };
     for pr in &d.prims {
         let closed = match pr.kind {
@@ -284,17 +285,17 @@ fn edge_table(d: &Detail) -> EdgeTable {
 }
 /// Ordered edge set: union appends, first orientation wins.
 #[derive(Default)]
-struct EdgeRun {
-    list: Vec<Edge>,
+pub(super) struct EdgeRun {
+    pub(super) list: Vec<Edge>,
     set: HashSet<(u32, u32)>,
 }
 impl EdgeRun {
-    fn push(&mut self, e: Edge) {
+    pub(super) fn push(&mut self, e: Edge) {
         if self.set.insert(ekey(e)) {
             self.list.push(e);
         }
     }
-    fn remove(&mut self, gone: &HashSet<(u32, u32)>) {
+    pub(super) fn remove(&mut self, gone: &HashSet<(u32, u32)>) {
         self.list.retain(|&e| !gone.contains(&ekey(e)));
         self.set.retain(|k| !gone.contains(k));
     }
@@ -313,8 +314,9 @@ fn id_range(s: &str) -> Option<(u64, u64)> {
         _ => None,
     }
 }
-/// One edge token; `Err(())` = the whole pattern comes out empty (Houdini 20.5).
-fn edge_token(d: &Detail, t: &EdgeTable, body: &str) -> Result<Vec<Edge>, ()> {
+/// One edge token; `Err(())` = the whole pattern comes out empty (Houdini 20.5). `loose` (Edge Divide's parse) keeps
+/// `pA-B` pairs that are no mesh edge (degenerate ones too) as long as both ids are existing points.
+fn edge_token(d: &Detail, t: &EdgeTable, body: &str, loose: bool) -> Result<Vec<Edge>, ()> {
     let prims = t.per_prim.len() as u64;
     let prim_edges = |lo: u64, hi: u64| -> Vec<Edge> {
         let mut run = EdgeRun::default();
@@ -353,11 +355,12 @@ fn edge_token(d: &Detail, t: &EdgeTable, body: &str) -> Result<Vec<Edge>, ()> {
         let Some(ids) = ids else { return Ok(Vec::new()) };
         return Ok(match ids.as_slice() {
             [one] => t.list.iter().copied().filter(|e| e.contains(one)).collect(),
-            many => many
-                .windows(2)
-                .map(|w| [w[0], w[1]])
-                .filter(|&e| e[0] != e[1] && t.set.contains(&ekey(e)))
-                .collect(),
+            many if loose => {
+                many.windows(2).map(|w| [w[0], w[1]]).filter(|e| e.iter().all(|&p| p < d.point_count)).collect()
+            }
+            many => {
+                many.windows(2).map(|w| [w[0], w[1]]).filter(|&e| e[0] != e[1] && t.set.contains(&ekey(e))).collect()
+            }
         });
     }
     // names: primitive groups (their prims' edges), then edge groups
@@ -382,6 +385,10 @@ fn edge_token(d: &Detail, t: &EdgeTable, body: &str) -> Result<Vec<Edge>, ()> {
 }
 /// Edge-group pattern (module docs); an empty pattern is handled by the caller.
 fn eval_edge_pattern(d: &Detail, t: &EdgeTable, pat: &str) -> Vec<Edge> {
+    eval_edge_pattern_with(d, t, pat, false)
+}
+/// [`eval_edge_pattern`], optionally `loose` (see [`edge_token`]); shared with `edgedivide`.
+pub(super) fn eval_edge_pattern_with(d: &Detail, t: &EdgeTable, pat: &str, loose: bool) -> Vec<Edge> {
     let mut run = EdgeRun::default();
     for raw in pat.split_whitespace() {
         let (kind, body) = match raw.chars().next() {
@@ -392,7 +399,7 @@ fn eval_edge_pattern(d: &Detail, t: &EdgeTable, pat: &str) -> Vec<Edge> {
         if body.is_empty() {
             continue;
         }
-        let Ok(set) = edge_token(d, t, body) else { return Vec::new() };
+        let Ok(set) = edge_token(d, t, body, loose) else { return Vec::new() };
         match kind {
             '!' => {
                 let not: HashSet<(u32, u32)> = set.iter().map(|&e| ekey(e)).collect();
@@ -447,12 +454,12 @@ fn eval_vertex_pattern(d: &Detail, pat: &str) -> Vec<bool> {
                     let s = r.start + lo as usize;
                     mark(s..r.start + (hi.min(len - 1) as usize) + 1);
                 }
-            } else if let Some((lo, hi)) = id_range(raw) {
-                if lo <= hi {
-                    let last = (d.prims.len() as u64).min(hi.saturating_add(1));
-                    for q in lo..last {
-                        mark(prim_range(q as usize));
-                    }
+            } else if let Some((lo, hi)) = id_range(raw)
+                && lo <= hi
+            {
+                let last = (d.prims.len() as u64).min(hi.saturating_add(1));
+                for q in lo..last {
+                    mark(prim_range(q as usize));
                 }
             }
         } else if raw.starts_with('p') && raw[1..].starts_with(|c: char| c.is_ascii_digit()) {
@@ -591,7 +598,15 @@ impl Node<Detail> for GroupCreate {
             let normal = use_normal.then(|| (unit(widen(dir)), f64::from(angle) + ANGLE_EPS, opposite));
             let base_pat = base.then_some(basegroup);
             let crit = bounding || use_normal;
-            return Ok(Arc::new(cook_edge_group(d, &name, merge, base_pat, crit, bounding.then_some((&region, whole)), normal)));
+            return Ok(Arc::new(cook_edge_group(
+                d,
+                &name,
+                merge,
+                base_pat,
+                crit,
+                bounding.then_some((&region, whole)),
+                normal,
+            )));
         }
         let n = d.class_len(class);
         let mut new = match (base, basegroup.trim().is_empty()) {
@@ -775,7 +790,9 @@ mod tests {
         assert!(o.group(AttrClass::Prim, "a_").is_some());
         assert!(Arc::ptr_eq(&gc(&[("groupname", s(""))], &b).expect("cooks"), &b));
         for gt in [GT_EDGE, GT_VERTEX] {
-            assert!(gc(&[("grouptype", ParamValue::Menu(gt)), ("groupname", s(""))], &b).is_ok_and(|o| Arc::ptr_eq(&o, &b)));
+            assert!(
+                gc(&[("grouptype", ParamValue::Menu(gt)), ("groupname", s(""))], &b).is_ok_and(|o| Arc::ptr_eq(&o, &b))
+            );
         }
         assert!(matches!(gc(&[("grouptype", ParamValue::Menu(9))], &b), Err(CookError::BadParam(_))));
         assert!(matches!(gc(&[("angle", ParamValue::F(f32::NAN))], &b), Err(CookError::BadParam(_))));
@@ -860,11 +877,24 @@ mod tests {
             .expect("cooks");
         let want = load("boxpre_edge_union_houdini.geo");
         assert_eq!(e.edge_groups, want.edge_groups);
-        assert_eq!(e.edge_group("ea").map(|g| g.edges.clone()), Some(vec![[0, 1], [1, 2], [2, 6], [6, 5], [5, 1], [4, 5]]));
-        let v = gc(&[("groupname", s("vg")), ("grouptype", ParamValue::Menu(GT_VERTEX)), ("basegroup", s("1 3v2 5v0-1"))], &b)
-            .expect("cooks");
+        assert_eq!(
+            e.edge_group("ea").map(|g| g.edges.clone()),
+            Some(vec![[0, 1], [1, 2], [2, 6], [6, 5], [5, 1], [4, 5]])
+        );
+        let v = gc(
+            &[("groupname", s("vg")), ("grouptype", ParamValue::Menu(GT_VERTEX)), ("basegroup", s("1 3v2 5v0-1"))],
+            &b,
+        )
+        .expect("cooks");
         let want = load("boxpre_vertex_houdini.geo");
-        assert_eq!(v.groups, want.groups);
+        // same groups; Houdini's file lists the new vertex group before `va` (its own order), so compare by name
+        let by_name = |d: &Detail| {
+            let mut g: Vec<(String, Vec<bool>)> =
+                d.groups.iter().map(|g| (format!("{:?}:{}", g.class, g.name), g.mask.clone())).collect();
+            g.sort();
+            g
+        };
+        assert_eq!(by_name(&v), by_name(&want));
         assert_eq!(mask(&v, AttrClass::Vertex, "vg"), [4, 5, 6, 7, 14, 20, 21]);
         for out in [&e, &v] {
             let back = hexe_geo::read_geo(&hexe_geo::write_geo_json(out)).expect("round trip");
@@ -875,9 +905,32 @@ mod tests {
     fn edge_and_vertex_hostile_input_never_panics() {
         let b = cube();
         let pats = [
-            "p", "p-", "p--", "p0-", "p99999999999999999999", "p4294967295-0", "0e", "e0", "0e99999999999999999999",
-            "0v", "v0", "0v99999999999999999999-0", "99999999999999999999", "0-99999999999999999999", "!", "^", "!!0",
-            "^^0", "*v*", "**", "\u{0}", "p0-1-2-3-4-5-6-7-0-1-2", "0v0-99999999999", ":", "-", "0--1",
+            "p",
+            "p-",
+            "p--",
+            "p0-",
+            "p99999999999999999999",
+            "p4294967295-0",
+            "0e",
+            "e0",
+            "0e99999999999999999999",
+            "0v",
+            "v0",
+            "0v99999999999999999999-0",
+            "99999999999999999999",
+            "0-99999999999999999999",
+            "!",
+            "^",
+            "!!0",
+            "^^0",
+            "*v*",
+            "**",
+            "\u{0}",
+            "p0-1-2-3-4-5-6-7-0-1-2",
+            "0v0-99999999999",
+            ":",
+            "-",
+            "0--1",
         ];
         for gt in [GT_EDGE, GT_VERTEX] {
             for pat in pats {

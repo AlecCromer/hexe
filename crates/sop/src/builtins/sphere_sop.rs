@@ -186,14 +186,19 @@ fn poly_points(freq: u64) -> Option<u64> {
 
 /// Houdini's geodesic sphere (hython 20.5 point / prim order and positions): per icosahedron face (`ICO_FACES` order) the
 /// lattice is walked row by row from the apex (row i = 0..=f, column j = 0..=i; weights A = f-i, L = i-j, R = j) and each
-/// point not yet made (corners / edge points are shared) is appended. Position = normalize(Σ sin(θ·w/f)·V) with θ the
-/// icosahedron edge angle: slerp on the edges, its sine-weighted extension inside. Prims per face: the upward triangles
+/// point not yet made (corners / edge points are shared) is appended. Position = normalize(Σ g(w/f)·V) with
+/// g(t) = sin(tθ) / (sin(tθ) + sin((1-t)θ)), θ the icosahedron edge angle: slerp on the edges, the same per-corner
+/// weights inside (hython-verified to 2e-6 at f = 4, 5, 101). Prims per face: the upward triangles
 /// row by row `[r(i+1,j+1), r(i+1,j), r(i,j)]`, then the inverted ones `[r(i,j+1), r(i+1,j+1), r(i,j)]`.
 fn poly(freq: usize, xf: &Xf, orient: u32, t: [f32; 3]) -> Detail {
     let base = ico_vertices();
     let theta = (1.0 / 5f64.sqrt()).acos();
     let f = freq as f64;
-    let wsin = |w: usize| (theta * w as f64 / f).sin();
+    // edge weight of corner share w/f along a slerp, as a normalised (gnomonic) barycentric: sin(tθ) / (sin(tθ) + sin((1-t)θ))
+    let wsin = |w: usize| {
+        let (a, b) = ((theta * w as f64 / f).sin(), (theta * (freq - w) as f64 / f).sin());
+        if a + b > 0.0 { a / (a + b) } else { 0.0 }
+    };
     let mut ids: HashMap<Key, u32> = HashMap::new();
     let mut unit: Vec<[f64; 3]> = Vec::with_capacity(10 * freq * freq + 2);
     let mut tris: Vec<[u32; 3]> = Vec::with_capacity(20 * freq * freq);
@@ -536,6 +541,8 @@ mod tests {
             assert!((s - 1.0).abs() < 1e-5, "{q:?} -> {s}");
         }
     }
+    /// (orient menu, [(point index, Houdini P)]) recorded from hython.
+    type OrientSamples<const N: usize> = (u32, [(usize, [f64; 3]); N]);
     fn near(got: [f32; 3], want: [f64; 3], tol: f64, what: &str) {
         assert!(got.iter().zip(want).all(|(g, w)| (f64::from(*g) - w).abs() <= tol), "{what}: {got:?} != {want:?}");
     }
@@ -543,7 +550,7 @@ mod tests {
     /// put Houdini's icosahedron vertex 0 on -Z (Y) / +Y (X, Z); sampled interior and edge points, same prim lists.
     #[test]
     fn poly_orient_matches_houdini() {
-        let rec: [(u32, [(usize, [f64; 3]); 3]); 3] = [
+        let rec: [OrientSamples<3>; 3] = [
             (
                 1,
                 [
@@ -620,7 +627,7 @@ mod tests {
     #[test]
     fn poly_transform_matches_houdini() {
         let base = r#""type":1,"freq":2,"rad":[1,2,3],"scale":1.5,"r":[10,20,30],"t":[0.5,-1,2]"#;
-        let rec: [(u32, [(usize, [f64; 3]); 3]); 2] = [
+        let rec: [OrientSamples<3>; 2] = [
             (
                 1,
                 [

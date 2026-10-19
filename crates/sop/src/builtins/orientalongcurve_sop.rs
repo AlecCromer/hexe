@@ -10,14 +10,19 @@
 //! `extrapolateendtangents`; runs of zero-length edges interpolate the bounding directions. Up vectors: the start up is
 //! the target up (`upvectortype`: curve normal (largest-area fallback, else +Y), X / Y / Z axis, prim / detail
 //! `upvectorattrib`, `upvector`) made perpendicular to the first tangent (parallel: an arbitrary perpendicular), then
-//! carried by minimal rotations. `continuousclosed` spreads the closing twist of closed curves over the edges (by
-//! `rollper`: per edge or by distance / attribute); `useendupvector` does the same towards the end target up (open curves);
-//! `upvectoratstart` off rolls the whole curve so the AVERAGE up best matches the target. Frame matrix rows = (up x tangent,
-//! up, tangent), pre-multiplied by the Euler rotation of `pitch` / `yaw` / `roll` (+ increments per edge, per distance,
-//! per full curve, or times `rollattrib` / ...; closed continuous curves round the total to whole turns, `fulltwists` adds
-//! turns of roll) in `rOrd`, post-multiplied by the stretch-around-turns matrix and `scale`, translated to `P`.
-//! Point outputs average the vertices of the point (unit directions with sign alignment, mean length; quaternions with
-//! sign alignment; matrices by polar decomposition).
+//! carried by minimal rotations. `continuousclosed` spreads the closing twist of closed curves over the curve BY DISTANCE
+//! (whatever `rollper` is: the shipped node differs from the HDK sample here, pinned by the recorded knot cases);
+//! `useendupvector` does the same towards the end target up (open curves); `upvectoratstart` off rolls the whole curve so
+//! the AVERAGE up best matches the target. Frame matrix rows = (up x tangent, up, tangent), pre-multiplied by the Euler
+//! rotation of `pitch` / `yaw` / `roll` (+ increments per edge, per distance, per full curve, or times `rollattrib` / ...;
+//! closed continuous curves round the total to whole turns, `fulltwists` adds turns of roll), post-multiplied by the
+//! stretch-around-turns matrix and `scale`, translated to `P`. Houdini quirk kept: Euler step k rotates about axis
+//! `rOrd[k]` by angle k (pitch, yaw, roll), so a non-`xyz` order also re-assigns angles to axes. Another kept quirk:
+//! "per full curve by edges" on a one-point curve divides 0 by 0 and Houdini writes NaN frames.
+//! Point outputs average the vertices of the point, walked newest first (unit directions with sign alignment, mean
+//! length; quaternions with sign alignment; matrices by polar decomposition). Quaternions: trace >= 0 takes the w branch.
+//! UNVERIFIED: `upvectoratstart` off when the target up lies in a planar curve's plane (the average solve is a sign
+//! knife-edge decided by ~1e-17 roundoff; the recorded `x_avg` case leaves that curve out).
 //!
 //! Not modelled (-> `Unsupported`): `adjustupcurvature` (curvature attribute features), `transformbyattribs` when the input
 //! carries instance attributes (N, up, pscale, scale, rot, orient, pivot, trans, transform), non-polygon prims (NURBS /
@@ -322,11 +327,10 @@ struct Cfg {
     at_start: bool,
     continuous: bool,
     use_end: bool,
-    twist_per: Per,
     max_stretch: f64,
 }
 
-/// `pos`: the curve's vertex positions (`nverts`); `roll_at`: per-vertex values of a varying twist attribute.
+/// `pos`: the curve's vertex positions (`nverts`).
 #[allow(clippy::too_many_arguments)]
 fn backbone(
     cfg: &Cfg,
@@ -339,7 +343,6 @@ fn backbone(
     need_dirs: bool,
     mut target_up: V3,
     end_up: V3,
-    roll_at: Option<&[f64]>,
 ) -> Frames {
     let nverts = pos.len();
     let mut f = Frames {
@@ -407,12 +410,11 @@ fn backbone(
         f.sscales = vec![1.0; npoints];
     }
     let stretch = f.stretch;
-    let put_stretch =|f: &mut Frames, i: usize, s: Option<Stretch>| {
-        if let Some(s) = s {
-            if let (Some(d), Some(k)) = (f.sdirs.get_mut(i), f.sscales.get_mut(i)) {
-                *d = s.dir;
-                *k = s.scale;
-            }
+    let put_stretch = |f: &mut Frames, i: usize, s: Option<Stretch>| {
+        let Some(s) = s else { return };
+        if let (Some(d), Some(k)) = (f.sdirs.get_mut(i), f.sscales.get_mut(i)) {
+            *d = s.dir;
+            *k = s.scale;
         }
     };
     let first_dir = normalized(dirs[first_nz]).0;
@@ -482,8 +484,17 @@ fn backbone(
             }
         }
     } else {
-        let (t, s) =
-            interpolate_tangent(tt, stretch, max_s, thr, dirs[ne - 1], dirs[0], len2(dirs[ne - 1]), len2(dirs[0]), false);
+        let (t, s) = interpolate_tangent(
+            tt,
+            stretch,
+            max_s,
+            thr,
+            dirs[ne - 1],
+            dirs[0],
+            len2(dirs[ne - 1]),
+            len2(dirs[0]),
+            false,
+        );
         f.tangents[0] = t;
         put_stretch(&mut f, 0, s);
     }
@@ -613,25 +624,14 @@ fn backbone(
                 let b = cross(f.ups[i], f.tangents[i]);
                 f.ups[i] = add(scale(b, s), scale(f.ups[i], c));
             };
-            match (cfg.twist_per, roll_at) {
-                (Per::Edge | Per::FullEdges, _) => {
-                    for i in 1..npoints {
-                        rot(&mut f, i, -(i as f64) * net / nedges as f64);
-                    }
-                }
-                (Per::Attrib, Some(vals)) => {
-                    for i in 1..npoints {
-                        rot(&mut f, i, -vals.get(i).copied().unwrap_or(0.0) * net);
-                    }
-                }
-                _ => {
-                    let total: f64 = dirs.iter().map(|d| len2(*d).sqrt()).sum();
-                    let mut cur = 0.0;
-                    for i in 1..npoints {
-                        cur += len2(dirs[i - 1]).sqrt();
-                        rot(&mut f, i, -cur * net / total);
-                    }
-                }
+            // Houdini 20.5 spreads this twist by distance whatever `rollper` is (recorded knot cases: per-edge and
+            // attribute rolls differ from the defaults by exactly whole turns x t); the HDK sample's per-edge /
+            // attribute spreads are not what the shipped node does
+            let total: f64 = dirs.iter().map(|d| len2(*d).sqrt()).sum();
+            let mut cur = 0.0;
+            for i in 1..npoints {
+                cur += len2(dirs[i - 1]).sqrt();
+                rot(&mut f, i, -cur * net / total);
             }
             if cont {
                 f.twist_loop = -net;
@@ -717,11 +717,9 @@ fn find_rot_attr(d: &Detail, name: &str) -> Option<RotAttr> {
 fn v3_attr(d: &Detail, class: AttrClass, name: &str) -> Option<Vec<V3>> {
     match &d.attr(class, name)?.data {
         AttrData::V3(v) => Some(v.iter().map(|t| [f64::from(t[0]), f64::from(t[1]), f64::from(t[2])]).collect()),
-        AttrData::FN { size, data } if *size >= 3 => Some(
-            data.chunks(*size as usize)
-                .map(|t| [f64::from(t[0]), f64::from(t[1]), f64::from(t[2])])
-                .collect(),
-        ),
+        AttrData::FN { size, data } if *size >= 3 => {
+            Some(data.chunks(*size as usize).map(|t| [f64::from(t[0]), f64::from(t[1]), f64::from(t[2])]).collect())
+        }
         _ => None,
     }
 }
@@ -782,13 +780,19 @@ fn polar(m: &M3) -> Option<(M3, M3)> {
 /// Rotation matrix (rows, row vectors) -> quaternion `[i, j, k, w]` (Houdini order).
 fn quat_from_rot(m: &M3) -> [f64; 4] {
     let tr = m[0][0] + m[1][1] + m[2][2];
-    let q = if tr >= 0.0 {
+    if tr >= 0.0 {
         let s = (tr + 1.0).sqrt();
         let w = 0.5 * s;
         let k = 0.5 / s;
         [(m[1][2] - m[2][1]) * k, (m[2][0] - m[0][2]) * k, (m[0][1] - m[1][0]) * k, w]
     } else {
-        let i = if m[1][1] > m[0][0] { if m[2][2] > m[1][1] { 2 } else { 1 } } else if m[2][2] > m[0][0] { 2 } else { 0 };
+        let i = if m[1][1] > m[0][0] {
+            if m[2][2] > m[1][1] { 2 } else { 1 }
+        } else if m[2][2] > m[0][0] {
+            2
+        } else {
+            0
+        };
         let (j, k) = ((i + 1) % 3, (i + 2) % 3);
         let s = (m[i][i] - m[j][j] - m[k][k] + 1.0).sqrt();
         let mut q = [0.0; 4];
@@ -798,8 +802,7 @@ fn quat_from_rot(m: &M3) -> [f64; 4] {
         q[j] = (m[i][j] + m[j][i]) * h;
         q[k] = (m[i][k] + m[k][i]) * h;
         q
-    };
-    q
+    }
 }
 fn quat_to_rot(q: [f64; 4]) -> M3 {
     let [x, y, z, w] = q;
@@ -864,10 +867,8 @@ impl Run {
             if let Some(v) = self.up_attr.as_ref().and_then(|a| a.get(prim)) {
                 tup = unit_or_y(*v);
             }
-            if self.cfg.use_end {
-                if let Some(v) = self.end_up_attr.as_ref().and_then(|a| a.get(prim)) {
-                    eup = unit_or_y(*v);
-                }
+            if let Some(v) = self.end_up_attr.as_ref().filter(|_| self.cfg.use_end).and_then(|a| a.get(prim)) {
+                eup = unit_or_y(*v);
             }
         }
         let cont = closed && self.cfg.continuous;
@@ -887,25 +888,8 @@ impl Run {
                 _ => None,
             }
         };
-        let roll_vals: Option<Vec<f64>> = match &self.rot_attr[2] {
-            Some(a @ (RotAttr::Vertex(_) | RotAttr::Point(_))) => {
-                Some((0..npoints).map(|i| varying(a, i).unwrap_or(0.0)).collect())
-            }
-            _ => None,
-        };
-        let f = backbone(
-            &self.cfg,
-            pos,
-            nedges,
-            npoints,
-            closed,
-            self.rotate_backbone,
-            self.stretch,
-            needs_len,
-            tup,
-            eup,
-            roll_vals.as_deref(),
-        );
+        let f =
+            backbone(&self.cfg, pos, nedges, npoints, closed, self.rotate_backbone, self.stretch, needs_len, tup, eup);
         let mut local = [0.0; 3];
         for ax in 0..3 {
             match &self.rot_attr[ax] {
@@ -1015,15 +999,13 @@ impl Run {
                     }
                 }
             }
-            out.push(Xf { m, t: pos[i] });
+            out.push(Xf { m, t: pos.get(i).copied().unwrap_or([0.0; 3]) });
             if needs_len && i + 1 < npoints {
                 cur_len += f.dirs.get(i).map_or(0.0, |d| len2(*d).sqrt());
             }
         }
-        if unrolled {
-            if let Some(&x0) = out.first() {
-                out.push(x0);
-            }
+        if let (true, Some(&x0)) = (unrolled, out.first()) {
+            out.push(x0);
         }
         // closed / unrolled curves have npoints == nverts (- 1 for unrolled); never more than nverts
         out.truncate(nverts);
@@ -1227,7 +1209,8 @@ impl Node<Detail> for OrientAlongCurve {
         let deg = |on: bool, v: f64| if on { v.to_radians() } else { 0.0 };
         let angles = [deg(ap, fin(p, "pitch")?), deg(ay, fin(p, "yaw")?), deg(ar, fin(p, "roll")?)];
         let twists = f64::from(p.int("fulltwists").ok_or_else(|| bad("`fulltwists`: missing or not an int"))?);
-        let inc = [deg(ap, fin(p, "incpitch")?), deg(ay, fin(p, "incyaw")?), deg(ar, fin(p, "incroll")? + 360.0 * twists)];
+        let inc =
+            [deg(ap, fin(p, "incpitch")?), deg(ay, fin(p, "incyaw")?), deg(ar, fin(p, "incroll")? + 360.0 * twists)];
         let up_custom = vec3(p, "upvector")?;
         let end_custom = vec3(p, "endupvector")?;
         let uniform = fin(p, "scale")?;
@@ -1270,7 +1253,8 @@ impl Node<Detail> for OrientAlongCurve {
             let inst = ["N", "up", "pscale", "scale", "rot", "orient", "pivot", "trans", "transform"];
             if inst.iter().any(|n| src.attr(AttrClass::Point, n).is_some()) {
                 return Err(CookError::Unsupported(
-                    "orientalongcurve: `transformbyattribs` with instance attributes on the points is not modelled".into(),
+                    "orientalongcurve: `transformbyattribs` with instance attributes on the points is not modelled"
+                        .into(),
                 ));
             }
         }
@@ -1333,16 +1317,7 @@ impl Node<Detail> for OrientAlongCurve {
             }
         }
         let run = Run {
-            cfg: Cfg {
-                tangent,
-                extrapolate,
-                use_normal: up_type == 0,
-                at_start,
-                continuous,
-                use_end,
-                twist_per: per[2],
-                max_stretch,
-            },
+            cfg: Cfg { tangent, extrapolate, use_normal: up_type == 0, at_start, continuous, use_end, max_stretch },
             rotate_backbone,
             stretch,
             angles,
@@ -1439,7 +1414,9 @@ impl Node<Detail> for OrientAlongCurve {
                     if name == "N" { TypeInfo::Normal } else { TypeInfo::Vector },
                 ),
                 Out::Trans => (AttrData::V3(data.chunks(3).map(|c| [c[0], c[1], c[2]]).collect()), TypeInfo::Point),
-                Out::Quat => (AttrData::V4(data.chunks(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()), TypeInfo::Quaternion),
+                Out::Quat => {
+                    (AttrData::V4(data.chunks(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()), TypeInfo::Quaternion)
+                }
                 Out::M3 | Out::M4 => (AttrData::FN { size: size as u32, data }, TypeInfo::None),
             };
             out.add_attr(Attribute { name, class, data, type_info });
@@ -1496,10 +1473,10 @@ mod tests {
             ([1.0, 1.0, 1.0], [-0.408_248_3, 0.816_496_6, -0.408_248_3]),
             ([2.0, 1.0, -0.5], [0.195_180_01, 0.097_590_01, 0.975_900_05]),
         ] {
-            let o = run(curve(&[[0.0; 3], d], false), &[
-                ("upvectortype", ParamValue::Menu(5)),
-                ("upvector", ParamValue::V3(d)),
-            ])
+            let o = run(
+                curve(&[[0.0; 3], d], false),
+                &[("upvectortype", ParamValue::Menu(5)), ("upvector", ParamValue::V3(d))],
+            )
             .expect("cooks");
             let got = v3s(&o, AttrClass::Point, "up")[0];
             assert!(got.iter().zip(up).all(|(a, b)| (a - b).abs() < 1e-5), "{d:?}: {got:?} vs {up:?}");
@@ -1532,7 +1509,8 @@ mod tests {
             for (k, v) in parms.as_object().expect("parms") {
                 for base in ["endupvector", "upvector"] {
                     if let Some(c) = k.strip_prefix(base).filter(|c| c.len() == 1) {
-                        let e = vecs.entry(base.into()).or_insert(if base == "upvector" { [0.0, 1.0, 0.0] } else { [0.0, 1.0, 0.0] });
+                        // both vector parms default to +Y
+                        let e = vecs.entry(base.into()).or_insert([0.0, 1.0, 0.0]);
                         e["xyz".find(c).expect("xyz")] = v.as_f64().expect("f") as f32;
                     }
                 }
@@ -1556,8 +1534,12 @@ mod tests {
             let h = read(&format!("{name}_houdini.geo"));
             let d = cook(&*n, input.clone(), &p).expect("cooks");
             let names = |x: &Detail| {
-                let mut v: Vec<String> =
-                    x.attrs.iter().filter(|a| a.class != AttrClass::Detail).map(|a| format!("{:?}:{}", a.class, a.name)).collect();
+                let mut v: Vec<String> = x
+                    .attrs
+                    .iter()
+                    .filter(|a| a.class != AttrClass::Detail)
+                    .map(|a| format!("{:?}:{}", a.class, a.name))
+                    .collect();
                 v.sort();
                 v
             };
@@ -1565,13 +1547,15 @@ mod tests {
                 fails.push(format!("{name}: attrs {:?} vs {:?}", names(&d), names(&h)));
                 continue;
             }
-            for a in h.attrs.iter().filter(|a| matches!(a.class, AttrClass::Point | AttrClass::Vertex) && a.name != "P") {
+            for a in h.attrs.iter().filter(|a| matches!(a.class, AttrClass::Point | AttrClass::Vertex) && a.name != "P")
+            {
                 let (x, y) = (flat(&a.data), flat(&d.attr(a.class, &a.name).expect("attr").data));
                 if x.len() != y.len() {
                     fails.push(format!("{name}: `{}` len {} vs {}", a.name, y.len(), x.len()));
                     continue;
                 }
-                let bad: Vec<usize> = x.iter().zip(&y).enumerate().filter(|(_, (p, q))| (*p - *q).abs() > 1e-5).map(|(k, _)| k).collect();
+                let bad: Vec<usize> =
+                    x.iter().zip(&y).enumerate().filter(|(_, (p, q))| (*p - *q).abs() > 1e-5).map(|(k, _)| k).collect();
                 if let Some(&k) = bad.first() {
                     fails.push(format!(
                         "{name}: {:?} `{}`[{k}] hexe {} vs houdini {} ({} bad: {:?})",
@@ -1589,25 +1573,6 @@ mod tests {
     }
 
     #[test]
-    fn zz_debug() {
-        let fx = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/sop-orientalongcurve/");
-        let read = |f: &str| hexe_geo::read_geo(&std::fs::read(format!("{fx}{f}")).expect("fixture")).expect("geo");
-        let input = read("curves_in.geo");
-        eprintln!("groups {:?}", input.groups.iter().map(|g| (&g.name, g.class, &g.mask)).collect::<Vec<_>>());
-        let o = run(input.clone(), &[("group", ParamValue::S("sel".into()))]).expect("c");
-        eprintln!("N0 {:?}", &v3s(&o, AttrClass::Point, "N")[..3]);
-        let o = run(input.clone(), &[("outputtransform3", ParamValue::B(true)), ("outputquaternion", ParamValue::B(true))]).expect("c");
-        let h = read("outputs_point_houdini.geo");
-        eprintln!("m85 {:?}", &flat(&o.attr(AttrClass::Point, "transform").expect("t").data)[85 * 9..86 * 9]);
-        eprintln!("q85 hexe {:?} houdini {:?}", &flat(&o.attr(AttrClass::Point, "orient").expect("t").data)[85 * 4..86 * 4], &flat(&h.attr(AttrClass::Point, "orient").expect("t").data)[85 * 4..86 * 4]);
-        let hq = flat(&h.attr(AttrClass::Point, "orient").expect("t").data);
-        let hx = flat(&h.attr(AttrClass::Point, "xf3").expect("t").data);
-        for k in [0usize, 5, 33, 50, 85, 90] {
-            eprintln!("pt {k} m {:?} q {:?}", &hx[k * 9..k * 9 + 9], &hq[k * 4..k * 4 + 4]);
-        }
-    }
-
-    #[test]
     fn hostile_inputs_never_panic() {
         assert_eq!(run(Detail::default(), &[]).expect("empty").point_count, 0);
         // single point, two coincident points, all-coincident closed curve, NaN / huge coordinates
@@ -1620,17 +1585,20 @@ mod tests {
             (vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0; 3], [1.0, 0.0, 0.0]], false),
         ] {
             for tt in 0..5 {
-                let o = run(curve(&pts, closed), &[
-                    ("tangenttype", ParamValue::Menu(tt)),
-                    ("stretcharoundturns", ParamValue::B(true)),
-                    ("extrapolateendtangents", ParamValue::B(true)),
-                    ("upvectoratstart", ParamValue::B(false)),
-                    ("outputquaternion", ParamValue::B(true)),
-                    ("outputtransform4", ParamValue::B(true)),
-                    ("applyroll", ParamValue::B(true)),
-                    ("incroll", ParamValue::F(1e30)),
-                    ("fulltwists", ParamValue::I(i32::MAX)),
-                ])
+                let o = run(
+                    curve(&pts, closed),
+                    &[
+                        ("tangenttype", ParamValue::Menu(tt)),
+                        ("stretcharoundturns", ParamValue::B(true)),
+                        ("extrapolateendtangents", ParamValue::B(true)),
+                        ("upvectoratstart", ParamValue::B(false)),
+                        ("outputquaternion", ParamValue::B(true)),
+                        ("outputtransform4", ParamValue::B(true)),
+                        ("applyroll", ParamValue::B(true)),
+                        ("incroll", ParamValue::F(1e30)),
+                        ("fulltwists", ParamValue::I(i32::MAX)),
+                    ],
+                )
                 .expect("cooks");
                 assert_eq!(o.point_count as usize, pts.len());
             }
@@ -1639,22 +1607,45 @@ mod tests {
         let o = run(curve(&[[1.0, 2.0, 3.0]], false), &[]).expect("cooks");
         assert_eq!(v3s(&o, AttrClass::Point, "N"), vec![[0.0, 0.0, 1.0]]);
         assert_eq!(v3s(&o, AttrClass::Point, "up"), vec![[0.0, 1.0, 0.0]]);
+        // ... and, like Houdini 20.5 (hython: `-nan(ind)`), a NaN frame under pitch per full curve by edges (0 / 0 edges)
+        let o = run(
+            curve(&[[1.0, 2.0, 3.0]], false),
+            &[
+                ("applypitch", ParamValue::B(true)),
+                ("pitchper", ParamValue::Menu(3)),
+                ("incpitch", ParamValue::F(90.0)),
+            ],
+        )
+        .expect("cooks");
+        assert!(v3s(&o, AttrClass::Point, "N")[0].iter().any(|c| c.is_nan()));
         let line = || curve(&[[0.0; 3], [1.0, 0.0, 0.0], [2.0, 1.0, 0.0]], false);
         assert!(matches!(run(line(), &[("scale", ParamValue::F(f32::NAN))]), Err(CookError::BadParam(_))));
-        assert!(matches!(run(line(), &[("upvector", ParamValue::V3([f32::INFINITY, 0.0, 0.0]))]), Err(CookError::BadParam(_))));
+        assert!(matches!(
+            run(line(), &[("upvector", ParamValue::V3([f32::INFINITY, 0.0, 0.0]))]),
+            Err(CookError::BadParam(_))
+        ));
         assert!(matches!(run(line(), &[("tangenttype", ParamValue::Menu(5))]), Err(CookError::BadParam(_))));
         assert!(matches!(run(line(), &[("rollper", ParamValue::Menu(99))]), Err(CookError::BadParam(_))));
         assert!(matches!(run(line(), &[("adjustupcurvature", ParamValue::B(true))]), Err(CookError::Unsupported(_))));
         assert!(run(line(), &[("group", ParamValue::S("nope".into()))]).is_err());
         // zero / NaN-free custom up of length 0 falls back to +Y; max stretch 0 never divides into a panic
         assert!(run(line(), &[("upvectortype", ParamValue::Menu(5)), ("upvector", ParamValue::V3([0.0; 3]))]).is_ok());
-        assert!(run(line(), &[("stretcharoundturns", ParamValue::B(true)), ("maxstretcharoundturns", ParamValue::F(0.0))]).is_ok());
+        assert!(
+            run(line(), &[("stretcharoundturns", ParamValue::B(true)), ("maxstretcharoundturns", ParamValue::F(0.0))])
+                .is_ok()
+        );
         // vertex class: P is refused with a warning, other outputs still written
-        let o = run(line(), &[("class", ParamValue::Menu(1)), ("outputtranslation", ParamValue::B(true))]).expect("cooks");
+        let o =
+            run(line(), &[("class", ParamValue::Menu(1)), ("outputtranslation", ParamValue::B(true))]).expect("cooks");
         assert!(o.attr(AttrClass::Vertex, "P").is_none() && o.attr(AttrClass::Vertex, "N").is_some());
         // an existing attribute of another shape is refused, never silently reshaped
         let mut l = line();
-        l.add_attr(Attribute { name: "up".into(), class: AttrClass::Point, data: AttrData::F32(vec![0.0; 3]), type_info: TypeInfo::None });
+        l.add_attr(Attribute {
+            name: "up".into(),
+            class: AttrClass::Point,
+            data: AttrData::F32(vec![0.0; 3]),
+            type_info: TypeInfo::None,
+        });
         assert!(matches!(run(l, &[]), Err(CookError::Unsupported(_))));
         // bad topology is an error, not a panic
         let mut b = line();

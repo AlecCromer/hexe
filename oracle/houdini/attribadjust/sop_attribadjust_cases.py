@@ -3,7 +3,10 @@ run as `hython sop_attribadjust_cases.py <out-dir>`). Writes:
   input.geo   the synthetic input (8x8 point grid, 49 quads) with point / prim / vertex / detail attributes and a point group;
   cases.json  one entry per case: node type, the parms set (flat Houdini names: menus as tokens, ramps / multiparms as
               their instance parms), the adjusted attribute (class, name) and Houdini's resulting values for it (or
-              `"unchanged": true` when Houdini leaves the geometry alone).
+              `"unchanged": true` when Houdini leaves the geometry alone); cases setting `outlierviz` also record the
+              outlier attribute (`outlier`: name + values, or `missing`);
+  parms.json  every parm tuple of the three HDAs (name, component parm names, template kind / default, menu tokens),
+              with the specific-values multiparm and the ramp at 8 instances: the names a saved .hip can carry.
 Parm values are applied in order, so a ramp / multiparm count comes before its instance parms.
 """
 import hou, json, os, re, sys
@@ -125,6 +128,23 @@ cases = [
     ('f_wrong_type', 'attribadjustfloat', {'attrib': 'iv', 'singlevalue': 0.5}),
     ('f_default_new_group', 'attribadjustfloat', {'group': 'grp', 'attrib': 'newd', 'dodefault': 1, 'default': 7.0,
                                                   'singlevalue': 1.0}),
+    # outlier attribute (`outlierviz`): written by the range branch only
+    ('f_outlierviz', 'attribadjustfloat', {'group': 'grp', 'operation': 'set', 'valuetype': 'rand',
+                                           'distribinrange': 'outliers', 'outlierpercent': 35.0, 'outlierviz': 1}),
+    ('f_outlierviz_line', 'attribadjustfloat', {'attrib': 'lin', 'operation': 'set', 'valuetype': 'line',
+                                                'distribinrange': 'outliers', 'outlierpercent': 50.0, 'outlierside': 'both',
+                                                'outlierviz': 1, 'outlierattrib': 'isout', 'startposx': -1.0,
+                                                'endposx': 1.5, 'endposz': 1.0}),
+    ('f_outlierviz_existing', 'attribadjustfloat', {'group': 'grp', 'operation': 'set', 'valuetype': 'rand',
+                                                    'distribinrange': 'outliers', 'outlierpercent': 50.0, 'outlierviz': 1,
+                                                    'outlierattrib': 'variant'}),
+    ('f_outlierviz_const', 'attribadjustfloat', {'distribinrange': 'outliers', 'outlierviz': 1, 'singlevalue': 0.5}),
+    ('f_outlierviz_specific', 'attribadjustfloat', {'operation': 'set', 'valuetype': 'rand', 'rangemethod': 'specific',
+                                                    'distribinrange': 'outliers', 'outlierviz': 1}),
+    ('f_outlierviz_uniform', 'attribadjustfloat', {'operation': 'set', 'valuetype': 'rand', 'distribinrange': 'uniform',
+                                                   'outlierviz': 1}),
+    ('f_outlierviz_noadjust', 'attribadjustfloat', {'adjustvalue': 0, 'valuetype': 'rand', 'distribinrange': 'outliers',
+                                                    'outlierviz': 1}),
     # ---------------- integer ----------------
     ('i_const_add', 'attribadjustinteger', {'attrib': 'variant', 'singlevalue': 3}),
     ('i_rand_set', 'attribadjustinteger', {'attrib': 'variant', 'operation': 'set', 'valuetype': 'rand'}),
@@ -165,6 +185,11 @@ cases = [
     ('i_prim', 'attribadjustinteger', {'class': 'primitive', 'attrib': 'variant', 'operation': 'mult', 'singlevalue': 3}),
     ('i_float_attr', 'attribadjustinteger', {'attrib': 'pscale', 'singlevalue': 2}),
     ('i_new_group', 'attribadjustinteger', {'group': 'grp', 'attrib': 'newi', 'operation': 'set', 'singlevalue': 6}),
+    ('i_outlierviz', 'attribadjustinteger', {'attrib': 'variant', 'operation': 'set', 'valuetype': 'rand',
+                                             'distribinrange': 'outliers', 'outlierpercent': 40.0, 'outlierside': 'both',
+                                             'outlierviz': 1, 'outlierattrib': 'isout'}),
+    ('i_outlierviz_prim', 'attribadjustinteger', {'class': 'primitive', 'attrib': 'variant', 'valuetype': 'rand',
+                                                  'distribinrange': 'outliers', 'outlierpercent': 50.0, 'outlierviz': 1}),
     # ---------------- color ----------------
     ('c_const', 'attribadjustcolor', {'singlevaluer': 0.2, 'singlevalueg': 0.4, 'singlevalueb': 0.6}),
     ('c_new_group', 'attribadjustcolor', {'group': 'grp', 'attrib': 'Cnew', 'singlevaluer': 0.25, 'singlevalueg': 0.5,
@@ -266,6 +291,16 @@ for name, typ, parms in cases:
             old = [e.attribValue(b) for e in elems(base, cls)] if b is not None else None
         rec['values'] = vals
         rec['unchanged'] = old == vals and b is not None and b.dataType() == a.dataType()
+    if 'outlierviz' in parms:
+        oname = n.parm('outlierattrib').evalAsString()
+        oa = g.findGlobalAttrib(oname) if cls == 'detail' else {
+            'point': g.findPointAttrib, 'vertex': g.findVertexAttrib, 'primitive': g.findPrimAttrib}[cls](oname)
+        if oa is None:
+            rec['outlier'] = {'name': oname, 'missing': True}
+        else:
+            rec['outlier'] = {'name': oname, 'data_type': oa.dataType().name(), 'size': oa.size(),
+                              'values': [g.attribValue(oname)] if cls == 'detail' else
+                              [e.attribValue(oa) for e in elems(g, cls)]}
     records.append(rec)
     print(name, rec.get('data_type'), rec.get('unchanged'), rec['warnings'], rec['errors'])
 
@@ -273,3 +308,43 @@ with open(os.path.join(out, 'cases.json'), 'w', encoding='utf-8', newline='\n') 
     f.write('{"houdini": %s, "cases": [\n' % json.dumps(hou.applicationVersionString()))
     f.write(',\n'.join(json.dumps(r, sort_keys=True, separators=(',', ':')) for r in records))
     f.write('\n]}\n')
+
+# ---------------- parm table: every parm tuple of the three HDAs (multiparms / ramps at MAX instances) ----------------
+MAX = 8  # hexe declares 8 ramp keys and 8 specific values
+
+
+def parm_table(n):
+    rows = []
+    for pt in n.parmTuples():
+        tm = pt.parmTemplate()
+        kind = tm.type().name()
+        row = {'name': pt.name(), 'comps': [p.name() for p in pt], 'kind': kind,
+               'multiparm': bool(len(pt) and pt[0].isMultiParmInstance())}
+        if kind in ('Float', 'Int', 'Toggle', 'String', 'Menu'):
+            d = tm.defaultValue()
+            row['default'] = list(d) if isinstance(d, tuple) else d
+        if kind == 'Menu' or (kind == 'String' and tm.menuItems()):
+            row['menu'] = list(tm.menuItems())
+            row['menu_type'] = tm.menuType().name()
+            row['menu_script'] = bool(tm.itemGeneratorScript())
+        rows.append(row)
+    return rows
+
+
+table = {}
+for typ in ('attribadjustfloat', 'attribadjustinteger', 'attribadjustcolor'):
+    n = geo.createNode(typ)
+    ramp = 'colorramp' if typ == 'attribadjustcolor' else 'remapramp'
+    defaults = {ramp: len(n.parm(ramp).evalAsRamp().keys()), 'nvalues': n.parm('nvalues').eval()}
+    n.parm('nvalues').set(MAX)
+    n.parm(ramp).set(MAX)
+    rows = parm_table(n)
+    for r in rows:
+        if r['name'] in defaults:
+            r['default'] = defaults[r['name']]
+    table[typ] = rows
+with open(os.path.join(out, 'parms.json'), 'w', encoding='utf-8', newline='\n') as f:
+    f.write('{"houdini": %s, "max_instances": %d, "types": {\n' % (json.dumps(hou.applicationVersionString()), MAX))
+    f.write(',\n'.join('%s: [\n%s\n]' % (json.dumps(t), ',\n'.join(json.dumps(r, sort_keys=True, separators=(',', ':'))
+                                                                    for r in rows)) for t, rows in table.items()))
+    f.write('\n}}\n')

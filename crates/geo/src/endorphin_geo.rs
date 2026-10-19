@@ -178,6 +178,10 @@ impl B {
     /// Place `c` at `place` (scene placement) with parent-local `locals` (rest, scene pose or keyed).
     fn character(&mut self, c: &Character, locals: &[Xf], place: &Xf) {
         let w: Vec<Xf> = c.world_of(locals).iter().map(|x| place.mul(x)).collect();
+        self.character_world(c, &w);
+    }
+    /// Emit `c` with ready-made joint world matrices `w` (joint order, placement included): a posed or simulated state.
+    fn character_world(&mut self, c: &Character, w: &[Xf]) {
         let base = self.d.point_count;
         let r = self.d.add_points(c.joints.len() as u32);
         for (i, j) in c.joints.iter().enumerate() {
@@ -302,10 +306,16 @@ fn nodes_json<'a>(ns: impl Iterator<Item = &'a Node>) -> String {
     Value::Array(ns.map(Node::to_json).collect()).to_string()
 }
 
-fn scene_detail(s: &Scene, t: f32) -> Detail {
+/// `worlds`: simulated joint world matrices per character (scene characters in file order, then the environment); a
+/// character without a matching entry (missing / wrong joint count) falls back to the keyed scene pose at `t`.
+fn scene_detail(s: &Scene, t: f32, worlds: &[&[Xf]]) -> Detail {
     let mut b = B::default();
-    for c in &s.characters {
-        b.character(c, &s.posed_locals(c, t), &c.xf);
+    let sim_of = |c: &Character, i: usize| worlds.get(i).copied().filter(|w| w.len() == c.joints.len());
+    for (i, c) in s.characters.iter().enumerate() {
+        match sim_of(c, i) {
+            Some(w) => b.character_world(c, w),
+            None => b.character(c, &s.posed_locals(c, t), &c.xf),
+        }
     }
     if s.use_default_ground {
         // Default ground = one y=0 quad sized to the content (1.25x its horizontal reach, 2..40 m).
@@ -313,7 +323,10 @@ fn scene_detail(s: &Scene, t: f32) -> Detail {
         b.ground((reach * 1.25).clamp(2.0, 40.0), 1);
     }
     if let Some(e) = &s.environment {
-        b.character(e, &s.posed_locals(e, t), &e.xf);
+        match sim_of(e, s.characters.len()) {
+            Some(w) => b.character_world(e, w),
+            None => b.character(e, &s.posed_locals(e, t), &e.xf),
+        }
     }
     let mut d = b.finish();
     detail_str(&mut d, "endo_kind", "scene");
@@ -341,10 +354,15 @@ fn scene_detail(s: &Scene, t: f32) -> Detail {
 pub fn document_detail(doc: &Document) -> Detail {
     document_detail_at(doc, 0.0)
 }
+/// Scene geometry with every character posed by `worlds` (e.g. `endo_sim::Sim::pose()`): per character, per joint world
+/// matrices incl. placement, scene characters in file order then the environment. `t` is only the label (`endo_time`).
+pub fn scene_detail_posed(s: &Scene, t: f32, worlds: &[&[Xf]]) -> Detail {
+    scene_detail(s, t, worlds)
+}
 /// Like `document_detail`; `t` seconds samples keyed scene channels (non-scene documents ignore it).
 pub fn document_detail_at(doc: &Document, t: f32) -> Detail {
     let mut d = match doc {
-        Document::Scene(s) => return scene_detail(s, t),
+        Document::Scene(s) => return scene_detail(s, t, &[]),
         Document::Character(c) => {
             let mut b = B::default();
             b.character(c, &c.rest_locals(), &Xf::default());

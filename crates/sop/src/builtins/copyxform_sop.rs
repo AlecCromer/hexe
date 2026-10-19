@@ -287,11 +287,7 @@ fn xform_v3(kind: Kind, x: &CopyXf, v: [f32; 3]) -> Result<[f32; 3], CookError> 
                 Some(it) if len > 0.0 && len.is_finite() => {
                     let o = it * n;
                     let ol = o.length();
-                    if ol > 0.0 && ol.is_finite() {
-                        f32x3(o / ol * len)
-                    } else {
-                        v
-                    }
+                    if ol > 0.0 && ol.is_finite() { f32x3(o / ol * len) } else { v }
                 }
                 _ => v,
             }
@@ -308,11 +304,7 @@ fn xform_v4(x: &CopyXf, q: [f32; 4]) -> [f32; 4] {
             let src = DQuat::from_xyzw(f64::from(q[0]), f64::from(q[1]), f64::from(q[2]), f64::from(q[3]));
             let o = r * src;
             let out = [o.x as f32, o.y as f32, o.z as f32, o.w as f32];
-            if out.iter().all(|c| c.is_finite()) {
-                out
-            } else {
-                q
-            }
+            if out.iter().all(|c| c.is_finite()) { out } else { q }
         }
         None => q,
     }
@@ -335,11 +327,7 @@ fn valid_group_name(name: &str) -> bool {
 /// Vertex ids of a prim (empty on a bad range).
 fn prim_verts(d: &Detail, p: &Prim) -> std::ops::Range<usize> {
     let (lo, hi) = (p.verts.start as usize, p.verts.end as usize);
-    if lo <= hi && hi <= d.vertex_point.len() {
-        lo..hi
-    } else {
-        0..0
-    }
+    if lo <= hi && hi <= d.vertex_point.len() { lo..hi } else { 0..0 }
 }
 
 /// The copied piece: selected prims (prim order), points (point order) and the source-point -> piece-index map.

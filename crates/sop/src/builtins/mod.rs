@@ -77,6 +77,7 @@ mod fuse_sop;
 //
 mod facet_sop;
 //
+mod endosim_sop;
 mod file_sop;
 //
 mod grid_sop;
@@ -261,6 +262,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("fuse", fuse_sop::spec, fuse_sop::new);
     //
     r.register("facet", facet_sop::spec, facet_sop::new);
+    //
+    r.register("endosim", endosim_sop::spec, endosim_sop::new);
     //
     r.register("file", file_sop::spec, file_sop::new);
     //

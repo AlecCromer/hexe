@@ -116,7 +116,8 @@ fn parm_alias<'a>(ty: &str, name: &'a str) -> &'a str {
     }
 }
 fn convert(ty: &str, spec: &ParamSpec, p: &HipParm) -> Result<Option<Value>, String> {
-    let first = p.values.first().ok_or("empty tuple")?;
+    // an empty tuple (a separator: `sepparm [ 0 locks=0 ] ( )`) carries no value
+    let Some(first) = p.values.first() else { return Ok(None) };
     let val = match &spec.default {
         ParamValue::F(_) => ParamValue::F(f(first)? as f32),
         ParamValue::I(_) => ParamValue::I(f(first)?.round() as i32),
@@ -476,6 +477,12 @@ mod tests {
         assert_eq!(hexe_type(&r, "attribwrangle").as_deref(), Some("wrangle"));
         assert_eq!(hexe_type(&r, "hda::lib::1.0"), None);
         assert_eq!(hexe_type(&r, "nosuch"), None);
+    }
+    #[test]
+    fn empty_tuple_is_no_value() {
+        let spec = ParamSpec::new("sepparm", ParamValue::S(String::new()));
+        let p = HipParm { name: "sepparm".into(), flags: 0, values: Vec::new() };
+        assert_eq!(convert("attribadjustfloat", &spec, &p), Ok(None));
     }
     #[test]
     fn path_extensions() {

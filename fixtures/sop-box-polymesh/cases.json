@@ -1,0 +1,219 @@
+{
+ "pm_default": {
+  "type": 1
+ },
+ "pm_dense": {
+  "divrate": [
+   7,
+   6,
+   8
+  ],
+  "scale": 0.5,
+  "t": [
+   0,
+   0.5,
+   0
+  ],
+  "type": 1
+ },
+ "pm_div111": {
+  "divrate": [
+   1,
+   1,
+   1
+  ],
+  "size": [
+   2,
+   3,
+   4
+  ],
+  "type": 1
+ },
+ "pm_div2": {
+  "divrate": [
+   2,
+   2,
+   2
+  ],
+  "type": 1
+ },
+ "pm_flat_y": {
+  "divrate": [
+   3,
+   1,
+   4
+  ],
+  "size": [
+   2,
+   1,
+   3
+  ],
+  "t": [
+   0.25,
+   1,
+   -0.5
+  ],
+  "type": 1
+ },
+ "pm_neg_dodivs": {
+  "divrate": [
+   4,
+   2,
+   3
+  ],
+  "divs": [
+   5,
+   5,
+   5
+  ],
+  "dodivs": 1,
+  "r": [
+   0,
+   90,
+   0
+  ],
+  "size": [
+   -1,
+   2,
+   0.5
+  ],
+  "type": 1
+ },
+ "pm_nonuniform": {
+  "divrate": [
+   3,
+   4,
+   5
+  ],
+  "size": [
+   2,
+   3,
+   4
+  ],
+  "t": [
+   1,
+   -2,
+   0.5
+  ],
+  "type": 1
+ },
+ "pm_rot_scale": {
+  "divrate": [
+   2,
+   5,
+   3
+  ],
+  "r": [
+   30,
+   45,
+   60
+  ],
+  "scale": 2,
+  "size": [
+   1,
+   2,
+   3
+  ],
+  "t": [
+   1,
+   2,
+   3
+  ],
+  "type": 1
+ },
+ "poly_dodivs333": {
+  "divrate": [
+   2,
+   2,
+   2
+  ],
+  "divs": [
+   3,
+   3,
+   3
+  ],
+  "dodivs": 1,
+  "size": [
+   2,
+   4,
+   6
+  ],
+  "t": [
+   1,
+   -1,
+   0.5
+  ],
+  "type": 0
+ },
+ "poly_dodivs_mixed": {
+  "consolidatepts": 0,
+  "divs": [
+   1,
+   2,
+   4
+  ],
+  "dodivs": 1,
+  "r": [
+   10,
+   20,
+   30
+  ],
+  "type": 0
+ },
+ "poly_rot_scale": {
+  "r": [
+   30,
+   45,
+   60
+  ],
+  "scale": 2,
+  "size": [
+   1,
+   2,
+   3
+  ],
+  "t": [
+   1,
+   2,
+   3
+  ],
+  "type": 0
+ },
+ "pts_divrate": {
+  "divrate": [
+   3,
+   2,
+   4
+  ],
+  "size": [
+   1,
+   2,
+   3
+  ],
+  "type": 5
+ },
+ "pts_dodivs": {
+  "divs": [
+   2,
+   3,
+   1
+  ],
+  "dodivs": 1,
+  "size": [
+   2,
+   2,
+   2
+  ],
+  "type": 5
+ },
+ "pts_dodivs_noconsol": {
+  "consolidatepts": 0,
+  "divs": [
+   2,
+   3,
+   1
+  ],
+  "dodivs": 1,
+  "type": 5
+ }
+}

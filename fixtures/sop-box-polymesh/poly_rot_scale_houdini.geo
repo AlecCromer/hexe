@@ -1,0 +1,66 @@
+[
+	"fileversion","20.5.522",
+	"hasindex",false,
+	"pointcount",8,
+	"vertexcount",24,
+	"primitivecount",6,
+	"info",{
+		"hostname":"",
+		"date":"",
+		"artist":"",
+		"software":"Houdini 20.5.522",
+		"bounds":[-2.71759677,4.71759653,-0.93176055,4.93176079,-0.251330853,6.25133133],
+		"primcount_summary":"          6 Polygons\n",
+		"attribute_summary":"     1 point attributes:\tP\n"
+	},
+	"topology",[
+		"pointref",[
+			"indices",[1,5,4,0,2,6,5,1,3,7,6,2,0,4,7,3,2,1,0,3,5,6,7,4]
+		]
+	],
+	"attributes",[
+		"pointattributes",[
+			[
+				[
+					"scope","public",
+					"type","numeric",
+					"name","P",
+					"options",{
+						"type":{
+							"type":"string",
+							"value":"point"
+						}
+					}
+				],
+				[
+					"size",3,
+					"storage","fpreal32",
+					"defaults",[
+						"size",1,
+						"storage","fpreal64",
+						"values",[0]
+					],
+					"values",[
+						"size",3,
+						"storage","fpreal32",
+						"tuples",[[-0.424703538,-0.93176055,1.16288269],[0.282403231,0.292984366,-0.251330853],[4.71759653,1.97496486,3.42290401],[4.01048994,0.75022006,4.83711767],[-2.71759677,2.02503514,2.57709622],[-2.01048994,3.24977994,
+								1.16288269],[2.4247036,4.93176079,4.83711767],[1.71759677,3.70701575,6.25133133]
+						]
+					]
+				]
+			]
+		]
+	],
+	"primitives",[
+		[
+			[
+				"type","Polygon_run"
+			],
+			[
+				"startvertex",0,
+				"nprimitives",6,
+				"nvertices_rle",[4,6]
+			]
+		]
+	]
+]

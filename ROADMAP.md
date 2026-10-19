@@ -18,15 +18,49 @@ Rules: numbers come from tools (`parity`, `oracle`, `size`, `perf`), never from 
 - [ ] **Single-geo .hip name**: a .hip with ONE geo and no container still loads as `geo1` (should keep its object name).
 - [ ] **Spare parameters** (ledger `ui-spare-parms`, planned): Edit Parameter Interface, every Houdini parm type.
 - [ ] **Larger user scenes cook**: multi-object /obj networks, network boxes, For-Each pairs and Copy to Points load,
-  but every display chain hits a node with no hexe twin (attribadjustfloat / color / integer, copyxform, pack,
-  enumerate, remesh (doc: sidefx.com/docs/houdini/nodes/sop/remesh.html), orientalongcurve, scatteralign, material,
-  attribvop, attribfrommap, polywire, texture, vellum*, Labs tree tools, solver, filecache) -> the cook errors honestly;
-  each is its own SOP atom. `join` done 2026-10-19 (ledger `sop-join`, zero-diff vs Houdini on recorded synthetic cases).
-  Other blockers seen: sphere `freq` above 100; groupcreate edge / vertex groups; non-poly primitive-type menus;
-  parm expressions that query geometry (`detail()`, `point()`, `$N`, `$CEX`) keep the saved value (hip-expr notes).
+  but display chains still stop: attribnoise uses hexe-invented parms (Houdini token `mult` rejected, most parms dropped),
+  groupcreate "include by edges" (unshared / boundary) not modelled. Still no hexe twin: pack, scatteralign, material, attribvop
+  (needs a VOP-network compiler: its own epic), attribfrommap, polywire, polydoctor, texture, vellum*, Labs tree
+  tools, solver, filecache -> the cook errors honestly; each is its own SOP atom. Done 2026-10-19: `join`, `copyxform`,
+  `attribadjustfloat / integer / color`, `enumerate`, `orientalongcurve`, `remesh` (statistical parity), sphere
+  `freq` > 100, groupcreate edge / vertex groups, Box polymesh / points / `r`, edgedivide named edge groups.
+  Parm expressions that query geometry (`detail()`, `point()`, `$N`, `$CEX`) keep the saved value (hip-expr).
 - [ ] Debt found 2026-10-18, not this session's: `polyreduce feature_edges_hold_their_line` assertions had been commented
   out by a collapsed line; restored, they FAIL (drift with features 0.056 > without 0.027). `xtask assets`: untracked
-  `apps/hexe-tauri/src-tauri/icons/icon.ico` has no ATTRIBUTION row. `xtask parity`: sop-group evidence fn missing.
+  `apps/hexe-tauri/src-tauri/icons/icon.ico` has no ATTRIBUTION row. (sop-group evidence name fixed 2026-10-19.)
+  Windows-only test fails: `rop_geometry scripts_run_in_order...` and cli `cook_motion_chain_scene_gives_the_skeleton_frame`
+  run shell scripts (`echo >>`, `stub.sh`) -> `cargo xtask ci` stops at `test` on Windows.
+
+### Remaining steps from the 2026-10-19 SOP session (all uncommitted on top of 2d25018)
+In flight when the usage limit hit (work saved in the tree, resume or redo):
+- [ ] **attribnoise to Houdini parms** (`attribnoise_sop.rs`): declare every Houdini 20.5 parm tuple of attribnoise /
+  attribnoisefloat / attribnoisevector (Houdini names, defaults, menu tokens: `operation` uses `mult`, not `multiply`);
+  port the HDA's VEX noise exactly where feasible (else statistical, documented); `specs_declare_every_houdini_parm`
+  test; fixtures/sop-attribnoise from oracle/houdini/attribnoise/sop_attribnoise_cases.py. Partial edits may be in the
+  tree: check `git diff crates/sop/src/builtins/attribnoise_sop.rs` before continuing.
+- [ ] **groupcreate "include by edges"** (`groupcreate_sop.rs`): declare every Houdini parm; implement groupedges,
+  unshared, boundarygroups, min / max edge angle + length, depth (edgeptgrp / edgestep), random (reuse attribadjust's
+  VEX rand); bounding object / volume / camerapath Unsupported only when ENABLED. Fixtures/sop-groupcreate-include +
+  a synthetic open box -> groupcreate unshared `borders` -> edgedivide test. (Agent had only started reading.)
+Then, to finish this batch:
+- [ ] Merge those two: MANIFEST rows (sha256 from disk), ledger rows / evidence, `cargo xtask sops` (docs/SOPS.md).
+- [ ] Full check: `cargo fmt --all`, clippy `--all-targets -D warnings`, `cargo test --workspace --no-fail-fast`
+  (only the 3 known failures above allowed), `cargo xtask parity`, `cargo xtask oracle`, portability scan of changed
+  files (no user names / home paths / hostnames / private scene names).
+- [ ] Re-cook the private test scene locally per object (`hexe open <scene> --geo <obj> --cook-out ...`) and grep for
+  BOTH "unsupported" and "bad parameter" (the 2026-10-19 check missed the latter); list the next blocker per object.
+- [ ] Commit only when the user asks: one ledger atom per commit (hip-expr, sop-copyxform, sop-attribadjust,
+  sop-enumerate, sop-orientalongcurve, sop-remesh, sop-sphere, sop-groupcreate + geo-groups, sop-box, sop-edgedivide).
+Next SOP atoms after that (by how often they block display chains):
+- [ ] `attribvop`: needs a VOP-network -> VEX compiler (own epic; plan before starting).
+- [ ] `pack`: needs a packed-prim payload in hexe-geo (also unblocks copyxform `pack=1`, copytopoints pack).
+- [ ] `scatteralign`, `material` (attribute-only twin), `attribfrommap` + `texture` (UV / image sampling),
+  `polywire`, `polydoctor`, `filecache` (pass-through + file read), `solver`, vellum*, Labs tree tools.
+- [ ] Remesh parity: 2-iteration convergence (+15% tris), box corner rounding (+12%), adaptive sizing on boxes.
+- [ ] Orient Along Curve: `adjustupcurvature`, `transformbyattribs` with instance attribs.
+- [ ] Group / pattern parsers: `@attr=value` expressions (enumerate, edgedivide, groupcreate).
+- [ ] Geometry-query HScript expressions (`detail()`, `point()`, `$N`, `$CEX`, opinputpath) in hip-expr.
+Process note: parallel agents exhausted the usage limit twice; run ONE agent at a time.
 
 Next, as asked:
 - [ ] **PolyReduce 1.0 parameter set + panel** (hython dump of `polyreduce` v1: reduce "Polygons", creases "Features",
@@ -68,3 +102,4 @@ Known gaps left behind (all give an explicit error or are documented, none silen
 | 2026-10-18 | claude-opus-5.5 | ~3 | ui-node-flags, sop-control, obj-containers, hip-foreach (+ ui-spare-parms planned): bypass / template (ghost) / display flags, required-input arrow + dashed optional wires, slat line removed, Null object = control + point1 network, Add SOP point list, /obj containers from .hip (object-level assets), network boxes + node colours drawn, For-Each blockpath pairing, second-output wires dropped with a note | nested-asset .hip: /obj/<asset>/<geo> + notes, cooks 218/432; a five-object .hip loads (network boxes, 3 For-Each pairs) but its display chains stop at no-twin SOPs | ci: fmt + clippy green (fixed 4 pre-existing clippy errors); test red only on env-bound Windows failures + restored polyreduce assertion; assets / parity red on pre-existing rows; app driven live (debug server + screenshots); nothing committed |
 | 2026-10-19 | claude-opus-5.5 | ~1.5 | sop-join (P1, partial): Join SOP, every rule derived from hython 20.5.522 probes (oracle/houdini/join/) | recorded synthetic arcs2 + arcs7 zero-diff vs Houdini (P + vertex order, fixtures/sop-join); 13 tests | fmt + clippy green; join tests green; parity / assets red only on the pre-existing sop-group + icon.ico rows; not committed |
 | 2026-10-19 | claude-opus-5.5 | ~2 | hip-expr (P1, partial): .chn channels parsed, HScript evaluator (hexe_graph::hscript), import evaluates expression parms at the saved frame; `hexe open --exprs` | semantics checked with hou.hscriptExpression; 8 tests; geometry-query expressions keep the saved value + note | fmt + clippy green; graph tests green; not committed |
+| 2026-10-19 | claude-opus-5.5 (+5 parallel subagents) | ~3 | sop-copyxform, sop-attribadjust, sop-enumerate, sop-orientalongcurve, sop-remesh (new, partial); sop-sphere poly rebuilt to Houdini order + freq budget; sop-groupcreate edge / vertex; geo-groups i8 selections | all synthetic hython fixtures; copyxform / attribadjust (82 cases) / enumerate (19) / orientalongcurve (28) / groupcreate (388) match; remesh statistical (most cases within 5%) | clippy green; sop lib 854 pass, 2 pre-existing fails (polyreduce, rop_geometry script) + cli `cook_motion_chain` (stub.sh, Windows); not committed |

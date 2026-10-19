@@ -5,8 +5,7 @@ tube SOPs or a python SOP) and one line of `stats.json` with Houdini's output co
 min / max, boundary + non-manifold edge counts, the farthest output point from the input surface, and areas.
 Inputs:
   grid:    default Grid SOP (10x10, 10x10 points, quads)
-  sphere4: polygon Sphere SOP, frequency 4 (radius 1)
-  sphere8: polygon Sphere SOP, frequency 8 (radius 1)
+  sphere:  Sphere SOP, type Polygon Mesh, default 13 rows x 24 columns (radius 1)
   box:     default Box SOP (unit, 6 quads)
   tube:    open polygon Tube SOP (no caps, 12 columns, 2 rows)
   fold:    10x10 grid of quads folded 40 degrees along row 4, the fold row carried in edge group `crease`
@@ -54,12 +53,11 @@ FOLD = (
 
 def inputs():
     grid = geo.createNode('grid')
-    s4 = geo.createNode('sphere'); s4.parm('type').set(2); s4.parm('freq').set(4)
-    s8 = geo.createNode('sphere'); s8.parm('type').set(2); s8.parm('freq').set(8)
+    sph = geo.createNode('sphere'); sph.parm('type').set(2)  # polymesh: rows x cols, not frequency
     box = geo.createNode('box')
     tube = geo.createNode('tube'); tube.parm('type').set(1); tube.parm('cap').set(0)
     fold = geo.createNode('python'); fold.parm('python').set(FOLD)
-    return {'grid': grid, 'sphere4': s4, 'sphere8': s8, 'box': box, 'tube': tube, 'fold': fold}
+    return {'grid': grid, 'sphere': sph, 'box': box, 'tube': tube, 'fold': fold}
 
 
 def edges_of(g):
@@ -112,14 +110,14 @@ CASES = [
     ('grid_it0', 'grid', {'targetsize': 0.5, 'iterations': 0}),
     ('grid_it10', 'grid', {'targetsize': 0.5, 'iterations': 10}),
     ('grid_inputptsonly', 'grid', {'targetsize': 0.5, 'inputptsonly': 1}),
-    ('sphere4_t02', 'sphere4', {'targetsize': 0.2}),
+    ('sphere_t02', 'sphere', {'targetsize': 0.2}),
     ('box_t025', 'box', {'targetsize': 0.25}),
     ('tube_t015', 'tube', {'targetsize': 0.15}),
     ('fold_hard', 'fold', {'targetsize': 0.3, 'hard_edges': 'crease', 'useouthardedgesgroup': 1}),
-    ('sphere8_adaptive_d1', 'sphere8', {'sizing': 1, 'density': 1.0}),
-    ('sphere8_adaptive_d2', 'sphere8', {'sizing': 1, 'density': 2.0}),
-    ('sphere8_adaptive_d4', 'sphere8', {'sizing': 1, 'density': 4.0}),
-    ('sphere8_adaptive_max03', 'sphere8', {'sizing': 1, 'density': 2.0, 'usemaxsize': 1, 'maxsize': 0.3}),
+    ('sphere_adaptive_d1', 'sphere', {'sizing': 1, 'density': 1.0}),
+    ('sphere_adaptive_d2', 'sphere', {'sizing': 1, 'density': 2.0}),
+    ('sphere_adaptive_d4', 'sphere', {'sizing': 1, 'density': 4.0}),
+    ('sphere_adaptive_max03', 'sphere', {'sizing': 1, 'density': 2.0, 'usemaxsize': 1, 'maxsize': 0.3}),
     ('box_adaptive_d2', 'box', {'sizing': 1, 'density': 2.0}),
     ('grid_adaptive_max05', 'grid', {'sizing': 1, 'usemaxsize': 1, 'maxsize': 0.5}),
 ]

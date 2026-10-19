@@ -451,34 +451,52 @@ mod tests {
 "#;
     const SMOKE_CASE: &str = "cmd = [\"cook\", \"{input}\", \"--out\", \"{out}\", \"--time\", \"0\"]\ninput = \"scene.json\"\nexpected = \"expected.geo\"\ncompare = \"geo\"\nfeature = \"sop-merge\"\n";
 
-    /// Expected for box -> xform(t=1,2,3) -> merge(sphere poly freq 1): 8 box-order corners + (1,2,3), then the 12 unit
-    /// icosahedron points in the sphere lane's documented order (pole +Y, upper ring of 5 at y=+1/sqrt5 starting at
-    /// angle 0, lower ring of 5 at y=-1/sqrt5 offset 36 deg, pole -Y), faces outward, Houdini (clockwise) winding. Closed form only; the sphere
-    /// lane's private helpers are deliberately NOT reused.
+    /// Expected for box -> xform(t=1,2,3) -> merge(sphere poly freq 1): 8 box-order corners + (1,2,3), then Houdini 20.5's
+    /// 12 unit icosahedron points (hython: vertex 0 = -Z, ring of 5 at z=-1/sqrt5 from 90 deg in -72 deg steps, ring of 5
+    /// at z=+1/sqrt5 from 126 deg in +72 deg steps, vertex 11 = +Z) and its 20 recorded triangles. Closed form + recorded
+    /// lists only; the sphere lane's private helpers are deliberately NOT reused.
     fn expected_smoke() -> Detail {
         let mut pts: Vec<[f32; 3]> =
             (0..8u32).map(|i| corner(i, 0.0)).map(|p| [p[0] + 1.0, p[1] + 2.0, p[2] + 3.0]).collect();
-        let (ry, rr) = (1.0 / 5f64.sqrt(), 2.0 / 5f64.sqrt());
-        let ring = |k: usize, off: f64, y: f64| {
-            let a = 2.0 * std::f64::consts::PI * k as f64 / 5.0 + off;
-            [(rr * a.cos()) as f32, y as f32, (rr * a.sin()) as f32]
+        let (rz, rr) = (1.0 / 5f64.sqrt(), 2.0 / 5f64.sqrt());
+        let ring = |deg: f64, z: f64| {
+            let a = deg.to_radians();
+            [(rr * a.cos()) as f32, (rr * a.sin()) as f32, z as f32]
         };
-        pts.push([0.0, 1.0, 0.0]);
-        pts.extend((0..5).map(|k| ring(k, 0.0, ry)));
-        pts.extend((0..5).map(|k| ring(k, std::f64::consts::PI / 5.0, -ry)));
-        pts.push([0.0, -1.0, 0.0]);
+        pts.push([0.0, 0.0, -1.0]);
+        pts.extend((0..5).map(|k| ring(90.0 - 72.0 * k as f64, -rz)));
+        pts.extend((0..5).map(|k| ring(126.0 + 72.0 * k as f64, rz)));
+        pts.push([0.0, 0.0, 1.0]);
         let mut d = Detail::default();
         d.add_points(20);
         *d.p_mut() = pts;
         for f in FACES {
             d.add_poly(&f, true);
         }
-        for k in 0..5u32 {
-            let n = (k + 1) % 5;
-            // counter-clockwise construction order, each emitted reversed after its first corner (Houdini winding)
-            for tri in [[0, 1 + k, 1 + n], [1 + k, 6 + k, 1 + n], [6 + k, 1 + k, 6 + (k + 4) % 5], [6 + k, 11, 6 + n]] {
-                d.add_poly(&tri.map(|i| i + 8), true);
-            }
+        let tris: [[u32; 3]; 20] = [
+            [2, 1, 0],
+            [3, 2, 0],
+            [4, 3, 0],
+            [5, 4, 0],
+            [1, 5, 0],
+            [6, 5, 1],
+            [7, 4, 5],
+            [8, 3, 4],
+            [9, 2, 3],
+            [10, 1, 2],
+            [10, 6, 1],
+            [6, 7, 5],
+            [7, 8, 4],
+            [8, 9, 3],
+            [9, 10, 2],
+            [6, 10, 11],
+            [10, 9, 11],
+            [9, 8, 11],
+            [8, 7, 11],
+            [7, 6, 11],
+        ];
+        for tri in tris {
+            d.add_poly(&tri.map(|i| i + 8), true);
         }
         d
     }

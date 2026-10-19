@@ -101,7 +101,9 @@ CASES = {
     'extrap_prev': {'tangenttype': 2, 'extrapolateendtangents': 1},
     'extrap_next': {'tangenttype': 3, 'extrapolateendtangents': 1},
     'normal_avg': {'upvectoratstart': 0},
-    'x_avg': {'upvectortype': 1, 'upvectoratstart': 0},
+    # X lies in the tilted circle's plane (prim 2): the average-up solve is then a sign knife-edge (|Mx.up| ~ 1e-17)
+    'x_avg': {'upvectortype': 1, 'upvectoratstart': 0, 'group': '0-1 3-11'},
+    'y_avg': {'upvectortype': 2, 'upvectoratstart': 0},
     'z_start': {'upvectortype': 3},
     'custom_end': {'upvectortype': 5, 'upvectorx': 0.3, 'upvectory': 0.2, 'upvectorz': 1.0, 'useendupvector': 1,
                    'endupvectorx': 1.0, 'endupvectory': 0.0, 'endupvectorz': 0.0},

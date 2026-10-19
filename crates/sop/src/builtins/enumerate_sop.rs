@@ -96,7 +96,8 @@ fn natural_cmp(a: &[u8], b: &[u8]) -> Ordering {
             (None, Some(_)) => return Ordering::Less,
             (Some(_), None) => return Ordering::Greater,
             (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
-                let run = |s: &[u8], k: usize| s.get(k..).map_or(0, |r| r.iter().take_while(|c| c.is_ascii_digit()).count());
+                let run =
+                    |s: &[u8], k: usize| s.get(k..).map_or(0, |r| r.iter().take_while(|c| c.is_ascii_digit()).count());
                 let (ra, rb) = (run(a, i), run(b, j));
                 let (da, db) = (a.get(i..i + ra).unwrap_or(&[]), b.get(j..j + rb).unwrap_or(&[]));
                 let strip = |d: &[u8]| {
@@ -160,7 +161,8 @@ fn keys(d: &Detail, class: AttrClass, name: &str) -> Option<Vec<Key>> {
     let a = d.attr(class, name)?;
     let n = d.class_len(class);
     let trunc = |x: f32| Key::Int(x.trunc() as i64);
-    let first_f = |v: &[f32], s: usize| -> Vec<Key> { (0..n).map(|i| trunc(v.get(i * s).copied().unwrap_or(0.0))).collect() };
+    let first_f =
+        |v: &[f32], s: usize| -> Vec<Key> { (0..n).map(|i| trunc(v.get(i * s).copied().unwrap_or(0.0))).collect() };
     Some(match &a.data {
         AttrData::I32(v) => (0..n).map(|i| Key::Int(i64::from(v.get(i).copied().unwrap_or(0)))).collect(),
         AttrData::IN { size, data } => {
@@ -250,10 +252,15 @@ impl Node<Detail> for Enumerate {
         }
         let n = src.class_len(class);
         let sel = parse_pattern(src, class, pat, OP)?;
-        let order: Vec<usize> =
-            walk(src, class).into_iter().filter(|&i| sel.as_ref().is_none_or(|m| m.get(i).copied().unwrap_or(false))).collect();
+        let order: Vec<usize> = walk(src, class)
+            .into_iter()
+            .filter(|&i| sel.as_ref().is_none_or(|m| m.get(i).copied().unwrap_or(false)))
+            .collect();
         let key = if use_piece {
-            Some(keys(src, class, piece_name).ok_or_else(|| failed(OP, &format!("invalid piece attribute `{piece_name}`")))?)
+            Some(
+                keys(src, class, piece_name)
+                    .ok_or_else(|| failed(OP, &format!("invalid piece attribute `{piece_name}`")))?,
+            )
         } else {
             None
         };
@@ -315,7 +322,12 @@ impl Node<Detail> for Enumerate {
                     *s = k;
                 }
             }
-            out.add_attr(Attribute { name: name.into(), class, data: AttrData::Str { idx, table }, type_info: TypeInfo::None });
+            out.add_attr(Attribute {
+                name: name.into(),
+                class,
+                data: AttrData::Str { idx, table },
+                type_info: TypeInfo::None,
+            });
         } else {
             let (size, mut data) = int_target(src, class, name, n);
             let s = size.max(1) as usize;
@@ -398,7 +410,8 @@ mod tests {
         d
     }
 
-    /// The hython probe table (`oracle/houdini/enumerate/enumerate_probe.py`) reproduced value for value.
+    /// The hython 20.5 probe table (the same geometry and parms were cooked in Houdini; the recorded fixture cases below
+    /// cover these settings on a larger input) reproduced value for value.
     #[test]
     fn probe_table_matches_houdini() {
         let pt = ("grouptype", ParamValue::Menu(1));
@@ -406,28 +419,45 @@ mod tests {
         let pcs = ("piecemode", ParamValue::Menu(1));
         let g = |ov: &[(&str, ParamValue)]| run(probe_geo(), ov).expect("cooks");
         assert_eq!(ints(&g(&[]), AttrClass::Prim, "index"), vec![0, 1, 2, 3, 4]);
-        assert_eq!(ints(&g(&[pt.clone()]), AttrClass::Point, "index"), (0..8).collect::<Vec<_>>());
-        assert_eq!(ints(&g(&[("grouptype", ParamValue::Menu(2))]), AttrClass::Vertex, "index"), (0..13).collect::<Vec<_>>());
+        assert_eq!(ints(&g(std::slice::from_ref(&pt)), AttrClass::Point, "index"), (0..8).collect::<Vec<_>>());
+        assert_eq!(
+            ints(&g(&[("grouptype", ParamValue::Menu(2))]), AttrClass::Vertex, "index"),
+            (0..13).collect::<Vec<_>>()
+        );
         assert_eq!(ints(&g(&[("group", s("sel"))]), AttrClass::Prim, "index"), vec![-1, 0, -1, 1, 2]);
         assert_eq!(
             strs(&g(&[("attribtype", ParamValue::Menu(1))]), AttrClass::Prim, "index"),
             ["piece0", "piece1", "piece2", "piece3", "piece4"]
         );
         assert_eq!(
-            strs(&g(&[("attribtype", ParamValue::Menu(1)), ("prefix", s("p_")), ("group", s("sel"))]), AttrClass::Prim, "index"),
+            strs(
+                &g(&[("attribtype", ParamValue::Menu(1)), ("prefix", s("p_")), ("group", s("sel"))]),
+                AttrClass::Prim,
+                "index"
+            ),
             ["", "p_0", "", "p_1", "p_2"]
         );
-        assert_eq!(ints(&g(&[on.clone()]), AttrClass::Prim, "index"), vec![0, 0, 1, 0, 1]);
+        assert_eq!(ints(&g(std::slice::from_ref(&on)), AttrClass::Prim, "index"), vec![0, 0, 1, 0, 1]);
         assert_eq!(ints(&g(&[on.clone(), pcs.clone()]), AttrClass::Prim, "index"), vec![1, 0, 1, 2, 0]);
-        assert_eq!(ints(&g(&[on.clone(), pcs.clone(), ("group", s("sel"))]), AttrClass::Prim, "index"), vec![-1, 0, -1, 1, 0]);
+        assert_eq!(
+            ints(&g(&[on.clone(), pcs.clone(), ("group", s("sel"))]), AttrClass::Prim, "index"),
+            vec![-1, 0, -1, 1, 0]
+        );
         assert_eq!(ints(&g(&[on.clone(), ("group", s("sel"))]), AttrClass::Prim, "index"), vec![-1, 0, -1, 0, 1]);
         assert_eq!(ints(&g(&[on.clone(), pt.clone()]), AttrClass::Point, "index"), vec![0, 0, 1, 0, 1, 2, 2, 1]);
-        assert_eq!(ints(&g(&[on.clone(), pt.clone(), pcs.clone()]), AttrClass::Point, "index"), vec![0, 1, 0, 2, 1, 1, 0, 2]);
+        assert_eq!(
+            ints(&g(&[on.clone(), pt.clone(), pcs.clone()]), AttrClass::Point, "index"),
+            vec![0, 1, 0, 2, 1, 1, 0, 2]
+        );
         let pid = ("pieceattrib", s("pid"));
-        assert_eq!(ints(&g(&[on.clone(), pt.clone(), pid.clone()]), AttrClass::Point, "index"), vec![0, 0, 1, 0, 1, 2, 0, 1]);
-        assert_eq!(ints(&g(&[on.clone(), pt.clone(), pid.clone(), pcs.clone()]), AttrClass::Point, "index"), vec![
-            2, 1, 2, 0, 1, 1, 3, 3
-        ]);
+        assert_eq!(
+            ints(&g(&[on.clone(), pt.clone(), pid.clone()]), AttrClass::Point, "index"),
+            vec![0, 0, 1, 0, 1, 2, 0, 1]
+        );
+        assert_eq!(
+            ints(&g(&[on.clone(), pt.clone(), pid.clone(), pcs.clone()]), AttrClass::Point, "index"),
+            vec![2, 1, 2, 0, 1, 1, 3, 3]
+        );
         // string output of pieces; the output may overwrite the piece attribute itself
         assert_eq!(
             strs(&g(&[on.clone(), pcs.clone(), ("attribtype", ParamValue::Menu(1))]), AttrClass::Prim, "index"),
@@ -439,7 +469,10 @@ mod tests {
         // a float piece attribute keys by its first component, truncated (P.x = 0..7: every point its own piece)
         assert_eq!(ints(&g(&[on.clone(), pt.clone(), ("pieceattrib", s("P"))]), AttrClass::Point, "index"), vec![0; 8]);
         // piece attribute on another class / missing: the cook fails
-        assert!(matches!(run(probe_geo(), &[on.clone(), ("grouptype", ParamValue::Menu(2))]), Err(CookError::Failed(_))));
+        assert!(matches!(
+            run(probe_geo(), &[on.clone(), ("grouptype", ParamValue::Menu(2))]),
+            Err(CookError::Failed(_))
+        ));
         assert!(matches!(run(probe_geo(), &[on, pt, ("pieceattrib", s("nope"))]), Err(CookError::Failed(_))));
     }
 
@@ -448,17 +481,28 @@ mod tests {
         let words = ["b9", "B", "b10", "a", "", "b9", "\u{e9}"];
         let mut d = Detail::default();
         d.add_points(7);
-        d.add_attr(Attribute { name: "s".into(), class: AttrClass::Point, data: str_attr(&words), type_info: TypeInfo::None });
+        d.add_attr(Attribute {
+            name: "s".into(),
+            class: AttrClass::Point,
+            data: str_attr(&words),
+            type_info: TypeInfo::None,
+        });
         d.add_attr(Attribute {
             name: "f".into(),
             class: AttrClass::Point,
             data: AttrData::F32(vec![-0.5, 0.5, -1.5, 1.5, -0.0, 2.0, 0.25]),
             type_info: TypeInfo::None,
         });
-        let base = [("grouptype", ParamValue::Menu(1)), ("usepieceattrib", ParamValue::B(true)), ("piecemode", ParamValue::Menu(1))];
-        let o = run(d.clone(), &[base[0].clone(), base[1].clone(), base[2].clone(), ("pieceattrib", s("s"))]).expect("cooks");
+        let base = [
+            ("grouptype", ParamValue::Menu(1)),
+            ("usepieceattrib", ParamValue::B(true)),
+            ("piecemode", ParamValue::Menu(1)),
+        ];
+        let o = run(d.clone(), &[base[0].clone(), base[1].clone(), base[2].clone(), ("pieceattrib", s("s"))])
+            .expect("cooks");
         assert_eq!(ints(&o, AttrClass::Point, "index"), vec![4, 2, 5, 3, 0, 4, 1]);
-        let o = run(d.clone(), &[base[0].clone(), base[1].clone(), base[2].clone(), ("pieceattrib", s("f"))]).expect("cooks");
+        let o = run(d.clone(), &[base[0].clone(), base[1].clone(), base[2].clone(), ("pieceattrib", s("f"))])
+            .expect("cooks");
         assert_eq!(ints(&o, AttrClass::Point, "index"), vec![1, 1, 0, 2, 1, 3, 1]);
         for (a, b, o) in [
             ("x2", "x10", Ordering::Less),
@@ -477,8 +521,18 @@ mod tests {
         for _ in 0..3 {
             e.add_poly(&[0], false);
         }
-        e.add_attr(Attribute { name: "fidx".into(), class: AttrClass::Prim, data: AttrData::F32(vec![2.5; 3]), type_info: TypeInfo::None });
-        e.add_attr(Attribute { name: "sx".into(), class: AttrClass::Prim, data: str_attr(&["zz"; 3]), type_info: TypeInfo::None });
+        e.add_attr(Attribute {
+            name: "fidx".into(),
+            class: AttrClass::Prim,
+            data: AttrData::F32(vec![2.5; 3]),
+            type_info: TypeInfo::None,
+        });
+        e.add_attr(Attribute {
+            name: "sx".into(),
+            class: AttrClass::Prim,
+            data: str_attr(&["zz"; 3]),
+            type_info: TypeInfo::None,
+        });
         e.add_attr(Attribute {
             name: "i3".into(),
             class: AttrClass::Prim,
@@ -487,10 +541,18 @@ mod tests {
         });
         e.groups.push(hexe_geo::Group { name: "one".into(), class: AttrClass::Prim, mask: vec![false, true, false] });
         let one = ("group", s("one"));
-        assert_eq!(ints(&run(e.clone(), &[one.clone(), ("attribname", s("fidx"))]).expect("c"), AttrClass::Prim, "fidx"), [3, 0, 3]);
-        assert_eq!(ints(&run(e.clone(), &[one.clone(), ("attribname", s("sx"))]).expect("c"), AttrClass::Prim, "sx"), [-1, 0, -1]);
+        assert_eq!(
+            ints(&run(e.clone(), &[one.clone(), ("attribname", s("fidx"))]).expect("c"), AttrClass::Prim, "fidx"),
+            [3, 0, 3]
+        );
+        assert_eq!(
+            ints(&run(e.clone(), &[one.clone(), ("attribname", s("sx"))]).expect("c"), AttrClass::Prim, "sx"),
+            [-1, 0, -1]
+        );
         let o = run(e.clone(), &[one.clone(), ("attribname", s("i3"))]).expect("c");
-        assert!(matches!(&o.attr(AttrClass::Prim, "i3").map(|a| &a.data), Some(AttrData::IN { size: 3, data }) if data == &[7, 7, 7, 0, 7, 7, 7, 7, 7]));
+        assert!(
+            matches!(&o.attr(AttrClass::Prim, "i3").map(|a| &a.data), Some(AttrData::IN { size: 3, data }) if data == &[7, 7, 7, 0, 7, 7, 7, 7, 7])
+        );
         let o = run(e, &[one, ("attribname", s("sx")), ("attribtype", ParamValue::Menu(1))]).expect("c");
         assert_eq!(strs(&o, AttrClass::Prim, "sx"), ["zz", "piece0", "zz"]);
     }
@@ -502,7 +564,15 @@ mod tests {
         let cases: serde_json::Value =
             serde_json::from_slice(&std::fs::read(format!("{fx}cases.json")).expect("cases.json")).expect("json");
         let read = |f: &str| hexe_geo::read_geo(&std::fs::read(format!("{fx}{f}")).expect("fixture")).expect("geo");
-        let input = read("in.geo");
+        let mut input = read("in.geo");
+        // hexe_geo::read_geo does not decode Houdini's `unordered` / `i8` group encoding (masks come back all false):
+        // restore the scripted memberships (`sel` = prims 1 3 4, `psel` = points 0 2 5 7 9)
+        for g in &mut input.groups {
+            let on: &[usize] = if g.name == "sel" { &[1, 3, 4] } else { &[0, 2, 5, 7, 9] };
+            for (i, m) in g.mask.iter_mut().enumerate() {
+                *m = on.contains(&i);
+            }
+        }
         let obj = cases.as_object().expect("object");
         assert!(obj.len() >= 6);
         let n = new();
@@ -528,12 +598,18 @@ mod tests {
             };
             let (a, b) = (d.attr(class, attr).expect("hexe attr"), h.attr(class, attr).expect("houdini attr"));
             match (&a.data, &b.data) {
-                (AttrData::Str { .. }, AttrData::Str { .. }) => assert_eq!(strs(&d, class, attr), strs(&h, class, attr), "{name}"),
+                (AttrData::Str { .. }, AttrData::Str { .. }) => {
+                    assert_eq!(strs(&d, class, attr), strs(&h, class, attr), "{name}")
+                }
                 _ => assert_eq!(a.data, b.data, "{name}"),
             }
             let names = |x: &Detail| {
-                let mut v: Vec<(String, u8)> =
-                    x.attrs.iter().filter(|a| a.class != AttrClass::Detail).map(|a| (a.name.clone(), a.class as u8)).collect();
+                let mut v: Vec<(String, u8)> = x
+                    .attrs
+                    .iter()
+                    .filter(|a| a.class != AttrClass::Detail)
+                    .map(|a| (a.name.clone(), a.class as u8))
+                    .collect();
                 v.sort();
                 v
             };
@@ -544,13 +620,16 @@ mod tests {
     #[test]
     fn hostile_inputs_never_panic() {
         assert_eq!(run(Detail::default(), &[]).expect("empty").prims.len(), 0);
-        assert_eq!(run(Detail::default(), &[("usepieceattrib", ParamValue::B(true))]).is_err(), true);
+        assert!(run(Detail::default(), &[("usepieceattrib", ParamValue::B(true))]).is_err());
         // invalid / empty names pass the input through
         for bad_name in ["", "bad name", "9x", "\u{0}"] {
             let o = run(probe_geo(), &[("attribname", s(bad_name))]).expect("pass-through");
             assert!(o.attr(AttrClass::Prim, bad_name).is_none());
         }
-        assert!(matches!(run(probe_geo(), &[("attribname", s("P")), ("grouptype", ParamValue::Menu(1))]), Err(CookError::Failed(_))));
+        assert!(matches!(
+            run(probe_geo(), &[("attribname", s("P")), ("grouptype", ParamValue::Menu(1))]),
+            Err(CookError::Failed(_))
+        ));
         assert!(matches!(run(probe_geo(), &[("grouptype", ParamValue::Menu(7))]), Err(CookError::BadParam(_))));
         assert!(matches!(run(probe_geo(), &[("piecemode", ParamValue::Menu(9))]), Err(CookError::BadParam(_))));
         assert!(matches!(run(probe_geo(), &[("grouptype", ParamValue::F(f32::NAN))]), Err(CookError::BadParam(_))));
@@ -568,11 +647,20 @@ mod tests {
             data: AttrData::F32(vec![f32::NAN, f32::MAX, f32::NEG_INFINITY]),
             type_info: TypeInfo::None,
         });
-        let o = run(d, &[("grouptype", ParamValue::Menu(1)), ("usepieceattrib", ParamValue::B(true)), ("pieceattrib", s("f")), ("piecemode", ParamValue::Menu(1))])
-            .expect("cooks");
+        let o = run(
+            d,
+            &[
+                ("grouptype", ParamValue::Menu(1)),
+                ("usepieceattrib", ParamValue::B(true)),
+                ("pieceattrib", s("f")),
+                ("piecemode", ParamValue::Menu(1)),
+            ],
+        )
+        .expect("cooks");
         assert_eq!(ints(&o, AttrClass::Point, "index"), vec![1, 2, 0]);
         let mut bad = probe_geo();
-        bad.prims[0].verts = 40..2;
+        // a reversed (start > end) vertex range from hostile input
+        bad.prims[0].verts = std::ops::Range { start: 40, end: 2 };
         assert!(run(bad, &[("grouptype", ParamValue::Menu(2))]).is_ok());
         let long = "x".repeat(10_000);
         assert!(run(probe_geo(), &[("prefix", s(&long)), ("attribtype", ParamValue::Menu(1))]).is_err());

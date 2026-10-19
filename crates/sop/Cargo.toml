@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 [dependencies]
 hexe-geo = { workspace = true }
+endo-sim = { workspace = true }
 hexe-graph = { workspace = true }
 hexe-vex = { workspace = true }
 serde = { version = "1", features = ["derive"] }

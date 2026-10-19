@@ -1,25 +1,41 @@
 //! Edge Divide SOP (token `edgedivide`, Houdini 20.5 `edgedivide`): insert points along polygon edges.
 //!
-//! # Semantics (hython 20.5 probes, `fixtures/sop-edgedivide*`; 3x3 point grid)
-//! `group` = edge tokens `pA-B` (point pair; the written ORDER is the edge's direction). Empty `group` = passthrough. Tokens naming no existing polygon
-//! edge select nothing; with `applytoall` (default on) an empty selection means EVERY polygon edge (direction = first walk that meets the edge).
+//! # Semantics (hython 20.5 probes, `fixtures/sop-edgedivide*`; 3x3 grid, box, open box)
+//! `group` = an edge group pattern (ORDERED list of oriented edges; the order is the order points are created in, the
+//! orientation is the direction they are created along). Empty `group` = passthrough. The selection is `N ∪ A`, N first
+//! (`fixtures/sop-edgedivide-groups`, `oracle/houdini/edgedivide/sop_edgedivide_groups.py`):
+//! * N (named part): the EDGE groups (only) whose name matches any plain name token (`*` / `?` globs), concatenated in
+//!   NAME order (not token order); then, token by token, `!X` appends every mesh edge not in an edge group matching X
+//!   (mesh order; X naming no edge group = every edge), `^X` removes the edges of edge groups matching X.
+//! * A (ad-hoc part): the Group Create edge pattern (`groupcreate_sop` module docs: `N`, `N-M`, `NeM`, `pA-B-C`, `pA`,
+//!   prim group names, edge group names, `!`, `^`), except that `pA-B` pairs which are no mesh edge are kept (they divide
+//!   nothing, but make the group non-empty). An id past the end / `:step` / `NvM` empties the whole of A.
+//! * A single `*` = every mesh edge in mesh order (prim order, corner order).
+//! * Houdini errors ("not a valid group") when the result is empty and no plain name token matched an edge group and no
+//!   `!` token was given (`nonexist`, a point group name, `5`, `^mid`, `p0-1 ^p0-1`); `empty` (an existing empty edge
+//!   group), `p0-4` (no mesh edge) or `mid ^mid` pass through. `@attr` tokens select nothing (so mostly error), like Houdini.
 //! * `numdivs` = n: `max(n-1, 1)` new points at `t = j/(k+1)` from the edge start (1 and 2 both insert the midpoint; 3 inserts thirds).
-//! * Default (`sharedpoints` off): every polygon using the edge gets its OWN copy of the new points, created in direction order, prims in
-//!   prim order, edges in token order (all-edge mode: prim order, walk order, a shared edge creates its copies when first met). `sharedpoints`
-//!   = one set of points used by all prims. Each prim inserts them in its own walk direction.
+//! * Default (`sharedpoints` off): every polygon using the edge gets its OWN copy of the new points, created in direction
+//!   order, prims in prim order, edges in selection order. `sharedpoints` = one set of points used by all prims. Each
+//!   prim inserts them in its own walk direction.
 //! * New points: float attributes interpolated linearly, integer / string attributes copied from the edge START point; point groups false.
-//! * `connectpoints`, `closepath`, `tolerance`: no effect seen on the probes (ignored). Edge-group OUTPUT is not modelled.
+//! * Output edge groups: every divided edge is removed from every edge group (the sub-edges are not added).
+//! * `applytoall`, `connectpoints`, `closepath`, `tolerance`: no effect seen on the probes (ignored).
 //!
-//! Not modelled (-> `Unsupported`): vertex attributes or vertex groups on the input, non-`pA-B` tokens (edge group names, ranges).
-//! Non-polygon prims pass through untouched. UNVERIFIED: `applytoall` off with an empty selection, non-manifold edges.
-use super::group_sop::prim_verts;
+//! Not modelled (-> `Unsupported`): vertex attributes or vertex groups on the input; a bare `*` (or `!*` / `^*`) mixed
+//! with `!` / `^` tokens, a `!` token together with a plain name token, a plain name token after a `^name` token (their
+//! Houdini ordering was not pinned). Non-polygon prims pass through untouched. UNVERIFIED: non-manifold edges.
+use super::group_sop::{glob_match, prim_verts};
+use super::groupcreate_sop::{Edge, EdgeRun, EdgeTable, edge_table, ekey, eval_edge_pattern_with};
 use crate::SopNode;
 use hexe_geo::{AttrClass, AttrData, Detail, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSpec, ParamValue};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 const OP: &str = "edgedivide";
 const MAX_DIVS: i32 = 1024;
+/// One use of an edge: (prim, walk segment index, the segment's start point).
+type Use = (usize, usize, u32);
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("group", ParamValue::S(String::new())).label("Group"),
@@ -40,15 +56,69 @@ struct EdgeDivide {
 fn bad(m: &str) -> CookError {
     CookError::BadParam(format!("{OP}: {m}"))
 }
-fn parse_edges(pat: &str) -> Result<Vec<(u32, u32)>, CookError> {
-    let mut v = Vec::new();
-    for t in pat.split_whitespace() {
-        let pr = || CookError::Unsupported(format!("{OP}: group token `{t}`: only edge tokens `pA-B` are modelled"));
-        let body = t.strip_prefix('p').ok_or_else(pr)?;
-        let (a, b) = body.split_once('-').ok_or_else(pr)?;
-        v.push((a.parse::<u32>().map_err(|_| pr())?, b.parse::<u32>().map_err(|_| pr())?));
+/// A token body that names groups (not `*`, not an id / `NeM` / `NvM` token, not a `pA-B` path).
+fn is_name(body: &str) -> bool {
+    let path = body.strip_prefix('p').is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit()));
+    body != "*" && !body.starts_with(|c: char| c.is_ascii_digit()) && !path
+}
+/// The selected edges, ordered + oriented (module docs); `Ok(None)` = Houdini's "not a valid group" (the caller errors).
+fn select(d: &Detail, t: &EdgeTable, pat: &str) -> Result<Option<Vec<Edge>>, CookError> {
+    let toks: Vec<(char, &str)> = pat
+        .split_whitespace()
+        .map(|raw| match raw.chars().next() {
+            Some(k @ ('!' | '^')) => (k, &raw[1..]),
+            _ => (' ', raw),
+        })
+        .collect();
+    if let [(' ', "*")] = toks.as_slice() {
+        return Ok(Some(t.list.clone()));
     }
-    Ok(v)
+    let unsup = |m: &str| Err(CookError::Unsupported(format!("{OP}: group `{pat}`: {m} is not modelled")));
+    let negated = toks.iter().any(|&(k, _)| k != ' ');
+    if negated && toks.iter().any(|&(_, b)| b == "*") {
+        return unsup("`*` mixed with `!` / `^` tokens");
+    }
+    if toks.iter().any(|&(k, _)| k == '!') && toks.iter().any(|&(k, b)| k == ' ' && is_name(b)) {
+        return unsup("a `!` token together with a group name");
+    }
+    if let Some(i) = toks.iter().position(|&(k, b)| k == '^' && is_name(b))
+        && toks[i..].iter().any(|&(k, b)| k == ' ' && is_name(b))
+    {
+        return unsup("a group name after a `^name` token");
+    }
+    let mut groups: Vec<&hexe_geo::EdgeGroup> = d.edge_groups.iter().collect();
+    groups.sort_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
+    let edges_of = |glob: &str| -> HashSet<(u32, u32)> {
+        groups.iter().filter(|g| glob_match(glob, &g.name)).flat_map(|g| g.edges.iter().map(|&e| ekey(e))).collect()
+    };
+    // N: plain names (edge groups only, name order), then `!` / `^` token by token
+    let mut valid = false;
+    let mut run = EdgeRun::default();
+    let named =
+        |g: &&&hexe_geo::EdgeGroup| toks.iter().any(|&(k, b)| k == ' ' && is_name_or_star(b) && glob_match(b, &g.name));
+    for g in groups.iter().filter(named) {
+        valid = true;
+        g.edges.iter().for_each(|&e| run.push(e));
+    }
+    for &(k, body) in &toks {
+        match k {
+            '!' => {
+                valid = true;
+                let not = edges_of(body);
+                t.list.iter().filter(|&&e| !not.contains(&ekey(e))).for_each(|&e| run.push(e));
+            }
+            '^' if is_name(body) => run.remove(&edges_of(body)),
+            _ => {}
+        }
+    }
+    // A: the Group Create edge pattern (loose pairs kept), appended
+    for e in eval_edge_pattern_with(d, t, pat, true) {
+        run.push(e);
+    }
+    Ok((valid || !run.list.is_empty()).then_some(run.list))
+}
+fn is_name_or_star(body: &str) -> bool {
+    body == "*" || is_name(body)
 }
 /// Interpolated / copied element of every point attribute: `(a, b, t)` -> appended to the data.
 fn push_between(data: &mut AttrData, a: usize, b: usize, t: f32) {
@@ -109,13 +179,15 @@ impl Node<Detail> for EdgeDivide {
         if !(1..=MAX_DIVS).contains(&nd) {
             return Err(bad(&format!("numdivs {nd} outside 1..={MAX_DIVS}")));
         }
-        let all_on = p.toggle("applytoall").ok_or_else(|| bad("`applytoall` missing or not a toggle"))?;
+        p.toggle("applytoall").ok_or_else(|| bad("`applytoall` missing or not a toggle"))?; // no effect seen
         let shared = p.toggle("sharedpoints").ok_or_else(|| bad("`sharedpoints` missing or not a toggle"))?;
         let Some(d) = inputs.first() else { return Ok(Arc::default()) };
-        let toks = parse_edges(pat)?;
         if pat.trim().is_empty() {
             return Ok(Arc::clone(d));
         }
+        let Some(selected) = select(d, &edge_table(d), pat)? else {
+            return Err(bad(&format!("'{pat}' is not a valid group")));
+        };
         if d.groups.iter().any(|g| g.class == AttrClass::Vertex) || d.attrs.iter().any(|a| a.class == AttrClass::Vertex)
         {
             return Err(CookError::Unsupported(format!("{OP}: vertex attributes / groups are not modelled")));
@@ -130,53 +202,27 @@ impl Node<Detail> for EdgeDivide {
         let walk = |i: usize| -> Vec<(u32, u32)> {
             let (ps, closed) = (&pts[i], matches!(d.prims[i].kind, PrimKind::Poly { closed: true }));
             let n = ps.len();
-            let segs = if closed { n } else { n.saturating_sub(1) };
+            let segs = if closed && n > 2 { n } else { n.saturating_sub(1) };
             (0..segs).map(|k| (ps[k], ps[(k + 1) % n])).collect()
         };
         let key = |a: u32, b: u32| (a.min(b), a.max(b));
-        let mut present: BTreeMap<(u32, u32), ()> = BTreeMap::new();
+        // edge key -> its uses (prim, segment index, start point), prim order then walk order
+        let mut uses: BTreeMap<(u32, u32), Vec<Use>> = BTreeMap::new();
         for i in (0..d.prims.len()).filter(|&i| is_poly(i)) {
-            for (a, b) in walk(i) {
-                present.insert(key(a, b), ());
-            }
-        }
-        let mut edges: Vec<(u32, u32)> = Vec::new();
-        for &(a, b) in &toks {
-            if a != b && present.contains_key(&key(a, b)) && !edges.iter().any(|&(x, y)| key(x, y) == key(a, b)) {
-                edges.push((a, b));
-            }
-        }
-        if edges.is_empty() {
-            if !all_on {
-                return Ok(Arc::clone(d));
-            }
-            for i in (0..d.prims.len()).filter(|&i| is_poly(i)) {
-                for (a, b) in walk(i) {
-                    if a != b && !edges.iter().any(|&(x, y)| key(x, y) == key(a, b)) {
-                        edges.push((a, b));
-                    }
+            for (k, (a, b)) in walk(i).into_iter().enumerate() {
+                if a != b {
+                    uses.entry(key(a, b)).or_default().push((i, k, a));
                 }
             }
+        }
+        let seq: Vec<(u32, u32)> =
+            selected.iter().map(|&[a, b]| (a, b)).filter(|&(a, b)| uses.contains_key(&key(a, b))).collect();
+        if seq.is_empty() {
+            return Ok(Arc::clone(d));
         }
         let k_new = usize::try_from((nd - 1).max(1)).unwrap_or(1);
         let mut out = (**d).clone();
         let mut ins: Vec<BTreeMap<usize, Vec<u32>>> = vec![BTreeMap::new(); d.prims.len()];
-        // in all-edge mode points are created when the edge is first met (prim order); explicit mode: token order
-        let order: Vec<(u32, u32)> = edges;
-        let all_mode = toks.is_empty() || !order.iter().any(|&(a, b)| toks.contains(&(a, b)));
-        let mut seq: Vec<(u32, u32)> = order.clone();
-        if all_mode {
-            seq.clear();
-            for i in (0..d.prims.len()).filter(|&i| is_poly(i)) {
-                for (a, b) in walk(i) {
-                    if let Some(&e) = order.iter().find(|&&(x, y)| key(x, y) == key(a, b))
-                        && !seq.iter().any(|&(x, y)| key(x, y) == key(e.0, e.1))
-                    {
-                        seq.push(if e == (a, b) || e == (b, a) { e } else { (a, b) });
-                    }
-                }
-            }
-        }
         let make_points = |out: &mut Detail, a: u32, b: u32| -> Result<Vec<u32>, CookError> {
             let mut ids = Vec::with_capacity(k_new);
             let (au, bu) = (a as usize, b as usize);
@@ -195,18 +241,10 @@ impl Node<Detail> for EdgeDivide {
             Ok(ids)
         };
         for &(a, b) in &seq {
-            let users: Vec<(usize, usize, bool)> = (0..d.prims.len())
-                .filter(|&i| is_poly(i))
-                .flat_map(|i| {
-                    walk(i)
-                        .into_iter()
-                        .enumerate()
-                        .filter(|&(_, (x, y))| key(x, y) == key(a, b))
-                        .map(move |(k, (x, _))| (i, k, x == a))
-                })
-                .collect();
+            let users = uses.get(&key(a, b)).map(Vec::as_slice).unwrap_or_default();
             let shared_ids = if shared { Some(make_points(&mut out, a, b)?) } else { None };
-            for (i, k, fwd) in users {
+            for &(i, k, x) in users {
+                let fwd = x == a;
                 let mut ids = match &shared_ids {
                     Some(s) => s.clone(),
                     None => make_points(&mut out, a, b)?,
@@ -234,6 +272,11 @@ impl Node<Detail> for EdgeDivide {
         }
         out.vertex_point = vp;
         out.prims = prims;
+        // a divided edge no longer exists: drop it from every edge group
+        let gone: HashSet<(u32, u32)> = seq.iter().map(|&(a, b)| key(a, b)).collect();
+        for g in &mut out.edge_groups {
+            g.edges.retain(|&e| !gone.contains(&ekey(e)));
+        }
         Ok(Arc::new(out))
     }
 }
@@ -273,14 +316,22 @@ mod tests {
         assert_eq!(prim(&two, 2), [3, 12, 4, 7, 6]);
         assert_eq!(ed(&[("group", s("p0-1"))]).point_count, 10);
     }
+    /// hython: `*` = every edge in mesh order; empty group / a pair that is no mesh edge = passthrough; a token naming no
+    /// existing point is "not a valid group" (`applytoall` changes nothing).
     #[test]
     fn all_edges_and_passthrough() {
-        let all = ed(&[("group", s("p90-91"))]);
+        let all = ed(&[("group", s("*"))]);
         assert_eq!(all.point_count, 25);
         assert_eq!(prim(&all, 0), [0, 9, 1, 10, 4, 12, 3, 14]);
         assert_eq!(prim(&all, 1), [1, 15, 2, 16, 5, 17, 4, 11]);
         assert_eq!(*ed(&[]), *g3());
-        assert_eq!(*ed(&[("group", s("p90-91")), ("applytoall", ParamValue::B(false))]), *g3());
+        assert_eq!(*ed(&[("group", s("p0-4"))]), *g3());
+        let r = |ov: &[(&str, ParamValue)]| run("edgedivide", ov, Some(&g3()));
+        assert!(matches!(r(&[("group", s("p90-91"))]), Err(CookError::BadParam(_))));
+        assert!(matches!(
+            r(&[("group", s("p90-91")), ("applytoall", ParamValue::B(false))]),
+            Err(CookError::BadParam(_))
+        ));
     }
     #[test]
     fn attributes_interpolate_ints_copy() {
@@ -300,7 +351,7 @@ mod tests {
     #[test]
     fn hostile_params() {
         let r = |ov: &[(&str, ParamValue)]| run("edgedivide", ov, Some(&g3()));
-        assert!(r(&[("group", s("0-3"))]).is_err());
+        assert!(r(&[("group", s("0-3"))]).is_ok_and(|o| o.point_count == 25), "prims 0-3 = every edge");
         assert!(r(&[("group", s("e1"))]).is_err());
         assert!(r(&[("numdivs", ParamValue::I(0))]).is_err());
         assert!(r(&[("numdivs", ParamValue::I(100000))]).is_err());
@@ -335,5 +386,133 @@ mod tests {
             super::super::meshutil::testkit::houdini_twin(scene, geo).expect("hexe == Houdini");
             super::super::meshutil::testkit::houdini_values(scene, geo, 1e-4).expect("values == Houdini");
         }
+    }
+
+    // ---- `group` syntax vs Houdini 20.5 (fixtures/sop-edgedivide-groups, made by
+    // oracle/houdini/edgedivide/sop_edgedivide_groups.py from synthetic grid / box / open box + Group Create groups) ----
+    fn fx(file: &str) -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sop-edgedivide-groups").join(file)
+    }
+    fn load(file: &str) -> Arc<Detail> {
+        Arc::new(hexe_geo::read_geo(&std::fs::read(fx(file)).expect("fixture")).expect("parses"))
+    }
+    /// Every hython case: same error-or-not, point count, prim point lists (exact), new point positions (1e-5) and output
+    /// edge groups (ordered). Patterns hexe declines (`Unsupported`) must not be in the fixture.
+    #[test]
+    fn group_syntax_matches_houdini() {
+        let text = std::fs::read_to_string(fx("cases.json")).expect("cases.json");
+        let cases: Vec<serde_json::Value> = serde_json::from_str(&text).expect("json");
+        assert!(cases.len() > 120, "{}", cases.len());
+        let mut inputs: std::collections::HashMap<String, Arc<Detail>> = std::collections::HashMap::new();
+        let mut fails = Vec::new();
+        for c in &cases {
+            let src = c["input"].as_str().expect("input").to_string();
+            let d = Arc::clone(inputs.entry(src.clone()).or_insert_with(|| load(&format!("{src}_in.geo"))));
+            let pat = c["group"].as_str().expect("group");
+            let nd = i32::try_from(c["numdivs"].as_i64().expect("numdivs")).expect("i32");
+            let sh = c["sharedpoints"].as_bool().expect("sharedpoints");
+            let ov = [("group", s(pat)), ("numdivs", ParamValue::I(nd)), ("sharedpoints", ParamValue::B(sh))];
+            let tag = format!("{src} {pat:?} numdivs {nd} shared {sh}");
+            let got = run("edgedivide", &ov, Some(&d));
+            if c["error"].as_bool() == Some(true) {
+                if !matches!(got, Err(CookError::BadParam(_))) {
+                    fails.push(format!("{tag}: Houdini errors, hexe {:?}", got.map(|o| o.point_count)));
+                }
+                continue;
+            }
+            let o = match got {
+                Ok(o) => o,
+                Err(e) => {
+                    fails.push(format!("{tag}: hexe error {e:?}"));
+                    continue;
+                }
+            };
+            let prims: Vec<Vec<u32>> = (0..o.prims.len()).map(|i| prim(&o, i)).collect();
+            let want_prims: Vec<Vec<u32>> = serde_json::from_value(c["prims"].clone()).expect("prims");
+            let want_n = u32::try_from(c["points"].as_u64().expect("points")).expect("u32");
+            if o.point_count != want_n || prims != want_prims {
+                fails.push(format!("{tag}: hexe {} {prims:?} != houdini {want_n} {want_prims:?}", o.point_count));
+                continue;
+            }
+            let want_p: Vec<[f32; 3]> = serde_json::from_value(c["new_P"].clone()).expect("new_P");
+            let got_p = &o.p()[d.point_count as usize..];
+            let close = got_p.len() == want_p.len()
+                && got_p.iter().zip(&want_p).all(|(a, b)| (0..3).all(|k| (a[k] - b[k]).abs() <= 1e-5));
+            if !close {
+                fails.push(format!("{tag}: new P {got_p:?} != {want_p:?}"));
+            }
+            let want_eg: std::collections::BTreeMap<String, Vec<[u32; 2]>> =
+                serde_json::from_value(c["edge_groups"].clone()).expect("edge_groups");
+            let got_eg: std::collections::BTreeMap<String, Vec<[u32; 2]>> =
+                o.edge_groups.iter().map(|g| (g.name.clone(), g.edges.clone())).collect();
+            if got_eg != want_eg {
+                fails.push(format!("{tag}: edge groups {got_eg:?} != {want_eg:?}"));
+            }
+        }
+        assert!(fails.is_empty(), "{} of {} cases differ:\n{}", fails.len(), cases.len(), fails.join("\n"));
+    }
+    /// Hostile / unmodelled group strings: an error or a result, never a panic; unpinned mixes are `Unsupported`.
+    #[test]
+    fn hostile_group_strings_never_panic() {
+        let g = load("grid3_in.geo");
+        let pats = [
+            "p",
+            "p-",
+            "p--",
+            "p0-",
+            "p99999999999999999999",
+            "p4294967295-0",
+            "p0-4294967295",
+            "0e",
+            "e0",
+            "0e99999999999999999999",
+            "0v",
+            "99999999999999999999",
+            "0-99999999999999999999",
+            "!",
+            "^",
+            "!!0",
+            "^^0",
+            "!^mid",
+            "^!mid",
+            "*v*",
+            "**",
+            "***?",
+            "\u{0}",
+            "p0-1-2-5-4-3-0-1-2",
+            ":",
+            "-",
+            "0--1",
+            "@P.x>0",
+            "@",
+            "mid ^",
+            "! ^ *",
+            "[mid]",
+            "m\u{301}id",
+            "é ^é !é",
+            "p1-4 p1-4 p4-1",
+        ];
+        for pat in pats {
+            for sh in [false, true] {
+                let ov = [("group", s(pat)), ("sharedpoints", ParamValue::B(sh)), ("numdivs", ParamValue::I(20))];
+                let _ = run("edgedivide", &ov, Some(&g));
+            }
+        }
+        for pat in ["* ^mid", "!* *", "^*", "!mid zeta", "mid ^zeta alpha"] {
+            assert!(
+                matches!(run("edgedivide", &[("group", s(pat))], Some(&g)), Err(CookError::Unsupported(_))),
+                "{pat}"
+            );
+        }
+        // edge groups naming points / prims that do not exist, a prim range past the vertex list: no panic
+        let mut broken = (*g).clone();
+        broken.set_edge_group("bad", [[0, 4_000_000_000], [7, 7], [u32::MAX, 0]]);
+        let broken = Arc::new(broken);
+        for pat in ["bad", "!bad", "bad p1-4", "*"] {
+            let _ = run("edgedivide", &[("group", s(pat))], Some(&broken));
+        }
+        let mut cut = (*g).clone();
+        cut.vertex_point.truncate(5);
+        let _ = run("edgedivide", &[("group", s("*"))], Some(&Arc::new(cut)));
     }
 }

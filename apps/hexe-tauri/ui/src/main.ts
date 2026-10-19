@@ -16,6 +16,8 @@ import { openFileDialog } from "./filewin";
 import { baseName, FILTERS, matchesFilter } from "./filedlg";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { type Nav, navBack, navForward, navStart, navVisit } from "./navhist";
+import { frameScheduler } from "./frame";
+import { Player } from "./play";
 import "./shell";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -579,26 +581,40 @@ $<HTMLInputElement>("fitx").addEventListener("change", (e) => { viewport.setFitE
     othersCache.clear(); // other objects may be time-dependent
     await recook();
   };
-  frameSlider.addEventListener("input", () => void scrub(frameSlider.value));
-  frameBox.addEventListener("change", () => void scrub(frameBox.value));
-  for (const r of [fStart, fEnd]) r.addEventListener("change", () => { drawTicks(); showFrame(Number(frameBox.value), rate); });
-  // transport: play loops over the range at the timeline rate (a frame never starts before the previous cook finished)
-  let playing = false;
-  const stop = () => { playing = false; $("tplay").classList.remove("on"); };
-  const play = async () => {
-    if (playing) return;
-    playing = true;
-    $("tplay").classList.add("on");
-    while (playing) {
-      const t0 = performance.now();
+  // transport: Play advances `$F` at the timeline fps against the wall clock (upstream Player: a cook slower than 1/fps
+  // drops frames instead of slowing the clip) and loops over the start..end range; the frame scheduler is rAF with a
+  // timer fallback, so playback also runs in an occluded window. Touching the slider / box / step buttons stops it.
+  const player = new Player();
+  let playBusy = false;
+  const playTick = frameScheduler(() => void (async () => {
+    if (!player.running) return;
+    const [a, b] = range();
+    let want = player.frameAt(performance.now());
+    if (want > b || want < a) { player.start(a, performance.now(), rate); want = a; }
+    if (want !== Number(frameBox.value) && !playBusy) {
+      playBusy = true;
+      try { await scrub(String(want)); } finally { playBusy = false; }
+    }
+    if (player.running) playTick();
+  })());
+  const setPlaying = async (on: boolean) => {
+    if (on === player.running) return;
+    if (on) {
       const [a, b] = range();
       const f = Number(frameBox.value);
-      await scrub(String(f >= b || f < a ? a : f + 1));
-      const wait = 1000 / Math.max(1, rate) - (performance.now() - t0);
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      player.start(f >= b || f < a ? a : f, performance.now(), rate);
+      $("tplay").classList.add("on");
+      playTick();
+    } else {
+      player.stop();
+      $("tplay").classList.remove("on");
     }
   };
-  $("tplay").addEventListener("click", () => void play());
+  const stop = () => void setPlaying(false);
+  frameSlider.addEventListener("input", () => { stop(); void scrub(frameSlider.value); });
+  frameBox.addEventListener("change", () => { stop(); void scrub(frameBox.value); });
+  for (const r of [fStart, fEnd]) r.addEventListener("change", () => { drawTicks(); showFrame(Number(frameBox.value), rate); });
+  $("tplay").addEventListener("click", () => void setPlaying(!player.running));
   $("tstop").addEventListener("click", stop);
   $("tstart").addEventListener("click", () => { stop(); void scrub(String(range()[0])); });
   $("tend").addEventListener("click", () => { stop(); void scrub(String(range()[1])); });
@@ -608,7 +624,7 @@ $<HTMLInputElement>("fitx").addEventListener("change", (e) => { viewport.setFitE
   // a fresh session starts at /obj (Houdini), an opened scene inside its object
   if (start) { path.value = start; await open(); } else { net.level = "obj"; await refresh(); showParams(); }
   // proof / test door (read by the T1 proof script): drive the real param pane through the DOM
-    (window as unknown as Record<string, unknown>).__hexe = { net, select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, setFrame: scrub, open: async (p: string) => { path.value = p; await open(); } };
+    (window as unknown as Record<string, unknown>).__hexe = { net, select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, setFrame: scrub, play: setPlaying, open: async (p: string) => { path.value = p; await open(); } };
     const job = await api.renderRequest();
     if (job) await headlessRender(job);
 }

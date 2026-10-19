@@ -61,8 +61,8 @@ area = "B"
 tier = "P0"
 status = "shipped"
 commands = []
-evidence = ["crates/geo/src/tests.rs::groups_roundtrip_and_boolrle"]
-notes = "boolRLE (value,count)-pair vs alternating-run semantics UNVERIFIED: reader accepts both, writer emits pairs. Group order of 'ordered' groups is dropped (mask only)."
+evidence = ["crates/geo/src/tests.rs::groups_roundtrip_and_boolrle", "crates/geo/src/tests.rs::per_element_flag_groups"]
+notes = "Per-element selections [\"unordered\",[\"i8\"|\"i16\"|\"i32\"|\"i64\",[...]]] (what hython saveToFile writes for small groups) are read; length mismatch = error. boolRLE (value,count)-pair vs alternating-run semantics UNVERIFIED: reader accepts both, writer emits pairs. Group order of 'ordered' groups is dropped (mask only)."
 
 [[feature]]
 id = "graph-cook-lazy"
@@ -118,14 +118,15 @@ evidence = [
   "crates/sop/src/builtins/box_sop.rs::default_box_is_8_points_6_quads_p_only",
   "crates/sop/src/builtins/box_sop.rs::size_center_scale_move_p_only",
   "crates/sop/src/builtins/box_sop.rs::closed_manifold_outward_winding",
-  "crates/sop/src/builtins/box_sop.rs::divisions_match_closed_form_and_independent_builder",
   "crates/sop/src/builtins/box_sop.rs::unconsolidated_faces_own_their_points",
   "crates/sop/src/builtins/box_sop.rs::hostile_params_are_errors",
-  "crates/sop/src/builtins/box_sop.rs::non_poly_types_are_unsupported_in_wave_2",
-  "crates/sop/src/builtins/box_sop.rs::fixture_box_default_matches_analytical_expected",
-  "crates/sop/src/builtins/box_sop.rs::fixture_box_divs222_matches_analytical_expected",
+  "crates/sop/src/builtins/box_sop.rs::houdini_cases_match_exactly",
+  "crates/sop/src/builtins/box_sop.rs::spec_menus_follow_houdini_item_order",
+  "crates/sop/src/builtins/box_sop.rs::default_box_matches_houdini_fixture_order",
+  "crates/sop/src/builtins/box_sop.rs::fixture_box_divs222_matches_houdini",
+  "crates/sop/src/builtins/box_sop.rs::unrepresentable_types_name_the_type",
 ]
-notes = "wave 2: type=poly only (other menu values -> BadParam 'unsupported in wave 2'); params type consolidatepts size t scale divrate dodivs divs. EXCLUDED: surftype r orderrate rebar orientedbbox vertexnormals, input-0 bbox mode (generator only). divrate validated (min 1, cap) but inert for poly (mesh types only). divs = points per axis (<2 treated as 2). Oracle cases box-default, box-divs222 (analytical, not Houdini-observed; hython blocked). UNVERIFIED vs Houdini: point/prim order (here x-major z-fastest low->high, faces -x+x-y+y-z+z), winding, consolidatepts-off with divs, divs=1, negative size, scale-about-centre (t unscaled), attr list (P only). H31: DEFAULT box point/prim order now equals real Houdini 20.5 (fixtures/sop-box/houdini.geo, pinned by box_sop.rs::default_box_matches_houdini_fixture_order; supersedes every order claim above); H32: hexe emits Houdini's clockwise cells verbatim (prim0 [1,5,4,0]) -> cycles equal; dodivs/divs semantics differ from Houdini (it uses segment counts + interior points), divisions order UNVERIFIED. Houdini-oracle (H32, real Houdini 20.5): MATCH, see docs/HOUDINI-ORACLE.md."
+notes = "2026-10-19 (supersedes the wave-2 / dodivs / UNVERIFIED claims below): type menu = Houdini 20.5 item order (poly polymesh mesh nurbs bezier points prim); poly, polymesh (quads, consolidated), points and `r` rotation exact vs 14 hython cases (fixtures/sop-box-polymesh from oracle/houdini/box/sop_box_types.py); poly + dodivs = Houdini's segment lattice of open polylines (box-divs222 re-recorded: 64 pts / 48 lines). mesh / nurbs / bezier / prim, non-quad surftype, rebar, vertexnormals -> BadParam naming the type. Older notes: wave 2: type=poly only (other menu values -> BadParam 'unsupported in wave 2'); params type consolidatepts size t scale divrate dodivs divs. EXCLUDED: surftype r orderrate rebar orientedbbox vertexnormals, input-0 bbox mode (generator only). divrate validated (min 1, cap) but inert for poly (mesh types only). divs = points per axis (<2 treated as 2). Oracle cases box-default, box-divs222 (analytical, not Houdini-observed; hython blocked). UNVERIFIED vs Houdini: point/prim order (here x-major z-fastest low->high, faces -x+x-y+y-z+z), winding, consolidatepts-off with divs, divs=1, negative size, scale-about-centre (t unscaled), attr list (P only). H31: DEFAULT box point/prim order now equals real Houdini 20.5 (fixtures/sop-box/houdini.geo, pinned by box_sop.rs::default_box_matches_houdini_fixture_order; supersedes every order claim above); H32: hexe emits Houdini's clockwise cells verbatim (prim0 [1,5,4,0]) -> cycles equal; dodivs/divs semantics differ from Houdini (it uses segment counts + interior points), divisions order UNVERIFIED. Houdini-oracle (H32, real Houdini 20.5): MATCH, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-grid"
@@ -163,8 +164,8 @@ area = "A"
 tier = "P0"
 status = "shipped"
 commands = ["sphere"]
-evidence = ["crates/sop/src/builtins/sphere_sop.rs::default_is_one_point_one_sphere_prim", "crates/sop/src/builtins/sphere_sop.rs::poly_counts_are_10f2_plus_2_and_20f2", "crates/sop/src/builtins/sphere_sop.rs::poly_is_closed_outward_unit_sphere", "crates/sop/src/builtins/sphere_sop.rs::polymesh_default_closed_form_counts", "crates/sop/src/builtins/sphere_sop.rs::hostile_params_are_errors_not_panics", "crates/sop/src/builtins/sphere_sop.rs::fixtures_match_sop_output_and_independent_expected"]
-notes = "types prim/poly/polymesh only (mesh/nurbs/bezier/polysoup = BadParam; polymesh surftype quads only). Skipped params: orderu/orderv/imperfect (NURBS), accurate (no input). ALL UNVERIFIED vs Houdini (hython blocked, analytical fixtures): polymesh counts (R-2)C+2 pts / (R-1)C prims (tri poles), point order (rings top-down, then top pole, bottom pole), ring angle start/direction, poly icosahedron orientation + point/tri order, orient permutation, rotate order Rx,Ry,Rz, scale on rad only, Sphere xform row/col convention, upole/triangularpoles semantics, freq cap 100 (UI max 10), no N/uv attrs H31: polymesh order now equals real Houdini 20.5 (poles points 0/1 first, ring +X toward -Z; supersedes the order claims above); H32: Houdini cells emitted verbatim (clockwise), cycles equal. Houdini-oracle (H32, real Houdini 20.5): MATCH, see docs/HOUDINI-ORACLE.md."
+evidence = ["crates/sop/src/builtins/sphere_sop.rs::default_is_one_point_one_sphere_prim", "crates/sop/src/builtins/sphere_sop.rs::poly_counts_are_10f2_plus_2_and_20f2", "crates/sop/src/builtins/sphere_sop.rs::poly_is_closed_outward_unit_sphere", "crates/sop/src/builtins/sphere_sop.rs::polymesh_default_closed_form_counts", "crates/sop/src/builtins/sphere_sop.rs::hostile_params_are_errors_not_panics", "crates/sop/src/builtins/sphere_sop.rs::fixtures_match_sop_output_and_independent_expected", "crates/sop/src/builtins/sphere_sop.rs::poly_freq_above_100_matches_houdini", "crates/sop/src/builtins/sphere_sop.rs::poly_orient_matches_houdini", "crates/sop/src/builtins/sphere_sop.rs::poly_transform_matches_houdini", "crates/sop/src/builtins/sphere_sop.rs::poly_f1_is_houdinis_icosahedron", "crates/sop/src/builtins/sphere_sop.rs::poly_freq_budget_is_an_error_not_a_hang"]
+notes = "2026-10-19: poly type rebuilt to Houdini 20.5 point / prim order and positions (icosahedron vertex 0 at -Z, faces apex-first, slerp-weighted interior; hython-verified f=1,2,5,101, orient X/Y/Z, xform; oracle/houdini/parmgaps/sphere_poly_ref.py); freq unbounded like Houdini, work budget 10f^2+2 <= 4M points (supersedes the poly-order and freq-cap-100 claims below). types prim/poly/polymesh only (mesh/nurbs/bezier/polysoup = BadParam; polymesh surftype quads only). Skipped params: orderu/orderv/imperfect (NURBS), accurate (no input). ALL UNVERIFIED vs Houdini (hython blocked, analytical fixtures): polymesh counts (R-2)C+2 pts / (R-1)C prims (tri poles), point order (rings top-down, then top pole, bottom pole), ring angle start/direction, poly icosahedron orientation + point/tri order, orient permutation, rotate order Rx,Ry,Rz, scale on rad only, Sphere xform row/col convention, upole/triangularpoles semantics, freq cap 100 (UI max 10), no N/uv attrs H31: polymesh order now equals real Houdini 20.5 (poles points 0/1 first, ring +X toward -Z; supersedes the order claims above); H32: Houdini cells emitted verbatim (clockwise), cycles equal. Houdini-oracle (H32, real Houdini 20.5): MATCH, see docs/HOUDINI-ORACLE.md."
 
 [[feature]]
 id = "sop-transform"
@@ -748,7 +749,7 @@ evidence = [
   "crates/sop/src/builtins/group_sop.rs::box_normal_dir_y_angle_10_is_top_only_and_angle_90_is_all_but_bottom",
   "crates/sop/src/builtins/group_sop.rs::merge_ops_against_existing_group",
   "crates/sop/src/builtins/group_sop.rs::pattern_refers_to_existing_groups_and_unknown_fails",
-  "crates/sop/src/builtins/group_sop.rs::vertex_group_edge_unsupported_and_hostile_params",
+  "crates/sop/src/builtins/group_sop.rs::vertex_group_and_hostile_params",
 ]
 notes = "H16: point/prim/vertex groups (edge = Unsupported); pattern ranges/*/!/group names/globs; bbox (inclusive faces); normal (Newell, points = averaged unit prim normals, angle boundary INCLUSIVE so 90 keeps perpendicular sides); merge_op replace|union|intersect|subtract. Empty pattern with no filter = all elements. Defaults grouptype=prim, dir=(0,1,0), angle=45, bbox_size=1 are guesses. NOT modelled: edge groups, prim:vertex syntax, include-by-edges, base-group-vs-pattern split, unshared/convex options. UNVERIFIED vs Houdini (hython blocked); analytical oracle only. Example: examples/group-blast.json. Houdini-oracle (H32, real Houdini 20.5): MATCH, see docs/HOUDINI-ORACLE.md."
 
@@ -1601,8 +1602,11 @@ evidence = [
   "crates/sop/src/builtins/groupcreate_sop.rs::bounding_box_matches_hython",
   "crates/sop/src/builtins/groupcreate_sop.rs::normals_match_hython",
   "crates/sop/src/builtins/groupcreate_sop.rs::names_and_unsupported_and_hostile",
+  "crates/sop/src/builtins/groupcreate_sop.rs::edge_vertex_and_bsphere_cases_match_houdini",
+  "crates/sop/src/builtins/groupcreate_sop.rs::edge_and_vertex_group_files_match_houdini",
+  "crates/sop/src/builtins/groupcreate_sop.rs::edge_and_vertex_hostile_input_never_panics",
 ]
-notes = "H38c: prim + point groups; basegroup pattern grammar probed in hython 20.5 (ids, N-M incl. reversed, :step, names+globs, ! = unioned complement, ^ = subtract, unknown names empty); bbox (inclusive, wholly vs includenotwhollycontained, negative size empty); normals (angle inclusive, oppositenormals, zero dir empty); mergeop x4. Houdini-oracle (real 20.5, membership proven through blast): sop-groupcreate-bbox|pattern|normal|pointnormal MATCH. NOT modelled (Unsupported): edge + vertex groups, boundtype sphere/object/volume/hull; ignored: geotype, ordered, edge-angle/length, random, camerapath, nonplanar; no `,` increments, no [..] globs. The legacy `group` SOP keeps its own (differing: `!` subtracts) semantics."
+notes = "2026-10-19: edge + vertex group types (patterns incl. Houdini's whole-pattern-empties quirks, bbox / bsphere, edge normals = normalised sum of point normals, merge ops, ordered edge lists) and boundtype sphere for all classes match Houdini 20.5 on 388 synthetic cases (fixtures/sop-groupcreate-edgevtx from oracle/houdini/parmgaps/groupcreate_edge_vertex.py); supersedes the edge/vertex/sphere Unsupported claims below; boundtype object/volume/hull still Unsupported. H38c: prim + point groups; basegroup pattern grammar probed in hython 20.5 (ids, N-M incl. reversed, :step, names+globs, ! = unioned complement, ^ = subtract, unknown names empty); bbox (inclusive, wholly vs includenotwhollycontained, negative size empty); normals (angle inclusive, oppositenormals, zero dir empty); mergeop x4. Houdini-oracle (real 20.5, membership proven through blast): sop-groupcreate-bbox|pattern|normal|pointnormal MATCH. NOT modelled (Unsupported): edge + vertex groups, boundtype sphere/object/volume/hull; ignored: geotype, ordered, edge-angle/length, random, camerapath, nonplanar; no `,` increments, no [..] globs. The legacy `group` SOP keeps its own (differing: `!` subtracts) semantics."
 
 [[feature]]
 id = "sop-groupcombine"
@@ -1763,8 +1767,10 @@ evidence = [
   "crates/sop/src/builtins/edgedivide_sop.rs::attributes_interpolate_ints_copy",
   "crates/sop/src/builtins/edgedivide_sop.rs::hostile_params",
   "crates/sop/src/builtins/edgedivide_sop.rs::edgedivide_matches_hython",
+  "crates/sop/src/builtins/edgedivide_sop.rs::group_syntax_matches_houdini",
+  "crates/sop/src/builtins/edgedivide_sop.rs::hostile_group_strings_never_panic",
 ]
-notes = "H39: insert max(numdivs-1,1) points on polygon edges given as pA-B tokens (token order = direction); per-prim copies in direction order unless sharedpoints; floats interpolated, ints copied from edge start; applytoall + empty selection = every edge (pinned from hython probe with an empty edge group; literal nonexistent token errors in Houdini, so no twin row). Houdini-oracle (real 20.5): sop-edgedivide + -rev3 + -shared + -two + -bound MATCH incl. attribute values. NOT modelled: edge-group names/output, connectpoints, closepath, vertex attrs (Unsupported)."
+notes = "2026-10-19 (supersedes the applytoall + edge-group claims below): group = Houdini 20.5 edge-group syntax (named edge groups sorted by name first, then the Group Create edge pattern: NeM, pA-B-C, pA, prim groups, !, ^; lone * = every edge; 'not a valid group' errors); applytoall has NO effect and an empty selection passes through (re-probed: empty edge group -> 9 of 9 grid points with applytoall 0 and 1); divided edges leave output edge groups; 133 hython cases (fixtures/sop-edgedivide-groups from oracle/houdini/edgedivide/sop_edgedivide_groups.py); some * / ! / ^-with-name mixes Unsupported. H39: insert max(numdivs-1,1) points on polygon edges given as pA-B tokens (token order = direction); per-prim copies in direction order unless sharedpoints; floats interpolated, ints copied from edge start; applytoall + empty selection = every edge (pinned from hython probe with an empty edge group; literal nonexistent token errors in Houdini, so no twin row). Houdini-oracle (real 20.5): sop-edgedivide + -rev3 + -shared + -two + -bound MATCH incl. attribute values. NOT modelled: edge-group names/output, connectpoints, closepath, vertex attrs (Unsupported)."
 
 [[feature]]
 id = "io.endorphin-read"
@@ -1922,3 +1928,100 @@ evidence = [
   "crates/sop/src/hip_expr.rs::reference_cycles_stop_with_a_note",
 ]
 notes = "Saved .parm values of expression parms are stale, so import evaluates the .chn expression at the saved frame. HScript rules checked with hou.hscriptExpression (20.5.522): left-assoc ^, trig in degrees, no ?:, round = floor(x+.5), smooth/fit/acos edge cases, string + concatenates, /0 and %0 -> 0, trailing backslash = continuation (oracle/houdini/hscript_continuation.py); ch() of a menu = item index, ramp interp tokens 0..6. Compare tool: oracle/houdini/hip_exprs.py vs `hexe open --exprs`. GAPS: geometry queries (detail/point/$N/$CEX ...), node-local vars, opinputpath, python channels, keyframe functions, `{}` blocks -> kept saved value with an import note."
+
+[[feature]]
+id = "sop-endosim"
+title = "EndoSim SOP [hexe-native]: passive-ragdoll physics of an Endorphin scene, scrubbed by $F (no Houdini counterpart)"
+area = "A"
+tier = "N/A"
+status = "partial"
+commands = ["endosim"]
+evidence = [
+  "crates/endo-sim/src/tests.rs::mini_scene_falls_onto_the_ground_and_stays_finite",
+  "crates/endo-sim/src/tests.rs::balcony_standing_characters_fall_monotonically_without_nan",
+  "crates/sop/src/builtins/endosim_sop.rs::tests::frame_scrubs_the_simulation",
+]
+notes = "h44, hexe-native (tag): no Houdini oracle. Crate endo-sim = rapier3d 0.35 f32: one dynamic body per MetaBody (Sphyl/Sphere/Cylinder/Cuboid, File/Mesh -> bbox capsule), spherical joints with hard (else soft) limits centred on the posed start configuration (twist about joint X), fixed joints where no limits, environment + default ground static, same-character collisions off. endosim SOP: input = file SOP on a .ens (found via detail attr endo_file), param frame 0 = follow timeline $F (frame F = F-1 steps of 1/fps), poses cached per frame (scrub back = replay). PASSIVE RAGDOLL ONLY: behaviours / balance / catch-fall muscles / drives are NOT simulated. UNVERIFIED vs the real Endorphin engine (rapier is not NaturalMotion's solver; limits are half-ranges about the start pose)."
+
+[[feature]]
+id = "sop-copyxform"
+title = "Copy and Transform SOP (`copyxform`): ncy copies with per-copy t*i / r*i / s^i / shear*i / scale^i about a pivot (+pivot rotate), source group, copy-number attribute, output groups"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["copyxform"]
+evidence = [
+  "crates/sop/src/builtins/copyxform_sop.rs::recorded_cases_match_houdini_exactly",
+  "crates/sop/src/builtins/copyxform_sop.rs::copy_i_uses_parms_scaled_by_i_not_matrix_power",
+  "crates/sop/src/builtins/copyxform_sop.rs::typed_attributes_transform_by_type_info",
+  "crates/sop/src/builtins/copyxform_sop.rs::source_groups_prims_points_and_unknown",
+  "crates/sop/src/builtins/copyxform_sop.rs::copy_number_attribute_and_groups",
+  "crates/sop/src/builtins/copyxform_sop.rs::hostile_inputs_never_panic",
+]
+notes = "Matches Houdini 20.5 on 3 synthetic hython cases (fixtures/sop-copyxform from oracle/houdini/copyxform/sop_copyxform_cases.py): copy 0 = input untouched, copy i = one matrix from t*i, r*i, s^i, shear*i, scale^i (not the copy-1 matrix to the i), pivot rotate always xyz; typed point/vector/normal/quaternion attrs transform by type info, untyped left alone. GAPS: pack=1 Unsupported (no packed payload in hexe-geo; pivot / viewportlod pack-only); copying sphere/tube/volume/packed prims Unsupported; edge-group copies unverified. The geo reader ignores the `unordered` i8 group-selection encoding (the test decodes it itself; needs its own row)."
+[[feature]]
+id = "sop-attribadjust"
+title = "Attribute Adjust Float / Integer / Color SOPs (`attribadjustfloat`, `attribadjustinteger`, `attribadjustcolor`)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["attribadjustfloat", "attribadjustinteger", "attribadjustcolor"]
+evidence = [
+  "crates/sop/src/builtins/attribadjust_sop.rs::float_cases_match_houdini",
+  "crates/sop/src/builtins/attribadjust_sop.rs::integer_cases_match_houdini",
+  "crates/sop/src/builtins/attribadjust_sop.rs::color_cases_match_houdini",
+  "crates/sop/src/builtins/attribadjust_sop.rs::vex_rand_matches_recorded_values",
+  "crates/sop/src/builtins/attribadjust_sop.rs::hsv_matches_vex_probe",
+  "crates/sop/src/builtins/attribadjust_sop.rs::hostile_inputs_never_panic",
+  "crates/sop/src/builtins/attribadjust_sop.rs::specs_declare_every_houdini_parm",
+  "crates/sop/src/builtins/attribadjust_sop.rs::hostile_tuple_ignored_and_outlier_parms",
+  "crates/sop/src/hip_import.rs::empty_tuple_is_no_value",
+]
+notes = "90 synthetic hython cases match incl. the outlier attribute; specs declare every Houdini parm tuple (pinned against parms.json; .hip saves tuple names) (fixtures/sop-attribadjust from oracle/houdini/attribadjust/sop_attribadjust_cases.py): constant / attribute / random (VEX rand + random_fhash bit-exact) / line / radial / bbox / remap-attribute patterns, all range methods, remap ramp (constant / linear keys), outliers, stepping, specific values, every operation, blend (float / int), clamp, color correction + HSV round trip. Unsupported -> error: noise, cmap, unit conversion, float SOP on vector attribs, list values, spline ramp bases, color blend / specific values / min-max with non-random patterns, attribute-driven color correction, spatial patterns on prim / detail class."
+[[feature]]
+id = "sop-enumerate"
+title = "Enumerate SOP (`enumerate`): index points / prims / vertices, by element or piece attribute, int or prefixed string"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["enumerate"]
+evidence = [
+  "crates/sop/src/builtins/enumerate_sop.rs::recorded_cases_match_houdini_exactly",
+  "crates/sop/src/builtins/enumerate_sop.rs::probe_table_matches_houdini",
+  "crates/sop/src/builtins/enumerate_sop.rs::natural_order_and_existing_attributes",
+  "crates/sop/src/builtins/enumerate_sop.rs::hostile_inputs_never_panic",
+]
+notes = "19 synthetic hython cases exact (fixtures/sop-enumerate from oracle/houdini/enumerate/sop_enumerate_cases.py). Elements mode = per-piece counters; pieces mode = rank of the piece value (ints numeric, strings natural order with signed-char bytes); float pieces truncated; unselected -> -1 / \"\"; existing numeric attribs converted to int. GAPS: numeric vertex-group patterns and @attr group expressions -> Unsupported."
+
+[[feature]]
+id = "sop-orientalongcurve"
+title = "Orient Along Curve SOP (`orientalongcurve`): per-point / per-vertex frames along poly curves (tangent + up types, roll / twist, stretch, all outputs)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["orientalongcurve"]
+evidence = [
+  "crates/sop/src/builtins/orientalongcurve_sop.rs::recorded_cases_match_houdini",
+  "crates/sop/src/builtins/orientalongcurve_sop.rs::straight_segment_and_arbitrary_perp_match_the_probes",
+  "crates/sop/src/builtins/orientalongcurve_sop.rs::hostile_inputs_never_panic",
+]
+notes = "28 synthetic hython cases within 1e-5 (fixtures/sop-orientalongcurve from oracle/houdini/orientalongcurve/sop_orientalongcurve_cases.py): all 5 tangent types + extrapolation, up from normal / axis / attribute / custom with start / average / end up, continuous closed, roll per edge / distance / full / attribute + full twists, Euler order quirk (step k uses angle k about rOrd[k]), stretch-around-turns scale, every output in point and vertex class. Structure follows the HDK SOP_OrientAlongCurve sample, corrected to the shipped node's recordings. GAPS: adjustupcurvature, transformbyattribs with instance attribs, non-poly prims -> Unsupported; average-up sign when up lies in a planar curve's plane is unverified (rounding-noise decided)."
+[[feature]]
+id = "sop-remesh"
+title = "Remesh SOP (`remesh`, remesh::2.0): isotropic triangle remesh (split / collapse / flip / relax + projection), hard edges, groups, adaptive sizing"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["remesh"]
+evidence = [
+  "crates/sop/src/builtins/remesh_sop.rs::uniform_cases_track_recorded_houdini_stats",
+  "crates/sop/src/builtins/remesh_sop.rs::zero_iterations_and_input_points_only_are_the_triangulation",
+  "crates/sop/src/builtins/remesh_sop.rs::hard_edges_split_like_houdini_and_are_reported",
+  "crates/sop/src/builtins/remesh_sop.rs::adaptive_sphere_tracks_houdini_roughly",
+  "crates/sop/src/builtins/remesh_sop.rs::attributes_groups_and_outputs_follow",
+  "crates/sop/src/builtins/remesh_sop.rs::group_limits_the_remesh_and_detach_splits_points",
+  "crates/sop/src/builtins/remesh_sop.rs::hard_points_never_move",
+  "crates/sop/src/builtins/remesh_sop.rs::hostile_params_are_errors",
+  "crates/sop/src/builtins/remesh_sop.rs::hostile_geometry_never_panics",
+]
+notes = "STATISTICAL parity vs Houdini 20.5 on synthetic inputs (fixtures/sop-remesh/stats.json from oracle/houdini/remesh/sop_remesh_cases.py): triangulation-only cases exact; most uniform cases within ~5% triangles / edge mean; boundary / hard edges / UV seams split-only (power-of-two pattern and hard-edges group count exact); outputs all triangles, manifold, within 3e-7 of the input. GAPS: 2-iteration coarse grid +15% tris, box +12% (edges rounded more); adaptive sizing is a curvature heuristic (sphere ok, box poor); smoothing ignored (Houdini identical at 0 / .1); group fields take names only; point / edge order not Houdini's."

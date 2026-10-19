@@ -118,7 +118,7 @@
   }
  },
  {
-  "case": "sphere4_t02",
+  "case": "sphere_t02",
   "houdini": {
    "all_tris": true,
    "area_in": 12.38774,
@@ -135,7 +135,7 @@
    "points": 407,
    "prims": 810
   },
-  "input": "sphere4_in.geo",
+  "input": "sphere_in.geo",
   "parms": {
    "targetsize": 0.2
   }
@@ -217,7 +217,7 @@
   }
  },
  {
-  "case": "sphere8_adaptive_d1",
+  "case": "sphere_adaptive_d1",
   "houdini": {
    "all_tris": true,
    "area_in": 12.38774,
@@ -234,14 +234,14 @@
    "points": 15,
    "prims": 26
   },
-  "input": "sphere8_in.geo",
+  "input": "sphere_in.geo",
   "parms": {
    "density": 1.0,
    "sizing": 1
   }
  },
  {
-  "case": "sphere8_adaptive_d2",
+  "case": "sphere_adaptive_d2",
   "houdini": {
    "all_tris": true,
    "area_in": 12.38774,
@@ -258,14 +258,14 @@
    "points": 29,
    "prims": 54
   },
-  "input": "sphere8_in.geo",
+  "input": "sphere_in.geo",
   "parms": {
    "density": 2.0,
    "sizing": 1
   }
  },
  {
-  "case": "sphere8_adaptive_d4",
+  "case": "sphere_adaptive_d4",
   "houdini": {
    "all_tris": true,
    "area_in": 12.38774,
@@ -282,14 +282,14 @@
    "points": 57,
    "prims": 110
   },
-  "input": "sphere8_in.geo",
+  "input": "sphere_in.geo",
   "parms": {
    "density": 4.0,
    "sizing": 1
   }
  },
  {
-  "case": "sphere8_adaptive_max03",
+  "case": "sphere_adaptive_max03",
   "houdini": {
    "all_tris": true,
    "area_in": 12.38774,
@@ -306,7 +306,7 @@
    "points": 184,
    "prims": 364
   },
-  "input": "sphere8_in.geo",
+  "input": "sphere_in.geo",
   "parms": {
    "density": 2.0,
    "maxsize": 0.3,

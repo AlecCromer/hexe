@@ -1,0 +1,55 @@
+[
+	"fileversion","20.5.522",
+	"hasindex",false,
+	"pointcount",24,
+	"vertexcount",0,
+	"primitivecount",0,
+	"info",{
+		"hostname":"",
+		"date":"",
+		"artist":"",
+		"software":"Houdini 20.5.522",
+		"bounds":[-1,1,-1,1,-1,1],
+		"attribute_summary":"     1 point attributes:\tP\n"
+	},
+	"topology",[
+		"pointref",[
+			"indices",[]
+		]
+	],
+	"attributes",[
+		"pointattributes",[
+			[
+				[
+					"scope","public",
+					"type","numeric",
+					"name","P",
+					"options",{
+						"type":{
+							"type":"string",
+							"value":"point"
+						}
+					}
+				],
+				[
+					"size",3,
+					"storage","fpreal32",
+					"defaults",[
+						"size",1,
+						"storage","fpreal64",
+						"values",[0]
+					],
+					"values",[
+						"size",3,
+						"storage","fpreal32",
+						"tuples",[[-1,-1,-1],[-1,-1,1],[-1,-0.333333313,-1],[-1,-0.333333313,1],[-1,0.333333373,-1],[-1,0.333333373,1],[-1,1,-1],[-1,1,1],[0,-1,-1],[0,-1,1],[0,-0.333333313,-1],[0,-0.333333313,1],[0,0.333333373,-1],[0,
+								0.333333373,1],[0,1,-1],[0,1,1],[1,-1,-1],[1,-1,1],[1,-0.333333313,-1],[1,-0.333333313,1],[1,0.333333373,-1],[1,0.333333373,1],[1,1,-1],[1,1,1]
+						]
+					]
+				]
+			]
+		]
+	],
+	"primitives",[
+	]
+]

@@ -353,6 +353,13 @@ fn read_groups(v: &Value, class: AttrClass, n: usize, out: &mut Vec<Group>) -> R
                     mask = expand_rle(&a, n).ok_or_else(|| {
                         GeoError::Count(format!("group `{name}` boolRLE does not cover {n} elements"))
                     })?;
+                } else if let Some(r) = ["i8", "i16", "i32", "i64"].iter().find_map(|k| find(&uk, k)) {
+                    // Houdini 20.5 ASCII writes small groups as one flag per element: `["i8", [1, 1, 0, ...]]`
+                    let a = ints(r)?;
+                    if a.len() != n {
+                        return Err(GeoError::Count(format!("group `{name}` has {} flags for {n} elements", a.len())));
+                    }
+                    mask = a.iter().map(|&x| x != 0).collect();
                 }
             } else if let Some(o) = find(&sk, "ordered") {
                 for i in ints(o)? {

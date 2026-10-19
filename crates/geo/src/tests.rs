@@ -272,6 +272,21 @@ fn groups_roundtrip_and_boolrle() {
     assert_eq!(g.groups.len(), 2);
 }
 
+/// Houdini 20.5 ASCII writes small groups as one flag per element (`["i8", [1, 1, 0, ...]]`, seen in hython
+/// `saveToFile` output); a flag list that does not match the element count is an error, never a panic.
+#[test]
+fn per_element_flag_groups() {
+    let i8s = houdini_shape().replace(r#"["boolRLE",[0,1,1,2,0,1]]"#, r#"["i8",[0,1,1,0]]"#);
+    let d = read_geo_json(i8s.as_bytes()).unwrap();
+    assert_eq!(d.group(AttrClass::Point, "g").unwrap().mask, [false, true, true, false]);
+    let i32s = houdini_shape().replace(r#"["boolRLE",[1,2]]"#, r#"["i32",[0,7]]"#);
+    assert_eq!(read_geo_json(i32s.as_bytes()).unwrap().group(AttrClass::Prim, "p").unwrap().mask, [false, true]);
+    for bad in [r#"["i8",[0,1,1]]"#, r#"["i8",[0,1,1,0,1]]"#, r#"["i8","x"]"#, r#"["i8",[0,1,1,1e999]]"#] {
+        let s = houdini_shape().replace(r#"["boolRLE",[0,1,1,2,0,1]]"#, bad);
+        assert!(read_geo_json(s.as_bytes()).is_err(), "{bad}");
+    }
+}
+
 #[test]
 fn hostile_input_is_err_never_panic() {
     let good = write_geo_json(&synthetic_a());
