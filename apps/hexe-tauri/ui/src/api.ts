@@ -22,6 +22,22 @@ export interface NodeView {
   /** bypass flag: the node passes its input 0 through unchanged */
   bypass: boolean;
   params: Record<string, PVal>;
+  /** spare (user-added) parameters, interface order (Edit Parameter Interface) */
+  spare?: SpareParm[];
+  /** channel expressions: channel (`scale`, `tx`, a spare name) -> HScript (`ch("../null1/p")`) */
+  chans?: Record<string, string>;
+  /** channels whose expression failed in the last cook -> message */
+  chan_errors?: Record<string, string>;
+  /** locked parameters (Lock Parameter): read-only */
+  locked?: string[];
+}
+/** Spare parameter (Rust `hexe_sop::SpareParm`): value kinds float / int (size 1..4) / toggle / string / menu; layout kinds folder
+ *  (a tab; params name it in `folder`) / separator / label. `value` null = `default`; `ui` = the Houdini type it was made as. */
+export type SpareKind = "float" | "int" | "toggle" | "string" | "menu" | "folder" | "separator" | "label";
+export interface SpareParm {
+  name: string; label: string; kind: SpareKind; size: number; default: PVal | number[] | null; value: PVal | number[] | null;
+  min: number | null; max: number | null; menu: [string, string][]; folder: string | null; invisible: boolean; join: boolean;
+  help: string; disable_when: string; hide_when: string; ui: string;
 }
 export interface EdgeView { from: number; to: number; input: number }
 /** Sticky note of a network (editor px: top-left x, y, size w, h; colour rgb 0..1), from the scene / .hip file */
@@ -109,6 +125,10 @@ export const api = {
     /** new empty object / rename: a taken name is numbered up; both return the final name */
     objectAdd: (name: string, kind: ObjKind = "geo", net: string | null = null) => invoke<string>("object_add", { name, kind, net }),
   /** object-level params (a Null's Transform / Render / Misc tabs): specs + current values */
+  nodeSpareSet: (id: number, parms: SpareParm[]) => invoke<void>("node_spare_set", { id, parms }),
+  nodeSetLock: (id: number, parm: string, on: boolean) => invoke<void>("node_set_lock", { id, parm, on }),
+  nodeSetChannel: (id: number, chan: string, expr: string | null) => invoke<void>("node_set_channel", { id, chan, expr }),
+  nodeSpareValue: (id: number, parm: string, value: PVal | number[]) => invoke<void>("node_spare_value", { id, parm, value }),
   objectParams: (name: string) => invoke<[ParamInfo[], Record<string, PVal>]>("object_params", { name }),
   objectSetParam: (name: string, parm: string, value: PVal) => invoke<void>("object_set_param", { name, parm, value }),
     /** every object: kind, container (`net`), file position, flags, a container's sticky notes; + the current one */

@@ -267,6 +267,26 @@ fn objects_info(app: State<App>) -> model::ObjInfoList {
     let s = app.lock();
     (s.objects_info(), s.object_name().to_string())
 }
+/// Replace a node's spare-parameter interface (Edit Parameter Interface: Accept / Apply).
+#[tauri::command]
+fn node_spare_set(app: State<App>, id: u32, parms: Vec<hexe_sop::SpareParm>) -> Res<()> {
+    app.lock().node_spare_set(id, parms)
+}
+/// Set (`expr`) or delete (null) a channel expression, e.g. `scale` = `ch("../null1/newparameter2")`.
+#[tauri::command]
+fn node_set_channel(app: State<App>, id: u32, chan: String, expr: Option<String>) -> Res<()> {
+    app.lock().node_set_channel(id, &chan, expr.as_deref())
+}
+/// Lock / unlock a parameter (Houdini Lock Parameter).
+#[tauri::command]
+fn node_set_lock(app: State<App>, id: u32, parm: String, on: bool) -> Res<()> {
+    app.lock().node_set_lock(id, &parm, on)
+}
+/// Set one spare parameter's value.
+#[tauri::command]
+fn node_spare_value(app: State<App>, id: u32, parm: String, value: Value) -> Res<()> {
+    app.lock().node_spare_value(id, &parm, &value)
+}
 /// Object-level parameters (a Null's Transform / Render / Misc tabs): specs + current values.
 #[tauri::command]
 fn object_params(
@@ -423,6 +443,10 @@ pub fn run() {
             set_bypass,
             objects_info,
             object_params,
+            node_spare_set,
+            node_spare_value,
+            node_set_channel,
+            node_set_lock,
             object_set_param,
             undo,
             redo,

@@ -74,6 +74,14 @@ pub struct NodeView {
     pub bypass: bool,
     /// Every spec'd param with its current value (defaults included): the param pane edits this.
     pub params: BTreeMap<String, Value>,
+    /// Spare (user-added) parameters, interface order, each with its current value (Edit Parameter Interface).
+    pub spare: Vec<hexe_sop::SpareParm>,
+    /// Channel expressions: channel (`scale`, `tx`, a spare name) -> HScript (`ch("../null1/p")`).
+    pub chans: BTreeMap<String, String>,
+    /// Channels whose expression failed in the last cook -> message.
+    pub chan_errors: BTreeMap<String, String>,
+    /// Locked parameters (Lock Parameter): read-only in the pane, refused by every setter.
+    pub locked: Vec<String>,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -170,6 +178,8 @@ pub struct Session {
     ui: hexe_sop::UiExtra,
     /// Object-level data per object name (kind, container, position, flags); absent = a Geometry object at /obj.
     meta: BTreeMap<String, ObjMeta>,
+    /// Channel-expression failures of the last cook: node -> channel -> message (the pane shows them on the field).
+    chan_err: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Object kinds at /obj: a SOP network, a Null (its network: `control` + `point1`), an object-level container.
@@ -416,6 +426,7 @@ impl Default for Session {
             parked: BTreeMap::new(),
             ui: hexe_sop::UiExtra::default(),
             meta: BTreeMap::new(),
+            chan_err: BTreeMap::new(),
         }
     }
 }
@@ -1134,6 +1145,10 @@ impl Session {
                     ((0..k).map(|i| format!("input{i}")).collect::<Vec<_>>(), k.min(1))
                 }
             };
+            let spare = self.ui.spare.get(&name).cloned().unwrap_or_default();
+            let chans = self.ui.chan.get(&name).cloned().unwrap_or_default();
+            let chan_errors = self.chan_err.get(&name).cloned().unwrap_or_default();
+            let locked = self.ui.lock.get(&name).map(|l| l.iter().cloned().collect()).unwrap_or_default();
             nodes.push(NodeView {
                 id: id.index(),
                 ty: self.graph.node_type(id).unwrap_or_default().to_string(),
@@ -1143,6 +1158,10 @@ impl Session {
                 inputs,
                 required,
                 bypass: self.graph.bypass(id),
+                spare,
+                chans,
+                chan_errors,
+                locked,
                 params,
             });
             for (port, src) in self.graph.input_sources(id).into_iter().enumerate() {
@@ -1247,7 +1266,106 @@ impl Session {
             .find(|s| s.name == name)
             .ok_or_else(|| format!("node has no parameter `{name}`"))?;
         let v = param_from_json(&spec.default, value).map_err(|m| format!("parameter `{name}`: {m}"))?;
-        self.graph.set_param(n, name, v).map_err(|e| e.to_string())
+        self.refuse_locked(n, name)?;
+        self.graph.set_param(n, name, v).map_err(|e| e.to_string())?;
+        // a typed value replaces the parameter's channel expressions (Houdini: the field is no longer driven)
+        self.drop_channels(n, name);
+        Ok(())
+    }
+
+    /// `Err` if node `n`'s parameter `parm` is locked.
+    fn refuse_locked(&self, n: NodeId, parm: &str) -> Result<(), String> {
+        let name = self.graph.name(n).unwrap_or_default();
+        if self.ui.lock.get(name).is_some_and(|l| l.contains(parm)) {
+            return Err(format!("parameter `{parm}` is locked (unlock it first)"));
+        }
+        Ok(())
+    }
+
+    /// Lock / unlock node `id`'s parameter `parm` (built-in or spare). Undoable.
+    pub fn node_set_lock(&mut self, id: u32, parm: &str, on: bool) -> Result<(), String> {
+        let n = self.find(id)?;
+        let name = self.graph.name(n).unwrap_or_default().to_string();
+        let own = self.graph.param_specs(n).iter().any(|s| s.name == parm);
+        let spare = self.ui.spare.get(&name).is_some_and(|ps| ps.iter().any(|p| p.name == parm));
+        if !own && !spare {
+            return Err(format!("{name} has no parameter `{parm}`"));
+        }
+        self.mutate(None, |s| {
+            if on {
+                s.ui.lock.entry(name.clone()).or_default().insert(parm.to_string());
+            } else if let Some(l) = s.ui.lock.get_mut(&name) {
+                l.remove(parm);
+                if l.is_empty() {
+                    s.ui.lock.remove(&name);
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Remove the channel expressions of node `n`'s parameter `parm` (its scalar channel or every component).
+    fn drop_channels(&mut self, n: NodeId, parm: &str) {
+        let name = self.graph.name(n).unwrap_or_default().to_string();
+        let spare = self.ui.spare.get(&name).cloned().unwrap_or_default();
+        let chans = hexe_sop::chans::channels_of(&self.graph, &spare, n, parm);
+        if let Some(c) = self.ui.chan.get_mut(&name) {
+            for ch in chans {
+                c.remove(&ch);
+            }
+            if c.is_empty() {
+                self.ui.chan.remove(&name);
+            }
+        }
+    }
+
+    /// Set (`Some`) or delete (`None`) the channel expression of node `id`'s channel `chan` (a parameter, a component such
+    /// as `tx`, or a spare parameter). A syntax error is refused; references are resolved at cook time. Undoable.
+    pub fn node_set_channel(&mut self, id: u32, chan: &str, expr: Option<&str>) -> Result<(), String> {
+        let n = self.find(id)?;
+        let name = self.graph.name(n).unwrap_or_default().to_string();
+        let spare = self.ui.spare.get(&name).cloned().unwrap_or_default();
+        let Some(sl) = hexe_sop::chans::slot(&self.graph, &spare, n, chan) else {
+            return Err(format!("{name} has no channel `{chan}`"));
+        };
+        self.refuse_locked(n, hexe_sop::chans::slot_parm(&sl, &spare))?;
+        if let Some(e) = expr {
+            if e.trim().is_empty() || e.len() > hexe_graph::hscript::MAX_EXPR {
+                return Err("expression is empty or too long".into());
+            }
+            struct Probe;
+            impl hexe_graph::hscript::Scope for Probe {
+                fn var(&self, _: &str) -> Option<hexe_graph::hscript::Value> {
+                    Some(hexe_graph::hscript::Value::Num(0.0))
+                }
+                fn channel(
+                    &self,
+                    _: &str,
+                    _: bool,
+                ) -> Result<hexe_graph::hscript::Value, hexe_graph::hscript::ExprError> {
+                    Ok(hexe_graph::hscript::Value::Num(0.0))
+                }
+            }
+            if let Err(hexe_graph::hscript::ExprError::Syntax(m)) = hexe_graph::hscript::eval(e, &Probe) {
+                return Err(format!("expression: {m}"));
+            }
+        }
+        self.mutate(None, |s| {
+            match expr {
+                Some(e) => {
+                    s.ui.chan.entry(name.clone()).or_default().insert(chan.to_string(), e.to_string());
+                }
+                None => {
+                    if let Some(c) = s.ui.chan.get_mut(&name) {
+                        c.remove(chan);
+                        if c.is_empty() {
+                            s.ui.chan.remove(&name);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
     }
 
     fn edge_connect_raw(&mut self, from: u32, to: u32, input: usize) -> Result<(), String> {
@@ -1414,9 +1532,103 @@ impl Session {
                 return Ok(());
             }
             s.graph.rename(n, &name).map_err(|e| e.to_string())?;
+            if let Some(sp) = s.ui.spare.remove(&old) {
+                s.ui.spare.insert(name.clone(), sp);
+            }
+            // its channels move with it, and references to it follow the new name (Houdini updates them)
+            if let Some(c) = s.ui.chan.remove(&old) {
+                s.ui.chan.insert(name.clone(), c);
+            }
+            if let Some(l) = s.ui.lock.remove(&old) {
+                s.ui.lock.insert(name.clone(), l);
+            }
+            let (from, to) = (format!("../{old}/"), format!("../{name}/"));
+            for e in s.ui.chan.values_mut().flat_map(|c| c.values_mut()) {
+                if e.contains(&from) {
+                    *e = e.replace(&from, &to);
+                }
+            }
             if let Some(p) = s.pos.remove(&old) {
                 s.pos.insert(name, p);
             }
+            Ok(())
+        })
+    }
+
+    // ---- spare parameters (Houdini Edit Parameter Interface) ----
+
+    /// Replace node `id`'s spare-parameter interface with `parms` (the dialog's Accept / Apply). Names must be valid,
+    /// unique and not one of the node's own parameters; a param keeping its name, kind and size keeps its value. Undoable.
+    pub fn node_spare_set(&mut self, id: u32, parms: Vec<hexe_sop::SpareParm>) -> Result<(), String> {
+        if parms.len() > hexe_sop::MAX_SPARE {
+            return Err(format!("{} spare parameters (at most {})", parms.len(), hexe_sop::MAX_SPARE));
+        }
+        let n = self.find(id)?;
+        let name = self.graph.name(n).unwrap_or_default().to_string();
+        let own: std::collections::BTreeSet<String> =
+            self.graph.param_specs(n).iter().map(|s| s.name.clone()).collect();
+        let old = self.ui.spare.get(&name).cloned().unwrap_or_default();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut out = Vec::with_capacity(parms.len());
+        for p in parms {
+            if !hexe_sop::valid_spare_name(&p.name) {
+                return Err(format!("invalid parameter name `{}` (a letter or _, then letters, digits, _)", p.name));
+            }
+            if own.contains(&p.name) {
+                return Err(format!("`{}` is already a parameter of this node", p.name));
+            }
+            if !seen.insert(p.name.clone()) {
+                return Err(format!("two parameters named `{}`", p.name));
+            }
+            if !hexe_sop::SPARE_KINDS.contains(&p.kind.as_str()) {
+                return Err(format!("{}: unknown kind `{}`", p.name, p.kind));
+            }
+            let mut p = p.sanitized().ok_or_else(|| "bad spare parameter".to_string())?;
+            if let Some(o) = old.iter().find(|o| o.name == p.name && o.kind == p.kind && o.size == p.size) {
+                p.value = o.value.clone();
+            }
+            out.push(p);
+        }
+        // a folder reference must name a spare folder
+        let folders: std::collections::BTreeSet<String> =
+            out.iter().filter(|p| p.kind == "folder").map(|p| p.name.clone()).collect();
+        for p in &mut out {
+            if p.folder.as_ref().is_some_and(|f| !folders.contains(f) || *f == p.name) {
+                p.folder = None;
+            }
+        }
+        self.mutate(None, |s| {
+            if out.is_empty() {
+                s.ui.spare.remove(&name);
+            } else {
+                s.ui.spare.insert(name, out);
+            }
+            Ok(())
+        })
+    }
+
+    /// Set the value of node `id`'s spare parameter `parm` (checked against its kind / size / menu). Undoable; repeated
+    /// sets of the same parameter (a scrub) merge into one undo step.
+    pub fn node_spare_value(&mut self, id: u32, parm: &str, value: &Value) -> Result<(), String> {
+        let n = self.find(id)?;
+        let name = self.graph.name(n).unwrap_or_default().to_string();
+        let p = self
+            .ui
+            .spare
+            .get(&name)
+            .and_then(|ps| ps.iter().find(|p| p.name == parm))
+            .ok_or_else(|| format!("no spare parameter `{parm}` on {name}"))?;
+        self.refuse_locked(n, parm)?;
+        if matches!(p.kind.as_str(), "folder" | "separator" | "label") {
+            return Err(format!("{parm}: a {} holds no value", p.kind));
+        }
+        let v =
+            p.coerce(value).ok_or_else(|| format!("{parm}: {value} does not fit a {} of size {}", p.kind, p.size))?;
+        self.mutate(Some(format!("spare:{id}:{parm}")), |s| {
+            if let Some(q) = s.ui.spare.get_mut(&name).and_then(|ps| ps.iter_mut().find(|q| q.name == parm)) {
+                q.value = if v == q.default { Value::Null } else { v };
+            }
+            s.drop_channels(n, parm);
             Ok(())
         })
     }
@@ -1714,6 +1926,13 @@ impl Session {
 
     fn cook_at(&mut self, node: NodeId, keep: bool) -> CookResult {
         let fail = cook_fail;
+        // channel references first: their results are the parameter values this cook uses
+        self.chan_err.clear();
+        for (n, c, e) in
+            hexe_sop::chans::apply_channels(&mut self.graph, &mut self.ui, f64::from(self.frame), f64::from(self.fps))
+        {
+            self.chan_err.entry(n).or_default().insert(c, e);
+        }
         let (time, fps) = (self.time(), self.fps);
         let graph = &mut self.graph;
         graph.set_fps(fps);
@@ -2723,6 +2942,147 @@ mod tests {
         assert!(c.positions.chunks(3).any(|p| p == [3.0, 0.0, 0.0]));
         assert!(s.object_add_kind("x", "camera", None).is_err(), "unknown kind");
         assert!(s.object_add_kind("x", "geo", Some("null1")).is_err(), "a Null is no container");
+    }
+
+    fn spare(name: &str, kind: &str, size: u8, default: Value) -> hexe_sop::SpareParm {
+        serde_json::from_value(
+            serde_json::json!({ "name": name, "label": name, "kind": kind, "size": size, "default": default }),
+        )
+        .expect("spare")
+    }
+
+    #[test]
+    fn spare_parms_set_value_undo_rename_and_round_trip() {
+        let mut s = Session::new();
+        let id = s.node_add("null", 0.0, 0.0).expect("null");
+        // the null SOP's own parms (Houdini): Copy Input on, Cache Input off
+        let g = s.graph_get();
+        assert_eq!(
+            (g.nodes[0].params["copyinput"].clone(), g.nodes[0].params["cacheinput"].clone()),
+            (Value::Bool(true), Value::Bool(false))
+        );
+        let mut tab = spare("tab1", "folder", 1, Value::Null);
+        tab.label = "Controls".into();
+        let mut count = spare("count", "int", 1, Value::from(3));
+        count.folder = Some("tab1".into());
+        let offset = spare("offset", "float", 3, serde_json::json!([0.0, 1.0, 0.0]));
+        s.node_spare_set(id, vec![tab, count.clone(), offset.clone()]).expect("set");
+        let sp = &s.graph_get().nodes[0].spare;
+        assert_eq!(sp.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["tab1", "count", "offset"]);
+        assert_eq!((sp[1].current().clone(), sp[1].folder.as_deref()), (Value::from(3), Some("tab1")));
+        // values: coerced to the kind (int rounds), checked
+        s.node_spare_value(id, "count", &Value::from(7.6)).expect("value");
+        assert_eq!(s.graph_get().nodes[0].spare[1].current(), &Value::from(8));
+        s.node_spare_value(id, "offset", &serde_json::json!([1, 2, 3])).expect("v3");
+        assert!(s.node_spare_value(id, "offset", &serde_json::json!([1, 2])).is_err(), "wrong size");
+        assert!(s.node_spare_value(id, "count", &Value::from("x")).is_err(), "wrong type");
+        assert!(s.node_spare_value(id, "tab1", &Value::from(1)).is_err(), "a folder holds no value");
+        assert!(s.node_spare_value(id, "nope", &Value::from(1)).is_err(), "unknown");
+        // re-setting the interface keeps values of unchanged params; undo restores
+        s.node_spare_set(id, vec![count.clone(), offset]).expect("drop the folder");
+        let sp = &s.graph_get().nodes[0].spare;
+        assert_eq!(
+            (sp.len(), sp[0].current().clone(), sp[0].folder.clone()),
+            (2, Value::from(8), None),
+            "folder ref to a gone folder is cleared"
+        );
+        assert!(s.undo().expect("undo"));
+        assert_eq!(s.graph_get().nodes[0].spare.len(), 3);
+        // rename carries the interface
+        s.node_rename(id, "ctrl").expect("rename");
+        let g = s.graph_get();
+        let id = g.nodes[0].id;
+        assert_eq!(g.nodes[0].spare.len(), 3);
+        // bad interfaces are refused whole
+        for bad in [
+            vec![spare("1x", "int", 1, Value::from(0))],
+            vec![spare("copyinput", "toggle", 1, Value::Bool(false))],
+            vec![count.clone(), count.clone()],
+            vec![spare("w", "matrix", 1, Value::Null)],
+        ] {
+            assert!(s.node_spare_set(id, bad).is_err());
+        }
+        assert_eq!(s.graph_get().nodes[0].spare.len(), 3, "a refused set changes nothing");
+        // save / load round trip; a hostile file entry is dropped, not fatal
+        let dir = std::env::temp_dir().join(format!("hexe-spare-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let out = dir.join("s.json");
+        s.graph_save(&out.to_string_lossy()).expect("save");
+        let mut t = Session::new();
+        t.graph_load(&out.to_string_lossy()).expect("load");
+        let sp = &t.graph_get().nodes[0].spare;
+        assert_eq!(
+            (sp.len(), sp[1].current().clone(), sp[2].current().clone()),
+            (3, Value::from(8), serde_json::json!([1.0, 2.0, 3.0]))
+        );
+        let text = std::fs::read_to_string(&out).expect("read").replace("\"count\"", "\"9bad\"");
+        std::fs::write(&out, text).expect("write");
+        let mut u = Session::new();
+        u.graph_load(&out.to_string_lossy()).expect("load");
+        assert_eq!(u.graph_get().nodes[0].spare.len(), 2, "the invalid name is dropped");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn relative_reference_to_a_spare_parameter_drives_a_param_and_follows_renames() {
+        let mut s = Session::new();
+        let null = s.node_add("null", 0.0, 0.0).expect("null");
+        let bx = s.node_add("box", 0.0, 100.0).expect("box");
+        s.set_display(Some(bx)).expect("display");
+        s.node_spare_set(null, vec![spare("newparameter2", "int", 1, Value::from(2))]).expect("spare");
+        // Copy Parameter on null1.newparameter2 -> Paste Relative References on box1's Uniform Scale
+        s.node_set_channel(bx, "scale", Some("ch(\"../null1/newparameter2\")")).expect("channel");
+        let c = s.cook();
+        assert!(c.error.is_none(), "{:?}", c.error);
+        let scale =
+            |s: &Session| s.graph_get().nodes.iter().find(|n| n.ty == "box").expect("box").params["scale"].clone();
+        assert_eq!(scale(&s), Value::from(2.0));
+        assert!(c.positions.iter().any(|p| (p.abs() - 1.0).abs() < 1e-6), "box of size 1 scaled by 2 reaches +-1");
+        // the source changes -> the next cook follows
+        s.node_spare_value(null, "newparameter2", &Value::from(5)).expect("value");
+        s.cook();
+        assert_eq!(scale(&s), Value::from(5.0));
+        let g = s.graph_get();
+        let b = g.nodes.iter().find(|n| n.ty == "box").expect("box");
+        assert_eq!(b.chans["scale"], "ch(\"../null1/newparameter2\")");
+        // renaming the source rewrites the reference; the expression keeps working
+        s.node_rename(null, "ctrl").expect("rename");
+        s.cook();
+        let g = s.graph_get();
+        let b = g.nodes.iter().find(|n| n.ty == "box").expect("box");
+        assert_eq!((b.chans["scale"].as_str(), b.chan_errors.len()), ("ch(\"../ctrl/newparameter2\")", 0));
+        // a broken reference is reported on the field, the cook still runs
+        let bx = b.id;
+        s.node_set_channel(bx, "scale", Some("ch(\"../ghost/p\")")).expect("set");
+        assert!(s.cook().error.is_none());
+        assert!(s.graph_get().nodes.iter().find(|n| n.ty == "box").expect("box").chan_errors.contains_key("scale"));
+        // typing a value replaces the expression; bad channels / syntax are refused
+        s.node_set_param(bx, "scale", &Value::from(3.0)).expect("typed");
+        assert!(s.graph_get().nodes.iter().find(|n| n.ty == "box").expect("box").chans.is_empty());
+        assert!(s.node_set_channel(bx, "nope", Some("1")).is_err());
+        assert!(s.node_set_channel(bx, "scale", Some("1 +")).is_err());
+        assert!(
+            s.node_set_channel(bx, "sizex", Some("ch(\"../ctrl/newparameter2\") * 2")).is_ok(),
+            "component channel"
+        );
+        s.cook();
+        let size = s.graph_get().nodes.iter().find(|n| n.ty == "box").expect("box").params["size"].clone();
+        assert_eq!(size[0], Value::from(10.0));
+        // Lock Parameter: setters refuse, channel writes leave it alone, unlock restores editing
+        s.node_set_lock(bx, "size", true).expect("lock");
+        assert_eq!(s.graph_get().nodes.iter().find(|n| n.ty == "box").expect("box").locked, ["size"]);
+        assert!(s.node_set_param(bx, "size", &serde_json::json!([1, 1, 1])).is_err());
+        assert!(s.node_set_channel(bx, "sizey", Some("2")).is_err());
+        s.node_spare_value(null, "newparameter2", &Value::from(9)).expect("source");
+        s.cook();
+        let size = s.graph_get().nodes.iter().find(|n| n.ty == "box").expect("box").params["size"].clone();
+        assert_eq!(size[0], Value::from(10.0), "locked: the channel does not write");
+        assert!(s.node_set_lock(bx, "nope", true).is_err());
+        s.node_set_lock(bx, "size", false).expect("unlock");
+        s.cook();
+        let size = s.graph_get().nodes.iter().find(|n| n.ty == "box").expect("box").params["size"].clone();
+        assert_eq!(size[0], Value::from(18.0));
+        assert!(s.undo().expect("undo"));
     }
 
     #[test]

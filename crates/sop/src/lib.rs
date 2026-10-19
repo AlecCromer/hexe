@@ -10,6 +10,7 @@
     clippy::unreachable
 )]
 mod builtins;
+pub mod chans;
 #[cfg(test)]
 mod cook_model_oracle;
 mod hip_expr;
@@ -24,8 +25,8 @@ pub use hip_import::{
 };
 pub use registry::{CtorFn, Registry, SopNode, SpecFn};
 pub use scene::{
-    Loaded, MAX_UI_ITEMS, SceneError, UiBox, UiExtra, UiNote, fill_unwired, load_scene, load_scene_in, load_scene_with,
-    load_scene_with_base, save_scene, save_scene_ext,
+    Loaded, MAX_SPARE, MAX_UI_ITEMS, SPARE_KINDS, SceneError, SpareParm, UiBox, UiExtra, UiNote, fill_unwired,
+    load_scene, load_scene_in, load_scene_with, load_scene_with_base, save_scene, save_scene_ext, valid_spare_name,
 };
 
 /// Registry of every built-in SOP (`builtins.rs`).

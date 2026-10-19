@@ -411,3 +411,51 @@ g:hover > .edge:not(.sel) { stroke: #f0f0f0; stroke-width: 2.2; }
 .netbox-title { fill: #e8e8e8; font-size: 14px; font-weight: 600; }
 /* For-Each block pair link (Block Begin ... Block End) */
 .blocklink { fill: none; stroke: #8fb8e0; stroke-width: 1.2; stroke-dasharray: 2 4; opacity: .75; }
+/* spare parameters in the pane */
+.prow.spare label { color: #e6e6e6; }
+hr.psep { border: 0; border-top: 1px solid #555; margin: 6px 0; }
+/* Edit Parameter Interface dialog (Houdini layout: Create | Existing | Description) */
+.pd-back { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #0007; }
+.pd { display: flex; flex-direction: column; width: min(1500px, 96vw); height: min(900px, 92vh); background: #3a3a3a; border: 1px solid #555; box-shadow: 0 12px 40px #000a; color: #ddd; font-size: 13px; }
+.pd-head { display: flex; gap: 60px; padding: 8px 12px; border-bottom: 1px solid #2a2a2a; }
+.pd-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 44px 1fr 1.25fr; gap: 6px; padding: 8px; }
+.pd-col { display: flex; flex-direction: column; min-height: 0; gap: 6px; }
+.pd-col h3 { margin: 2px 0; font-size: 14px; }
+.pd-tabs { display: flex; gap: 1px; border-bottom: 1px solid #2a2a2a; }
+.pd-tabs button { padding: 4px 12px; background: #333; border: 1px solid #2a2a2a; border-bottom: 0; border-radius: 3px 3px 0 0; color: #cfcfcf; }
+.pd-tabs button.on { background: #4b4b4b; color: #fff; }
+.pd-tabs button:disabled { color: #777; }
+.pd-list { flex: 1; min-height: 0; overflow: auto; background: #2b2b2b; border: 1px solid #222; }
+.pd-item { padding: 3px 10px; cursor: default; white-space: nowrap; }
+.pd-item:nth-child(even) { background: #2f2f2f; }
+.pd-item.on { background: #5c7fa3; color: #fff; }
+.pd-item.off, .pd-item.pd-own { color: #7c7c7c; }
+.pd-item.invis { font-style: italic; color: #999; }
+.pd-root { font-weight: 600; }
+.pd-own { padding-left: 18px; }
+.pd-filter, .pd-check { display: flex; align-items: center; gap: 6px; }
+.pd-filter input { flex: 1; }
+.pd-arrows { display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+.pd-arrow { font-size: 22px; padding: 2px 6px; }
+.pd-arrow.back { transform: scaleX(-1); }
+.pd-desc { flex: 1; min-height: 0; overflow: auto; padding: 8px 4px; }
+.pd-row { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 8px; margin: 5px 0; }
+.pd-row > label { color: #bdbdbd; }
+.pd-row input[type=text], .pd-row select, .pd-row textarea { width: 100%; box-sizing: border-box; }
+.pd-sub { margin: 14px 0 6px; color: #cfcfcf; }
+.pd-nums { display: flex; gap: 4px; }
+.pd-nums input { width: 0; flex: 1; }
+.pd-menu { display: flex; flex-direction: column; gap: 4px; }
+.pd-mrow { display: grid; grid-template-columns: 1fr 1fr 28px; gap: 4px; }
+.pd-mhead { color: #aaa; }
+.pd-hint { color: #9a9a9a; padding: 8px; }
+.pd-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid #2a2a2a; }
+.pd-err { margin-right: auto; color: #ff8a80; }
+/* channel expressions (Houdini: a driven field turns green; a failing one red) + the parameter right-click menu */
+.prow.expr input, .prow.expr select { background: #2f5a2f; color: #e8ffe8; }
+.prow.experr input, .prow.experr select { background: #6a2a2a; color: #ffe8e8; }
+.pexpr { display: flex; gap: 4px; } .pexpr input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; }
+.mdrop.parmmenu { display: block; position: fixed; z-index: 70; min-width: 230px; }
+.prow.locked input, .prow.locked select { background: #303030; color: #8a8a8a; }
+.prow.locked label::after { content: " \1F512"; font-size: 10px; }
+.mdrop.parmmenu .mi:disabled kbd { color: #777; }

@@ -1,10 +1,14 @@
 // Param pane generated from the selected node's schema (list_node_types). Edits -> node_set_param -> onChange (re-cook).
-import type { NodeType, NodeView, ParamInfo, PVal } from "./api";
+import type { Kind, NodeType, NodeView, ParamInfo, PVal, SpareParm } from "./api";
 import { type CodeEditor, createCodeEditor, parseCodeError } from "./codeeditor";
 import { attachScrub, scrubSpeed } from "./scrub";
 import { nodeIcon } from "./shelf";
 import { labelOf } from "./tabcats";
 import { formatPoints, parsePoints, resizePoints } from "./pointlist";
+import { channelNames, clipboard, copyParm, type MenuHandlers, referenceExprs, showParmMenu } from "./parmmenu";
+
+/** value before the last edit of each `node:parm` (Revert to Previous Value) */
+const prevValues = new Map<string, PVal | number[]>();
 
 export type SetParam = (id: number, name: string, value: PVal) => Promise<void>;
 
@@ -144,8 +148,10 @@ export const COG_ITEMS = [
 const COG_SUB = new Set(["Add Visualizer", "Legacy Presets"]);
 let openCog: HTMLElement | null = null;
 function closeCog(): void { openCog?.classList.remove("open"); openCog = null; }
-document.addEventListener("mousedown", (e) => { if (openCog && !openCog.contains(e.target as Node)) closeCog(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCog(); });
+if (typeof document !== "undefined") {
+  document.addEventListener("mousedown", (e) => { if (openCog && !openCog.contains(e.target as Node)) closeCog(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCog(); });
+}
 function cogMenu(actions: Record<string, () => void>): HTMLElement {
   const items: CogItem[] = COG_ITEMS.map((l) => (l === null ? null : { label: l, run: actions[l], sub: COG_SUB.has(l) }));
   const drop = el("div", { className: "mdrop cogdrop" });
@@ -172,7 +178,32 @@ function cogMenu(actions: Record<string, () => void>): HTMLElement {
 /** last tab shown per node type (Houdini keeps the folder you were on) */
 const activeTab = new Map<string, string>();
 
-export function renderParams(host: HTMLElement, node: NodeView | null, type: NodeType | undefined, set: SetParam): void {
+/** Pane extras: spare-parameter value edits and the Edit Parameter Interface dialog (SOP nodes; absent = not offered). */
+export interface PaneOpts {
+  spareSet?: (name: string, value: PVal | number[]) => Promise<void>;
+  editInterface?: () => void;
+  /** set (string) / delete (null) a channel expression; absent = no Paste References / Edit Expression */
+  setChannel?: (chan: string, expr: string | null) => Promise<void>;
+  /** network the node lives in (`/obj/geo1`): Copy Parameter remembers it for relative paths */
+  net?: string;
+  /** after channel edits: re-read the graph and repaint */
+  changed?: () => void;
+  /** Lock / Unlock Parameter */
+  setLock?: (parm: string, on: boolean) => Promise<void>;
+}
+
+/** A spare parameter as a pane `ParamInfo` (value kinds only). Vectors of any size use the vector widget. */
+export function spareInfo(s: SpareParm): ParamInfo {
+  const kind: Kind = s.kind === "float" || s.kind === "int"
+    ? (s.size > 1 ? "vector3" : s.kind)
+    : s.kind === "toggle" || s.kind === "string" || s.kind === "menu" ? s.kind : "string";
+  return {
+    name: s.name, label: s.label || s.name, kind, default: (s.default ?? 0) as PVal, min: s.min, max: s.max,
+    menu: s.menu.map(([token, label], value) => ({ value, token, label })), language: null, choices: [], folder: null,
+  };
+}
+
+export function renderParams(host: HTMLElement, node: NodeView | null, type: NodeType | undefined, set: SetParam, opts: PaneOpts = {}): void {
   host.replaceChildren();
   shown = { node: -1, editors: [] };
   if (!node || !type) {
@@ -184,6 +215,7 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
   ico.setAttribute("viewBox", "0 0 24 24");
   ico.setAttribute("class", "phead-ico");
   ico.innerHTML = nodeIcon(node.type);
+  const spare = (node.spare ?? []).filter((s) => !s.invisible);
   const revert = async () => {
     for (const p of type.params) {
       const cur = node.params[p.name] ?? p.default;
@@ -191,19 +223,30 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
       node.params[p.name] = p.default;
       await set(node.id, p.name, p.default).catch(() => {});
     }
-    renderParams(host, node, type, set);
+    for (const s of node.spare ?? []) {
+      if (s.value === null || !opts.spareSet || s.default === null) continue;
+      s.value = null;
+      await opts.spareSet(s.name, s.default).catch(() => {});
+    }
+    renderParams(host, node, type, set, opts);
   };
-  const cog = cogMenu({ "Revert to Factory Defaults": () => void revert() });
+  const actions: Record<string, () => void> = { "Revert to Factory Defaults": () => void revert() };
+  if (opts.editInterface) actions["Edit Parameter Interface..."] = opts.editInterface;
+  if (opts.editInterface && (node.spare ?? []).length) actions["Delete All Spare Parameters"] = () => deleteAllSpare(node, host, type, set, opts);
+  const cog = cogMenu(actions);
   host.append(el("div", { className: "phead", title: `${node.type} · #${node.id}` }, ico, el("span", { className: "phead-ty", textContent: labelOf(node.type) }), el("b", { textContent: node.name }), cog));
-  if (!type.params.length) host.append(el("div", { className: "hint", textContent: "No parameters." }));
+  if (!type.params.length && !spare.length) host.append(el("div", { className: "hint", textContent: "No parameters." }));
   shown.node = node.id;
-  // Houdini folders: untabbed params first, then a tab bar; only the active tab's rows show
-  const tabs = [...new Set(type.params.map((p) => p.folder).filter((f): f is string => !!f))];
+  // Houdini folders: untabbed params first, then a tab bar; only the active tab's rows show. Tabs = the node's own
+  // folders, then its spare folders (by label; the same label shares one tab)
+  const spareTab = new Map(spare.filter((s) => s.kind === "folder").map((s) => [s.name, s.label || s.name]));
+  const tabs = [...new Set([...type.params.map((p) => p.folder), ...spareTab.values()].filter((f): f is string => !!f))];
   const pages = new Map<string, HTMLElement>();
+  let bar: HTMLElement | null = null;
   if (tabs.length) {
     const want = activeTab.get(type.type);
     const on = want && tabs.includes(want) ? want : tabs[0];
-    const bar = el("div", { className: "pfold" });
+    const tb = el("div", { className: "pfold" });
     for (const t of tabs) {
       const page = el("div", { className: "ppage" });
       page.dataset.tab = t;
@@ -214,24 +257,93 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
       b.addEventListener("click", () => {
         activeTab.set(type.type, t);
         for (const [k, pg] of pages) pg.hidden = k !== t;
-        for (const x of bar.children) x.classList.toggle("on", (x as HTMLElement).dataset.tab === t);
+        for (const x of tb.children) x.classList.toggle("on", (x as HTMLElement).dataset.tab === t);
       });
-      bar.append(b);
+      tb.append(b);
     }
-    pages.set("", bar); // appended after the untabbed rows
+    bar = tb;
   }
-  for (const p of type.params) {
+  const fail = (label: string) => (e: unknown) => {
+    host.querySelector(".err-msg")?.remove();
+    host.prepend(el("div", { className: "err-msg", textContent: `${label}: ${typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e)}` }));
+  };
+  // right-click menu + expression / lock look of a row: `chans` = its channel names, `value` its current value
+  const applyExprs = async (pairs: [string, string | null][], label: string) => {
+    for (const [c, e] of pairs) await opts.setChannel?.(c, e).catch(fail(label));
+    opts.changed?.();
+  };
+  const wire = (row: HTMLElement, label: string, parm: string, chans: string[], cur: () => PVal | number[], def: PVal | number[], setValue: (v: PVal | number[]) => void, makeDefault?: () => void) => {
+    const ex = chans.filter((c) => node.chans?.[c]);
+    const er = chans.filter((c) => node.chan_errors?.[c]);
+    const locked = (node.locked ?? []).includes(parm);
+    if (ex.length) row.classList.add("expr");
+    if (er.length) row.classList.add("experr");
+    if (locked) {
+      row.classList.add("locked");
+      for (const i of row.querySelectorAll<HTMLInputElement>("input,select,textarea")) i.disabled = true;
+    }
+    if (ex.length || er.length || locked) {
+      row.title = [locked ? "Locked" : "", ...ex.map((c) => `${c} = ${node.chans?.[c]}`), ...er.map((c) => `${c}: ${node.chan_errors?.[c]}`)].filter(Boolean).join("\n");
+    }
+    const key = `${node.name}:${parm}`;
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const put = (v: PVal | number[]) => { prevValues.set(key, cur()); setValue(v); };
+    const h = (): MenuHandlers => {
+      const value = cur();
+      const c = clipboard();
+      const shape = c && Array.isArray(c.value) === Array.isArray(value) && (!Array.isArray(value) || (c.value as number[]).length === value.length);
+      const can = !locked;
+      const prev = prevValues.get(key);
+      const srcExprs = c ? chans.flatMap((t, i): [string, string][] => { const e = c.exprs?.[c.chans[i] ?? ""]; return e ? [[t, e]] : []; }) : [];
+      return {
+        copy: () => copyParm({ net: opts.net ?? "", node: node.name, parm, chans, value, exprs: Object.fromEntries(ex.map((x) => [x, node.chans?.[x] ?? ""])) }),
+        revertPrevious: can && prev !== undefined && !same(prev, value) ? () => put(prev) : undefined,
+        editExpression: can && opts.setChannel ? () => editExpr(row, label, chans) : undefined,
+        deleteExpression: can && ex.length && opts.setChannel ? () => void applyExprs(ex.map((x) => [x, null]), label) : undefined,
+        pasteValues: can && c && shape ? () => put(c.value) : undefined,
+        pasteExpressions: can && srcExprs.length && opts.setChannel ? () => void applyExprs(srcExprs, label) : undefined,
+        pasteRelative: can && c && opts.setChannel ? () => void applyExprs(referenceExprs(c, opts.net ?? "", node.name, chans), label) : undefined,
+        pasteAbsolute: can && c && opts.setChannel ? () => void applyExprs(referenceExprs(c, opts.net ?? "", node.name, chans, true), label) : undefined,
+        deleteChannels: can && ex.length && opts.setChannel ? () => void applyExprs(ex.map((x) => [x, null]), label) : undefined,
+        lock: !locked && opts.setLock ? () => void opts.setLock?.(parm, true).then(() => opts.changed?.(), fail(label)) : undefined,
+        unlock: locked && opts.setLock ? () => void opts.setLock?.(parm, false).then(() => opts.changed?.(), fail(label)) : undefined,
+        revertDefaults: can && !same(value, def) ? () => put(def) : undefined,
+        makeDefault: can && makeDefault && !same(value, def) ? makeDefault : undefined,
+      };
+    };
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (e.shiftKey) { h().revertPrevious?.(); return; } // Shift+RMB
+      showParmMenu(e.clientX, e.clientY, h());
+    });
+    // Houdini mouse shortcuts: Ctrl+MMB = Revert to Defaults, Ctrl+Shift+LMB = Delete Channels
+    row.addEventListener("mousedown", (e) => {
+      if (e.button === 1 && e.ctrlKey && !e.shiftKey) { e.preventDefault(); h().revertDefaults?.(); }
+      else if (e.button === 0 && e.ctrlKey && e.shiftKey) { e.preventDefault(); h().deleteChannels?.(); }
+    });
+  };
+  /** Edit Expression: one text field per channel in place of the row's widget; Enter applies (empty = delete). */
+  const editExpr = (row: HTMLElement, label: string, chans: string[]) => {
+    const box = el("div", { className: "pctl pexpr" });
+    const ins = chans.map((c) => {
+      const i = el("input", { type: "text", value: node.chans?.[c] ?? "", placeholder: c, spellcheck: false });
+      i.dataset.expr = c;
+      box.append(i);
+      return i;
+    });
+    row.querySelector(".pctl")?.replaceWith(box);
+    ins[0]?.focus();
+    const go = () => void applyExprs(ins.map((i, k) => [chans[k], i.value.trim() || null]), label);
+    for (const i of ins) i.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); if (e.key === "Escape") opts.changed?.(); });
+  };  for (const p of type.params) {
     const target = (p.folder && pages.get(p.folder)) || host;
     const value = node.params[p.name] ?? p.default;
     const code = !!p.language && p.kind === "string";
     const row = el("div", { className: code ? "prow code" : "prow" }, el("label", { textContent: code ? `${p.label} (${p.language})` : p.label, title: p.name }));
     const commit = (v: PVal) => {
+      prevValues.set(`${node.name}:${p.name}`, node.params[p.name] ?? p.default);
       node.params[p.name] = v;
-      const clear = () => host.querySelector(".err-msg")?.remove();
-      set(node.id, p.name, v).then(clear, (e) => {
-        clear();
-        host.prepend(el("div", { className: "err-msg", textContent: `${p.label}: ${typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e)}` }));
-      });
+      set(node.id, p.name, v).then(() => host.querySelector(".err-msg")?.remove(), fail(p.label));
     };
     if (node.type === "add" && p.name === "points") {
       target.append(...pointList(String(value), commit));
@@ -242,12 +354,46 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
       shown.editors.push(ed);
       row.append(ed.el);
     } else row.append(control(p, value, commit));
+    wire(row, p.label, p.name, channelNames(p.name, p.kind === "vector3" ? 3 : 1), () => node.params[p.name] ?? p.default, p.default, (v) => { commit(v as PVal); opts.changed?.(); });
     target.append(row);
   }
-  const bar = pages.get("");
-  if (bar) { pages.delete(""); host.append(bar, ...pages.values()); }
+  // spare parameters: on their folder's tab, else after the node's own (untabbed ones before the tab bar, like Houdini's
+  // root level)
+  const tail: HTMLElement[] = [];
+  for (const s of spare) {
+    if (s.kind === "folder") continue;
+    const tab = s.folder ? spareTab.get(s.folder) : undefined;
+    const put = (e: HTMLElement) => { const pg = tab ? pages.get(tab) : undefined; if (pg) pg.append(e); else tail.push(e); };
+    if (s.kind === "separator") { put(el("hr", { className: "psep" })); continue; }
+    if (s.kind === "label") { put(el("div", { className: "prow plabel" }, el("label", { textContent: "" }), el("div", { className: "pctl", textContent: s.label }))); continue; }
+    const info = spareInfo(s);
+    const row = el("div", { className: "prow spare", title: s.help || s.name }, el("label", { textContent: info.label, title: s.name }));
+    const commit = (v: PVal) => {
+      prevValues.set(`${node.name}:${s.name}`, (s.value ?? s.default ?? 0) as PVal);
+      s.value = v as SpareParm["value"];
+      opts.spareSet?.(s.name, v).then(() => host.querySelector(".err-msg")?.remove(), fail(info.label));
+    };
+    const ctl = control(info, (s.value ?? s.default ?? 0) as PVal, commit);
+    for (const i of ctl.querySelectorAll<HTMLElement>("[data-param]")) i.dataset.param = `spare.${i.dataset.param}`;
+    if (!opts.spareSet) for (const i of ctl.querySelectorAll<HTMLInputElement>("input,select")) i.disabled = true;
+    row.append(ctl);
+    // Make Current Value Default: the spare interface again, with this value as its default
+    const makeDefault = () => void spareInterfaceHook?.(node.id, (node.spare ?? []).map((q) => (q.name === s.name ? { ...q, default: q.value ?? q.default, value: null } : q))).then(() => opts.changed?.());
+    wire(row, info.label, s.name, channelNames(s.name, s.kind === "float" || s.kind === "int" ? s.size : 1), () => (s.value ?? s.default ?? 0) as PVal, (s.default ?? 0) as PVal, (v) => { commit(v as PVal); opts.changed?.(); }, makeDefault);
+    put(row);
+  }
+  host.append(...tail);
+  if (bar) host.append(bar, ...pages.values());
   paintCookError();
 }
+
+/** Cog > Delete All Spare Parameters: the interface emptied through the dialog's own hook (undoable in Rust). */
+function deleteAllSpare(node: NodeView, host: HTMLElement, type: NodeType, set: SetParam, opts: PaneOpts): void {
+  void spareInterfaceHook?.(node.id, []).then(() => { node.spare = []; renderParams(host, node, type, set, opts); });
+}
+/** Set by main.ts: replace a node's spare interface (`api.nodeSpareSet`). */
+export let spareInterfaceHook: ((id: number, parms: SpareParm[]) => Promise<void>) | null = null;
+export function setSpareInterfaceHook(f: (id: number, parms: SpareParm[]) => Promise<void>): void { spareInterfaceHook = f; }
 
 /** Placement-style params the viewport handle owns in Houdini; the operator bar leaves them to the pane. */
 const OPBAR_SKIP = new Set(["t", "r", "center", "origin"]);

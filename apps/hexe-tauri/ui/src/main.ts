@@ -9,7 +9,8 @@ import { buildShelf } from "./shelf";
 import { rulerTicks } from "./ruler";
 import { PLACE, previewSegments } from "./place";
 import { labelOf } from "./tabcats";
-import { renderOpBar, renderParams, showCookError } from "./params";
+import { renderOpBar, renderParams, setSpareInterfaceHook, showCookError } from "./params";
+import { openParmDialog } from "./parmdialog";
 import { Spreadsheet } from "./sheet";
 import { Viewport } from "./viewport";
 import { openFileDialog } from "./filewin";
@@ -84,12 +85,26 @@ async function recook(): Promise<void> {
   }
 }
 
+setSpareInterfaceHook(async (id, parms) => { await api.nodeSpareSet(id, parms); await refresh(false); });
 function showParams(): void {
   const id = net.selectedNode;
   const node = graph.nodes.find((n) => n.id === id) ?? null;
   const type = types.find((t) => t.type === node?.type);
   // pane + viewport operator bar edit the same node: each repaints the other after a commit (never itself: a scrub survives)
-  const pane = () => renderParams($("params"), node, type, (i, n, v) => setParam(i, n, v).then(bar));
+  // spare parameters (Edit Parameter Interface): values + the dialog, SOP nodes only
+  const opts = node && type ? {
+    spareSet: async (n: string, v: PVal | number[]) => { await api.nodeSpareValue(node.id, n, v); await recook(); },
+    setChannel: async (c: string, e: string | null) => { await api.nodeSetChannel(node.id, c, e); },
+    setLock: async (p: string, on: boolean) => { await api.nodeSetLock(node.id, p, on); },
+    net: `/obj/${net.objPath.join("/")}`,
+    changed: () => void refresh().then(showParams),
+    editInterface: () => openParmDialog(`/obj/${[...net.objPath, node.name].join("/")}`, type.params, node.spare ?? [], async (parms) => {
+      await api.nodeSpareSet(node.id, parms);
+      await refresh(false);
+      showParams();
+    }),
+  } : {};
+  const pane = () => renderParams($("params"), node, type, (i, n, v) => setParam(i, n, v).then(bar), opts);
   const bar = () => renderOpBar($("opbar"), node, type, setParam, pane);
   pane();
   bar();
@@ -638,7 +653,7 @@ $<HTMLInputElement>("fitx").addEventListener("change", (e) => { viewport.setFitE
   // a fresh session starts at /obj (Houdini), an opened scene inside its object
   if (start) { path.value = start; await open(); } else { net.level = "obj"; await refresh(); showParams(); }
   // proof / test door (read by the T1 proof script): drive the real param pane through the DOM
-    (window as unknown as Record<string, unknown>).__hexe = { net, select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, viewport, setFrame: scrub, play: setPlaying, open: async (p: string) => { path.value = p; await open(); } };
+    (window as unknown as Record<string, unknown>).__hexe = { net, select: (name: string) => { const n = graph.nodes.find((q) => q.name === name); if (n) net.selectNode(n.id); }, recook, refresh: () => refresh(false).then(showParams), viewport, setFrame: scrub, play: setPlaying, open: async (p: string) => { path.value = p; await open(); } };
     const job = await api.renderRequest();
     if (job) await headlessRender(job);
 }

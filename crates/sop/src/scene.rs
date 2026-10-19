@@ -69,6 +69,142 @@ pub struct UiExtra {
     pub boxes: Vec<UiBox>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<UiNote>,
+    /// Node name -> its spare (user-added) parameters, in interface order (Houdini Edit Parameter Interface).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub spare: BTreeMap<String, Vec<SpareParm>>,
+    /// Node name -> channel (parameter or component, `tx`) -> HScript expression (`ch("../null1/p")`), see `chans`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub chan: BTreeMap<String, BTreeMap<String, String>>,
+    /// Node name -> locked parameters (Houdini Lock Parameter: no edits, no channel writes).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lock: BTreeMap<String, std::collections::BTreeSet<String>>,
+}
+
+/// Most spare parameters kept per node.
+pub const MAX_SPARE: usize = 512;
+/// Spare parameter kinds: value-holding `float` `int` (1..4 components) `toggle` `string` `menu`; layout-only `folder`
+/// (a tab: the params naming it in `folder` sit on it) `separator` `label`.
+pub const SPARE_KINDS: [&str; 8] = ["float", "int", "toggle", "string", "menu", "folder", "separator", "label"];
+
+/// A spare parameter: one entry of a node's user-edited interface. `value` null = `default`. `ui` is the Houdini type it
+/// was created as (`Angle`, `Color`, `File`, ...): an editor hint only.
+#[derive(Clone, Debug, PartialEq, Deserialize, serde::Serialize)]
+pub struct SpareParm {
+    pub name: String,
+    pub label: String,
+    pub kind: String,
+    #[serde(default = "one")]
+    pub size: u8,
+    #[serde(default)]
+    pub default: Value,
+    #[serde(default)]
+    pub value: Value,
+    #[serde(default)]
+    pub min: Option<f32>,
+    #[serde(default)]
+    pub max: Option<f32>,
+    /// Menu items `[token, label]` (`menu` kind).
+    #[serde(default)]
+    pub menu: Vec<[String; 2]>,
+    /// Name of the spare `folder` (tab) it sits on; `None` = after the node's own parameters.
+    #[serde(default)]
+    pub folder: Option<String>,
+    #[serde(default)]
+    pub invisible: bool,
+    /// Horizontally join to the next parameter.
+    #[serde(default)]
+    pub join: bool,
+    #[serde(default)]
+    pub help: String,
+    #[serde(default)]
+    pub disable_when: String,
+    #[serde(default)]
+    pub hide_when: String,
+    #[serde(default)]
+    pub ui: String,
+}
+fn one() -> u8 {
+    1
+}
+
+/// Spare parameter names: a letter or `_`, then letters, digits, `_`; at most 64 bytes (Houdini parm names).
+pub fn valid_spare_name(n: &str) -> bool {
+    let mut c = n.chars();
+    c.next().is_some_and(|f| f.is_ascii_alphabetic() || f == '_')
+        && c.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+        && n.len() <= 64
+}
+
+impl SpareParm {
+    /// `v` as this parameter's value type, or `None` if it does not fit (wrong type / size, non-finite, menu index out of
+    /// range, over-long string).
+    pub fn coerce(&self, v: &Value) -> Option<Value> {
+        let n = usize::from(self.size);
+        let num = |x: &Value| x.as_f64().filter(|f| f.is_finite() && f.abs() < 1e30);
+        match self.kind.as_str() {
+            "float" | "int" => {
+                let xs: Vec<f64> = match v {
+                    Value::Array(a) if a.len() == n && n > 1 => a.iter().map(num).collect::<Option<_>>()?,
+                    x if n == 1 => vec![num(x)?],
+                    _ => return None,
+                };
+                let xs: Vec<Value> = if self.kind == "int" {
+                    xs.iter().map(|f| Value::from(f.round().clamp(i32::MIN as f64, i32::MAX as f64) as i64)).collect()
+                } else {
+                    xs.iter().map(|f| Value::from(*f)).collect()
+                };
+                Some(if n == 1 { xs[0].clone() } else { Value::Array(xs) })
+            }
+            "toggle" => match v {
+                Value::Bool(b) => Some(Value::Bool(*b)),
+                x => Some(Value::Bool(num(x)? != 0.0)),
+            },
+            "string" => v.as_str().filter(|s| s.len() <= MAX_UI_TEXT).map(Value::from),
+            "menu" => {
+                let i = num(v)?;
+                (i >= 0.0 && i.fract() == 0.0 && (i as usize) < self.menu.len().max(1)).then(|| Value::from(i as u64))
+            }
+            _ => Some(Value::Null),
+        }
+    }
+    /// The zero value of the kind (0, [0,..], false, "", first menu item; null for layout kinds).
+    pub fn zero(&self) -> Value {
+        match self.kind.as_str() {
+            "float" | "int" if self.size > 1 => Value::Array(vec![Value::from(0); usize::from(self.size)]),
+            "float" | "int" | "menu" => Value::from(0),
+            "toggle" => Value::Bool(false),
+            "string" => Value::from(""),
+            _ => Value::Null,
+        }
+    }
+    /// Well-formed or `None`: valid name, known kind, size 1..4 (1 for non-numeric), text capped, finite range, default and
+    /// value of the right type (a bad default becomes the zero value, a bad value the default).
+    pub fn sanitized(mut self) -> Option<SpareParm> {
+        if !valid_spare_name(&self.name) || !SPARE_KINDS.contains(&self.kind.as_str()) {
+            return None;
+        }
+        if !matches!(self.kind.as_str(), "float" | "int") {
+            self.size = 1;
+        }
+        self.size = self.size.clamp(1, 4);
+        for s in [&mut self.label, &mut self.help, &mut self.disable_when, &mut self.hide_when, &mut self.ui] {
+            cap_text(s);
+        }
+        self.menu.truncate(MAX_SPARE);
+        for m in &mut self.menu {
+            cap_text(&mut m[0]);
+            cap_text(&mut m[1]);
+        }
+        self.min = self.min.filter(|v| v.is_finite());
+        self.max = self.max.filter(|v| v.is_finite());
+        self.default = self.coerce(&self.default).unwrap_or_else(|| self.zero());
+        self.value = if self.value.is_null() { Value::Null } else { self.coerce(&self.value).unwrap_or(Value::Null) };
+        Some(self)
+    }
+    /// Current value (the default when unset).
+    pub fn current(&self) -> &Value {
+        if self.value.is_null() { &self.default } else { &self.value }
+    }
 }
 
 /// A network box: titled coloured backdrop behind `nodes`.
@@ -139,6 +275,34 @@ impl UiExtra {
             n.color = clamp_rgb(n.color).unwrap_or([1.0, 0.97, 0.52]);
             cap_text(&mut n.text);
         }
+        // spare parameters of known nodes: well-formed entries, unique names, capped count
+        self.spare = std::mem::take(&mut self.spare)
+            .into_iter()
+            .filter(|(k, _)| known(k))
+            .map(|(k, ps)| {
+                let mut seen = std::collections::BTreeSet::new();
+                let ps: Vec<SpareParm> = ps
+                    .into_iter()
+                    .filter_map(SpareParm::sanitized)
+                    .filter(|p| seen.insert(p.name.clone()))
+                    .take(MAX_SPARE)
+                    .collect();
+                (k, ps)
+            })
+            .filter(|(_, ps)| !ps.is_empty())
+            .collect();
+        self.chan = std::mem::take(&mut self.chan)
+            .into_iter()
+            .filter(|(k, _)| known(k))
+            .map(|(k, c)| (k, crate::chans::sanitize_chans(c)))
+            .filter(|(_, c)| !c.is_empty())
+            .collect();
+        self.lock = std::mem::take(&mut self.lock)
+            .into_iter()
+            .filter(|(k, _)| known(k))
+            .map(|(k, l)| (k, l.into_iter().filter(|p| p.len() <= 128).take(crate::chans::MAX_CHANS).collect()))
+            .filter(|(_, l): &(String, std::collections::BTreeSet<String>)| !l.is_empty())
+            .collect();
         self
     }
 }

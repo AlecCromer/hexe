@@ -1881,10 +1881,16 @@ id = "ui-spare-parms"
 title = "Spare parameters (Edit Parameter Interface): add user parms of every Houdini parm type to any node"
 area = "A"
 tier = "P2"
-status = "planned"
+status = "partial"
 commands = []
-evidence = []
-notes = "Requested 2026-10-18 (item 9): nodes keep their locked parms; users add parms (Angle, Button, Color, Float/Int vectors, File, Folder, Ramp, String, Toggle, Menu, Operator Path, ...). Not started."
+evidence = [
+  "apps/hexe-tauri/src-tauri/src/model.rs::spare_parms_set_value_undo_rename_and_round_trip",
+  "apps/hexe-tauri/ui/src/parmdialog.test.ts::parm dialog: Houdini names (newparameter, newparameter2), types map to spare kinds, unsupported types make nothing",
+  "apps/hexe-tauri/ui/src/parmdialog.test.ts::parm dialog: insert after the selection / into a selected folder, remove moves folder members to root, retype keeps identity",
+  "apps/hexe-tauri/ui/src/parmdialog.test.ts::spare params render with the pane widgets: vectors any size, menus with entries",
+  "crates/sop/src/builtins/null_sop.rs::copy_input_off_gives_empty_geometry_like_houdini",
+]
+notes = "2026-10-19: hexe_sop::SpareParm in UiExtra.spare (saved with the scene, undo / redo, follows renames, sanitized on load). Kinds float / int (size 1..4), toggle, string, menu, folder (tab), separator, label; the Houdini type it was made as kept in `ui`. Edit Parameter Interface dialog (parmdialog.ts, from the gear menu): Create Parameters By Type (Houdini's list; Button / Ramp / Data / RGBA Mask / Key-Value / Icon Strip / Hue Circle / Geometry Data disabled), Existing Parameters tree (the node's own parms greyed), Parameter Description (Name, Label, Type, Size, flags, Range, Disable / Hide When, Folder, Help; Channels = defaults; Menu = items), Accept / Apply / Discard; names newparameter, newparameter2 ... like Houdini. Null SOP gained copyinput / cacheinput (hython: copyinput off = empty geometry). Verified live: dialog adds an Integer to a null, Accept stores it, the pane edits its value. GAPS: Render Properties / Node Properties / From Nodes tabs, callbacks, Show Parm In, tags, Disable / Hide When are stored but not evaluated, join is not laid out, drag reordering, Null OBJECT spare parms, .hip spare-parm import."
 
 [[feature]]
 id = "sop-join"
@@ -2025,3 +2031,20 @@ evidence = [
   "crates/sop/src/builtins/remesh_sop.rs::hostile_geometry_never_panics",
 ]
 notes = "STATISTICAL parity vs Houdini 20.5 on synthetic inputs (fixtures/sop-remesh/stats.json from oracle/houdini/remesh/sop_remesh_cases.py): triangulation-only cases exact; most uniform cases within ~5% triangles / edge mean; boundary / hard edges / UV seams split-only (power-of-two pattern and hard-edges group count exact); outputs all triangles, manifold, within 3e-7 of the input. GAPS: 2-iteration coarse grid +15% tris, box +12% (edges rounded more); adaptive sizing is a curvature heuristic (sphere ok, box poor); smoothing ignored (Houdini identical at 0 / .1); group fields take names only; point / edge order not Houdini's."
+
+[[feature]]
+id = "param-channels"
+title = "Channel references: parameters driven by HScript expressions (ch(\"../null1/newparameter2\")), Copy Parameter / Paste Relative References"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = []
+evidence = [
+  "crates/sop/src/chans.rs::relative_references_drive_parameters_and_spare_values",
+  "crates/sop/src/chans.rs::channels_of_list_components_and_bad_references_are_errors_not_panics",
+  "apps/hexe-tauri/src-tauri/src/model.rs::relative_reference_to_a_spare_parameter_drives_a_param_and_follows_renames",
+  "apps/hexe-tauri/ui/src/parmmenu.test.ts::Paste Relative References writes ch(\"../null1/newparameter2\") into Uniform Scale; tuples map component by component",
+  "apps/hexe-tauri/ui/src/parmmenu.test.ts::relative paths: same node, sibling, other network",
+  "apps/hexe-tauri/ui/src/parmmenu.test.ts::right-click menu: Houdini's entries in order, shortcuts, missing handlers grey out",
+]
+notes = "UiExtra.chan: node -> channel (param, component tx / sizex, or spare name) -> expression; hexe_sop::chans::apply_channels evaluates them with hexe_graph::hscript before every cook (app cook_at and hexe-cli cook), writes params + spare values, settles chains in up to 16 passes (cycles stop there), failures reported per field (red) while the cook runs. Typing a value replaces the expression; renaming a node rewrites ../old/ references. Pane: Houdini's right-click menu entry for entry (Revert to Previous Value Shift+RMB, Expression > Edit / Delete, Copy Parameter, Paste Values, Paste Expressions / Channels, Paste Relative References, Paste Other > Absolute, Delete Channels Ctrl+Shift+LMB, Lock / Unlock Parameter (UiExtra.lock: setters refuse, channels skip), Revert to Defaults Ctrl+MMB, Make Current Value Default for spare parms; Channels / Keyframes / Motion FX / Reference / Include in Take / Factory Defaults / Export / More greyed = not in hexe yet); driven fields green, locked grey. Verified live: CONTROLLER spare int -> Copy Parameter -> a Transform's Uniform Scale Paste Relative References = ch(\"../CONTROLLER/newparameter2\") = 2, then 6 after editing. GAPS: references across objects (../../obj/node) and object-level params, $variables beyond F FF T FPS, keyframes, chs string channels into menus, .hip channel import still evaluates once at load (hip-expr)."

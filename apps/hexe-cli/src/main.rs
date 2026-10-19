@@ -192,10 +192,15 @@ fn cook_scene_range(
     base: Option<&std::path::Path>,
     frames: Option<(i64, i64, i64)>,
 ) -> Result<(Vec<u8>, u32, u32), String> {
-    let hexe_sop::Loaded { mut graph, display, .. } =
+    let hexe_sop::Loaded { mut graph, display, mut ui, .. } =
         hexe_sop::load_scene_with_base(json, &registry(), base).map_err(|e| e.to_string())?;
     if let Some((a, b, s)) = frames {
         hexe_sop::render_frames(&mut graph, display, a, b, s)?;
+    }
+    // channel references (`ch("../null1/p")`) evaluated at the cook frame (24 fps, as `graph.cook` times it)
+    let fps = 24.0;
+    for (node, chan, e) in hexe_sop::chans::apply_channels(&mut graph, &mut ui, f64::from(time) * fps + 1.0, fps) {
+        eprintln!("hexe-cli: channel {node}.{chan}: {e}");
     }
     let detail = graph.cook(display, time).map_err(|e| e.to_string())?;
     Ok((hexe_geo::write_geo_json(&detail), detail.point_count, detail.prim_count()))
