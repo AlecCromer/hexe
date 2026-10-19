@@ -6,9 +6,15 @@ use crate::Registry;
 
 mod null_sop;
 //
+pub(crate) mod dot_sop;
+//
 mod add_sop;
+mod control_sop;
+mod join_sop;
 //
 mod attribs;
+//
+mod attribadjust_sop;
 //
 mod attribcopy_sop;
 //
@@ -55,6 +61,8 @@ mod connectivity_sop;
 //
 mod copytopoints_sop;
 //
+mod copyxform_sop;
+//
 mod curve_sop;
 //
 mod delete_sop;
@@ -62,6 +70,8 @@ mod delete_sop;
 mod dissolve_sop;
 //
 mod divide_sop;
+//
+mod enumerate_sop;
 //
 mod fuse_sop;
 //
@@ -101,6 +111,8 @@ mod name_sop;
 //
 mod normal_sop;
 //
+mod orientalongcurve_sop;
+//
 pub(crate) mod meshutil;
 //
 mod selutil;
@@ -132,6 +144,8 @@ mod split_sop;
 mod polyextrude_sop;
 //
 mod ray_sop;
+//
+mod remesh_sop;
 //
 mod resample_sop;
 //
@@ -176,7 +190,16 @@ mod sweep_sop;
 pub(crate) fn builtins(r: &mut Registry) {
     r.register("null", null_sop::spec, null_sop::new);
     //
+    r.register("dot", dot_sop::spec, dot_sop::new);
+    //
     r.register("add", add_sop::spec, add_sop::new);
+    //
+    r.register("control", control_sop::spec, control_sop::new);
+    r.register("join", join_sop::spec, join_sop::new);
+    //
+    r.register("attribadjustfloat", attribadjust_sop::float_spec, attribadjust_sop::float_new);
+    r.register("attribadjustinteger", attribadjust_sop::int_spec, attribadjust_sop::int_new);
+    r.register("attribadjustcolor", attribadjust_sop::color_spec, attribadjust_sop::color_new);
     //
     r.register("attribcopy", attribcopy_sop::spec, attribcopy_sop::new);
     //
@@ -223,6 +246,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("copytopoints", copytopoints_sop::spec, copytopoints_sop::new);
     //
+    r.register("copyxform", copyxform_sop::spec, copyxform_sop::new);
+    //
     r.register("curve", curve_sop::spec, curve_sop::new);
     //
     r.register("delete", delete_sop::spec, delete_sop::new);
@@ -230,6 +255,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("dissolve", dissolve_sop::spec, dissolve_sop::new);
     //
     r.register("divide", divide_sop::spec, divide_sop::new);
+    //
+    r.register("enumerate", enumerate_sop::spec, enumerate_sop::new);
     //
     r.register("fuse", fuse_sop::spec, fuse_sop::new);
     //
@@ -269,6 +296,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     //
     r.register("normal", normal_sop::spec, normal_sop::new);
     //
+    r.register("orientalongcurve", orientalongcurve_sop::spec, orientalongcurve_sop::new);
+    //
     r.register("output", output_sop::spec, output_sop::new);
     //
     r.register("peak", peak_sop::spec, peak_sop::new);
@@ -296,6 +325,8 @@ pub(crate) fn builtins(r: &mut Registry) {
     r.register("polyextrude", polyextrude_sop::spec, polyextrude_sop::new);
     //
     r.register("ray", ray_sop::spec, ray_sop::new);
+    //
+    r.register("remesh", remesh_sop::spec, remesh_sop::new);
     //
     r.register("resample", resample_sop::spec, resample_sop::new);
     //

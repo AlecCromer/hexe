@@ -176,6 +176,21 @@ impl Detail {
     pub fn group(&self, class: AttrClass, name: &str) -> Option<&Group> {
         self.groups.iter().find(|g| g.class == class && g.name == name)
     }
+    pub fn edge_group(&self, name: &str) -> Option<&EdgeGroup> {
+        self.edge_groups.iter().find(|g| g.name == name)
+    }
+    /// Create / replace edge group `name`: each unordered pair kept once (first orientation wins), self-edges and pairs
+    /// naming points past `point_count` dropped.
+    pub fn set_edge_group(&mut self, name: &str, edges: impl IntoIterator<Item = [PointId; 2]>) {
+        let n = self.point_count;
+        let mut seen = std::collections::HashSet::new();
+        let edges: Vec<[PointId; 2]> =
+            edges.into_iter().filter(|&[a, b]| a != b && a < n && b < n && seen.insert((a.min(b), a.max(b)))).collect();
+        match self.edge_groups.iter_mut().find(|g| g.name == name) {
+            Some(g) => g.edges = edges,
+            None => self.edge_groups.push(EdgeGroup { name: name.to_string(), edges }),
+        }
+    }
     /// Append `n` points (all point attrs and point groups extended with defaults / false). Returns the new id range.
     pub fn add_points(&mut self, n: u32) -> std::ops::Range<PointId> {
         let start = self.point_count;
@@ -263,6 +278,14 @@ impl Detail {
         for b in other.attrs.iter().filter(|b| b.class == AttrClass::Detail) {
             if self.attr(AttrClass::Detail, &b.name).is_none() {
                 self.attrs.push(b.clone());
+            }
+        }
+        // edge groups: same-named ones join, `other`'s edges shifted by its new point offset
+        for g in &other.edge_groups {
+            let shifted = g.edges.iter().map(|&[a, b]| [a.saturating_add(np), b.saturating_add(np)]);
+            match self.edge_groups.iter_mut().find(|e| e.name == g.name) {
+                Some(e) => e.edges.extend(shifted),
+                None => self.edge_groups.push(EdgeGroup { name: g.name.clone(), edges: shifted.collect() }),
             }
         }
         self.point_count = np.saturating_add(other.point_count);

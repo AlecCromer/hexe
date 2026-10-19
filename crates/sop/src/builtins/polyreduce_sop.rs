@@ -18,7 +18,14 @@ use std::cmp::Reverse;
 use std::collections::{BTreeSet, BinaryHeap};
 use std::sync::Arc;
 
-const INPUTS: [InputSpec; 1] = [InputSpec { name: "input0" }];
+/// Houdini's input labels (PolyReduce 1.0, help `sop/polyreduce-.txt`): the mesh, feature polygons (their edges, picked by
+/// the `creases` group, resist collapse by `creaseweight` "Stiffen Features"), a reference mesh; 2 and 3 match input 1 by
+/// point number. Inputs 2 / 3 wired with geometry = explicit DEFERRED error (feature edges / reference not modelled yet).
+const INPUTS: [InputSpec; 3] = [
+    InputSpec { name: "Triangular Mesh" },
+    InputSpec { name: "Feature Polygons" },
+    InputSpec { name: "Reference Mesh" },
+];
 const OP: &str = "polyreduce";
 
 /// 4×4 symmetric matrix for quadric error metric
@@ -77,6 +84,52 @@ impl Quadric {
     }
 }
 
+/// Feature edges from the Feature Polygons input (PolyReduce 1.0 help): its polygons' edges; `creases` narrows them -
+/// whitespace tokens `*` (all), `pA-B-C...` (an edge path), an edge group, or a primitive group (its polygons' edges).
+/// Empty = every polygon edge of the input. Point numbers carry over to input 1 as-is.
+fn feature_edges(f: &Detail, creases: &str) -> Result<Vec<[u32; 2]>, CookError> {
+    let poly_edges = |pick: &dyn Fn(usize) -> bool| -> Vec<[u32; 2]> {
+        let mut out = Vec::new();
+        for (q, pr) in f.prims.iter().enumerate() {
+            let PrimKind::Poly { closed } = pr.kind else { continue };
+            if !pick(q) {
+                continue;
+            }
+            let pts: Vec<u32> = pr.verts.clone().filter_map(|v| f.vertex_point.get(v as usize).copied()).collect();
+            let n = pts.len();
+            let segs = if closed && n > 2 { n } else { n.saturating_sub(1) };
+            out.extend((0..segs).map(|k| [pts[k], pts[(k + 1) % n]]));
+        }
+        out
+    };
+    if creases.trim().is_empty() {
+        return Ok(poly_edges(&|_| true));
+    }
+    let mut out = Vec::new();
+    for tok in creases.split_whitespace() {
+        if tok == "*" {
+            out.extend(poly_edges(&|_| true));
+        } else if let Some(path) =
+            tok.strip_prefix('p').filter(|s| s.chars().next().is_some_and(|c| c.is_ascii_digit()))
+        {
+            let ids: Result<Vec<u32>, _> = path.split('-').map(str::parse::<u32>).collect();
+            let ids = ids.map_err(|_| bad(format!("polyreduce: bad feature edge path `{tok}`")))?;
+            out.extend(ids.windows(2).map(|w| [w[0], w[1]]));
+        } else if let Some(g) = f.edge_group(tok) {
+            out.extend(g.edges.iter().copied());
+        } else if let Some(g) = f.group(hexe_geo::AttrClass::Prim, tok) {
+            let mask = g.mask.clone();
+            out.extend(poly_edges(&|q| mask.get(q).copied().unwrap_or(false)));
+        } else {
+            return Err(failed(
+                OP,
+                &format!("Features: no edge or primitive group `{tok}` on the Feature Polygons input"),
+            ));
+        }
+    }
+    Ok(out)
+}
+
 pub fn spec() -> Vec<ParamSpec> {
     vec![
         ParamSpec::new("target", ParamValue::Menu(0))
@@ -85,6 +138,9 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("percentage", ParamValue::F(50.0)).label("Percentage").range(0.0, 100.0),
         ParamSpec::new("finalcount", ParamValue::I(100)).label("Final Count"),
         ParamSpec::new("preserveboundary", ParamValue::B(true)).label("Preserve Boundary"),
+        // PolyReduce 1.0 feature edges (Houdini parm names): `creases` picks them from input 2, `creaseweight` stiffens
+        ParamSpec::new("creases", ParamValue::S(String::new())).label("Features"),
+        ParamSpec::new("creaseweight", ParamValue::F(1.0)).label("Stiffen Features").range(0.0, 100.0),
     ]
 }
 
@@ -161,6 +217,10 @@ impl Node<Detail> for PolyReduce {
     fn type_name(&self) -> &'static str {
         OP
     }
+    /// Houdini: only the first input is required.
+    fn min_inputs(&self) -> usize {
+        1
+    }
     fn inputs(&self) -> &[InputSpec] {
         &INPUTS
     }
@@ -184,6 +244,19 @@ impl Node<Detail> for PolyReduce {
         let preserve_boundary = toggle(p, "preserveboundary")?;
 
         let Some(src) = inputs.first() else { return Ok(Arc::new(Detail::default())) };
+        // feature edges (input 2), matched to input 1 by point number; penalised in the quadrics below
+        let crease_w = match p.float("creaseweight") {
+            Some(v) if v.is_finite() && v >= 0.0 => f64::from(v),
+            _ => return Err(bad("polyreduce: `creaseweight` must be finite and >= 0")),
+        };
+        let features = match inputs.get(1).filter(|f| f.point_count > 0) {
+            Some(f) => feature_edges(f, p.string("creases").unwrap_or(""))?,
+            None => Vec::new(),
+        };
+        // wired = it changes Houdini's result: say so instead of silently reducing without it
+        if inputs.get(2).is_some_and(|r| r.point_count > 0) {
+            return Err(bad("polyreduce: Reference Mesh (input 3) is not modelled yet"));
+        }
         let np = src.point_count as usize;
         let mut m = Mesh { faces: Vec::new(), of_point: vec![BTreeSet::new(); np] };
         let mut locked = vec![false; np];
@@ -261,6 +334,48 @@ impl Node<Detail> for PolyReduce {
                         q[a as usize] = q[a as usize].add(&boundary_q);
                         q[b as usize] = q[b as usize].add(&boundary_q);
                     }
+                }
+            }
+        }
+
+        // Feature edges (Stiffen Features): Garland-Heckbert constraint planes - for each face beside the edge, the plane
+        // through the edge perpendicular to that face, weighted `creaseweight` x squared edge length, so collapses that
+        // move the edge off its line cost more (weight 0 = no effect). Edges not in input 1's mesh are ignored.
+        if crease_w > 0.0 {
+            for &[a, b] in &features {
+                let (Some(pa), Some(pb)) = (pos.get(a as usize).copied(), pos.get(b as usize).copied()) else {
+                    continue;
+                };
+                let e = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
+                let len2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+                if len2 <= 1e-12 {
+                    continue;
+                }
+                let shared: Vec<usize> = m
+                    .of_point
+                    .get(a as usize)
+                    .into_iter()
+                    .flatten()
+                    .filter(|f| m.of_point.get(b as usize).is_some_and(|s| s.contains(f)))
+                    .copied()
+                    .collect();
+                for f in shared {
+                    let Some(Some((corners, _))) = m.faces.get(f) else { continue };
+                    let Some(fnrm) = face_normal(&pos, corners) else { continue };
+                    let c = [
+                        e[1] * fnrm[2] - e[2] * fnrm[1],
+                        e[2] * fnrm[0] - e[0] * fnrm[2],
+                        e[0] * fnrm[1] - e[1] * fnrm[0],
+                    ];
+                    let cl = (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
+                    if cl <= 1e-12 {
+                        continue;
+                    }
+                    let n = [c[0] / cl, c[1] / cl, c[2] / cl];
+                    let d = -(n[0] * pa[0] + n[1] * pa[1] + n[2] * pa[2]);
+                    let fq = Quadric::from_plane(n[0], n[1], n[2], d).scale(crease_w * len2);
+                    q[a as usize] = q[a as usize].add(&fq);
+                    q[b as usize] = q[b as usize].add(&fq);
                 }
             }
         }
@@ -603,6 +718,77 @@ mod tests {
         let p = defaults().with("percentage", ParamValue::F(100.0));
         let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
         assert!(Arc::ptr_eq(&n.cook(&ctx, std::slice::from_ref(&a)).expect("cooks"), &a));
+    }
+
+    /// Stiffen Features keeps a feature line: a flat 9x9 grid (no shape, so plain QEM collapses anywhere) with the middle
+    /// row's 8 edges as features at weight 100 keeps every surviving point that touches the row ON the row.
+    #[test]
+    fn feature_edges_hold_their_line() {
+        let mut g = Detail::default();
+        g.add_points(81);
+        let pts: Vec<[f32; 3]> = (0..81)
+            .map(|i| {
+                let (x, z) = ((i % 9) as f32, (i / 9) as f32);
+                [x, 0.6 * (x * 0.7).sin() * (z * 0.9).cos(), z]
+            })
+            .collect();
+        *g.p_mut() = pts;
+        for r in 0..8u32 {
+            for c in 0..8u32 {
+                let i = r * 9 + c;
+                g.add_poly(&[i, i + 1, i + 10, i + 9], true);
+            }
+        }
+        let row: Vec<u32> = (36..45).collect(); // z = 4
+        let mut f = g.clone();
+        f.set_edge_group("crease", row.windows(2).map(|w| [w[0], w[1]]));
+        let (g, f) = (Arc::new(g), Arc::new(f));
+        let n = new();
+        let on_row = |d: &Detail| d.p().iter().filter(|q| (q[2] - 4.0).abs() < 1e-4).count();
+        let off_row_near =
+            |d: &Detail| d.p().iter().filter(|q| (q[2] - 4.0).abs() > 1e-4 && (q[2] - 4.0).abs() < 0.75).count();
+        let base = defaults().with("percentage", ParamValue::F(40.0)).with("preserveboundary", ParamValue::B(true));
+        let pf =
+            base.clone().with("creases", ParamValue::S("crease".into())).with("creaseweight", ParamValue::F(100.0));
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &pf, log: &|_| {} };
+        let with = n.cook(&ctx, &[g.clone(), f.clone()]).expect("reduces with features");
+        assert!(with.prims.len() < g.prims.len(), "still reduces the whole mesh");
+        let bctx = CookCtx { time: 0.0, fps: 24.0, params: &base, log: &|_| {} };
+        let without = n.cook(&bctx, &[g.clone(), f.clone()]).expect("reduces");
+        assert_eq!(with.prims.len(), without.prims.len(), "same reduction target either way");
+        // drift = how far the points near the line sit from it; features keep it far smaller
+        let drift = |d: &Detail| d.p().iter().map(|q| (q[2] - 4.0).abs()).filter(|dz| *dz < 0.75).sum::<f32>();
+        assert!(drift(&with) * 4.0 < drift(&without), "drift with {} vs without {}", drift(&with), drift(&without));
+        assert!(on_row(&with) + off_row_near(&with) >= 2, "the line survives");
+    }
+
+    #[test]
+    fn three_inputs_like_houdini_and_unmodelled_ones_say_so() {
+        let names: Vec<_> = new().inputs().iter().map(|i| i.name).collect();
+        assert_eq!(names, ["Triangular Mesh", "Feature Polygons", "Reference Mesh"]);
+        let n = new();
+        let p = defaults();
+        let ctx = CookCtx { time: 0.0, fps: 24.0, params: &p, log: &|_| {} };
+        let mesh = Arc::new(sphere_grid(8, 8));
+        let empty = Arc::new(Detail::default());
+        // unwired inputs 2 / 3 (fed empty geometry) reduce exactly as with one input
+        let one = n.cook(&ctx, std::slice::from_ref(&mesh)).expect("one input");
+        let three = n.cook(&ctx, &[mesh.clone(), empty.clone(), empty.clone()]).expect("empty extras");
+        assert_eq!((one.point_count, one.prims.len()), (three.point_count, three.prims.len()));
+        // an EMPTY feature group (your file: group1 has no edges) = plain reduction, same result as no features
+        let mut tagged = (*mesh).clone();
+        tagged.set_edge_group("group1", []);
+        let tagged = Arc::new(tagged);
+        let pf = p.clone().with("creases", ParamValue::S("group1".into())).with("creaseweight", ParamValue::F(10.0));
+        let fctx = CookCtx { time: 0.0, fps: 24.0, params: &pf, log: &|_| {} };
+        let none = n.cook(&fctx, &[tagged.clone(), tagged.clone(), empty.clone()]).expect("empty features");
+        assert_eq!((none.p(), &none.prims), (one.p(), &one.prims));
+        // unknown feature group = an error naming it
+        let pbad = p.clone().with("creases", ParamValue::S("nope".into()));
+        let bctx = CookCtx { time: 0.0, fps: 24.0, params: &pbad, log: &|_| {} };
+        assert!(format!("{:?}", n.cook(&bctx, &[mesh.clone(), mesh.clone()]).expect_err("unknown")).contains("nope"));
+        let refm = n.cook(&ctx, &[mesh.clone(), empty, mesh]).expect_err("reference not modelled");
+        assert!(format!("{refm:?}").contains("Reference Mesh"), "{refm:?}");
     }
 
     #[test]

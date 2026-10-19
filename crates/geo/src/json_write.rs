@@ -307,5 +307,15 @@ pub fn write_geo_json(d: &Detail) -> Vec<u8> {
             top.push(Value::Array(g));
         }
     }
+    // Houdini 20.5 layout: [["name", n], ["points", [a, b, c, d, ...]]] (consecutive pairs)
+    if !d.edge_groups.is_empty() {
+        let eg: Vec<Value> = d
+            .edge_groups
+            .iter()
+            .map(|g| json!([["name", g.name], ["points", g.edges.iter().flatten().collect::<Vec<_>>()]]))
+            .collect();
+        top.push(json!("edgegroups"));
+        top.push(Value::Array(eg));
+    }
     serde_json::to_vec(&Value::Array(top)).unwrap_or_default()
 }

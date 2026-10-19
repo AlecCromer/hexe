@@ -8,6 +8,7 @@
     clippy::unreachable
 )]
 pub mod cli;
+pub mod files;
 pub mod model;
 pub mod render;
 pub mod script;
@@ -84,9 +85,32 @@ fn edge_connect(app: State<App>, from: u32, to: u32, input: usize) -> Res<()> {
 fn edge_disconnect(app: State<App>, to: u32, input: usize) -> Res<()> {
     app.lock().edge_disconnect(to, input)
 }
+/// Network dot centred at (x, y), wired `from` -> dot and dot -> `to`'s `input` when given; one undo step.
+#[tauri::command]
+fn dot_add(app: State<App>, x: f32, y: f32, from: Option<u32>, to: Option<u32>, input: Option<usize>) -> Res<u32> {
+    app.lock().dot_add(x, y, from, to.map(|t| (t, input.unwrap_or(0))))
+}
+/// TAB menu with a wire selected: a `type` node at (x, y) spliced into `from` -> `to`:`input` (`Session::node_add_wired`).
+#[tauri::command]
+fn node_add_wired(
+    app: State<App>,
+    r#type: String,
+    x: f32,
+    y: f32,
+    from: Option<u32>,
+    to: Option<u32>,
+    input: Option<usize>,
+) -> Res<u32> {
+    app.lock().node_add_wired(&r#type, x, y, from, to.map(|t| (t, input.unwrap_or(0))))
+}
 #[tauri::command]
 fn set_display(app: State<App>, id: Option<u32>) -> Res<()> {
     app.lock().set_display(id)
+}
+/// Bypass flag on / off (one undo step).
+#[tauri::command]
+fn set_bypass(app: State<App>, id: u32, on: bool) -> Res<()> {
+    app.lock().set_bypass(id, on)
 }
 /// Remove several nodes as one undo step.
 #[tauri::command]
@@ -145,6 +169,11 @@ fn timeline_set(app: State<App>, frame: i32) -> Res<()> {
 fn cook(app: State<App>) -> CookResult {
     app.lock().cook()
 }
+/// Cook one node that is not the display node (template flag overlay); the spreadsheet keeps the display cook.
+#[tauri::command]
+fn cook_node(app: State<App>, id: u32) -> CookResult {
+    app.lock().cook_node(id)
+}
 /// One window of the geometry spreadsheet over the last cook (`class` = point|vertex|prim|detail).
 #[tauri::command]
 fn spreadsheet(app: State<App>, class: String, offset: usize, limit: usize) -> Res<Sheet> {
@@ -198,6 +227,60 @@ fn render_save(handle: tauri::AppHandle, app: State<App>, data_url: String) {
 fn render_fail(handle: tauri::AppHandle, message: String) {
     eprintln!("hexe: render: {message}");
     handle.exit(2);
+}
+/// File > Open browser: entries of `dir` (`files::list`).
+#[tauri::command]
+fn fs_list(dir: String) -> Res<Vec<files::Entry>> {
+    files::list(&dir)
+}
+/// File > Open browser: home / desktop / temp / drive roots.
+#[tauri::command]
+fn fs_places() -> files::Places {
+    files::places()
+}
+/// File > Open browser New Folder: creates `New Folder` (numbered when taken) in `dir`, returns its name.
+#[tauri::command]
+fn fs_mkdir(dir: String) -> Res<String> {
+    files::mkdir(&dir)
+}
+/// /obj: every Geometry object's name (sorted) + the current one (whose network the SOP commands edit).
+#[tauri::command]
+fn objects_list(app: State<App>) -> (Vec<String>, String) {
+    let s = app.lock();
+    (s.objects(), s.object_name().to_string())
+}
+/// Enter a Geometry object (double-click at /obj): its network becomes current; returns it.
+#[tauri::command]
+fn object_enter(app: State<App>, name: String) -> Res<GraphView> {
+    let mut s = app.lock();
+    s.object_enter(&name)?;
+    Ok(s.graph_get())
+}
+/// New empty Geometry object (`name`, numbered up when taken); returns its final name.
+#[tauri::command]
+fn object_add(app: State<App>, name: String, kind: Option<String>, net: Option<String>) -> Res<String> {
+    app.lock().object_add_kind(&name, kind.as_deref().unwrap_or("geo"), net.as_deref())
+}
+/// Every object: kind (geo / null / subnet), container, file position, flags, a container's sticky notes.
+#[tauri::command]
+fn objects_info(app: State<App>) -> model::ObjInfoList {
+    let s = app.lock();
+    (s.objects_info(), s.object_name().to_string())
+}
+/// Delete a Geometry object and its network.
+#[tauri::command]
+fn object_remove(app: State<App>, name: String) -> Res<()> {
+    app.lock().object_remove(&name)
+}
+/// Rename a Geometry object (numbered up when taken); returns the final name.
+#[tauri::command]
+fn object_rename(app: State<App>, old: String, new: String) -> Res<String> {
+    app.lock().object_rename(&old, &new)
+}
+/// Cook another object's display node (the viewport draws every visible object).
+#[tauri::command]
+fn cook_object(app: State<App>, name: String) -> Res<CookResult> {
+    app.lock().cook_object(&name)
 }
 /// Scene path to open at startup: the positional CLI argument, else `HEXE_OPEN`; `None` = start empty.
 #[tauri::command]
@@ -321,7 +404,11 @@ pub fn run() {
             node_set_param,
             edge_connect,
             edge_disconnect,
+            dot_add,
+            node_add_wired,
             set_display,
+            set_bypass,
+            objects_info,
             undo,
             redo,
             copy_nodes,
@@ -331,8 +418,18 @@ pub fn run() {
             timeline_get,
             timeline_set,
             cook,
+            cook_node,
             spreadsheet,
             startup_scene,
+            objects_list,
+            object_enter,
+            object_add,
+            object_remove,
+            object_rename,
+            cook_object,
+            fs_list,
+            fs_places,
+            fs_mkdir,
             selection_set,
             selection_get,
             group_from_selection,

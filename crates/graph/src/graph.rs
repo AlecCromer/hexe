@@ -35,6 +35,8 @@ struct Slot<T> {
     cache: Option<Cached<T>>,
     /// Tombstone (`remove_node`): ids stay stable, the slot is invisible to every accessor.
     removed: bool,
+    /// Bypass flag: the node does not run; its output is input 0 unchanged (other inputs are not needed / cooked).
+    bypass: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -121,7 +123,7 @@ impl<T: Payload> Graph<T> {
             params.set(name, value.clone());
         }
         let inputs = vec![None; node.inputs().len()];
-        self.slots.push(Slot { node, params, inputs, outs: Vec::new(), cache: None, removed: false });
+        self.slots.push(Slot { node, params, inputs, outs: Vec::new(), cache: None, removed: false, bypass: false });
         Ok(id)
     }
 
@@ -131,16 +133,10 @@ impl<T: Payload> Graph<T> {
         self.link(src, out, dst, input, true)
     }
 
-    /// Test seam: same as `connect` minus the cycle check, to exercise cook-time cycle detection
-    /// (a graph loaded from hostile JSON can still be cyclic).
-    #[cfg(test)]
-    pub(crate) fn connect_unchecked(
-        &mut self,
-        src: NodeId,
-        out: usize,
-        dst: NodeId,
-        input: usize,
-    ) -> Result<(), GraphError> {
+    /// Same as `connect` minus the cycle check. Houdini's network editor lets you wire a loop (the cook flags the
+    /// loop's nodes as errors) while `hou` rejects it at connect, so the editor + scene files use this and scripts use
+    /// `connect`. Safe: cook (`GraphError::Cycle`), dirty propagation and every walk terminate on cycles.
+    pub fn connect_unchecked(&mut self, src: NodeId, out: usize, dst: NodeId, input: usize) -> Result<(), GraphError> {
         self.link(src, out, dst, input, false)
     }
 
@@ -209,6 +205,22 @@ impl<T: Payload> Graph<T> {
         }
         self.invalidate(id);
         Ok(())
+    }
+
+    /// Bypass flag (Houdini semantics): a bypassed node outputs its input 0 unchanged and does not run.
+    pub fn set_bypass(&mut self, id: NodeId, on: bool) -> Result<(), GraphError> {
+        if self.slot(id)?.bypass == on {
+            return Ok(());
+        }
+        if let Some(s) = self.live_mut(id) {
+            s.bypass = on;
+        }
+        self.invalidate(id);
+        Ok(())
+    }
+
+    pub fn bypass(&self, id: NodeId) -> bool {
+        self.live(id).is_some_and(|s| s.bypass)
     }
 
     pub fn param(&self, id: NodeId, name: &str) -> Option<&ParamValue> {
@@ -387,6 +399,19 @@ impl<T: Payload> Graph<T> {
                     continue;
                 }
                 let slot = self.slot(cur)?;
+                if slot.bypass {
+                    // bypassed: only input 0 is cooked (it becomes the output)
+                    let src = slot
+                        .inputs
+                        .first()
+                        .copied()
+                        .flatten()
+                        .ok_or(GraphError::MissingInput { node: cur, input: 0 })?;
+                    visit.insert(cur, Visit::Active);
+                    stack.push((cur, true));
+                    stack.push((src, false));
+                    continue;
+                }
                 if slot.node.block_role() == BlockRole::End {
                     // For-Each: the loop is not an edge. The engine cooks the Begin..End sub-network once per
                     // iteration itself (`block.rs`), so the End node is a leaf here: no cycle, no input walk.
@@ -413,6 +438,15 @@ impl<T: Payload> Graph<T> {
     /// Run one node whose inputs are all cached; store the result.
     fn cook_one(&mut self, id: NodeId, time: f32) -> Result<(), GraphError> {
         let slot = self.slot(id)?;
+        if slot.bypass {
+            let src = slot.inputs.first().copied().flatten().ok_or(GraphError::MissingInput { node: id, input: 0 })?;
+            let c = self.cached(src, time).ok_or(GraphError::Internal("bypass input cache missing at cook"))?;
+            let (out, sensitive) = (Arc::clone(&c.out), c.sensitive);
+            if let Some(s) = self.live_mut(id) {
+                s.cache = Some(Cached { out, time, sensitive });
+            }
+            return Ok(());
+        }
         let mut ins: Vec<Arc<T>> = Vec::with_capacity(slot.inputs.len());
         let mut sensitive = slot.node.time_dependent();
         for src in &slot.inputs {
@@ -562,6 +596,36 @@ mod tests {
         ParamSet::new().with("value", ParamValue::I(v))
     }
 
+    #[test]
+    fn bypass_passes_input_zero_through() {
+        let (ca, cb, cadd) = (counter(), counter(), counter());
+        let mut g: Graph<i32> = Graph::new();
+        let a = g.add_node(konst(&ca), val(5)).unwrap();
+        let b = g.add_node(inc(&cb), ParamSet::new().with("by", ParamValue::I(10))).unwrap();
+        g.connect(a, 0, b, 0).unwrap();
+        assert_eq!(*g.cook(b, 0.0).unwrap(), 15);
+        g.set_bypass(b, true).unwrap();
+        assert!(g.bypass(b) && g.is_dirty(b), "toggling bypass dirties the node");
+        let out = g.cook(b, 0.0).unwrap();
+        assert_eq!(*out, 5, "bypassed: input 0 unchanged");
+        assert!(Arc::ptr_eq(&out, &g.cook(a, 0.0).unwrap()), "pass-through shares the input Arc");
+        assert_eq!(count(&cb), 1, "a bypassed node never runs");
+        // only input 0 is needed: a bypassed two-input node with input 1 unconnected still cooks
+        let add = g.add_node(Add(cadd.clone()), ParamSet::new()).unwrap();
+        g.connect(a, 0, add, 0).unwrap();
+        assert!(g.cook(add, 0.0).is_err(), "not bypassed: input 1 missing");
+        g.set_bypass(add, true).unwrap();
+        assert_eq!(*g.cook(add, 0.0).unwrap(), 5);
+        assert_eq!(count(&cadd), 0);
+        // nothing on input 0: an error, never a panic
+        let lone = g.add_node(inc(&counter()), ParamSet::new()).unwrap();
+        g.set_bypass(lone, true).unwrap();
+        assert!(matches!(g.cook(lone, 0.0), Err(GraphError::MissingInput { input: 0, .. })));
+        // un-bypass recooks
+        g.set_bypass(b, false).unwrap();
+        assert_eq!(*g.cook(b, 0.0).unwrap(), 15);
+        assert!(g.set_bypass(NodeId(9999), true).is_err());
+    }
     #[test]
     fn cook_once_then_cached_and_lazy() {
         let (ca, cb, cside) = (counter(), counter(), counter());

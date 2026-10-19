@@ -434,12 +434,13 @@ mod tests {
         assert!(cook(&two(r#"{"method":9}"#, "{}")).is_err(), "bad method");
         assert!(cook(&two(r#"{}"#, r#"{"mode":7}"#)).is_err(), "bad merge mode");
         assert!(cook(&two(r#"{}"#, r#"{"begin":"s"}"#)).is_err(), "begin names a non-begin node");
-        // a real wire from the end back into the begin is a cycle, rejected at load
+        // a real wire from the end back into the begin is a loop: it loads (editor parity, the scene keeps what was
+        // drawn) and the cook reports the cycle instead of hanging
         let cyc = scene(
             r#"{"name":"b","type":"block_begin"},{"name":"e","type":"block_end"}"#,
             r#"[["b",0,"e",0],["e",0,"b",0]]"#,
         );
-        assert!(load_scene(&cyc).is_err());
+        assert!(cook(&cyc).is_err_and(|e| e.contains("cycle")), "{:?}", cook(&cyc).err());
     }
 
     #[test]

@@ -98,14 +98,18 @@ pub(super) fn rebuild(
             mask: pick(g.class).iter().map(|&i| g.mask.get(i).copied().unwrap_or(false)).collect(),
         })
         .collect();
-    Ok(Detail {
+    let mut out = Detail {
         point_count: u32::try_from(pidx.len()).map_err(|_| failed(who, "point id overflow"))?,
         vertex_point,
         prims: out_prims,
         attrs,
         groups,
+        edge_groups: Vec::new(),
         skipped_attribs: src.skipped_attribs.clone(),
-    })
+    };
+    let lists: Vec<Vec<usize>> = pidx.iter().map(|&i| vec![i]).collect();
+    super::meshutil::follow_edge_groups(src, &super::meshutil::inverse_lists(src.point_count, &lists), &mut out);
+    Ok(out)
 }
 
 /// Position of element `i` of `class` (point = P, prim = mean of its points); `[0;3]` when unknown.

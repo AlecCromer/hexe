@@ -52,6 +52,8 @@ pub struct NodeTypeInfo {
     pub ty: String,
     pub label: String,
     pub inputs: Vec<String>,
+    /// Inputs `0..required` must be wired (`Node::min_inputs`); the rest are optional.
+    pub required: usize,
     pub params: Vec<ParamInfo>,
 }
 
@@ -64,6 +66,10 @@ pub struct NodeView {
     pub x: f32,
     pub y: f32,
     pub inputs: Vec<String>,
+    /// Inputs `0..required` must be wired (`Node::min_inputs`): solid wires, red arrow when unwired; the rest dashed.
+    pub required: usize,
+    /// Bypass flag: the node passes input 0 through unchanged.
+    pub bypass: bool,
     /// Every spec'd param with its current value (defaults included): the param pane edits this.
     pub params: BTreeMap<String, Value>,
 }
@@ -80,6 +86,12 @@ pub struct GraphView {
     pub nodes: Vec<NodeView>,
     pub edges: Vec<EdgeView>,
     pub display: Option<u32>,
+    /// Sticky notes of this network (editor px, top-left, y down), from the scene / .hip file.
+    pub notes: Vec<hexe_sop::UiNote>,
+    /// Network boxes (titled backdrops behind their nodes), editor px, top-left, y down.
+    pub boxes: Vec<hexe_sop::UiBox>,
+    /// Node name -> user colour (rgb 0..1).
+    pub colors: BTreeMap<String, [f32; 3]>,
 }
 
 #[derive(Serialize, Debug, Default, PartialEq)]
@@ -122,6 +134,8 @@ pub struct CookResult {
     pub error: Option<String>,
     /// The node whose cook failed (the UI borders it red); `None` when the failure is not tied to one node.
     pub error_node: Option<u32>,
+    /// Edge groups: name -> flat point pairs `[a0, b0, a1, b1, ...]` (the viewport highlights the Group node's own one).
+    pub edge_groups: BTreeMap<String, Vec<u32>>,
 }
 
 pub struct Session {
@@ -146,6 +160,53 @@ pub struct Session {
     frame: i32,
     /// Timeline rate (frames per second). Default [`DEFAULT_TIMELINE_FPS`] = the gaia-motion clip rate, so `$F` is the clip frame.
     fps: f32,
+    /// Name of the Geometry object whose SOP network is `graph` (/obj: one network per object, `object_enter`).
+    object: String,
+    /// The other Geometry objects, parked while another one is current; each keeps its own network, layout and undo.
+    parked: BTreeMap<String, Parked>,
+    /// Editor extras of the current network kept through load / save / undo: sticky notes, network boxes, node colours.
+    ui: hexe_sop::UiExtra,
+    /// Object-level data per object name (kind, container, position, flags); absent = a Geometry object at /obj.
+    meta: BTreeMap<String, ObjMeta>,
+}
+
+/// Object kinds at /obj: a SOP network, a Null (its network: `control` + `point1`), an object-level container.
+pub const OBJ_KINDS: [&str; 3] = ["geo", "null", "subnet"];
+
+/// Object-level data of one object (editor state saved with multi-object scenes).
+#[derive(Clone, Debug, PartialEq)]
+struct ObjMeta {
+    kind: String,
+    /// Container object it lives in (`None` = directly under /obj).
+    net: Option<String>,
+    pos: Option<[f32; 2]>,
+    display: bool,
+    selectable: bool,
+}
+impl Default for ObjMeta {
+    fn default() -> Self {
+        ObjMeta { kind: "geo".into(), net: None, pos: None, display: true, selectable: true }
+    }
+}
+
+/// `objects_info`: every object + the current one's name.
+pub type ObjInfoList = (Vec<ObjInfo>, String);
+
+/// One object as the /obj editor sees it.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct ObjInfo {
+    pub name: String,
+    /// `geo` (SOP network) · `null` (Null object: `control` + `point1` SOPs) · `subnet` (object-level container such as a
+    /// subnet or digital asset: holds other objects; its own network has only sticky notes)
+    pub kind: String,
+    /// Container object it lives in (`None` = directly under /obj).
+    pub net: Option<String>,
+    /// Network position from the file (editor px, top-left); `None` = the editor places it.
+    pub pos: Option<[f32; 2]>,
+    pub display: bool,
+    pub selectable: bool,
+    /// Sticky notes of a container's network (`subnet` only; a geo's notes come with its graph).
+    pub notes: Vec<hexe_sop::UiNote>,
 }
 /// Timeline rate unless `--fps`: gaia-motion renders its clips at 30 fps (`motion` SOP `fps` default).
 pub const DEFAULT_TIMELINE_FPS: f32 = 30.0;
@@ -182,6 +243,22 @@ struct Clip {
     edges: Vec<(usize, usize, usize)>,
 }
 
+/// A Geometry object's SOP network while another object is current (moved, never copied: switching is O(1)).
+#[derive(Default)]
+struct Parked {
+    graph: Graph<Detail>,
+    pos: BTreeMap<String, [f32; 2]>,
+    last: Option<Arc<Detail>>,
+    undo: Vec<Snap>,
+    redo: Vec<Snap>,
+    last_key: Option<String>,
+    ui: hexe_sop::UiExtra,
+}
+/// The object a fresh / single-network scene lives in.
+pub const FIRST_OBJECT: &str = "geo1";
+/// Most Geometry objects at /obj (hundreds are normal; a hostile multi-object file cannot exhaust memory past this).
+pub const MAX_OBJECTS: usize = 10_000;
+
 impl Default for Session {
     fn default() -> Self {
         Session {
@@ -199,8 +276,48 @@ impl Default for Session {
             selection: Vec::new(),
             frame: 1,
             fps: DEFAULT_TIMELINE_FPS,
+            object: FIRST_OBJECT.to_string(),
+            parked: BTreeMap::new(),
+            ui: hexe_sop::UiExtra::default(),
+            meta: BTreeMap::new(),
         }
     }
+}
+
+/// Object-level data of a multi-object file entry (`kind`, `net`, `pos`, `display`, `selectable`; all optional).
+fn obj_meta(o: &Value) -> Result<ObjMeta, String> {
+    let mut m = ObjMeta::default();
+    if let Some(k) = o.get("kind").filter(|k| !k.is_null()) {
+        let k = k.as_str().ok_or("kind: not a string")?;
+        if !OBJ_KINDS.contains(&k) {
+            return Err(format!("kind `{k}` (one of {})", OBJ_KINDS.join(", ")));
+        }
+        m.kind = k.to_string();
+    }
+    if let Some(n) = o.get("net").filter(|n| !n.is_null()) {
+        let n = n.as_str().ok_or("net: not a string")?;
+        valid_object_name(n)?;
+        m.net = Some(n.to_string());
+    }
+    if let Some(p) = o.get("pos").filter(|p| !p.is_null()) {
+        let xy: Vec<f32> =
+            p.as_array().ok_or("pos: not [x, y]")?.iter().filter_map(Value::as_f64).map(|v| v as f32).collect();
+        match xy[..] {
+            [x, y] if x.is_finite() && y.is_finite() => m.pos = Some([x, y]),
+            _ => return Err("pos: not two finite numbers".into()),
+        }
+    }
+    m.display = o.get("display").and_then(Value::as_bool).unwrap_or(true);
+    m.selectable = o.get("selectable").and_then(Value::as_bool).unwrap_or(true);
+    Ok(m)
+}
+
+/// Object names: like node names (letters, digits, `_` and `-`), at most 64 characters.
+fn valid_object_name(name: &str) -> Result<(), String> {
+    if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(format!("invalid object name `{name}` (letters, digits, `_` and `-`, at most 64)"));
+    }
+    Ok(())
 }
 
 fn kind_of(v: &ParamValue) -> &'static str {
@@ -328,6 +445,7 @@ impl Session {
                     ty: t.to_string(),
                     label: t.to_string(),
                     inputs: node.inputs().iter().map(|i| i.name.to_string()).collect(),
+                    required: node.min_inputs().min(node.inputs().len()),
                     params: self.reg.specs(t)?.iter().map(param_info).collect(),
                 })
             })
@@ -337,7 +455,12 @@ impl Session {
     /// Fresh empty graph.
     pub fn graph_new(&mut self) {
         self.graph = Graph::new();
+        self.ui = hexe_sop::UiExtra::default();
         self.pos.clear();
+        self.last = None;
+        self.parked.clear();
+        self.meta.clear();
+        self.object = FIRST_OBJECT.to_string();
         self.reset_history();
     }
 
@@ -355,32 +478,422 @@ impl Session {
             // File -> Open on a Houdini .hip: first /obj geo container with SOPs (no-twin nodes load as `unsupported:<type>`).
             let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
             let imp = hexe_sop::import_hip(&bytes).map_err(|e| format!("{path}: {e}"))?;
-            let g = imp.geos.first().ok_or_else(|| format!("{path}: no /obj geo network with SOP nodes"))?;
-            serde_json::to_string(&g.scene).map_err(|e| e.to_string())?
+            if imp.geos.is_empty() {
+                return Err(format!("{path}: no /obj geo network with SOP nodes"));
+            }
+            if imp.geos.len() + imp.empty.len() == 1 && imp.containers.is_empty() {
+                serde_json::to_string(&imp.geos[0].scene).map_err(|e| e.to_string())?
+            } else {
+                // every geo becomes a Geometry object (empty ones too), every subnet / asset a container object holding
+                // the objects inside it; names made unique (nested assets can repeat them)
+                let mut seen = std::collections::BTreeSet::new();
+                let mut uniq = |n: &str| {
+                    let base: String =
+                        n.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').take(56).collect();
+                    let base = if base.is_empty() { "geo".to_string() } else { base };
+                    let name = (0u32..)
+                        .map(|i| if i == 0 { base.clone() } else { format!("{base}{i}") })
+                        .find(|c| !seen.contains(c))
+                        .unwrap_or_default();
+                    seen.insert(name.clone());
+                    name
+                };
+                // containers first, outermost first: an object's `net` (its container's hip path) maps to a unique name
+                let mut boxes: Vec<&hexe_sop::ContainerImport> = imp.containers.iter().collect();
+                boxes.sort_by_key(|c| c.object.parent.matches('/').count() + usize::from(!c.object.parent.is_empty()));
+                let mut path_names = BTreeMap::new();
+                let full = |o: &hexe_sop::ObjMeta| {
+                    if o.parent.is_empty() { o.name.clone() } else { format!("{}/{}", o.parent, o.name) }
+                };
+                let entry = |name: String, kind: &str, o: &hexe_sop::ObjMeta, paths: &BTreeMap<String, String>| {
+                    serde_json::json!({
+                        "name": name, "kind": kind, "net": paths.get(&o.parent), "pos": o.pos,
+                        "display": o.display, "selectable": o.selectable,
+                    })
+                };
+                let mut objects: Vec<Value> = Vec::new();
+                for c in boxes {
+                    let name = uniq(&c.object.name);
+                    let mut e = entry(name.clone(), "subnet", &c.object, &path_names);
+                    e["scene"] = Value::Null;
+                    e["notes"] = Value::Array(c.notes.clone());
+                    objects.push(e);
+                    path_names.insert(full(&c.object), name);
+                }
+                for g in &imp.geos {
+                    let mut e = entry(uniq(&g.name), "geo", &g.object, &path_names);
+                    e["scene"] = g.scene.clone();
+                    objects.push(e);
+                }
+                for o in &imp.empty {
+                    let mut e = entry(uniq(&o.name), "geo", o, &path_names);
+                    e["scene"] = Value::Null;
+                    objects.push(e);
+                }
+                // open inside the first Geometry object that has nodes
+                let current = objects
+                    .iter()
+                    .find(|o| o.get("kind").and_then(Value::as_str) == Some("geo") && !o["scene"].is_null())
+                    .and_then(|o| o.get("name"))
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                serde_json::json!({ "hexe_objects": 1, "current": current, "objects": objects }).to_string()
+            }
         } else {
             std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?
         };
+        if self.load_objects(&json, Path::new(path).parent())? {
+            self.apply_sets();
+            self.reset_history();
+            return Ok(());
+        }
         let l =
             hexe_sop::load_scene_with_base(&json, &self.reg, Path::new(path).parent()).map_err(|e| e.to_string())?;
         self.graph = l.graph;
         self.pos = l.pos;
+        self.ui = l.ui;
+        self.last = None;
+        self.parked.clear();
+        self.meta.clear();
+        self.object = FIRST_OBJECT.to_string();
         self.auto_layout();
         self.apply_sets();
         self.reset_history();
         Ok(())
     }
 
-    /// Write the scene (nodes, non-default params, edges, display, `ui.pos`) to `path`.
+    /// Write the scene to `path`: one object = the plain scene format (nodes, non-default params, edges, display,
+    /// `ui.pos`); several = `{"hexe_objects": 1, "current": .., "objects": [{"name", "scene"}]}` (`scene` null = empty).
     pub fn graph_save(&self, path: &str) -> Result<(), String> {
-        let text = hexe_sop::save_scene(&self.graph, &self.pos).map_err(|e| e.to_string())?;
+        let text = if self.parked.is_empty() {
+            hexe_sop::save_scene_ext(&self.graph, &self.pos, &self.ui).map_err(|e| e.to_string())?
+        } else {
+            let scene = |g: &Graph<Detail>,
+                         pos: &BTreeMap<String, [f32; 2]>,
+                         ui: &hexe_sop::UiExtra|
+             -> Result<Value, String> {
+                if g.node_ids().into_iter().all(|n| g.name(n).is_none()) {
+                    return Ok(Value::Null);
+                }
+                let t = hexe_sop::save_scene_ext(g, pos, ui).map_err(|e| e.to_string())?;
+                serde_json::from_str(&t).map_err(|e| e.to_string())
+            };
+            let mut objects = vec![(self.object.clone(), scene(&self.graph, &self.pos, &self.ui)?, &self.ui)];
+            for (name, p) in &self.parked {
+                objects.push((name.clone(), scene(&p.graph, &p.pos, &p.ui)?, &p.ui));
+            }
+            objects.sort_by(|a, b| a.0.cmp(&b.0));
+            let objects: Vec<Value> = objects
+                .into_iter()
+                .map(|(name, scene, ui)| {
+                    let mut o = serde_json::json!({ "name": name, "scene": scene });
+                    if let Some(m) = self.meta.get(&name).filter(|m| **m != ObjMeta::default()) {
+                        o["kind"] = Value::from(m.kind.clone());
+                        o["net"] = m.net.clone().map_or(Value::Null, Value::from);
+                        o["pos"] = serde_json::json!(m.pos);
+                        o["display"] = Value::Bool(m.display);
+                        o["selectable"] = Value::Bool(m.selectable);
+                        if m.kind == "subnet" {
+                            o["notes"] = serde_json::json!(ui.notes);
+                        }
+                    }
+                    o
+                })
+                .collect();
+            serde_json::to_string_pretty(
+                &serde_json::json!({ "hexe_objects": 1, "current": self.object, "objects": objects }),
+            )
+            .map_err(|e| e.to_string())?
+        };
         std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))
+    }
+
+    /// A multi-object file (`graph_save`): every object loaded (relative paths against `base`), `current` entered.
+    /// `Ok(false)` = not that format (a plain scene). Nothing changes on error.
+    fn load_objects(&mut self, json: &str, base: Option<&Path>) -> Result<bool, String> {
+        let Ok(v) = serde_json::from_str::<Value>(json) else { return Ok(false) };
+        let Some(list) = v.get("hexe_objects").and(v.get("objects")).and_then(Value::as_array) else {
+            return Ok(false);
+        };
+        if list.is_empty() || list.len() > MAX_OBJECTS {
+            return Err(format!("objects: {} (1..={MAX_OBJECTS})", list.len()));
+        }
+        let mut parked = BTreeMap::new();
+        let mut meta = BTreeMap::new();
+        for o in list {
+            let name = o.get("name").and_then(Value::as_str).ok_or("object without a name")?;
+            valid_object_name(name)?;
+            let m = obj_meta(o).map_err(|e| format!("{name}: {e}"))?;
+            let mut p = Parked::default();
+            if m.kind == "subnet" {
+                // a container's own network holds only sticky notes
+                let notes = o.get("notes").cloned().unwrap_or(Value::Array(Vec::new()));
+                let ui: hexe_sop::UiExtra = serde_json::from_value(serde_json::json!({ "notes": notes }))
+                    .map_err(|e| format!("{name}: notes: {e}"))?;
+                p.ui = ui.sanitized(|_| true);
+            } else if let Some(scene) = o.get("scene").filter(|s| !s.is_null()) {
+                let l = hexe_sop::load_scene_with_base(&scene.to_string(), &self.reg, base)
+                    .map_err(|e| format!("{name}: {e}"))?;
+                p.graph = l.graph;
+                p.pos = l.pos;
+                p.ui = l.ui;
+            }
+            if parked.insert(name.to_string(), p).is_some() {
+                return Err(format!("two objects named `{name}`"));
+            }
+            if m != ObjMeta::default() {
+                meta.insert(name.to_string(), m);
+            }
+        }
+        // a container must exist and be a container; anything else lands at /obj
+        let boxes: std::collections::BTreeSet<String> =
+            meta.iter().filter(|(_, m)| m.kind == "subnet").map(|(k, _)| k.clone()).collect();
+        for (name, m) in &mut meta {
+            if m.net.as_ref().is_some_and(|n| !boxes.contains(n) || n == name) {
+                m.net = None;
+            }
+        }
+        // container loops (a in b, b in a): cut where the walk revisits
+        for name in meta.keys().cloned().collect::<Vec<_>>() {
+            let mut seen = std::collections::BTreeSet::from([name.clone()]);
+            let mut at = name.clone();
+            while let Some(up) = meta.get(&at).and_then(|m| m.net.clone()) {
+                if !seen.insert(up.clone()) {
+                    if let Some(m) = meta.get_mut(&at) {
+                        m.net = None;
+                    }
+                    break;
+                }
+                at = up;
+            }
+        }
+        let current = v.get("current").and_then(Value::as_str).filter(|c| parked.contains_key(*c));
+        let current = current.map_or_else(|| parked.keys().next().cloned().unwrap_or_default(), str::to_string);
+        let Some(p) = parked.remove(&current) else { return Err("no objects".into()) };
+        self.parked = parked;
+        self.meta = meta;
+        self.object = current;
+        self.swap_in(p);
+        self.auto_layout();
+        // parked objects get their layout when first entered (`object_enter` runs `auto_layout`)
+        Ok(true)
+    }
+
+    // ---- /obj: Geometry objects, one SOP network each. Every SOP command works on the current object's network.
+
+    /// The current object's name (the network every SOP command edits).
+    pub fn object_name(&self) -> &str {
+        &self.object
+    }
+
+    /// Every Geometry object's name, sorted.
+    pub fn objects(&self) -> Vec<String> {
+        let mut v: Vec<String> = std::iter::once(self.object.clone()).chain(self.parked.keys().cloned()).collect();
+        v.sort();
+        v
+    }
+
+    fn swap_out(&mut self) -> Parked {
+        Parked {
+            graph: std::mem::take(&mut self.graph),
+            pos: std::mem::take(&mut self.pos),
+            last: self.last.take(),
+            undo: std::mem::take(&mut self.undo),
+            redo: std::mem::take(&mut self.redo),
+            last_key: self.last_key.take(),
+            ui: std::mem::take(&mut self.ui),
+        }
+    }
+
+    fn swap_in(&mut self, p: Parked) {
+        self.graph = p.graph;
+        self.pos = p.pos;
+        self.last = p.last;
+        self.undo = p.undo;
+        self.redo = p.redo;
+        self.last_key = p.last_key;
+        self.ui = p.ui;
+    }
+
+    /// Make `name` the current object (double-click it at /obj): its network is what the SOP commands edit now.
+    pub fn object_enter(&mut self, name: &str) -> Result<(), String> {
+        if name == self.object {
+            return Ok(());
+        }
+        let p = self.parked.remove(name).ok_or_else(|| format!("no object `{name}`"))?;
+        let cur = self.swap_out();
+        let old = std::mem::replace(&mut self.object, name.to_string());
+        self.parked.insert(old, cur);
+        self.swap_in(p);
+        self.auto_layout();
+        Ok(())
+    }
+
+    /// A name no other object has: `name` if free, else the next free number on its base (geo1 taken: `geo1` -> geo2).
+    fn free_object_name(&self, name: &str, except: Option<&str>) -> String {
+        let taken = |c: &str| Some(c) != except && (c == self.object || self.parked.contains_key(c));
+        if !taken(name) {
+            return name.to_string();
+        }
+        let base = name.trim_end_matches(|c: char| c.is_ascii_digit());
+        let base = if base.is_empty() { name } else { base };
+        (1u32..).map(|i| format!("{base}{i}")).find(|c| !taken(c)).unwrap_or_default()
+    }
+
+    /// Every object with its kind, container, file position and flags (sorted by name).
+    pub fn objects_info(&self) -> Vec<ObjInfo> {
+        self.objects()
+            .into_iter()
+            .map(|name| {
+                let m = self.meta.get(&name).cloned().unwrap_or_default();
+                let ui = if name == self.object { Some(&self.ui) } else { self.parked.get(&name).map(|p| &p.ui) };
+                let notes =
+                    if m.kind == "subnet" { ui.map(|u| u.notes.clone()).unwrap_or_default() } else { Vec::new() };
+                ObjInfo {
+                    name,
+                    kind: m.kind,
+                    net: m.net,
+                    pos: m.pos,
+                    display: m.display,
+                    selectable: m.selectable,
+                    notes,
+                }
+            })
+            .collect()
+    }
+
+    /// A Null object's network (Houdini): `control` (the viewport indicator, display flag) and `point1`, an Add SOP
+    /// holding one point at the origin.
+    fn null_network(&self) -> Result<Parked, String> {
+        let mut p = Parked::default();
+        let e = |e: GraphError| e.to_string();
+        for (ty, name, at) in [("control", "control", [0.0, 0.0]), ("add", "point1", [LAYOUT_DX, 0.0])] {
+            let node = self.reg.create(ty).ok_or_else(|| format!("unknown node type `{ty}`"))?;
+            let id = p.graph.add_boxed(node, ParamSet::new()).map_err(e)?;
+            p.graph.rename(id, name).map_err(e)?;
+            p.pos.insert(name.to_string(), at);
+            if ty == "control" {
+                p.graph.set_display(Some(id)).map_err(e)?;
+            } else {
+                p.graph.set_param(id, "points", ParamValue::S("0,0,0".into())).map_err(e)?;
+            }
+        }
+        hexe_sop::fill_unwired(&mut p.graph).map_err(|e| e.to_string())?;
+        Ok(p)
+    }
+
+    /// New object (TAB menu at /obj): `name`, numbered up when taken; `kind` = `geo` (empty SOP network), `null`
+    /// (`control` + `point1` inside) or `subnet`; `net` = the container it is created in. Returns its name.
+    pub fn object_add_kind(&mut self, name: &str, kind: &str, net: Option<&str>) -> Result<String, String> {
+        valid_object_name(name)?;
+        if !OBJ_KINDS.contains(&kind) {
+            return Err(format!("object kind `{kind}` (one of {})", OBJ_KINDS.join(", ")));
+        }
+        if let Some(n) = net.filter(|n| self.meta.get(*n).is_none_or(|m| m.kind != "subnet")) {
+            return Err(format!("no container object `{n}`"));
+        }
+        if self.parked.len() + 1 >= MAX_OBJECTS {
+            return Err(format!("at most {MAX_OBJECTS} objects"));
+        }
+        let p = if kind == "null" { self.null_network()? } else { Parked::default() };
+        let name = self.free_object_name(name, None);
+        self.parked.insert(name.clone(), p);
+        let m = ObjMeta { kind: kind.to_string(), net: net.map(str::to_string), ..ObjMeta::default() };
+        if m != ObjMeta::default() {
+            self.meta.insert(name.clone(), m);
+        }
+        Ok(name)
+    }
+
+    /// New empty Geometry object at /obj (TAB menu > Geometry): `name`, numbered up when taken. Returns its name.
+    pub fn object_add(&mut self, name: &str) -> Result<String, String> {
+        self.object_add_kind(name, "geo", None)
+    }
+
+    /// Delete an object and its network; a container takes everything inside it along. Deleting the current one
+    /// enters another; the last one is emptied instead (there is always a current network).
+    pub fn object_remove(&mut self, name: &str) -> Result<(), String> {
+        if name != self.object && !self.parked.contains_key(name) {
+            return Err(format!("no object `{name}`"));
+        }
+        // the container and everything nested in it (breadth first: no recursion depth on deep nesting)
+        let mut doomed = vec![name.to_string()];
+        let mut i = 0;
+        while let Some(c) = doomed.get(i).cloned() {
+            doomed
+                .extend(self.meta.iter().filter(|(_, m)| m.net.as_deref() == Some(c.as_str())).map(|(k, _)| k.clone()));
+            i += 1;
+        }
+        for k in doomed.iter().rev() {
+            self.meta.remove(k);
+            self.object_remove_one(k)?;
+        }
+        Ok(())
+    }
+
+    fn object_remove_one(&mut self, name: &str) -> Result<(), String> {
+        if name != self.object {
+            return self.parked.remove(name).map(|_| ()).ok_or_else(|| format!("no object `{name}`"));
+        }
+        // the next current network: a SOP network (geo / null) before a container
+        let sops = self.parked.keys().find(|k| self.meta.get(*k).is_none_or(|m| m.kind != "subnet"));
+        match sops.or_else(|| self.parked.keys().next()).cloned() {
+            Some(other) => {
+                self.object_enter(&other)?;
+                self.parked.remove(name);
+            }
+            None => {
+                self.graph = Graph::new();
+                self.pos.clear();
+                self.ui = hexe_sop::UiExtra::default();
+                self.last = None;
+                self.reset_history();
+            }
+        }
+        Ok(())
+    }
+
+    /// Rename an object (click its name at /obj); a taken name is numbered up. Returns the final name.
+    pub fn object_rename(&mut self, old: &str, new: &str) -> Result<String, String> {
+        valid_object_name(new)?;
+        if old != self.object && !self.parked.contains_key(old) {
+            return Err(format!("no object `{old}`"));
+        }
+        let new = self.free_object_name(new, Some(old));
+        if new == old {
+            return Ok(new);
+        }
+        if old == self.object {
+            self.object = new.clone();
+        } else if let Some(p) = self.parked.remove(old) {
+            self.parked.insert(new.clone(), p);
+        }
+        if let Some(m) = self.meta.remove(old) {
+            self.meta.insert(new.clone(), m);
+        }
+        for m in self.meta.values_mut().filter(|m| m.net.as_deref() == Some(old)) {
+            m.net = Some(new.clone());
+        }
+        Ok(new)
+    }
+
+    /// Cook another object's display node (the viewport shows every visible object); the current object stays current.
+    pub fn cook_object(&mut self, name: &str) -> Result<CookResult, String> {
+        if name == self.object {
+            return Ok(self.cook());
+        }
+        let back = self.object.clone();
+        self.object_enter(name)?;
+        let c = self.cook();
+        self.object_enter(&back)?;
+        Ok(c)
     }
 
     /// Give every named node without a stored position a level (y) = depth, slot (x) = order within the level.
     fn auto_layout(&mut self) {
         let ids: Vec<NodeId> = self.named();
         let mut depth: BTreeMap<u32, usize> = BTreeMap::new();
-        // iterate to a fixpoint (depth = 1 + max input depth); bounded by node count (cycles cannot be wired).
+        // iterate to a fixpoint (depth = 1 + max input depth); bounded by node count, so a wired loop cannot spin it.
         for _ in 0..=ids.len() {
             let mut changed = false;
             for &id in &ids {
@@ -428,10 +941,18 @@ impl Session {
                 .iter()
                 .map(|s| (s.name.clone(), param_json(self.graph.param(id, &s.name).unwrap_or(&s.default))))
                 .collect();
-            let inputs = self
-                .reg
-                .create(self.graph.node_type(id).unwrap_or_default())
-                .map_or_else(Vec::new, |n| n.inputs().iter().map(|i| i.name.to_string()).collect());
+            let kind = self.reg.create(self.graph.node_type(id).unwrap_or_default());
+            // a type outside the registry (`unsupported:<houdini type>` from a .hip) keeps the ports it was loaded with; like
+            // most Houdini SOPs its first input is taken as the required one
+            let (inputs, required) = match &kind {
+                Some(n) => {
+                    (n.inputs().iter().map(|i| i.name.to_string()).collect(), n.min_inputs().min(n.inputs().len()))
+                }
+                None => {
+                    let k = self.graph.input_sources(id).len();
+                    ((0..k).map(|i| format!("input{i}")).collect::<Vec<_>>(), k.min(1))
+                }
+            };
             nodes.push(NodeView {
                 id: id.index(),
                 ty: self.graph.node_type(id).unwrap_or_default().to_string(),
@@ -439,6 +960,8 @@ impl Session {
                 x,
                 y,
                 inputs,
+                required,
+                bypass: self.graph.bypass(id),
                 params,
             });
             for (port, src) in self.graph.input_sources(id).into_iter().enumerate() {
@@ -447,7 +970,14 @@ impl Session {
                 }
             }
         }
-        GraphView { nodes, edges, display: self.graph.display().map(NodeId::index) }
+        GraphView {
+            nodes,
+            edges,
+            display: self.graph.display().map(NodeId::index),
+            notes: self.ui.notes.clone(),
+            boxes: self.ui.boxes.clone(),
+            colors: self.ui.color.clone(),
+        }
     }
 
     fn node_add_raw(&mut self, ty: &str, x: f32, y: f32) -> Result<u32, String> {
@@ -456,10 +986,11 @@ impl Session {
         }
         let node = self.reg.create(ty).ok_or_else(|| format!("unknown node type `{ty}`"))?;
         let id = self.graph.add_boxed(node, ParamSet::new()).map_err(|e| e.to_string())?;
-        let name = self.graph.unique_name(ty);
+        let dot = ty == hexe_sop::DOT_TYPE;
+        let name = self.graph.unique_name(if dot { hexe_sop::DOT_NAME_BASE } else { ty });
         self.graph.rename(id, &name).map_err(|e| e.to_string())?;
         self.pos.insert(name, [x, y]);
-        if self.graph.display().is_none() {
+        if self.graph.display().is_none() && !dot {
             self.graph.set_display(Some(id)).map_err(|e| e.to_string())?;
         }
         self.fill()?;
@@ -470,16 +1001,47 @@ impl Session {
         hexe_sop::fill_unwired(&mut self.graph).map_err(|e| e.to_string())
     }
 
+    fn is_dot(&self, n: NodeId) -> bool {
+        self.graph.node_type(n) == Some(hexe_sop::DOT_TYPE)
+    }
+
+    /// Every (node, input) that `n` feeds.
+    fn consumers(&self, n: NodeId) -> Vec<(NodeId, usize)> {
+        self.named()
+            .into_iter()
+            .flat_map(|k| {
+                self.graph
+                    .input_sources(k)
+                    .into_iter()
+                    .enumerate()
+                    .filter(move |(_, s)| *s == Some(n))
+                    .map(move |(i, _)| (k, i))
+            })
+            .collect()
+    }
+
     fn node_remove_raw(&mut self, id: u32) -> Result<(), String> {
         let n = self.find(id)?;
         let name = self.graph.name(n).map(str::to_string);
         let was_display = self.graph.display() == Some(n);
+        // a dot is a waypoint: its source takes over every input it fed (Houdini 20.5 `destroy()` on a network dot)
+        let through = if self.is_dot(n) {
+            let src = self.graph.input_sources(n).first().copied().flatten().filter(|s| self.graph.name(*s).is_some());
+            src.map(|s| (s, self.consumers(n)))
+        } else {
+            None
+        };
         self.graph.remove_node(n).map_err(|e| e.to_string())?;
         if let Some(name) = name {
             self.pos.remove(&name);
         }
+        if let Some((src, outs)) = through {
+            for (to, port) in outs {
+                self.graph.connect(src, 0, to, port).map_err(|e| e.to_string())?;
+            }
+        }
         if was_display {
-            let next = self.named().first().copied();
+            let next = self.named().into_iter().find(|&k| !self.is_dot(k));
             self.graph.set_display(next).map_err(|e| e.to_string())?;
         }
         self.fill()
@@ -509,7 +1071,11 @@ impl Session {
 
     fn edge_connect_raw(&mut self, from: u32, to: u32, input: usize) -> Result<(), String> {
         let (s, d) = (self.find(from)?, self.find(to)?);
-        self.graph.connect(s, 0, d, input).map_err(|e| e.to_string())
+        if s == d {
+            return Err("a node cannot be wired into itself".into());
+        }
+        // editor wiring may close a loop (Houdini parity): the cook flags it (`GraphError::Cycle`), see `Graph::connect_unchecked`
+        self.graph.connect_unchecked(s, 0, d, input).map_err(|e| e.to_string())
     }
 
     fn edge_disconnect_raw(&mut self, to: u32, input: usize) -> Result<(), String> {
@@ -520,12 +1086,64 @@ impl Session {
 
     fn set_display_raw(&mut self, id: Option<u32>) -> Result<(), String> {
         let n = id.map(|i| self.find(i)).transpose()?;
+        if n.is_some_and(|n| self.is_dot(n)) {
+            return Err("a network dot cannot carry the display flag".into());
+        }
         self.graph.set_display(n).map_err(|e| e.to_string())
     }
 
     /// Add a node of `ty` at editor position (x, y); the first node becomes the display node.
     pub fn node_add(&mut self, ty: &str, x: f32, y: f32) -> Result<u32, String> {
         self.mutate(None, |s| s.node_add_raw(ty, x, y))
+    }
+
+    /// Add a network dot (`__dotN`, type `dot`) centred at editor (x, y), wired `from` -> dot and dot -> `to`'s input when
+    /// given (a dot dropped on a wire, or at the end of a wire being drawn). ONE undo step; on any failure nothing changes.
+    pub fn dot_add(&mut self, x: f32, y: f32, from: Option<u32>, to: Option<(u32, usize)>) -> Result<u32, String> {
+        self.node_add_wired(hexe_sop::DOT_TYPE, x, y, from, to)
+    }
+
+    /// Add a `ty` node at editor (x, y) spliced into a wire: `from` -> its input 0 (skipped when `ty` takes no input:
+    /// a generator such as Box only feeds `to`) and its output -> `to`'s input. TAB menu with a wire selected, dots.
+    /// ONE undo step; on any failure nothing changes.
+    pub fn node_add_wired(
+        &mut self,
+        ty: &str,
+        x: f32,
+        y: f32,
+        from: Option<u32>,
+        to: Option<(u32, usize)>,
+    ) -> Result<u32, String> {
+        if !x.is_finite() || !y.is_finite() {
+            return Err("non-finite position".into());
+        }
+        if let Some(f) = from {
+            self.find(f)?;
+        }
+        if let Some((t, input)) = to {
+            let n = self.find(t)?;
+            let ports = self.reg.create(self.graph.node_type(n).unwrap_or_default()).map_or(0, |k| k.inputs().len());
+            if input >= ports {
+                return Err(format!("`{}` has no input {input}", self.graph.name(n).unwrap_or_default()));
+            }
+        }
+        let takes_input = self.reg.create(ty).is_some_and(|k| !k.inputs().is_empty());
+        let before = self.snapshot();
+        let r = self.mutate(None, |s| {
+            let d = s.node_add_raw(ty, x, y)?;
+            if let Some(f) = from.filter(|_| takes_input) {
+                s.edge_connect_raw(f, d, 0)?;
+            }
+            if let Some((t, input)) = to {
+                s.edge_connect_raw(d, t, input)?;
+            }
+            Ok(d)
+        });
+        // a refused wire after the node was added: put the graph back as it was
+        if r.is_err() && self.snapshot() != before {
+            self.restore(&before)?;
+        }
+        r
     }
 
     pub fn node_remove(&mut self, id: u32) -> Result<(), String> {
@@ -575,6 +1193,17 @@ impl Session {
         self.mutate(None, |s| s.set_display_raw(id))
     }
 
+    /// Bypass flag (one undo step): a bypassed node passes its input 0 through unchanged.
+    pub fn set_bypass(&mut self, id: u32, on: bool) -> Result<(), String> {
+        self.mutate(None, |s| {
+            let n = s.find(id)?;
+            if s.is_dot(n) {
+                return Err("a network dot cannot be bypassed".into());
+            }
+            s.graph.set_bypass(n, on).map_err(|e| e.to_string())
+        })
+    }
+
     /// Rename a node. Names are unique and `[A-Za-z0-9_-]+` (they key `ui.pos`, edges and `--set node.param`).
     pub fn node_rename(&mut self, id: u32, name: &str) -> Result<(), String> {
         let name = name.trim();
@@ -587,9 +1216,25 @@ impl Session {
             if old == name {
                 return Ok(());
             }
-            s.graph.rename(n, name).map_err(|e| e.to_string())?;
+            // a name another node has gets the next free number (Houdini): box + box1 taken, `box` -> box2, `box1` -> box2
+            let name = match s.graph.node_by_name(name) {
+                Some(other) if other != n => {
+                    let base = name.trim_end_matches(|c: char| c.is_ascii_digit());
+                    let base = if base.is_empty() { name } else { base };
+                    // the node's own current name counts as free (box2 renamed `box` stays box2)
+                    (1u32..)
+                        .map(|i| format!("{base}{i}"))
+                        .find(|c| s.graph.node_by_name(c).is_none_or(|o| o == n))
+                        .unwrap_or_default()
+                }
+                _ => name.to_string(),
+            };
+            if name == old {
+                return Ok(());
+            }
+            s.graph.rename(n, &name).map_err(|e| e.to_string())?;
             if let Some(p) = s.pos.remove(&old) {
-                s.pos.insert(name.to_string(), p);
+                s.pos.insert(name, p);
             }
             Ok(())
         })
@@ -643,7 +1288,7 @@ impl Session {
 
     fn snapshot(&self) -> Snap {
         let display = self.graph.display().and_then(|d| self.graph.name(d)).map(str::to_string);
-        Snap { scene: hexe_sop::save_scene(&self.graph, &self.pos).ok(), display }
+        Snap { scene: hexe_sop::save_scene_ext(&self.graph, &self.pos, &self.ui).ok(), display }
     }
 
     fn restore(&mut self, snap: &Snap) -> Result<(), String> {
@@ -652,11 +1297,13 @@ impl Session {
             None => {
                 self.graph = Graph::new();
                 self.pos.clear();
+                self.ui = hexe_sop::UiExtra::default();
             }
             Some(text) => {
                 let l = hexe_sop::load_scene_with_base(text, &self.reg, None).map_err(|e| e.to_string())?;
                 self.graph = l.graph;
                 self.pos = l.pos;
+                self.ui = l.ui;
                 let d = snap.display.as_deref().and_then(|n| self.graph.node_by_name(n));
                 self.graph.set_display(d).map_err(|e| e.to_string())?;
             }
@@ -871,19 +1518,30 @@ impl Session {
     /// Cook the display node at the timeline time. Never panics, never `Err`: a failure is `CookResult.error` (+ `error_node`; the UI shows both).
     pub fn cook(&mut self) -> CookResult {
         self.last = None;
-        let fail = |error: String, error_node: Option<u32>| CookResult {
-            error: Some(error),
-            error_node,
-            ..CookResult::default()
-        };
-        let Some(display) = self.graph.display() else { return fail("no display node".into(), None) };
+        let Some(display) = self.graph.display() else { return cook_fail("no display node".into(), None) };
+        self.cook_at(display, true)
+    }
+
+    /// Cook any node (viewport template flag): same result shape as `cook`, but the spreadsheet's
+    /// geometry (`last`) stays the display node's. Unknown id = an error result.
+    pub fn cook_node(&mut self, id: u32) -> CookResult {
+        match self.find(id) {
+            Ok(n) => self.cook_at(n, false),
+            Err(e) => cook_fail(e, None),
+        }
+    }
+
+    fn cook_at(&mut self, node: NodeId, keep: bool) -> CookResult {
+        let fail = cook_fail;
         let (time, fps) = (self.time(), self.fps);
         let graph = &mut self.graph;
         graph.set_fps(fps);
-        match catch_unwind(AssertUnwindSafe(|| graph.cook(display, time))) {
+        match catch_unwind(AssertUnwindSafe(|| graph.cook(node, time))) {
             Ok(Ok(detail)) => {
                 let out = flatten(&detail);
-                self.last = Some(detail);
+                if keep {
+                    self.last = Some(detail);
+                }
                 out
             }
             Ok(Err(e)) => {
@@ -899,6 +1557,9 @@ impl Session {
                 let named = node.and_then(|n| self.graph.name(n).map(|nm| (n, nm.to_string())));
                 let text = match (&e, &named) {
                     (GraphError::Node { source, .. }, Some((_, nm))) => format!("{nm}: {source}"),
+                    (GraphError::Cycle(_), Some((_, nm))) => {
+                        format!("{nm}: wired loop (its output feeds back into its own input)")
+                    }
                     _ => e.to_string(),
                 };
                 fail(text, named.map(|(n, _)| n.index()))
@@ -934,6 +1595,11 @@ pub fn ptnum_pattern(ids: &[u32]) -> String {
 }
 
 /// `Detail` -> the viewport payload. Polys/polylines become point-index lists; other prim kinds are counted, not drawn.
+/// A failed cook: no geometry, the message, and the node it is tied to (red border in the editor).
+fn cook_fail(error: String, error_node: Option<u32>) -> CookResult {
+    CookResult { error: Some(error), error_node, ..CookResult::default() }
+}
+
 pub fn flatten(d: &Detail) -> CookResult {
     // NURBS/Bezier prims are drawn through their tessellation (8 samples per span)
     let tess;
@@ -991,7 +1657,21 @@ pub fn flatten(d: &Detail) -> CookResult {
         .filter(|g| g.class == hexe_geo::AttrClass::Prim)
         .map(|g| (g.name.clone(), g.mask.iter().enumerate().filter(|(_, m)| **m).map(|(i, _)| i as u32).collect()))
         .collect();
-    CookResult { positions, prims, closed, prim_groups, shapes, cd, cd_point, counts, error: None, error_node: None }
+    let edge_groups =
+        d.edge_groups.iter().map(|g| (g.name.clone(), g.edges.iter().flatten().copied().collect())).collect();
+    CookResult {
+        positions,
+        prims,
+        closed,
+        prim_groups,
+        shapes,
+        cd,
+        cd_point,
+        counts,
+        error: None,
+        error_node: None,
+        edge_groups,
+    }
 }
 /// `Cd` (V3) for the viewport: per prim corner and per point, see `CookResult::cd`.
 fn colors(d: &Detail, prims: &[Vec<u32>]) -> (Option<Vec<f32>>, Option<Vec<f32>>) {
@@ -1241,6 +1921,99 @@ mod tests {
     }
 
     #[test]
+    fn objects_hold_separate_networks_and_round_trip() {
+        let mut s = Session::new();
+        assert_eq!((s.objects(), s.object_name()), (vec!["geo1".to_string()], "geo1"));
+        s.node_add("box", 0.0, 0.0).expect("box in geo1");
+        assert_eq!(s.object_add("geo1").expect("taken -> numbered"), "geo2");
+        s.object_enter("geo2").expect("enter");
+        assert!(s.graph_get().nodes.is_empty(), "geo2 starts empty");
+        s.node_add("sphere", 0.0, 0.0).expect("sphere in geo2");
+        s.node_add("null", 0.0, 100.0).expect("null in geo2");
+        assert!(s.undo().expect("undo"), "geo2 has its own undo");
+        assert_eq!(s.graph_get().nodes.len(), 1);
+        // the other object cooks without leaving this one
+        let c = s.cook_object("geo1").expect("cook geo1");
+        assert_eq!((c.error, c.counts.points), (None, 8));
+        assert_eq!(s.object_name(), "geo2");
+        s.object_enter("geo1").expect("back");
+        assert_eq!(s.graph_get().nodes.iter().map(|n| n.ty.as_str()).collect::<Vec<_>>(), ["box"]);
+        assert!(!s.undo().expect("undo") || s.graph_get().nodes.is_empty(), "geo1's undo is its own");
+        s.node_add("box", 0.0, 0.0).expect("box again");
+        // rename (numbered when taken), remove, round trip through a multi-object file
+        assert_eq!(s.object_rename("geo2", "geo1").expect("taken"), "geo2", "its own number is the next free one");
+        assert_eq!(s.object_rename("geo2", "spheres").expect("free"), "spheres");
+        s.object_add("empty").expect("empty object");
+        let dir = std::env::temp_dir().join(format!("hexe-objects-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let f = dir.join("multi.json");
+        let fs = f.to_str().expect("utf8 path");
+        s.graph_save(fs).expect("save");
+        let mut t = Session::new();
+        t.graph_load(fs).expect("load");
+        assert_eq!(t.objects(), ["empty", "geo1", "spheres"]);
+        assert_eq!(t.object_name(), "geo1", "current object kept");
+        t.object_enter("spheres").expect("enter");
+        assert_eq!(t.graph_get().nodes.iter().map(|n| n.ty.as_str()).collect::<Vec<_>>(), ["sphere"]);
+        t.object_remove("spheres").expect("remove current");
+        assert!(!t.objects().contains(&"spheres".to_string()) && t.objects().contains(&t.object_name().to_string()));
+        // a single object still saves as a plain scene (old files and tools keep working)
+        let mut one = Session::new();
+        one.node_add("box", 0.0, 0.0).expect("box");
+        let p1 = dir.join("one.json");
+        one.graph_save(p1.to_str().expect("utf8")).expect("save one");
+        assert!(!std::fs::read_to_string(&p1).expect("read").contains("hexe_objects"));
+        // hostile: bad names, unknown objects, duplicate names / empty list in a file
+        assert!(s.object_add("a b").is_err() && s.object_add("").is_err() && s.object_enter("nope").is_err());
+        assert!(s.object_remove("nope").is_err() && s.object_rename("nope", "x").is_err());
+        for bad in [
+            r#"{"hexe_objects":1,"objects":[]}"#,
+            r#"{"hexe_objects":1,"objects":[{"name":"a","scene":null},{"name":"a","scene":null}]}"#,
+            r#"{"hexe_objects":1,"objects":[{"name":"../x","scene":null}]}"#,
+        ] {
+            let p = dir.join("bad.json");
+            std::fs::write(&p, bad).expect("write");
+            assert!(t.graph_load(p.to_str().expect("utf8")).is_err(), "{bad}");
+        }
+        // hundreds of objects are fine
+        let mut many = Session::new();
+        for _ in 0..300 {
+            many.object_add("geo").expect("add");
+        }
+        assert_eq!(many.objects().len(), 301);
+        many.graph_new();
+        assert_eq!(many.objects(), ["geo1"], "File > New = one empty geo1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tab_insert_into_a_wire_is_one_undo_step() {
+        let mut s = Session::new();
+        let a = s.node_add("box", 0.0, 0.0).expect("box");
+        let b = s.node_add("null", 0.0, 200.0).expect("null");
+        s.edge_connect(a, b, 0).expect("wire");
+        let edge = |s: &Session, from, to, input| s.graph_get().edges.contains(&EdgeView { from, to, input });
+        // a filter goes between: a -> xform -> b
+        let x = s.node_add_wired("xform", 0.0, 100.0, Some(a), Some((b, 0))).expect("xform spliced in");
+        assert!(edge(&s, a, x, 0) && edge(&s, x, b, 0) && !edge(&s, a, b, 0));
+        assert!(s.undo().expect("undo"), "one step back");
+        let g = s.graph_get();
+        assert_eq!(g.nodes.len(), 2, "the spliced node is gone");
+        let (a, b) = (g.nodes[0].id, g.nodes[1].id);
+        assert!(edge(&s, a, b, 0), "the original wire is back");
+        // a generator takes no input: Box only feeds b, a is left unwired below
+        let bx = s.node_add_wired("box", 0.0, 100.0, Some(a), Some((b, 0))).expect("box spliced in");
+        assert!(edge(&s, bx, b, 0) && !s.graph_get().edges.iter().any(|e| e.to == bx));
+        // hostile: bad input index / unknown ids / non-finite position change nothing
+        let n = s.graph_get().nodes.len();
+        assert!(s.node_add_wired("xform", 0.0, 0.0, Some(a), Some((b, 9))).is_err());
+        assert!(s.node_add_wired("xform", 0.0, 0.0, Some(999), Some((b, 0))).is_err());
+        assert!(s.node_add_wired("xform", f32::NAN, 0.0, Some(a), Some((b, 0))).is_err());
+        assert!(s.node_add_wired("no-such-sop", 0.0, 0.0, Some(a), Some((b, 0))).is_err());
+        assert_eq!(s.graph_get().nodes.len(), n);
+    }
+
+    #[test]
     fn build_in_ui_add_wire_display_remove() {
         let mut s = Session::new();
         let b = s.node_add("box", 0.0, 0.0).expect("box");
@@ -1254,6 +2027,16 @@ mod tests {
         assert!(s.graph_get().edges.is_empty());
         assert_eq!(s.cook().error, None, "unwired input is fed empty geometry");
         assert!(s.edge_connect(pe, pe, 0).is_err(), "self loop refused, not panicked");
+        // a two-node loop wires (Houdini editor parity): the cook errors on a loop node instead of hanging, cut = cooks again
+        let n = s.node_add("null", 0.0, 200.0).expect("null");
+        s.edge_connect(pe, n, 0).expect("pe -> null");
+        s.edge_connect(n, pe, 0).expect("null -> pe closes the loop");
+        let c = s.cook();
+        assert!(c.error.as_deref().is_some_and(|e| e.contains("wired loop")), "{:?}", c.error);
+        assert!(c.error_node == Some(pe) || c.error_node == Some(n), "{:?}", c.error_node);
+        s.edge_connect(b, pe, 0).expect("rewire breaks the loop");
+        assert_eq!(s.cook().error, None);
+        s.node_remove(n).expect("remove");
         s.node_remove(pe).expect("remove");
         let g = s.graph_get();
         assert_eq!((g.nodes.len(), g.display), (1, Some(b)), "display falls back to a live node");
@@ -1305,6 +2088,24 @@ mod tests {
         assert_eq!(&pts.columns[..4], ["ptnum", "P.x", "P.y", "P.z"]);
         assert_eq!(s.spreadsheet("prim", 0, 1000).expect("prims").total, c.counts.prims as usize);
         assert!(s.spreadsheet("edge", 0, 1).is_err());
+    }
+
+    #[test]
+    fn cook_node_templates_without_touching_the_display_cook() {
+        let mut s = Session::new();
+        // hostile ids: unknown / huge -> an error result, never a panic
+        assert!(s.cook_node(0).error.is_some());
+        assert!(s.cook_node(u32::MAX).error.is_some());
+        let a = s.node_add("box", 0.0, 0.0).expect("box");
+        let b = s.node_add("sphere", 200.0, 0.0).expect("sphere");
+        s.set_display(Some(b)).expect("display sphere");
+        let disp = s.cook();
+        let t = s.cook_node(a);
+        assert!(t.error.is_none(), "{:?}", t.error);
+        assert_eq!(t.counts.points, 8, "the template is the box");
+        // the spreadsheet still shows the display (sphere) geometry
+        assert_eq!(s.spreadsheet("point", 0, 1).expect("points").total, disp.counts.points as usize);
+        assert_ne!(disp.counts.points, 8);
     }
 
     #[test]
@@ -1409,7 +2210,17 @@ mod tests {
         let b = s.node_add("box", 7.0, 8.0).expect("box");
         let pe = s.node_add("polyextrude", 0.0, 0.0).expect("pe");
         s.edge_connect(b, pe, 0).expect("wire");
-        assert!(s.node_rename(pe, "box1").is_err(), "name taken");
+        // a taken name gets the next free number: box1 is the box, so `box1` and `box` both land on box2
+        s.node_rename(pe, "box1").expect("taken name renumbers");
+        assert!(names(&s).contains(&"box2".to_string()), "{:?}", names(&s));
+        let third = s.node_add("null", 0.0, 0.0).expect("null");
+        s.node_rename(third, "box2").expect("taken name renumbers");
+        assert!(names(&s).contains(&"box3".to_string()), "box1 + box2 taken: {:?}", names(&s));
+        s.node_rename(third, "box").expect("a free name is kept as typed");
+        assert!(names(&s).contains(&"box".to_string()));
+        s.node_rename(pe, "box").expect("box2 renamed `box` keeps its own number");
+        assert!(names(&s).contains(&"box2".to_string()), "{:?}", names(&s));
+        s.node_remove(third).expect("remove");
         assert!(s.node_rename(pe, "").is_err());
         assert!(s.node_rename(pe, "a b").is_err());
         assert!(s.node_rename(pe, "a.b").is_err());
@@ -1454,6 +2265,104 @@ mod tests {
         assert!(s.copy(&[999]).is_err());
     }
 
+    /// Wires by node NAME (ids are not stable across undo / load), sorted.
+    fn named_edges(s: &Session) -> Vec<(String, String, usize)> {
+        let g = s.graph_get();
+        let nm = |id: u32| g.nodes.iter().find(|n| n.id == id).map(|n| n.name.clone()).unwrap_or_default();
+        let mut v: Vec<_> = g.edges.iter().map(|e| (nm(e.from), nm(e.to), e.input)).collect();
+        v.sort();
+        v
+    }
+    fn e3(a: &str, b: &str, i: usize) -> (String, String, usize) {
+        (a.to_string(), b.to_string(), i)
+    }
+    /// Network dots (Houdini `__dotN`): dropped on a wire or at a drawn wire's end in ONE undo step, fan out, never the
+    /// display node, deleting one rewires its source straight through to everything it fed, and they save -> load.
+    #[test]
+    fn dots_insert_fan_out_delete_through_and_round_trip() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 0.0, 0.0).expect("box");
+        let x = s.node_add("xform", 0.0, 200.0).expect("xform");
+        let m = s.node_add("merge", 200.0, 300.0).expect("merge");
+        s.edge_connect(b, x, 0).expect("wire");
+        s.edge_connect(x, m, 1).expect("wire");
+        s.set_display(Some(m)).expect("display");
+        // on the box -> xform wire
+        let undo0 = s.history().0;
+        let d1 = s.dot_add(50.0, 100.0, Some(b), Some((x, 0))).expect("dot on a wire");
+        assert_eq!(s.history().0, undo0 + 1, "one undo step");
+        assert_eq!(s.name_of(d1).as_deref(), Some("__dot1"));
+        // at the end of a wire drawn out of the dot (then wired on): __dot1 fans out to xform1 and __dot2 -> merge1.0
+        let d2 = s.dot_add(150.0, 150.0, Some(d1), None).expect("dot at a wire end");
+        s.edge_connect(d2, m, 0).expect("wire");
+        assert_eq!(s.name_of(d2).as_deref(), Some("__dot2"));
+        assert_eq!(
+            named_edges(&s),
+            [
+                e3("__dot1", "__dot2", 0),
+                e3("__dot1", "xform1", 0),
+                e3("__dot2", "merge1", 0),
+                e3("box1", "__dot1", 0),
+                e3("xform1", "merge1", 1)
+            ]
+        );
+        let c = s.cook();
+        assert_eq!((c.error.as_deref(), c.counts.points), (None, 16), "dots pass geometry through");
+        let dv = s.graph_get().nodes.into_iter().find(|n| n.id == d1).expect("dot view");
+        assert_eq!((dv.ty.as_str(), dv.x, dv.y), ("dot", 50.0, 100.0));
+        // never the display flag
+        assert!(s.set_display(Some(d1)).is_err());
+        assert_eq!(s.graph_get().display, Some(m));
+        // hostile: nothing changes, no history
+        let (n, h) = (s.graph_get().nodes.len(), s.history().0);
+        assert!(s.dot_add(0.0, 0.0, Some(999), None).is_err());
+        assert!(s.dot_add(0.0, 0.0, Some(b), Some((x, 7))).is_err(), "no such input port");
+        assert!(s.dot_add(0.0, 0.0, None, Some((999, 0))).is_err());
+        assert!(s.dot_add(f32::NAN, 0.0, None, None).is_err());
+        assert!(s.dot_add(0.0, 0.0, Some(m), Some((b, 0))).is_err(), "box has no input");
+        assert_eq!((s.graph_get().nodes.len(), s.history().0), (n, h));
+        // save -> load keeps dots, their positions, pin flag and every wire through them
+        s.node_set_param(d2, "pinned", &json!(true)).expect("pin");
+        let out = std::env::temp_dir().join(format!("hexe-tauri-dots-{}.json", std::process::id()));
+        let path = out.to_string_lossy().into_owned();
+        s.graph_save(&path).expect("save");
+        let mut t = Session::new();
+        t.graph_load(&path).expect("reload");
+        let _ = std::fs::remove_file(&out);
+        assert_eq!(named_edges(&t), named_edges(&s));
+        let back = t.graph_get();
+        let d2b = back.nodes.iter().find(|n| n.name == "__dot2").expect("__dot2 reloaded");
+        assert_eq!((d2b.ty.as_str(), d2b.x, d2b.y, &d2b.params["pinned"]), ("dot", 150.0, 150.0, &json!(true)));
+        assert_eq!(back.display.and_then(|d| t.name_of(d)).as_deref(), Some("merge1"));
+        // delete __dot1: box1 feeds xform1 and __dot2 directly (Houdini destroy()), one undo step
+        s.nodes_remove(&[d1]).expect("remove dot");
+        assert_eq!(
+            named_edges(&s),
+            [e3("__dot2", "merge1", 0), e3("box1", "__dot2", 0), e3("box1", "xform1", 0), e3("xform1", "merge1", 1)]
+        );
+        assert_eq!(s.cook().counts.points, 16);
+        s.undo().expect("undo");
+        assert_eq!(named_edges(&s).len(), 5);
+        // a dot chain removed together: the first live source upstream takes over
+        let ids: Vec<u32> = s.graph_get().nodes.iter().filter(|n| n.ty == "dot").map(|n| n.id).collect();
+        s.nodes_remove(&ids).expect("remove both dots");
+        assert_eq!(named_edges(&s), [e3("box1", "merge1", 0), e3("box1", "xform1", 0), e3("xform1", "merge1", 1)]);
+        assert_eq!(s.graph_get().display.and_then(|d| s.name_of(d)).as_deref(), Some("merge1"));
+    }
+    /// The display node never falls back onto a dot, and a dot added to an empty graph does not take the flag.
+    #[test]
+    fn dots_never_inherit_the_display_flag() {
+        let mut s = Session::new();
+        let d = s.dot_add(0.0, 0.0, None, None).expect("lone dot");
+        assert_eq!(s.graph_get().display, None);
+        let b = s.node_add("box", 0.0, 0.0).expect("box");
+        assert_eq!(s.graph_get().display, Some(b));
+        let n = s.node_add("null", 0.0, 100.0).expect("null");
+        s.set_display(Some(n)).expect("display");
+        s.node_remove(n).expect("remove the display node");
+        assert_eq!(s.graph_get().display, Some(b), "falls back past the dot");
+        let _ = d;
+    }
     #[test]
     fn multi_remove_is_one_step_and_validated() {
         let mut s = Session::new();
@@ -1613,5 +2522,84 @@ mod tests {
         s.selection_set(&[1_000_000]);
         assert_eq!(s.cook().error, None);
         assert!(s.group_from_selection().expect_err("out of range").contains("outside"));
+    }
+
+    #[test]
+    fn null_object_holds_control_and_point1() {
+        let mut s = Session::new();
+        assert_eq!(s.object_add_kind("null1", "null", None).expect("null"), "null1");
+        s.object_enter("null1").expect("enter");
+        let g = s.graph_get();
+        let names: Vec<&str> = g.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, ["control", "point1"]);
+        let ctl = &g.nodes[0];
+        assert_eq!((ctl.ty.as_str(), g.display), ("control", Some(ctl.id)), "the control SOP carries the display flag");
+        assert_eq!(g.nodes[1].params["points"], Value::from("0,0,0"), "point1 = one point at the origin");
+        // Uniform Scale drives how far the indicator lines reach
+        s.node_set_param(ctl.id, "scale", &Value::from(3.0)).expect("scale");
+        let c = s.cook();
+        assert_eq!((c.error.as_deref(), c.counts.points, c.counts.prims), (None, 7, 6));
+        assert!(c.positions.chunks(3).any(|p| p == [3.0, 0.0, 0.0]));
+        assert!(s.object_add_kind("x", "camera", None).is_err(), "unknown kind");
+        assert!(s.object_add_kind("x", "geo", Some("null1")).is_err(), "a Null is no container");
+    }
+
+    #[test]
+    fn containers_hold_objects_round_trip_and_delete_with_them() {
+        let mut s = Session::new();
+        s.node_add("box", 0.0, 0.0).expect("box");
+        let asset = s.object_add_kind("asset1", "subnet", None).expect("container");
+        let inner = s.object_add_kind("inner_geo1", "geo", Some(&asset)).expect("geo inside");
+        let info = s.objects_info();
+        let get = |n: &str| info.iter().find(|o| o.name == n).cloned().expect("listed");
+        assert_eq!((get(&asset).kind.as_str(), get(&asset).net.clone()), ("subnet", None));
+        assert_eq!((get(&inner).kind.as_str(), get(&inner).net.as_deref()), ("geo", Some("asset1")));
+        // rename the container: what is inside follows
+        s.object_rename(&asset, "Featured").expect("rename");
+        let net_of = |s: &Session, n: &str| s.objects_info().into_iter().find(|o| o.name == n).and_then(|o| o.net);
+        assert_eq!(net_of(&s, &inner).as_deref(), Some("Featured"));
+        let dir = std::env::temp_dir().join(format!("hexe-containers-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let f = dir.join("boxes.json");
+        let fs = f.to_str().expect("utf8 path");
+        s.graph_save(fs).expect("save");
+        let mut t = Session::new();
+        t.graph_load(fs).expect("load");
+        assert_eq!(t.objects_info(), s.objects_info(), "kinds + containers survive save / load");
+        // deleting the container deletes what it holds
+        t.object_remove("Featured").expect("remove");
+        assert_eq!(t.objects(), ["geo1"]);
+        // hostile: a container loop / a missing container lands at /obj, unknown kinds are refused
+        let bad = r#"{"hexe_objects":1,"objects":[{"name":"a","kind":"subnet","net":"b","scene":null},
+            {"name":"b","kind":"subnet","net":"a","scene":null},{"name":"c","net":"zz","scene":null}]}"#;
+        std::fs::write(&f, bad).expect("write");
+        let mut u = Session::new();
+        u.graph_load(fs).expect("loads");
+        let nets: Vec<Option<String>> = u.objects_info().into_iter().map(|o| o.net).collect();
+        assert!(nets.iter().filter(|n| n.is_some()).count() <= 1, "the loop is cut: {nets:?}");
+        assert_eq!(nets[2], None, "missing container -> /obj");
+        std::fs::write(&f, r#"{"hexe_objects":1,"objects":[{"name":"a","kind":"rocket","scene":null}]}"#)
+            .expect("write");
+        assert!(Session::new().graph_load(fs).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn bypass_is_undoable_and_required_inputs_are_reported() {
+        let mut s = Session::new();
+        let b = s.node_add("box", 0.0, 0.0).expect("box");
+        let pr = s.node_add("polyreduce", 0.0, 90.0).expect("polyreduce");
+        let x = s.node_add("xform", 0.0, 180.0).expect("xform");
+        s.edge_connect(b, x, 0).expect("wire");
+        let node = |s: &Session, id: u32| s.graph_get().nodes.into_iter().find(|n| n.id == id).expect("node");
+        assert_eq!((node(&s, pr).required, node(&s, pr).inputs.len()), (1, 3), "only Triangular Mesh is required");
+        assert_eq!(node(&s, x).required, 1);
+        assert_eq!(node(&s, b).required, 0);
+        s.set_bypass(x, true).expect("bypass");
+        assert!(node(&s, x).bypass);
+        assert!(s.undo().expect("undo"));
+        let xf = s.graph_get().nodes.into_iter().find(|n| n.name == "xform1").expect("xform1 (ids change on undo)");
+        assert!(!xf.bypass, "bypass is one undo step");
+        assert!(s.set_bypass(9999, true).is_err());
     }
 }

@@ -359,3 +359,38 @@ fn polygon_run_accepts_plain_nvertices_list() {
     let counts: Vec<usize> = d.prims.iter().map(|p| p.verts.len()).collect();
     assert_eq!((d.point_count, counts), (10, vec![3, 5, 5, 3, 3, 5]));
 }
+
+#[test]
+fn edge_groups_read_write_merge() {
+    // Houdini 20.5's own `edgegroups` layout (saved by hython: groupcreate edge group `p2-3 p5-6` on a sphere)
+    let text = houdini_shape().replace(
+        r#""primitivegroups",[[["name","p"],["selection",["unordered",["boolRLE",[1,2]]]]]]"#,
+        r#""primitivegroups",[[["name","p"],["selection",["unordered",["boolRLE",[1,2]]]]]],
+    "edgegroups",[[["name","eg"],["points",[0,1,2,3,1,0]]]]"#,
+    );
+    let d = read_geo_json(text.as_bytes()).unwrap();
+    assert_eq!(d.edge_group("eg").unwrap().edges, vec![[0, 1], [2, 3]], "pairs; the reversed duplicate 1-0 kept once");
+    // round trip through the writer
+    let back = read_geo_json(&write_geo_json(&d)).unwrap();
+    assert_eq!(back.edge_groups, d.edge_groups);
+    // merge: same-named groups join, the second input's points shift
+    let mut m = d.clone();
+    m.merge(&d);
+    assert_eq!(m.edge_group("eg").unwrap().edges, vec![[0, 1], [2, 3], [4, 5], [6, 7]]);
+    // hostile: odd point list / point out of range / no name
+    for bad in
+        [r#"[[["name","e"],["points",[0,1,2]]]]"#, r#"[[["name","e"],["points",[0,99]]]]"#, r#"[[["points",[0,1]]]]"#]
+    {
+        let t = houdini_shape().replace(
+            r#""primitivegroups",[[["name","p"],["selection",["unordered",["boolRLE",[1,2]]]]]]"#,
+            &format!(
+                r#""primitivegroups",[[["name","p"],["selection",["unordered",["boolRLE",[1,2]]]]]],"edgegroups",{bad}"#
+            ),
+        );
+        assert!(read_geo_json(t.as_bytes()).is_err(), "{bad}");
+    }
+    // set_edge_group drops self-edges and out-of-range points
+    let mut s = d.clone();
+    s.set_edge_group("x", [[0, 0], [0, 9], [3, 2], [2, 3]]);
+    assert_eq!(s.edge_group("x").unwrap().edges, vec![[3, 2]]);
+}

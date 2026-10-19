@@ -40,7 +40,13 @@ fn classes_types_and_sizes_with_values() {
     // detail float size 2 => exactly one element
     let o = cook(
         "attribcreate",
-        &[("name1", s("d")), ("class1", m(DETAIL)), ("size1", PV::I(2)), ("value1v1", PV::F(1.5)), ("value1v2", PV::F(2.5))],
+        &[
+            ("name1", s("d")),
+            ("class1", m(DETAIL)),
+            ("size1", PV::I(2)),
+            ("value1v1", PV::F(1.5)),
+            ("value1v2", PV::F(2.5)),
+        ],
         Some(&g),
     )
     .unwrap();
@@ -87,15 +93,13 @@ fn type_qualifier_guess_from_name() {
 #[test]
 fn write_values_off_keeps_defaults_and_group_limits_writes() {
     let g = grid3();
-    let o = cook(
-        "attribcreate",
-        &[("name1", s("f")), ("value1v1", PV::F(5.0)), ("writevalues1", PV::B(false))],
-        Some(&g),
-    )
-    .unwrap();
+    let o =
+        cook("attribcreate", &[("name1", s("f")), ("value1v1", PV::F(5.0)), ("writevalues1", PV::B(false))], Some(&g))
+            .unwrap();
     assert_eq!(o.attr(AttrClass::Point, "f").unwrap().data, AttrData::F32(vec![0.0; 9]), "exists, not written");
     // group: only members written
-    let o = cook("attribcreate", &[("name1", s("f")), ("value1v1", PV::F(5.0)), ("group", s("0-2"))], Some(&g)).unwrap();
+    let o =
+        cook("attribcreate", &[("name1", s("f")), ("value1v1", PV::F(5.0)), ("group", s("0-2"))], Some(&g)).unwrap();
     let AttrData::F32(v) = &o.attr(AttrClass::Point, "f").unwrap().data else { panic!() };
     assert_eq!(v, &[5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
 }
@@ -136,6 +140,7 @@ fn empty_input_and_invalid_name() {
     assert_eq!(o.point_count, 0);
     assert_eq!(o.attr(AttrClass::Point, "foo").map(|a| a.data.len()).unwrap_or(0), 0);
     // detail attribute on empty geometry still gets its single element
-    let o = cook("attribcreate", &[("name1", s("d")), ("class1", m(DETAIL)), ("value1v1", PV::F(1.0))], Some(&e)).unwrap();
+    let o =
+        cook("attribcreate", &[("name1", s("d")), ("class1", m(DETAIL)), ("value1v1", PV::F(1.0))], Some(&e)).unwrap();
     assert_eq!(o.attr(AttrClass::Detail, "d").unwrap().data, AttrData::F32(vec![1.0]));
 }

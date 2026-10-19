@@ -29,7 +29,9 @@ fn signed_volume(d: &Detail) -> f32 {
         let p = |k: usize| d.p()[pts[k] as usize];
         for k in 1..pts.len() - 1 {
             let (a, b, c) = (p(0), p(k), p(k + 1));
-            v += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0;
+            v += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+                + a[2] * (b[0] * c[1] - b[1] * c[0]))
+                / 6.0;
         }
     }
     v
@@ -88,7 +90,8 @@ fn polygon_to_polyline_and_back_roundtrips() {
 fn convert_from_filters_and_preserve_original_keeps_input() {
     let g = grid3();
     // Convert From = polyline: polygons are not a candidate => untouched
-    let n = cook("convert", &[("fromtype", PV::Menu(FROM_POLYLINE)), ("totype", PV::Menu(TO_POLYLINE))], Some(&g)).unwrap();
+    let n =
+        cook("convert", &[("fromtype", PV::Menu(FROM_POLYLINE)), ("totype", PV::Menu(TO_POLYLINE))], Some(&g)).unwrap();
     assert_eq!(*n, *g);
     // Preserve Original: input kept, converted copy appended
     let k = cook("convert", &[("totype", PV::Menu(TO_POLYLINE)), ("keeporiginal", PV::B(true))], Some(&g)).unwrap();

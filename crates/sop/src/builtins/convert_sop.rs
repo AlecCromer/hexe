@@ -72,7 +72,7 @@ pub fn spec() -> Vec<ParamSpec> {
         ParamSpec::new("lodu", ParamValue::F(1.0)).label("LOD U (Columns x)").range(0.1, 8.0),
         ParamSpec::new("lodv", ParamValue::F(1.0)).label("LOD V (Rows x)").range(0.1, 8.0),
         ParamSpec::new("capfan", ParamValue::B(false)).label("Tube Caps As Pole Fans"),
-ParamSpec::new("keeporiginal", ParamValue::B(false)).label("Preserve Original"),
+        ParamSpec::new("keeporiginal", ParamValue::B(false)).label("Preserve Original"),
         ParamSpec::new("spheremode", ParamValue::Menu(0))
             .label("Sphere Tessellation")
             .menu(&[("icosphere", "Icosphere (Houdini)"), ("latlong", "Lat-long grid")]),

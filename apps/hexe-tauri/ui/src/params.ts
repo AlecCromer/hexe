@@ -2,6 +2,9 @@
 import type { NodeType, NodeView, ParamInfo, PVal } from "./api";
 import { type CodeEditor, createCodeEditor, parseCodeError } from "./codeeditor";
 import { attachScrub, scrubSpeed } from "./scrub";
+import { nodeIcon } from "./shelf";
+import { labelOf } from "./tabcats";
+import { formatPoints, parsePoints, resizePoints } from "./pointlist";
 
 export type SetParam = (id: number, name: string, value: PVal) => Promise<void>;
 
@@ -88,6 +91,34 @@ function control(p: ParamInfo, value: PVal, commit: (v: PVal) => void): HTMLElem
   }
 }
 
+/** Add SOP point list (Houdini multiparm): Number of Points, then `Point N` = x y z + Weight. The engine has no point
+ *  weight yet, so Weight shows 1 and is read-only (said in its tooltip, not faked as editable). */
+function pointList(text: string, commit: (v: PVal) => void): HTMLElement[] {
+  let pts = parsePoints(text);
+  const save = () => commit(formatPoints(pts));
+  const count = el("input", { type: "number", min: "0", step: "1", value: String(pts.length) });
+  count.dataset.param = "points.count";
+  const rows = el("div", { className: "plist" });
+  const paint = () => {
+    rows.replaceChildren(...pts.map((pt, i) => {
+      const box = el("div", { className: "pctl v3" });
+      pt.forEach((x, k) => {
+        const n = el("input", { type: "number", value: String(x), step: "0.01" });
+        n.dataset.param = `points.${i}.${k}`;
+        const set = (f: number) => { pts[i][k] = f; save(); };
+        attachScrub(n, { kind: "float", min: null, max: null }, set);
+        n.addEventListener("change", () => { const f = Number(n.value); if (Number.isFinite(f)) set(f); });
+        box.append(n);
+      });
+      const w = el("input", { type: "number", value: "1", disabled: true, title: "Point weight: hexe has no point weights yet (always 1)" });
+      return el("div", { className: "prow" }, el("label", { textContent: `Point ${i}` }), box, el("span", { className: "pw-lab", textContent: "Weight" }), w);
+    }));
+  };
+  count.addEventListener("change", () => { pts = resizePoints(pts, Number(count.value)); count.value = String(pts.length); paint(); save(); });
+  paint();
+  return [el("div", { className: "prow" }, el("label", { textContent: "Number of Points", title: "points" }), el("div", { className: "pctl" }, count)), rows];
+}
+
 /** Editors of the pane currently shown + the last cook failure: a failing node's code editor shows the engine message inline. */
 let shown: { node: number; editors: CodeEditor[] } = { node: -1, editors: [] };
 let cookErr: { node: number | null; text: string | null } = { node: null, text: null };
@@ -108,7 +139,12 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
     host.append(el("div", { className: "hint", textContent: "Select a node in the network to edit its parameters." }));
     return;
   }
-  host.append(el("div", { className: "phead" }, el("b", { textContent: node.name }), el("span", { textContent: `${node.type} · #${node.id}` })));
+  // Houdini header: type icon · Type label · node name (id in the tooltip)
+  const ico = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  ico.setAttribute("viewBox", "0 0 24 24");
+  ico.setAttribute("class", "phead-ico");
+  ico.innerHTML = nodeIcon(node.type);
+  host.append(el("div", { className: "phead", title: `${node.type} · #${node.id}` }, ico, el("span", { className: "phead-ty", textContent: labelOf(node.type) }), el("b", { textContent: node.name })));
   if (!type.params.length) host.append(el("div", { className: "hint", textContent: "No parameters." }));
   shown.node = node.id;
   for (const p of type.params) {
@@ -123,6 +159,10 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
         host.prepend(el("div", { className: "err-msg", textContent: `${p.label}: ${typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e)}` }));
       });
     };
+    if (node.type === "add" && p.name === "points") {
+      host.append(...pointList(String(value), commit));
+      continue;
+    }
     if (code) {
       const ed = createCodeEditor(String(value), (t) => commit(t));
       shown.editors.push(ed);
@@ -131,4 +171,23 @@ export function renderParams(host: HTMLElement, node: NodeView | null, type: Nod
     host.append(row);
   }
   paintCookError();
+}
+
+/** Placement-style params the viewport handle owns in Houdini; the operator bar leaves them to the pane. */
+const OPBAR_SKIP = new Set(["t", "r", "center", "origin"]);
+/** Viewport operator bar (Houdini: `Box  Primitive Type [..]  Size [..]` above the viewport): the selected node's first few
+ *  menu / toggle / number / vector params, same widgets as the pane but without `data-param` (the pane stays the
+ *  scriptable one). `changed` runs after each commit so the pane can repaint. */
+export function renderOpBar(host: HTMLElement, node: NodeView | null, type: NodeType | undefined, set: SetParam, changed: () => void, max = 5): void {
+  host.replaceChildren();
+  if (!node || !type) return;
+  host.append(el("span", { className: "op-name", textContent: labelOf(type.type) }));
+  const ps = type.params.filter((p) => !OPBAR_SKIP.has(p.name) && !p.language && (p.kind !== "string" || p.choices.length > 0)).slice(0, Math.max(0, max));
+  for (const p of ps) {
+    const commit = (v: PVal) => { node.params[p.name] = v; set(node.id, p.name, v).then(changed, () => changed()); };
+    const c = control(p, node.params[p.name] ?? p.default, commit);
+    c.querySelectorAll("[data-param]").forEach((e) => e.removeAttribute("data-param"));
+    c.querySelectorAll("input[type=range]").forEach((e) => e.remove());
+    host.append(el("label", { className: `op-p op-${p.kind}`, title: p.name }, el("span", { textContent: p.label }), c));
+  }
 }

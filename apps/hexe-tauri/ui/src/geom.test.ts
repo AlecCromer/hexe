@@ -100,3 +100,16 @@ test("fit excludes prims in groups matching the glob param (the background slab)
   expect(globMatch("char_?", "char_ab")).toBe(false);
   expect(globMatch("a.b", "axb")).toBe(false);
 });
+
+import { roundedPath } from "./geom";
+test("roundedPath: every corner becomes a curve through its vertex, radius clamped to half of each side", () => {
+  const sq = roundedPath([[0, 0], [10, 0], [10, 10], [0, 10]], [2, 2, 2, 2]);
+  expect(sq.startsWith("M")).toBe(true);
+  expect(sq.endsWith("Z")).toBe(true);
+  expect((sq.match(/Q/g) ?? []).length).toBe(4);
+  expect(sq).toContain("Q10,0 10,2"); // corner (10, 0): in from (8, 0), out to (10, 2)
+  // a radius bigger than the sides allow is clamped: corner points never pass a side's midpoint
+  expect(roundedPath([[0, 0], [4, 0], [4, 4], [0, 4]], [50, 50, 50, 50])).toContain("Q4,0 4,2");
+  expect(roundedPath([[0, 0], [1, 0]], [1, 1])).toBe(""); // not a polygon
+  expect(roundedPath([[0, 0], [Number.NaN, 0], [1, 1]], [1, 1, 1])).toBe("");
+});

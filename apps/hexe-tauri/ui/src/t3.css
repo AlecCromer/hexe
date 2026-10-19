@@ -1,9 +1,11 @@
 /* T3: multi-select, port index labels, inline rename, value scrubbing */
 .node text.nm { pointer-events: all; cursor: text; }
 .node text.pidx { fill: var(--dim); font-size: 9px; pointer-events: none; }
-.node.sel .ring { display: block; stroke: #ffd24a; stroke-width: 2; }
-.node.sel.disp .ring { stroke: var(--acc); stroke-width: 3; }
-#renamebox { position: absolute; z-index: 6; height: 20px; padding: 0 4px; font-size: 13px; background: #14161a; border: 1px solid var(--acc); }
+.node.sel .ring { display: block; }
+/* rename in place (network.ts renameBox): Houdini look - node type in grey above, dark field over the name, orange caret */
+#renamebox { position: absolute; z-index: 6; transform: translateY(-50%); display: flex; flex-direction: column; gap: 1px; }
+#renamebox .rn-type { color: #8a8a8a; font-size: 15px; line-height: 1; padding-left: 2px; pointer-events: none; }
+#renamebox input { height: 30px; padding: 0 6px; font-size: 19px; background: #141414; color: #f0f0f0; border: 1px solid #5a5a5a; border-radius: 0; caret-color: #f0a020; outline: none; }
 /* scrubbable number fields: no spinner arrows, horizontal-resize cursor, whole page keeps it while dragging */
 .pctl input[type=number] { cursor: ew-resize; -moz-appearance: textfield; appearance: textfield; }
 .pctl input[type=number]:focus { cursor: text; }

@@ -84,7 +84,13 @@ fn bounding_box_gradient_normalises_position() {
 #[test]
 fn random_is_seeded_per_element_and_in_range() {
     let c = cube();
-    let r = |seed: f32| v3(&cook("color", &[("colortype", PV::Menu(RANDOM)), ("seed", PV::F(seed))], Some(&c)).unwrap(), AttrClass::Point, "Cd");
+    let r = |seed: f32| {
+        v3(
+            &cook("color", &[("colortype", PV::Menu(RANDOM)), ("seed", PV::F(seed))], Some(&c)).unwrap(),
+            AttrClass::Point,
+            "Cd",
+        )
+    };
     let (a, b, other) = (r(3.0), r(3.0), r(4.0));
     assert_eq!(a, b, "same seed -> same colours");
     assert_ne!(a, other, "seed changes colours");

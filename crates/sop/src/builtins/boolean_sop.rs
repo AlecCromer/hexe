@@ -944,6 +944,10 @@ impl Node<Detail> for Boolean {
     fn type_name(&self) -> &'static str {
         "boolean"
     }
+    /// Houdini: only the first input is required.
+    fn min_inputs(&self) -> usize {
+        1
+    }
     fn inputs(&self) -> &[InputSpec] {
         &INPUTS
     }

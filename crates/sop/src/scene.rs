@@ -49,6 +49,98 @@ struct SceneDef {
 struct UiDef {
     #[serde(default)]
     pos: BTreeMap<String, [f32; 2]>,
+    #[serde(flatten)]
+    extra: UiExtra,
+}
+
+/// Most network boxes / sticky notes kept from one scene (the rest are dropped on load).
+pub const MAX_UI_ITEMS: usize = 4096;
+/// Longest box title / note text kept (bytes; longer is truncated on a char boundary).
+const MAX_UI_TEXT: usize = 64 * 1024;
+
+/// Editor-only extras of `"ui"` (the cook ignores them): node colours, network boxes, sticky notes. Coordinates are editor px,
+/// y down, top-left corner. Optional keys: absent / empty ones are not written, so older scene files stay byte-identical.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, serde::Serialize)]
+pub struct UiExtra {
+    /// Node name -> user colour (rgb 0..1).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub color: BTreeMap<String, [f32; 3]>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub boxes: Vec<UiBox>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<UiNote>,
+}
+
+/// A network box: titled coloured backdrop behind `nodes`.
+#[derive(Clone, Debug, PartialEq, Deserialize, serde::Serialize)]
+pub struct UiBox {
+    pub name: String,
+    pub title: String,
+    pub color: [f32; 3],
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    #[serde(default)]
+    pub minimized: bool,
+    #[serde(default)]
+    pub nodes: Vec<String>,
+}
+
+/// A sticky note.
+#[derive(Clone, Debug, PartialEq, Deserialize, serde::Serialize)]
+pub struct UiNote {
+    pub name: String,
+    pub text: String,
+    pub color: [f32; 3],
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    #[serde(default)]
+    pub minimized: bool,
+}
+
+fn clamp_rgb(c: [f32; 3]) -> Option<[f32; 3]> {
+    c.iter().all(|v| !v.is_nan()).then(|| c.map(|v| v.clamp(0.0, 1.0)))
+}
+fn rect_ok(x: f32, y: f32, w: f32, h: f32) -> bool {
+    [x, y, w, h].iter().all(|v| v.is_finite()) && w >= 0.0 && h >= 0.0
+}
+fn cap_text(s: &mut String) {
+    if s.len() > MAX_UI_TEXT {
+        let mut end = MAX_UI_TEXT;
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        s.truncate(end);
+    }
+}
+
+impl UiExtra {
+    /// Keep only well-formed entries: colours of known nodes (clamped), finite non-negative rects, capped counts / text,
+    /// box member lists filtered to known nodes.
+    pub fn sanitized(mut self, known: impl Fn(&str) -> bool) -> UiExtra {
+        self.color = std::mem::take(&mut self.color)
+            .into_iter()
+            .filter(|(k, _)| known(k))
+            .filter_map(|(k, c)| Some((k, clamp_rgb(c)?)))
+            .collect();
+        self.boxes.retain(|b| rect_ok(b.x, b.y, b.w, b.h) && clamp_rgb(b.color).is_some());
+        self.boxes.truncate(MAX_UI_ITEMS);
+        for b in &mut self.boxes {
+            b.color = clamp_rgb(b.color).unwrap_or([0.52; 3]);
+            b.nodes.retain(|n| known(n));
+            cap_text(&mut b.title);
+        }
+        self.notes.retain(|n| rect_ok(n.x, n.y, n.w, n.h) && clamp_rgb(n.color).is_some());
+        self.notes.truncate(MAX_UI_ITEMS);
+        for n in &mut self.notes {
+            n.color = clamp_rgb(n.color).unwrap_or([1.0, 0.97, 0.52]);
+            cap_text(&mut n.text);
+        }
+        self
+    }
 }
 
 #[derive(Deserialize)]
@@ -59,6 +151,9 @@ struct NodeDef {
     ty: String,
     #[serde(default)]
     params: BTreeMap<String, Value>,
+    /// Bypass flag: the node passes its input 0 through unchanged.
+    #[serde(default)]
+    bypass: bool,
 }
 
 /// A loaded scene: the graph, its display node, and the name → id map.
@@ -68,6 +163,8 @@ pub struct Loaded {
     pub names: BTreeMap<String, NodeId>,
     /// `ui.pos` of the file: node name -> editor position (unknown names dropped, non-finite dropped).
     pub pos: BTreeMap<String, [f32; 2]>,
+    /// `ui` colours / network boxes / sticky notes (sanitized).
+    pub ui: UiExtra,
 }
 
 /// Hidden generator feeding unconnected inputs.
@@ -187,6 +284,7 @@ pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> 
                 .add_boxed(Box::new(node), overrides)
                 .map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
             graph.rename(id, &n.name).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
+            graph.set_bypass(id, n.bypass).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
             names.insert(n.name.clone(), id);
             continue;
         }
@@ -214,19 +312,23 @@ pub fn load_scene_with_base(json: &str, reg: &Registry, base: Option<&Path>) -> 
         }
         let id = graph.add_boxed(node, overrides).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
         graph.rename(id, &n.name).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
+        graph.set_bypass(id, n.bypass).map_err(|e| SceneError(format!("node `{}`: {e}", n.name)))?;
         names.insert(n.name.clone(), id);
     }
     let find = |name: &str| names.get(name).copied().ok_or_else(|| SceneError(format!("edge: unknown node `{name}`")));
     for (src, out, dst, input) in &def.edges {
         let (s, d) = (find(src)?, find(dst)?);
-        graph.connect(s, *out, d, *input).map_err(|e| SceneError(format!("edge {src}:{out} -> {dst}:{input}: {e}")))?;
+        graph
+            .connect_unchecked(s, *out, d, *input)
+            .map_err(|e| SceneError(format!("edge {src}:{out} -> {dst}:{input}: {e}")))?;
     }
     fill_unwired(&mut graph)?;
     let display = find(&def.display).map_err(|_| SceneError(format!("display: unknown node `{}`", def.display)))?;
     graph.set_display(Some(display)).map_err(|e| SceneError(format!("display: {e}")))?;
     let pos =
         def.ui.pos.into_iter().filter(|(k, p)| names.contains_key(k) && p.iter().all(|c| c.is_finite())).collect();
-    Ok(Loaded { graph, display, names, pos })
+    let ui = def.ui.extra.sanitized(|k| names.contains_key(k));
+    Ok(Loaded { graph, display, names, pos, ui })
 }
 
 /// Feed every unconnected input of every named node from the hidden empty source (created on first need), so a
@@ -273,6 +375,16 @@ fn param_json(v: &ParamValue) -> Value {
 /// params only, typed edges (the hidden empty source is not written), display (falls back to the first node),
 /// plus `"ui": {"pos": ..}` from `pos` (entries for unknown names are dropped). Errors on an empty graph.
 pub fn save_scene(graph: &Graph<Detail>, pos: &BTreeMap<String, [f32; 2]>) -> Result<String, SceneError> {
+    save_scene_ext(graph, pos, &UiExtra::default())
+}
+
+/// `save_scene` plus the editor extras (`ui.color`, `ui.boxes`, `ui.notes`; empty ones are not written) and each node's
+/// `"bypass": true`.
+pub fn save_scene_ext(
+    graph: &Graph<Detail>,
+    pos: &BTreeMap<String, [f32; 2]>,
+    ui: &UiExtra,
+) -> Result<String, SceneError> {
     let named: Vec<(NodeId, &str)> =
         graph.node_ids().into_iter().filter_map(|id| Some((id, graph.name(id)?))).collect();
     let Some(&(first, _)) = named.first() else { return err("nothing to save: the graph has no nodes") };
@@ -289,6 +401,9 @@ pub fn save_scene(graph: &Graph<Detail>, pos: &BTreeMap<String, [f32; 2]>) -> Re
         if !params.is_empty() {
             node["params"] = Value::Object(params);
         }
+        if graph.bypass(id) {
+            node["bypass"] = Value::Bool(true);
+        }
         nodes.push(node);
         for (port, src) in graph.input_sources(id).into_iter().enumerate() {
             if let Some(s) = src.and_then(|s| graph.name(s)) {
@@ -302,7 +417,11 @@ pub fn save_scene(graph: &Graph<Detail>, pos: &BTreeMap<String, [f32; 2]>) -> Re
         .filter(|(k, p)| graph.node_by_name(k).is_some() && p.iter().all(|c| c.is_finite()))
         .map(|(k, p)| (k.clone(), Value::Array(p.iter().map(|c| param_json(&ParamValue::F(*c))).collect())))
         .collect();
-    let doc = serde_json::json!({ "nodes": nodes, "edges": edges, "display": display, "ui": { "pos": pos } });
+    let mut doc = serde_json::json!({ "nodes": nodes, "edges": edges, "display": display, "ui": { "pos": pos } });
+    let extra = ui.clone().sanitized(|k| graph.node_by_name(k).is_some());
+    if let (Ok(Value::Object(m)), Some(Value::Object(u))) = (serde_json::to_value(&extra), doc.get_mut("ui")) {
+        u.extend(m);
+    }
     serde_json::to_string_pretty(&doc).map_err(|e| SceneError(format!("serialize: {e}")))
 }
 
@@ -486,7 +605,10 @@ mod tests {
         fails(&format!(r#"{two}[["a",0,"q",0]]}}"#), "unknown node `q`");
         fails(&format!(r#"{two}[["a",0,"b",3]]}}"#), "no input 3");
         fails(&format!(r#"{two}[["a",1,"b",0]]}}"#), "no output 1");
-        fails(&format!(r#"{two}[["a",0,"b",0],["b",0,"a",0]]}}"#), "cycle");
+        // a loop drawn in the editor saves and loads back (Houdini keeps it); the cook reports it, never hangs
+        let mut l = load(&format!(r#"{two}[["a",0,"b",0],["b",0,"a",0]]}}"#)).expect("a saved loop loads");
+        let display = l.display;
+        assert!(matches!(l.graph.cook(display, 0.0), Err(hexe_graph::GraphError::Cycle(_))));
         fails(&format!(r#"{two}[["a",0]]}}"#), "invalid scene JSON");
     }
 
@@ -558,5 +680,41 @@ mod tests {
         let scene = include_str!("../../../fixtures/null-passthrough/scene.json");
         let (mut g, id) = load_scene(scene).expect("fixture scene loads");
         assert_eq!(hexe_geo::write_geo_json(&g.cook(id, 0.0).expect("cooks")), expected.to_vec());
+    }
+    #[test]
+    fn bypass_colours_boxes_notes_roundtrip() {
+        let s = r#"{"nodes":[{"name":"b","type":"box"},{"name":"x","type":"xform","bypass":true}],"edges":[["b",0,"x",0]],"display":"x",
+            "ui":{"pos":{"b":[0,0]},"color":{"x":[0.9,0.5,0],"ghost":[1,1,1]},
+            "boxes":[{"name":"__netbox1","title":"Walls","color":[0.5,0.7,1],"x":-10,"y":-20,"w":300,"h":200,"minimized":false,"nodes":["b","x"]}],
+            "notes":[{"name":"__stickynote1","text":"hi","color":[1,0.97,0.52],"x":5,"y":6,"w":250,"h":250,"minimized":false}]}}"#;
+        let l = load(s).expect("loads");
+        assert!(l.graph.bypass(l.names["x"]));
+        assert_eq!(l.ui.color.len(), 1, "colours for unknown nodes are dropped");
+        assert_eq!((l.ui.boxes[0].title.as_str(), l.ui.boxes[0].w), ("Walls", 300.0));
+        assert_eq!(l.ui.notes[0].text, "hi");
+        let again = save_scene_ext(&l.graph, &l.pos, &l.ui).expect("saves");
+        let l2 = load(&again).expect("reloads");
+        assert!(l2.graph.bypass(l2.names["x"]));
+        assert_eq!(l2.ui, l.ui, "ui extras survive a save");
+        // the bypassed xform cooks to its input unchanged (the 8-point box)
+        let (mut g, d) = (l2.graph, l2.display);
+        assert_eq!(g.cook(d, 0.0).expect("cooks").class_len(hexe_geo::AttrClass::Point), 8);
+        // a plain scene saves without the extra keys (old files stay byte-identical)
+        assert!(!save_scene(&g, &BTreeMap::new()).expect("saves").contains("boxes"));
+    }
+    #[test]
+    fn ui_extras_hostile_values_are_dropped_not_fatal() {
+        let s = r#"{"nodes":[{"name":"a","type":"null"}],"display":"a","ui":{"color":{"a":[1e30,-5,0.5]},
+            "boxes":[{"name":"b","title":"t","color":[0,0,0],"x":1e39,"y":0,"w":-5,"h":10,"minimized":false,"nodes":[]}],
+            "notes":[{"name":"n","text":"t","color":[0,0,0],"x":0,"y":0,"w":1,"h":1,"minimized":false}]}}"#;
+        let l = load(s).expect("loads");
+        assert_eq!(l.ui.color["a"], [1.0, 0.0, 0.5], "colours clamp to [0, 1]");
+        assert!(l.ui.boxes.is_empty(), "non-finite / negative box dropped");
+        let note = r#"{"name":"n","text":"t","color":[0,0,0],"x":0,"y":0,"w":1,"h":1,"minimized":false}"#;
+        let many = format!(
+            r#"{{"nodes":[{{"name":"a","type":"null"}}],"display":"a","ui":{{"notes":[{}]}}}}"#,
+            vec![note; MAX_UI_ITEMS + 1].join(",")
+        );
+        assert_eq!(load(&many).expect("loads").ui.notes.len(), MAX_UI_ITEMS, "capped");
     }
 }

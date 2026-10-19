@@ -11,4 +11,11 @@ Read `AGENTS.md` first (wins on conflict; check `MODE:`). One session = one ledg
 8. Record: ledger row status/evidence/notes · oracle `--raise` if score rose · `perf --tighten` if faster · ROADMAP session-log line (date, agent, hours, atom, result) · honest table if numbers moved.
 9. Commit: `<ledger id>: <what>`; green only; one atom per commit.
 
+PORTABILITY (anything that can be committed: code, tests, fixtures, oracle scripts, ledger, ROADMAP, docs): nothing
+specific to the maintainer or their machine. No user names, home / Desktop paths, drive letters of a personal box,
+hostnames, or the names / contents of the maintainer's own `.hip` / `.hipnc` scenes (no geometry exported from them,
+no node names or parm values copied from them). Fixtures and tests must be built from synthetic inputs (hython scripts
+that construct the case) so they run on any computer; a private scene may be used to FIND a gap, never as evidence.
+Tool paths (hython, Houdini install) come from an env var / argument, never hardcoded.
+
 STOP conditions: `SPEC-GAP` (clean) · ci red you can't fix in the atom · scope creep → write it in ROADMAP, don't do it.

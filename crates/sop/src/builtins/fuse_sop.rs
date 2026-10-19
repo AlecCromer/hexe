@@ -296,6 +296,7 @@ impl Node<Detail> for Fuse {
             prims,
             attrs: Vec::new(),
             groups: Vec::new(),
+            edge_groups: Vec::new(),
             skipped_attribs: src.skipped_attribs.clone(),
         };
         for a in &src.attrs {
@@ -319,6 +320,8 @@ impl Node<Detail> for Fuse {
             };
             out.groups.push(g);
         }
+        let lists: Vec<Vec<usize>> = cl.iter().map(|c| c.iter().map(|&i| i as usize).collect()).collect();
+        super::meshutil::follow_edge_groups(src, &super::meshutil::inverse_lists(src.point_count, &lists), &mut out);
         Ok(Arc::new(out))
     }
 }

@@ -1,0 +1,90 @@
+{
+ "default": {},
+ "existing_float": {
+  "attribname": "fidx",
+  "group": "sel"
+ },
+ "existing_string": {
+  "attribname": "sx",
+  "attribtype": 1,
+  "group": "sel"
+ },
+ "existing_string_to_int": {
+  "attribname": "sx",
+  "group": "sel"
+ },
+ "overwrite_piece": {
+  "attribname": "name",
+  "usepieceattrib": 1
+ },
+ "point_float_elements": {
+  "grouptype": 1,
+  "pieceattrib": "f",
+  "usepieceattrib": 1
+ },
+ "point_float_pieces": {
+  "grouptype": 1,
+  "pieceattrib": "f",
+  "piecemode": 1,
+  "usepieceattrib": 1
+ },
+ "point_group_string": {
+  "attribtype": 1,
+  "group": "psel",
+  "grouptype": 1,
+  "prefix": "p_"
+ },
+ "point_int_pieces": {
+  "attribname": "pc",
+  "grouptype": 1,
+  "pieceattrib": "pid",
+  "piecemode": 1,
+  "usepieceattrib": 1
+ },
+ "point_natural_elements": {
+  "grouptype": 1,
+  "pieceattrib": "s",
+  "usepieceattrib": 1
+ },
+ "point_natural_pieces": {
+  "grouptype": 1,
+  "pieceattrib": "s",
+  "piecemode": 1,
+  "usepieceattrib": 1
+ },
+ "points": {
+  "grouptype": 1
+ },
+ "prim_elements": {
+  "usepieceattrib": 1
+ },
+ "prim_group": {
+  "group": "sel"
+ },
+ "prim_pieces_group": {
+  "group": "sel",
+  "piecemode": 1,
+  "usepieceattrib": 1
+ },
+ "prim_pieces_string": {
+  "attribtype": 1,
+  "piecemode": 1,
+  "usepieceattrib": 1
+ },
+ "vertex_elements_string": {
+  "attribtype": 1,
+  "grouptype": 2,
+  "pieceattrib": "vn",
+  "prefix": "",
+  "usepieceattrib": 1
+ },
+ "vertex_pieces": {
+  "grouptype": 2,
+  "pieceattrib": "vn",
+  "piecemode": 1,
+  "usepieceattrib": 1
+ },
+ "vertices": {
+  "grouptype": 2
+ }
+}

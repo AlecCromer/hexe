@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { pagesFor, showing, visibleRange } from "./sheetwin";
+import { headerLabel, pagesFor, showing, visibleRange } from "./sheetwin";
 test("visible range follows scroll, overscans, clamps", () => {
   expect(visibleRange(0, 180, 18, 1000, 0)).toEqual([0, 10]);
   expect(visibleRange(180, 180, 18, 1000, 2)).toEqual([8, 22]);
@@ -17,4 +17,12 @@ test("pages cover the range", () => {
 test("showing N of M caps at 10k", () => {
   expect(showing(8)).toBe("showing 8 of 8");
   expect(showing(12345)).toBe("showing 10000 of 12345");
+});
+
+test("header labels: P.x -> P[x], index column blank, plain names kept", () => {
+  expect(headerLabel("ptnum", 0)).toBe("");
+  expect(headerLabel("P.x", 1)).toBe("P[x]");
+  expect(headerLabel("uv.3", 2)).toBe("uv[3]");
+  expect(headerLabel("name", 3)).toBe("name");
+  expect(headerLabel("a.b.c", 4)).toBe("a.b[c]");
 });

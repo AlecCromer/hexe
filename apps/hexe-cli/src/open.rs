@@ -1,7 +1,8 @@
 //! `hexe-cli open <file.hip|.hipnc|.hiplc|.hip.gz> [--geo NAME] [--scene-out F] [--cook-out F.geo] [--all-out DIR]` (H40).
 //! Reads a Houdini scene (`hexe_graph::hip`), maps each `/obj/<geo>` SOP network onto a hexe scene (`hexe_sop::import_hip`),
 //! prints an import report. `--scene-out` writes the chosen geo's scene JSON; `--cook-out` cooks its display node at the
-//! scene's saved frame; `--all-out DIR` writes `<geo>.scene.json` for every geo + `import.json` (machine-readable report).
+//! scene's saved frame; `--all-out DIR` writes `<geo>.scene.json` for every geo + `import.json` (machine-readable report);
+//! `--exprs` prints every parm channel's value at the saved frame (`hexe_sop::hip_channel_report`).
 use std::fmt::Write as _;
 
 const MAX_HIP: u64 = 1 << 30;
@@ -12,11 +13,12 @@ struct Args {
     scene_out: Option<String>,
     cook_out: Option<String>,
     all_out: Option<String>,
+    exprs: bool,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
-    let usage = "usage: hexe-cli open <file.hip> [--geo NAME] [--scene-out F.json] [--cook-out F.geo] [--all-out DIR]";
-    let mut a = Args { file: String::new(), geo: None, scene_out: None, cook_out: None, all_out: None };
+    let usage = "usage: hexe-cli open <file.hip> [--geo NAME] [--scene-out F.json] [--cook-out F.geo] [--all-out DIR] [--exprs]";
+    let mut a = Args { file: String::new(), geo: None, scene_out: None, cook_out: None, all_out: None, exprs: false };
     let mut it = args.iter();
     while let Some(x) = it.next() {
         let mut val = |what: &str| it.next().cloned().ok_or_else(|| format!("open: {what} needs a value"));
@@ -25,6 +27,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             "--scene-out" => a.scene_out = Some(val("--scene-out")?),
             "--cook-out" => a.cook_out = Some(val("--cook-out")?),
             "--all-out" => a.all_out = Some(val("--all-out")?),
+            "--exprs" => a.exprs = true,
             f if !f.starts_with("--") && a.file.is_empty() => a.file = f.to_string(),
             other => return Err(format!("open: unexpected `{other}`\n{usage}")),
         }
@@ -44,6 +47,19 @@ pub fn open_cmd(args: &[String]) -> Result<String, String> {
     let bytes = std::fs::read(&a.file).map_err(|e| format!("{}: {e}", a.file))?;
     let imp = hexe_sop::import_hip(&bytes).map_err(|e| e.to_string())?;
     let mut out = String::new();
+    if a.exprs {
+        // every channel's value at the saved frame (tab-separated: path, channel, value | ERR reason)
+        let hip = hexe_graph::hip::read_hip(&bytes).map_err(|e| e.to_string())?;
+        for (path, chan, v) in hexe_sop::hip_channel_report(&hip) {
+            let v = match v {
+                Ok(hexe_graph::hscript::Value::Num(x)) => format!("{x}"),
+                Ok(hexe_graph::hscript::Value::Str(s)) => format!("{s:?}"),
+                Err(e) => format!("ERR {e}"),
+            };
+            let _ = writeln!(out, "{path}\t{chan}\t{v}");
+        }
+        return Ok(out);
+    }
     let _ = writeln!(
         out,
         "{}: frame {} @ {} fps, {} geo network(s), {} other container(s) skipped",

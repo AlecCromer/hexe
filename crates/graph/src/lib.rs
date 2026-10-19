@@ -12,6 +12,7 @@
 
 mod graph;
 pub mod hip;
+pub mod hscript;
 mod node;
 mod param;
 

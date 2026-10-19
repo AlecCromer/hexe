@@ -1,18 +1,22 @@
 //! Sphere SOP: generator. `type` prim = 1 point + `Prim::Sphere` · poly = subdivided icosahedron · polymesh = lat/long quads.
 //!
-//! Closed forms (all UNVERIFIED vs Houdini; hython blocked, see parity/features.toml `sop-sphere`):
+//! Closed forms:
 //! - prim: 1 pt (= `t`), 1 vertex, 1 `Sphere` prim, xform = R·diag(rad·scale)·O (row-major 3x3).
-//! - poly, `freq`=f: 10f²+2 pts, 20f² tris. Icosahedron with poles on the pole axis; every face split on a barycentric
-//!   lattice, shared corner/edge points deduplicated, points projected onto the unit sphere.
+//! - poly, `freq`=f (any f >= 1 like Houdini; work budget 10f²+2 <= 4M points): 10f²+2 pts, 20f² tris in Houdini 20.5's
+//!   order and positions (hython-verified to f = 101, see `poly`): Houdini's icosahedron (vertex 0 at -Z in the Y frame),
+//!   faces walked apex-first row by row, sine-weighted (slerp on edges) lattice points; `orient` X / Z remap the unit
+//!   points ((y,-z,-x) / (x,-z,y)), then rad·scale, rotation, `t` as below.
 //! - polymesh, `rows`=R `cols`=C: the poles FIRST (shared: top 0, bottom 1; `upole`: 2·C) then ring points (R-2)·C; ring angle runs +X toward -Z
 //!   (verified vs real Houdini 20.5, fixtures/sop-sphere/houdini.geo). Houdini lists cells clockwise; hexe emits them verbatim (H32:
 //!   Houdini winding is global). Prim order = Houdini: top fan, ring rows, bottom fan. Prims (R-1)·C =
 //!   (R-3)·C quads + 2·C pole faces (tris when `triangularpoles`, else quads that touch the pole). `upole` on: R·C pts.
+//!   `surftype` triangles / alttriangles / revtriangles (verified vs Houdini 20.5 hython): each ring cell [a,b,c,d] split in
+//!   place (abc+acd / checkerboard / abd+bcd), caps always triangles. Rows / Columns curve connectivities: not supported.
 //! - P = R(rad·scale ∘ O(unit)) + t. O = pole-axis permutation (y identity, x: (y,z,x), z: (z,x,y)), R = Rx then Ry then Rz.
 use crate::SopNode;
 use hexe_geo::{Detail, Prim, PrimKind};
 use hexe_graph::{CookCtx, CookError, InputSpec, Node, ParamSet, ParamSpec, ParamValue};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::sync::Arc;
 
@@ -20,10 +24,14 @@ use std::sync::Arc;
 const TY_PRIM: u32 = 0;
 const TY_POLY: u32 = 1;
 const TY_POLYMESH: u32 = 2;
-/// `surftype` menu position of `quads` (the only polymesh connectivity implemented).
+/// `surftype` menu positions (Houdini order) of the polymesh connectivities implemented: triangles, quads, alternate /
+/// reverse triangles. Rows / Columns / Rows and Columns (open curves) are not.
+const SURF_TRIS: u32 = 3;
 const SURF_QUADS: u32 = 4;
-/// Hard caps (AGENTS.md §4: capped allocations).
-const MAX_FREQ: i32 = 100;
+const SURF_ALT: u32 = 5;
+const SURF_REV: u32 = 6;
+/// Hard caps (AGENTS.md §4: capped allocations). Houdini's `freq` has no upper bound (min 1, hython 20.5), so the poly
+/// sphere is budgeted by its output: 10·f²+2 points <= `MAX_POINTS` (f <= 632), like the polymesh rows x cols.
 const MAX_POINTS: usize = 4_000_000;
 
 pub fn spec() -> Vec<ParamSpec> {
@@ -39,6 +47,8 @@ pub fn spec() -> Vec<ParamSpec> {
             ("rowcol", "Rows and Columns"),
             ("triangles", "Triangles"),
             ("quads", "Quadrilaterals"),
+            ("alttriangles", "Alternating Triangles"),
+            ("revtriangles", "Reverse Triangles"),
         ]),
         ParamSpec::new("rad", ParamValue::V3([1.0, 1.0, 1.0])).label("Radius").range(-1.0, 1.0),
         ParamSpec::new("t", ParamValue::V3([0.0; 3])).label("Center").range(-1.0, 1.0),
@@ -113,98 +123,150 @@ impl Xf {
     }
 }
 
-/// Icosahedron with vertex 0 / 11 on the +Y / -Y pole, rings of 5 at y = ±1/√5 (lower ring offset 36°).
-fn ico_vertices() -> Vec<[f64; 3]> {
-    let (ry, rr) = (1.0 / 5f64.sqrt(), 2.0 / 5f64.sqrt());
-    let ring = |k: usize, off: f64, y: f64| {
-        let a = 2.0 * PI * k as f64 / 5.0 + off;
-        [rr * a.cos(), y, rr * a.sin()]
+/// Houdini's icosahedron (orient Y frame, hython 20.5): vertex 0 / 11 = -Z / +Z, ring 1..=5 at z = -1/√5 from 90° in
+/// -72° steps, ring 6..=10 at z = +1/√5 from 126° in +72° steps (angles in the XY plane, radius 2/√5).
+fn ico_vertices() -> [[f64; 3]; 12] {
+    let (rz, rr) = (1.0 / 5f64.sqrt(), 2.0 / 5f64.sqrt());
+    let ring = |deg: f64, z: f64| {
+        let a = deg.to_radians();
+        [rr * a.cos(), rr * a.sin(), z]
     };
-    let mut v = vec![[0.0, 1.0, 0.0]];
-    v.extend((0..5).map(|k| ring(k, 0.0, ry)));
-    v.extend((0..5).map(|k| ring(k, PI / 5.0, -ry)));
-    v.push([0.0, -1.0, 0.0]);
+    let mut v = [[0.0; 3]; 12];
+    v[0] = [0.0, 0.0, -1.0];
+    for k in 0..5 {
+        v[1 + k] = ring(90.0 - 72.0 * k as f64, -rz);
+        v[6 + k] = ring(126.0 + 72.0 * k as f64, rz);
+    }
+    v[11] = [0.0, 0.0, 1.0];
     v
 }
-/// 20 faces, counter-clockwise from outside (construction order; `poly` emits them reversed = Houdini winding) (vertex indices into `ico_vertices`): per k top, down, up, bottom.
-fn ico_faces() -> Vec<[usize; 3]> {
-    let mut f = Vec::with_capacity(20);
-    for k in 0..5usize {
-        let n = (k + 1) % 5;
-        f.push([0, 1 + n, 1 + k]);
-        f.push([1 + k, 1 + n, 6 + k]);
-        f.push([6 + k, 6 + (k + 4) % 5, 1 + k]);
-        f.push([6 + k, 6 + n, 11]);
+/// Houdini's 20 faces in prim order as (apex A, left L, right R); its `freq` 1 prims are `[R, L, A]` (hython 20.5).
+const ICO_FACES: [[usize; 3]; 20] = [
+    [0, 1, 2],
+    [0, 2, 3],
+    [0, 3, 4],
+    [0, 4, 5],
+    [0, 5, 1],
+    [1, 5, 6],
+    [5, 4, 7],
+    [4, 3, 8],
+    [3, 2, 9],
+    [2, 1, 10],
+    [1, 6, 10],
+    [5, 7, 6],
+    [4, 8, 7],
+    [3, 9, 8],
+    [2, 10, 9],
+    [11, 10, 6],
+    [11, 9, 10],
+    [11, 8, 9],
+    [11, 7, 8],
+    [11, 6, 7],
+];
+/// Pole-axis map of the poly sphere (hython 20.5): Y is Houdini's native frame (identity), X: (y, -z, -x), Z: (x, -z, y).
+fn poly_orient(orient: u32, u: [f64; 3]) -> [f64; 3] {
+    let [x, y, z] = u;
+    match orient {
+        0 => [y, -z, -x],
+        2 => [x, -z, y],
+        _ => u,
     }
-    f
 }
 
-fn normalized(v: [f64; 3]) -> [f64; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if l > 0.0 { [v[0] / l, v[1] / l, v[2] / l] } else { v }
-}
-
-/// Dedup key of a lattice point: corner / edge / face interior.
+/// Dedup key of a face-boundary lattice point: corner `(0, v, 0, 0)` / edge `(1, lo, hi, weight on hi)`.
 type Key = (u8, usize, usize, usize);
-
-fn poly(freq: usize, xf: &Xf, t: [f32; 3]) -> Detail {
-    let base = ico_vertices();
-    let mut d = Detail::default();
-    let mut ids: BTreeMap<Key, u32> = BTreeMap::new();
-    let mut unit: Vec<[f64; 3]> = base.clone();
-    for i in 0..base.len() {
-        ids.insert((0, i, 0, 0), u32::try_from(i).unwrap_or(0));
-    }
-    let mut tris: Vec<[u32; 3]> = Vec::with_capacity(20 * freq * freq);
-    for (fi, face) in ico_faces().iter().enumerate() {
-        let [a, b, c] = *face;
-        // lattice point (r, s): weights a = f-r-s, b = s, c = r
-        let mut id_of = |r: usize, s: usize| -> u32 {
-            let (wa, wb, wc) = (freq - r - s, s, r);
-            let key: Key = match (wa == 0, wb == 0, wc == 0) {
-                (false, true, true) => (0, a, 0, 0),
-                (true, false, true) => (0, b, 0, 0),
-                (true, true, false) => (0, c, 0, 0),
-                (false, false, true) => edge_key(a, b, wa, wb),
-                (false, true, false) => edge_key(a, c, wa, wc),
-                (true, false, false) => edge_key(b, c, wb, wc),
-                _ => (2, fi, r, s),
-            };
-            if let Some(&id) = ids.get(&key) {
-                return id;
-            }
-            let w = |wt: usize, v: [f64; 3]| [wt as f64 * v[0], wt as f64 * v[1], wt as f64 * v[2]];
-            let (pa, pb, pc) = (w(wa, at(&base, a)), w(wb, at(&base, b)), w(wc, at(&base, c)));
-            let sum = [pa[0] + pb[0] + pc[0], pa[1] + pb[1] + pc[1], pa[2] + pb[2] + pc[2]];
-            let id = u32::try_from(unit.len()).unwrap_or(u32::MAX);
-            unit.push(normalized(sum));
-            ids.insert(key, id);
-            id
-        };
-        for r in 0..freq {
-            for s in 0..(freq - r) {
-                tris.push([id_of(r, s), id_of(r, s + 1), id_of(r + 1, s)]);
-                if s + 1 < freq - r {
-                    tris.push([id_of(r, s + 1), id_of(r + 1, s + 1), id_of(r + 1, s)]);
-                }
-            }
-        }
-    }
-    d.add_points(u32::try_from(unit.len()).unwrap_or(u32::MAX));
-    for (dst, u) in d.p_mut().iter_mut().zip(&unit) {
-        *dst = xf.p(*u, t);
-    }
-    for tri in &tris {
-        d.add_poly(&[tri[0], tri[2], tri[1]], true); // Houdini winding: clockwise from outside
-    }
-    d
-}
 /// Edge point shared by both faces: sorted vertex pair + weight on the larger vertex.
 fn edge_key(u: usize, v: usize, wu: usize, wv: usize) -> Key {
     if u < v { (1, u, v, wv) } else { (1, v, u, wu) }
 }
+/// Points of a `freq` poly sphere, `None` past the work budget (u64 maths: no overflow for any i32).
+fn poly_points(freq: u64) -> Option<u64> {
+    freq.checked_mul(freq)?.checked_mul(10)?.checked_add(2).filter(|&n| n <= MAX_POINTS as u64)
+}
 
-fn polymesh(rows: usize, cols: usize, upole: bool, tripoles: bool, xf: &Xf, t: [f32; 3]) -> Result<Detail, CookError> {
+/// Houdini's geodesic sphere (hython 20.5 point / prim order and positions): per icosahedron face (`ICO_FACES` order) the
+/// lattice is walked row by row from the apex (row i = 0..=f, column j = 0..=i; weights A = f-i, L = i-j, R = j) and each
+/// point not yet made (corners / edge points are shared) is appended. Position = normalize(Σ sin(θ·w/f)·V) with θ the
+/// icosahedron edge angle: slerp on the edges, its sine-weighted extension inside. Prims per face: the upward triangles
+/// row by row `[r(i+1,j+1), r(i+1,j), r(i,j)]`, then the inverted ones `[r(i,j+1), r(i+1,j+1), r(i,j)]`.
+fn poly(freq: usize, xf: &Xf, orient: u32, t: [f32; 3]) -> Detail {
+    let base = ico_vertices();
+    let theta = (1.0 / 5f64.sqrt()).acos();
+    let f = freq as f64;
+    let wsin = |w: usize| (theta * w as f64 / f).sin();
+    let mut ids: HashMap<Key, u32> = HashMap::new();
+    let mut unit: Vec<[f64; 3]> = Vec::with_capacity(10 * freq * freq + 2);
+    let mut tris: Vec<[u32; 3]> = Vec::with_capacity(20 * freq * freq);
+    let row_start = |i: usize| i * (i + 1) / 2;
+    let mut lattice = vec![0u32; row_start(freq + 1)];
+    for &[a, l, r] in &ICO_FACES {
+        for i in 0..=freq {
+            for j in 0..=i {
+                let (wa, wl, wr) = (freq - i, i - j, j);
+                let key: Option<Key> = match (wa == 0, wl == 0, wr == 0) {
+                    (false, true, true) => Some((0, a, 0, 0)),
+                    (true, false, true) => Some((0, l, 0, 0)),
+                    (true, true, false) => Some((0, r, 0, 0)),
+                    (false, false, true) => Some(edge_key(a, l, wa, wl)),
+                    (false, true, false) => Some(edge_key(a, r, wa, wr)),
+                    (true, false, false) => Some(edge_key(l, r, wl, wr)),
+                    _ => None,
+                };
+                let known = key.and_then(|k| ids.get(&k).copied());
+                let id = match known {
+                    Some(id) => id,
+                    None => {
+                        let (sa, sl, sr) = (wsin(wa), wsin(wl), wsin(wr));
+                        let (va, vl, vr) = (at(&base, a), at(&base, l), at(&base, r));
+                        let s: [f64; 3] = std::array::from_fn(|k| sa * va[k] + sl * vl[k] + sr * vr[k]);
+                        let len = (s[0] * s[0] + s[1] * s[1] + s[2] * s[2]).sqrt();
+                        let id = u32::try_from(unit.len()).unwrap_or(u32::MAX);
+                        unit.push(if len > 0.0 { s.map(|c| c / len) } else { s });
+                        if let Some(k) = key {
+                            ids.insert(k, id);
+                        }
+                        id
+                    }
+                };
+                if let Some(slot) = lattice.get_mut(row_start(i) + j) {
+                    *slot = id;
+                }
+            }
+        }
+        let at_l = |i: usize, j: usize| lattice.get(row_start(i) + j).copied().unwrap_or(0);
+        for i in 0..freq {
+            for j in 0..=i {
+                tris.push([at_l(i + 1, j + 1), at_l(i + 1, j), at_l(i, j)]);
+            }
+        }
+        for i in 1..freq {
+            for j in 0..i {
+                tris.push([at_l(i, j + 1), at_l(i + 1, j + 1), at_l(i, j)]);
+            }
+        }
+    }
+    let mut d = Detail::default();
+    d.add_points(u32::try_from(unit.len()).unwrap_or(u32::MAX));
+    for (dst, u) in d.p_mut().iter_mut().zip(&unit) {
+        *dst = xf.p(poly_orient(orient, *u), t);
+    }
+    for tri in &tris {
+        d.add_poly(tri, true);
+    }
+    d
+}
+
+fn polymesh(
+    rows: usize,
+    cols: usize,
+    upole: bool,
+    tripoles: bool,
+    surf: u32,
+    xf: &Xf,
+    t: [f32; 3],
+) -> Result<Detail, CookError> {
+    // triangle connectivities always cap with triangles (Houdini ignores `triangularpoles` there)
+    let tripoles = tripoles || surf != SURF_QUADS;
     let rings = rows - 2;
     let ring_pts = rings.checked_mul(cols);
     let pole_pts = if upole { 2 * cols } else { 2 };
@@ -245,9 +307,21 @@ fn polymesh(rows: usize, cols: usize, upole: bool, tripoles: bool, xf: &Xf, t: [
             d.add_poly(&[top(j), top(j + 1), ring(1, j + 1), ring(1, j)], true);
         }
     }
+    // ring cells [a, b, c, d]; triangle connectivities split each in place (Houdini 20.5 hython): triangles = abc + acd,
+    // reverse = abd + bcd, alternating = reverse where (band + column) is even, triangles where odd
     for i in 1..rings {
         for j in 0..cols {
-            d.add_poly(&[ring(i, j), ring(i, j + 1), ring(i + 1, j + 1), ring(i + 1, j)], true);
+            let (a, b, c, e) = (ring(i, j), ring(i, j + 1), ring(i + 1, j + 1), ring(i + 1, j));
+            let rev = surf == SURF_REV || (surf == SURF_ALT && (i - 1 + j) % 2 == 0);
+            if surf == SURF_QUADS {
+                d.add_poly(&[a, b, c, e], true);
+            } else if rev {
+                d.add_poly(&[a, b, e], true);
+                d.add_poly(&[b, c, e], true);
+            } else {
+                d.add_poly(&[a, b, c], true);
+                d.add_poly(&[a, c, e], true);
+            }
         }
     }
     for j in 0..cols {
@@ -302,22 +376,38 @@ impl Node<Detail> for Sphere {
             TY_PRIM => prim(&xf, t),
             TY_POLY => {
                 let f = int(p, "freq")?;
-                if !(1..=MAX_FREQ).contains(&f) {
-                    return Err(CookError::BadParam(format!("sphere: freq {f} not in 1..={MAX_FREQ}")));
+                if f < 1 {
+                    return Err(CookError::BadParam(format!("sphere: freq {f} < 1")));
                 }
-                poly(usize::try_from(f).map_err(|_| bad("freq"))?, &xf, t)
+                let fu = u64::try_from(f).map_err(|_| bad("freq"))?;
+                if poly_points(fu).is_none() {
+                    return Err(CookError::Failed(format!(
+                        "sphere: freq {f} makes more than {MAX_POINTS} points (10 f^2 + 2; work budget)"
+                    )));
+                }
+                let poly_xf = Xf { orient: 1, ..xf };
+                poly(usize::try_from(f).map_err(|_| bad("freq"))?, &poly_xf, orient, t)
             }
             TY_POLYMESH => {
                 let (rows, cols) = (int(p, "rows")?, int(p, "cols")?);
                 if rows < 3 || cols < 3 {
                     return Err(CookError::BadParam(format!("sphere: rows {rows} / cols {cols} must be >= 3")));
                 }
-                if menu(p, "surftype")? != SURF_QUADS {
-                    return Err(CookError::BadParam("sphere: polymesh supports surftype quads only".into()));
+                let surf = menu(p, "surftype")?;
+                if ![SURF_TRIS, SURF_QUADS, SURF_ALT, SURF_REV].contains(&surf) {
+                    return Err(CookError::BadParam(format!(
+                        "sphere: polymesh surftype {surf} (rows / columns curves) not supported"
+                    )));
+                }
+                let upole = toggle(p, "upole")?;
+                if upole && surf != SURF_QUADS {
+                    return Err(CookError::BadParam(
+                        "sphere: unique points per pole with triangle connectivity not verified yet".into(),
+                    ));
                 }
                 let (r, c) =
                     (usize::try_from(rows).map_err(|_| bad("rows"))?, usize::try_from(cols).map_err(|_| bad("cols"))?);
-                polymesh(r, c, toggle(p, "upole")?, toggle(p, "triangularpoles")?, &xf, t)?
+                polymesh(r, c, upole, toggle(p, "triangularpoles")?, surf, &xf, t)?
             }
             other => {
                 return Err(CookError::BadParam(format!(
@@ -418,7 +508,7 @@ mod tests {
     // ---- type = poly -------------------------------------------------------------------------------------------
     #[test]
     fn poly_counts_are_10f2_plus_2_and_20f2() {
-        for f in [1usize, 2, 3, 4, 7, 10, 100] {
+        for f in [1usize, 2, 3, 4, 7, 10, 100, 101] {
             let d = cook(&format!(r#"{{"type":1,"freq":{f}}}"#));
             assert_eq!(d.point_count as usize, 10 * f * f + 2, "points f={f}");
             assert_eq!(d.prims.len(), 20 * f * f, "tris f={f}");
@@ -446,16 +536,123 @@ mod tests {
             assert!((s - 1.0).abs() < 1e-5, "{q:?} -> {s}");
         }
     }
+    fn near(got: [f32; 3], want: [f64; 3], tol: f64, what: &str) {
+        assert!(got.iter().zip(want).all(|(g, w)| (f64::from(*g) - w).abs() <= tol), "{what}: {got:?} != {want:?}");
+    }
+    /// Houdini 20.5 hython (`sphere` type poly, oracle/houdini/parmgaps/sphere_poly_ref.py): orient X / Y / Z at freq 5
+    /// put Houdini's icosahedron vertex 0 on -Z (Y) / +Y (X, Z); sampled interior and edge points, same prim lists.
     #[test]
-    fn poly_has_pole_vertices_on_orient_axis() {
-        for (o, axis) in [(0, 0usize), (1, 1), (2, 2)] {
-            let d = cook(&format!(r#"{{"type":1,"orient":{o}}}"#));
-            for s in [1.0f32, -1.0] {
-                assert!(d.p().iter().any(|q| (q[axis] - s).abs() < 1e-6
-                    && q[(axis + 1) % 3].abs() < 1e-6
-                    && q[(axis + 2) % 3].abs() < 1e-6));
+    fn poly_orient_matches_houdini() {
+        let rec: [(u32, [(usize, [f64; 3]); 3]); 3] = [
+            (
+                1,
+                [
+                    (4, [0.2211194634437561, 0.3043449819087982, -0.9265421628952026]),
+                    (100, [-0.9453449845314026, -0.1714264154434204, 0.2773730158805847]),
+                    (251, [-0.7270480990409851, -0.0037337145768105984, 0.6865764260292053]),
+                ],
+            ),
+            (
+                0,
+                [
+                    (4, [0.3043449819087982, 0.9265421628952026, -0.2211194634437561]),
+                    (100, [-0.1714264154434204, -0.2773730158805847, 0.9453449845314026]),
+                    (251, [-0.0037337145768105984, -0.6865764260292053, 0.7270480990409851]),
+                ],
+            ),
+            (
+                2,
+                [
+                    (4, [0.2211194634437561, 0.9265421628952026, 0.3043449819087982]),
+                    (100, [-0.9453449845314026, -0.2773730158805847, -0.1714264154434204]),
+                    (251, [-0.7270480990409851, -0.6865764260292053, -0.0037337145768105984]),
+                ],
+            ),
+        ];
+        for (o, pts) in rec {
+            let d = cook(&format!(r#"{{"type":1,"freq":5,"orient":{o}}}"#));
+            assert_eq!((d.point_count, d.prims.len()), (252, 500));
+            for (i, want) in pts {
+                near(d.p()[i], want, 2e-6, &format!("orient {o} P[{i}]"));
             }
-            assert_closed_outward_unit_sphere(&d, true); // cyclic permutation keeps handedness
+            assert_closed_outward_unit_sphere(&d, true);
+            let prim = |i: usize| face_pts(&d, &d.prims[i]);
+            assert_eq!(
+                [prim(0), prim(24), prim(25), prim(100), prim(499)],
+                [vec![2, 1, 0], vec![14, 19, 13], vec![21, 2, 0], vec![1, 51, 0], vec![242, 167, 251]]
+            );
+        }
+        // freq 5 face 0 interior rows (sine-weighted lattice, not the normalised flat one)
+        let d = cook(r#"{"type":1,"freq":5}"#);
+        near(d.p()[7], [0.22503246366977692, 0.5122469067573547, -0.8288325071334839], 2e-6, "P[7]");
+        near(d.p()[8], [0.4176367223262787, 0.3723118007183075, -0.8288325071334839], 2e-6, "P[8]");
+    }
+    /// Houdini 20.5 hython: freq 101 (past hexe's old cap of 100; Houdini has no upper bound) = 102012 points, 204020
+    /// triangles; sampled positions and prims.
+    #[test]
+    fn poly_freq_above_100_matches_houdini() {
+        let d = cook(r#"{"type":1,"freq":101}"#);
+        assert_eq!((d.point_count, d.prims.len(), d.vertex_count()), (102_012, 204_020, 612_060));
+        let rec: [(usize, [f64; 3]); 10] = [
+            (0, [0.0, 0.0, -1.0]),
+            (1, [0.0, 0.010961574502289295, -0.9999399185180664]),
+            (11, [0.010626389645040035, 0.03653772920370102, -0.9992757439613342]),
+            (12, [0.021113399416208267, 0.02906011790037155, -0.9993547201156616]),
+            (13, [0.03146569803357124, 0.021397091448307037, -0.9992757439613342]),
+            (100, [0.09562284499406815, 0.07711715996265411, -0.9924258589744568]),
+            (1000, [0.11568845808506012, 0.40928915143013, -0.9050406813621521]),
+            (12345, [-0.23620925843715668, -0.5416808724403381, -0.8067137002944946]),
+            (50000, [0.5883612632751465, 0.7885125875473022, 0.17910604178905487]),
+            (102011, [-0.8476149439811707, -0.264373779296875, 0.46006014943122864]),
+        ];
+        for (i, want) in rec {
+            near(d.p()[i], want, 2e-6, &format!("P[{i}]"));
+        }
+        let prim = |i: usize| face_pts(&d, &d.prims[i]);
+        assert_eq!(prim(0), [2, 1, 0]);
+        assert_eq!(prim(1), [4, 3, 1]);
+        assert_eq!(prim(2), [5, 4, 2]);
+        assert_eq!(prim(5000), [5101, 5100, 5000]);
+        assert_eq!(prim(204_019), [96962, 61511, 102_011]);
+    }
+    /// Houdini 20.5 hython: freq 2, rad (1,2,3), scale 1.5, r (10,20,30), t (0.5,-1,2) for orient Y and X: the orient map
+    /// applies to the unit sphere before rad / rotation / translate.
+    #[test]
+    fn poly_transform_matches_houdini() {
+        let base = r#""type":1,"freq":2,"rad":[1,2,3],"scale":1.5,"r":[10,20,30],"t":[0.5,-1,2]"#;
+        let rec: [(u32, [(usize, [f64; 3]); 3]); 2] = [
+            (
+                1,
+                [
+                    (0, [-1.203350305557251, -1.081127405166626, -2.164374828338623]),
+                    (13, [-1.0353213548660278, -2.3088083267211914, 0.09703028202056885]),
+                    (41, [1.5535279512405396, -1.7135179042816162, 5.719414710998535]),
+                ],
+            ),
+            (
+                0,
+                [
+                    (0, [-0.8229087591171265, 1.6476922035217285, 2.489527702331543]),
+                    (13, [0.8616669178009033, 0.27234721183776855, 5.761268615722656]),
+                    (41, [2.2786941528320312, -3.3261947631835938, 3.749116897583008]),
+                ],
+            ),
+        ];
+        for (o, pts) in rec {
+            let d = cook(&format!("{{{base},\"orient\":{o}}}"));
+            for (i, want) in pts {
+                near(d.p()[i], want, 1e-5, &format!("orient {o} P[{i}]"));
+            }
+        }
+    }
+    #[test]
+    fn poly_freq_budget_is_an_error_not_a_hang() {
+        assert_eq!(super::poly_points(632), Some(10 * 632 * 632 + 2)); // largest freq inside the budget
+        assert_eq!(super::poly_points(633), None);
+        assert_eq!(super::poly_points(u64::MAX), None);
+        for f in [633, 100_000, i32::MAX] {
+            let e = cook_json(&scene(&format!(r#"{{"type":1,"freq":{f}}}"#)));
+            assert!(e.as_ref().is_err_and(|m| m.contains("budget")), "freq {f}: {e:?}");
         }
     }
 
@@ -512,6 +709,66 @@ mod tests {
     }
 
     // ---- hostile -----------------------------------------------------------------------------------------------
+    /// Prim point lists recorded from Houdini 20.5 hython (`sphere` polymesh, rows 5 x cols 4 unless noted): the
+    /// triangle connectivities split each ring cell in place, caps stay fans (and are triangles even with
+    /// `triangularpoles` off).
+    #[test]
+    fn polymesh_triangle_connectivities_match_houdini() {
+        let caps_top = "[0,3,2],[0,4,3],[0,5,4],[0,2,5]";
+        let caps_bot = "[10,11,1],[11,12,1],[12,13,1],[13,10,1]";
+        let rec = [
+            (
+                3,
+                format!(
+                    "[{caps_top},[2,3,7],[2,7,6],[3,4,8],[3,8,7],[4,5,9],[4,9,8],[5,2,6],[5,6,9],[6,7,11],[6,11,10],[7,8,12],[7,12,11],[8,9,13],[8,13,12],[9,6,10],[9,10,13],{caps_bot}]"
+                ),
+            ),
+            (
+                5,
+                format!(
+                    "[{caps_top},[2,3,6],[3,7,6],[3,4,8],[3,8,7],[4,5,8],[5,9,8],[5,2,6],[5,6,9],[6,7,11],[6,11,10],[7,8,11],[8,12,11],[8,9,13],[8,13,12],[9,6,13],[6,10,13],{caps_bot}]"
+                ),
+            ),
+            (
+                6,
+                format!(
+                    "[{caps_top},[2,3,6],[3,7,6],[3,4,7],[4,8,7],[4,5,8],[5,9,8],[5,2,9],[2,6,9],[6,7,10],[7,11,10],[7,8,11],[8,12,11],[8,9,12],[9,13,12],[9,6,13],[6,10,13],{caps_bot}]"
+                ),
+            ),
+        ];
+        for (surf, want) in rec {
+            let d = cook(&format!(r#"{{"type":2,"surftype":{surf},"rows":5,"cols":4}}"#));
+            let got: Vec<Vec<u32>> = d.prims.iter().map(|p| face_pts(&d, p)).collect();
+            let want: Vec<Vec<u32>> = serde_json::from_str(&want).expect("recorded json");
+            assert_eq!(got, want, "surftype {surf}");
+            assert_closed_outward_unit_sphere(&d, true);
+        }
+        // rows 4 x cols 3, triangularpoles off: alternating, caps still triangles (odd cols keep the (band + col) parity)
+        let d = cook(r#"{"type":2,"surftype":5,"rows":4,"cols":3,"triangularpoles":false}"#);
+        let got: Vec<Vec<u32>> = d.prims.iter().map(|p| face_pts(&d, p)).collect();
+        assert_eq!(
+            got,
+            [
+                [0, 3, 2],
+                [0, 4, 3],
+                [0, 2, 4],
+                [2, 3, 5],
+                [3, 6, 5],
+                [3, 4, 7],
+                [3, 7, 6],
+                [4, 2, 7],
+                [2, 5, 7],
+                [5, 6, 1],
+                [6, 7, 1],
+                [7, 5, 1]
+            ]
+        );
+        // your file's sphere: 20 x 20 triangles = 362 points, 720 triangles (Houdini)
+        let d = cook(r#"{"type":2,"surftype":3,"rows":20,"cols":20}"#);
+        assert_eq!((d.point_count, d.prims.len()), (362, 720));
+        assert!(d.prims.iter().all(|p| p.verts.len() == 3));
+    }
+
     #[test]
     fn hostile_params_are_errors_not_panics() {
         for bad in [
@@ -523,8 +780,9 @@ mod tests {
             r#"{"type":2,"surftype":0}"#,
             r#"{"type":1,"freq":0}"#,
             r#"{"type":1,"freq":-3}"#,
-            r#"{"type":1,"freq":101}"#,
+            r#"{"type":1,"freq":633}"#,
             r#"{"type":1,"freq":2147483647}"#,
+            r#"{"type":1,"freq":-2147483648}"#,
             r#"{"type":3}"#,
             r#"{"type":4}"#,
             r#"{"type":5}"#,
@@ -573,68 +831,85 @@ mod tests {
         });
         d
     }
-    /// Icosahedron by degrees, faces literal, f=2 via edge midpoints (map keyed by sorted vertex pair).
+    /// Houdini 20.5 `freq` 1 prims (hython): face k = `[R, L, A]` over the 12 icosahedron vertices.
+    const H_F1_PRIMS: [[u32; 3]; 20] = [
+        [2, 1, 0],
+        [3, 2, 0],
+        [4, 3, 0],
+        [5, 4, 0],
+        [1, 5, 0],
+        [6, 5, 1],
+        [7, 4, 5],
+        [8, 3, 4],
+        [9, 2, 3],
+        [10, 1, 2],
+        [10, 6, 1],
+        [6, 7, 5],
+        [7, 8, 4],
+        [8, 9, 3],
+        [9, 10, 2],
+        [6, 10, 11],
+        [10, 9, 11],
+        [9, 8, 11],
+        [8, 7, 11],
+        [7, 6, 11],
+    ];
+    /// Houdini 20.5 `freq` 2 prims (hython), 4 per face: `[mAR, mAL, A] [mLR, L, mAL] [R, mLR, mAR] [mAR, mLR, mAL]`.
+    const H_F2_PRIMS: &str = "[[2,1,0],[4,3,1],[5,4,2],[2,4,1],[6,2,0],[7,5,2],[8,7,6],[6,7,2],[9,6,0],[10,8,6],[11,10,9],\
+        [9,10,6],[12,9,0],[13,11,9],[14,13,12],[12,13,9],[1,12,0],[15,14,12],[3,15,1],[1,15,12],[16,15,3],[17,14,15],\
+        [18,17,16],[16,17,15],[19,13,14],[20,11,13],[21,20,19],[19,20,13],[22,10,11],[23,8,10],[24,23,22],[22,23,10],\
+        [25,7,8],[26,5,7],[27,26,25],[25,26,7],[28,4,5],[29,3,4],[30,29,28],[28,29,4],[29,16,3],[31,18,16],[30,31,29],\
+        [29,31,16],[17,19,14],[32,21,19],[18,32,17],[17,32,19],[20,22,11],[33,24,22],[21,33,20],[20,33,22],[23,25,8],\
+        [34,27,25],[24,34,23],[23,34,25],[26,28,5],[35,30,28],[27,35,26],[26,35,28],[38,37,36],[31,30,37],[18,31,38],\
+        [38,31,37],[37,39,36],[35,27,39],[30,35,37],[37,35,39],[39,40,36],[34,24,40],[27,34,39],[39,34,40],[40,41,36],\
+        [33,21,41],[24,33,40],[40,33,41],[41,38,36],[32,18,38],[21,32,41],[41,32,38]]";
+    /// Houdini's icosahedron by degrees (Y frame: vertex 0 = -Z, 11 = +Z, rings at z = -+1/sqrt5).
+    fn h_ico() -> Vec<[f64; 3]> {
+        let (z, r) = (1.0f64 / 5f64.sqrt(), 2.0f64 / 5f64.sqrt());
+        let ring = |deg: f64, z: f64| [r * deg.to_radians().cos(), r * deg.to_radians().sin(), z];
+        let mut u = vec![[0.0, 0.0, -1.0]];
+        u.extend((0..5).map(|k| ring(90.0 - 72.0 * k as f64, -z)));
+        u.extend((0..5).map(|k| ring(126.0 + 72.0 * k as f64, z)));
+        u.push([0.0, 0.0, 1.0]);
+        u
+    }
+    /// freq 2 = Houdini's recorded prim lists; each point's position read off its role in its face's first prims
+    /// (corner = icosahedron vertex of `H_F1_PRIMS`, edge point = normalised midpoint of the two corners).
     fn expected_poly_f2() -> Detail {
-        let (y, r) = (1.0f64 / 5f64.sqrt(), 2.0f64 / 5f64.sqrt());
-        let mut u: Vec<[f64; 3]> = vec![[0.0, 1.0, 0.0]];
-        for k in 0..5 {
-            let a = (72.0 * k as f64).to_radians();
-            u.push([r * a.cos(), y, r * a.sin()]);
-        }
-        for k in 0..5 {
-            let a = (72.0 * k as f64 + 36.0).to_radians();
-            u.push([r * a.cos(), -y, r * a.sin()]);
-        }
-        u.push([0.0, -1.0, 0.0]);
-        let faces: [[usize; 3]; 20] = [
-            [0, 2, 1],
-            [1, 2, 6],
-            [6, 10, 1],
-            [6, 7, 11],
-            [0, 3, 2],
-            [2, 3, 7],
-            [7, 6, 2],
-            [7, 8, 11],
-            [0, 4, 3],
-            [3, 4, 8],
-            [8, 7, 3],
-            [8, 9, 11],
-            [0, 5, 4],
-            [4, 5, 9],
-            [9, 8, 4],
-            [9, 10, 11],
-            [0, 1, 5],
-            [5, 1, 10],
-            [10, 9, 5],
-            [10, 6, 11],
-        ];
-        let mut mids: HashMap<(usize, usize), usize> = HashMap::new();
-        let mut mid = |u: &mut Vec<[f64; 3]>, a: usize, b: usize| -> u32 {
-            let key = (a.min(b), a.max(b));
-            if let Some(&i) = mids.get(&key) {
-                return i as u32;
-            }
-            let (p, q) = (u[a], u[b]);
-            let m = [p[0] + q[0], p[1] + q[1], p[2] + q[2]];
+        let ico = h_ico();
+        let polys: Vec<Vec<u32>> = serde_json::from_str(H_F2_PRIMS).expect("recorded prims");
+        let mut u = vec![[f64::NAN; 3]; 42];
+        let mid = |a: usize, b: usize| {
+            let m: [f64; 3] = std::array::from_fn(|k| ico[a][k] + ico[b][k]);
             let l = (m[0] * m[0] + m[1] * m[1] + m[2] * m[2]).sqrt();
-            u.push([m[0] / l, m[1] / l, m[2] / l]);
-            mids.insert(key, u.len() - 1);
-            (u.len() - 1) as u32
+            m.map(|c| c / l)
         };
-        let mut polys = Vec::new();
-        for [a, b, c] in faces {
-            let (mab, mac) = (mid(&mut u, a, b), mid(&mut u, a, c));
-            let mbc = mid(&mut u, b, c);
-            let (a, b, c) = (a as u32, b as u32, c as u32);
-            // the faces are counter-clockwise (construction); Houdini winding = each reversed after its first corner
-            polys.extend([vec![a, mac, mab], vec![mab, mac, mbc], vec![mab, mbc, b], vec![mac, c, mbc]]);
+        for (k, f1) in H_F1_PRIMS.iter().enumerate() {
+            let (a, l, r) = (f1[2] as usize, f1[1] as usize, f1[0] as usize);
+            let (p0, p1, p2) = (&polys[4 * k], &polys[4 * k + 1], &polys[4 * k + 2]);
+            u[p0[2] as usize] = ico[a];
+            u[p1[1] as usize] = ico[l];
+            u[p2[0] as usize] = ico[r];
+            u[p0[1] as usize] = mid(a, l);
+            u[p0[0] as usize] = mid(a, r);
+            u[p1[0] as usize] = mid(l, r);
         }
+        assert!(u.iter().flatten().all(|c| c.is_finite()), "every point placed");
         let (rad, t) = ([1.0, 2.0, 3.0], [0.5, 0.0, -1.0]);
         let pts: Vec<[f32; 3]> = u
             .iter()
             .map(|q| [(q[0] * rad[0] + t[0]) as f32, (q[1] * rad[1] + t[1]) as f32, (q[2] * rad[2] + t[2]) as f32])
             .collect();
         build(&pts, &polys)
+    }
+    #[test]
+    fn poly_f1_is_houdinis_icosahedron() {
+        let d = cook(r#"{"type":1,"freq":1}"#);
+        for (i, want) in h_ico().into_iter().enumerate() {
+            near(d.p()[i], want, 1e-6, &format!("P[{i}]"));
+        }
+        let got: Vec<Vec<u32>> = d.prims.iter().map(|p| face_pts(&d, p)).collect();
+        assert_eq!(got, H_F1_PRIMS.map(|p| p.to_vec()));
     }
     /// 13 point rows from latitude +90deg..-90deg; the two polar rows collapse to one point each (rows 0 and 12).
     fn expected_polymesh_default() -> Detail {

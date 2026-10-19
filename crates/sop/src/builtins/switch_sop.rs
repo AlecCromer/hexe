@@ -29,6 +29,10 @@ impl Node<Detail> for Switch {
     fn type_name(&self) -> &'static str {
         "switch"
     }
+    /// Houdini: only the first input is required.
+    fn min_inputs(&self) -> usize {
+        1
+    }
     fn inputs(&self) -> &[InputSpec] {
         &INPUTS
     }

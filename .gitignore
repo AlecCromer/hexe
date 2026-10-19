@@ -20,3 +20,6 @@ dump/
 frames/
 run*/
 *.ips
+
+# editor / in-place-edit backups
+*.bak

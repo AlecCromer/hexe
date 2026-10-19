@@ -25,3 +25,9 @@ export function showing(total: number): string {
   const n = Math.min(total, MAX_ROWS);
   return n < total ? `showing ${n} of ${total}` : `showing ${total} of ${total}`;
 }
+
+/** Column header as Houdini shows it: tuple components `P.x` -> `P[x]`; the leading index column (`ptnum`, `primnum`, ...) is blank. */
+export function headerLabel(col: string, index: number): string {
+  if (index === 0) return "";
+  return col.replace(/\.([A-Za-z0-9]+)$/, "[$1]");
+}

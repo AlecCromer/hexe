@@ -1,0 +1,366 @@
+[
+ {
+  "case": "grid_t05",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 100.0,
+   "area_out": 100.0,
+   "boundary_edges": 72,
+   "edge_groups": {},
+   "edge_max": 0.67211,
+   "edge_mean": 0.49149,
+   "edge_min": 0.32453,
+   "edge_sd": 0.06986,
+   "edges": 1539,
+   "max_dist": 0.0,
+   "nonmanifold_edges": 0,
+   "points": 538,
+   "prims": 1002
+  },
+  "input": "grid_in.geo",
+  "parms": {
+   "targetsize": 0.5
+  }
+ },
+ {
+  "case": "grid_t02",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 100.0,
+   "area_out": 100.0,
+   "boundary_edges": 288,
+   "edge_groups": {},
+   "edge_max": 0.28226,
+   "edge_mean": 0.19903,
+   "edge_min": 0.11661,
+   "edge_sd": 0.02562,
+   "edges": 9012,
+   "max_dist": 0.0,
+   "nonmanifold_edges": 0,
+   "points": 3101,
+   "prims": 5912
+  },
+  "input": "grid_in.geo",
+  "parms": {
+   "targetsize": 0.2
+  }
+ },
+ {
+  "case": "grid_it0",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 100.0,
+   "area_out": 100.0,
+   "boundary_edges": 36,
+   "edge_groups": {},
+   "edge_max": 1.57135,
+   "edge_mean": 1.25394,
+   "edge_min": 1.11111,
+   "edge_sd": 0.21292,
+   "edges": 261,
+   "max_dist": 0.0,
+   "nonmanifold_edges": 0,
+   "points": 100,
+   "prims": 162
+  },
+  "input": "grid_in.geo",
+  "parms": {
+   "iterations": 0,
+   "targetsize": 0.5
+  }
+ },
+ {
+  "case": "grid_it10",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 100.0,
+   "area_out": 100.0,
+   "boundary_edges": 72,
+   "edge_groups": {},
+   "edge_max": 0.66712,
+   "edge_mean": 0.51671,
+   "edge_min": 0.37137,
+   "edge_sd": 0.04928,
+   "edges": 1359,
+   "max_dist": 0.0,
+   "nonmanifold_edges": 0,
+   "points": 478,
+   "prims": 882
+  },
+  "input": "grid_in.geo",
+  "parms": {
+   "iterations": 10,
+   "targetsize": 0.5
+  }
+ },
+ {
+  "case": "grid_inputptsonly",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 100.0,
+   "area_out": 100.0,
+   "boundary_edges": 36,
+   "edge_groups": {},
+   "edge_max": 1.57135,
+   "edge_mean": 1.25394,
+   "edge_min": 1.11111,
+   "edge_sd": 0.21292,
+   "edges": 261,
+   "max_dist": 0.0,
+   "nonmanifold_edges": 0,
+   "points": 100,
+   "prims": 162
+  },
+  "input": "grid_in.geo",
+  "parms": {
+   "inputptsonly": 1,
+   "targetsize": 0.5
+  }
+ },
+ {
+  "case": "sphere4_t02",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 12.38774,
+   "area_out": 12.35293,
+   "boundary_edges": 0,
+   "edge_groups": {},
+   "edge_max": 0.26812,
+   "edge_mean": 0.19099,
+   "edge_min": 0.10795,
+   "edge_sd": 0.02733,
+   "edges": 1215,
+   "max_dist": 0.007437,
+   "nonmanifold_edges": 0,
+   "points": 407,
+   "prims": 810
+  },
+  "input": "sphere4_in.geo",
+  "parms": {
+   "targetsize": 0.2
+  }
+ },
+ {
+  "case": "box_t025",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 6.0,
+   "area_out": 5.80589,
+   "boundary_edges": 0,
+   "edge_groups": {},
+   "edge_max": 0.34123,
+   "edge_mean": 0.24905,
+   "edge_min": 0.14399,
+   "edge_sd": 0.03818,
+   "edges": 336,
+   "max_dist": 0.00504,
+   "nonmanifold_edges": 0,
+   "points": 114,
+   "prims": 224
+  },
+  "input": "box_in.geo",
+  "parms": {
+   "targetsize": 0.25
+  }
+ },
+ {
+  "case": "tube_t015",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 6.21166,
+   "area_out": 6.20254,
+   "boundary_edges": 96,
+   "edge_groups": {},
+   "edge_max": 0.20578,
+   "edge_mean": 0.14467,
+   "edge_min": 0.09433,
+   "edge_sd": 0.01841,
+   "edges": 1089,
+   "max_dist": 0.00295,
+   "nonmanifold_edges": 0,
+   "points": 395,
+   "prims": 694
+  },
+  "input": "tube_in.geo",
+  "parms": {
+   "targetsize": 0.15
+  }
+ },
+ {
+  "case": "fold_hard",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 116.96707,
+   "area_out": 116.96707,
+   "boundary_edges": 144,
+   "crease_edges": 36,
+   "crease_length": 10.0,
+   "edge_groups": {
+    "crease": 0,
+    "hardedges": 180
+   },
+   "edge_max": 0.41829,
+   "edge_mean": 0.2902,
+   "edge_min": 0.14445,
+   "edge_sd": 0.04182,
+   "edges": 5094,
+   "max_dist": 1e-06,
+   "nonmanifold_edges": 0,
+   "points": 1747,
+   "prims": 3348
+  },
+  "input": "fold_in.geo",
+  "parms": {
+   "hard_edges": "crease",
+   "targetsize": 0.3,
+   "useouthardedgesgroup": 1
+  }
+ },
+ {
+  "case": "sphere8_adaptive_d1",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 12.38774,
+   "area_out": 11.1997,
+   "boundary_edges": 0,
+   "edge_groups": {},
+   "edge_max": 1.22979,
+   "edge_mean": 1.00867,
+   "edge_min": 0.66956,
+   "edge_sd": 0.14624,
+   "edges": 39,
+   "max_dist": 0.105464,
+   "nonmanifold_edges": 0,
+   "points": 15,
+   "prims": 26
+  },
+  "input": "sphere8_in.geo",
+  "parms": {
+   "density": 1.0,
+   "sizing": 1
+  }
+ },
+ {
+  "case": "sphere8_adaptive_d2",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 12.38774,
+   "area_out": 11.92922,
+   "boundary_edges": 0,
+   "edge_groups": {},
+   "edge_max": 0.93289,
+   "edge_mean": 0.729,
+   "edge_min": 0.44685,
+   "edge_sd": 0.10973,
+   "edges": 81,
+   "max_dist": 0.063676,
+   "nonmanifold_edges": 0,
+   "points": 29,
+   "prims": 54
+  },
+  "input": "sphere8_in.geo",
+  "parms": {
+   "density": 2.0,
+   "sizing": 1
+  }
+ },
+ {
+  "case": "sphere8_adaptive_d4",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 12.38774,
+   "area_out": 12.17044,
+   "boundary_edges": 0,
+   "edge_groups": {},
+   "edge_max": 0.66472,
+   "edge_mean": 0.51313,
+   "edge_min": 0.34599,
+   "edge_sd": 0.07742,
+   "edges": 165,
+   "max_dist": 0.038141,
+   "nonmanifold_edges": 0,
+   "points": 57,
+   "prims": 110
+  },
+  "input": "sphere8_in.geo",
+  "parms": {
+   "density": 4.0,
+   "sizing": 1
+  }
+ },
+ {
+  "case": "sphere8_adaptive_max03",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 12.38774,
+   "area_out": 12.34982,
+   "boundary_edges": 0,
+   "edge_groups": {},
+   "edge_max": 0.38754,
+   "edge_mean": 0.28959,
+   "edge_min": 0.20556,
+   "edge_sd": 0.04581,
+   "edges": 546,
+   "max_dist": 0.011479,
+   "nonmanifold_edges": 0,
+   "points": 184,
+   "prims": 364
+  },
+  "input": "sphere8_in.geo",
+  "parms": {
+   "density": 2.0,
+   "maxsize": 0.3,
+   "sizing": 1,
+   "usemaxsize": 1
+  }
+ },
+ {
+  "case": "box_adaptive_d2",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 6.0,
+   "area_out": 5.78949,
+   "boundary_edges": 0,
+   "edge_groups": {},
+   "edge_max": 0.50394,
+   "edge_mean": 0.34235,
+   "edge_min": 0.18022,
+   "edge_sd": 0.06363,
+   "edges": 177,
+   "max_dist": 0.019184,
+   "nonmanifold_edges": 0,
+   "points": 61,
+   "prims": 118
+  },
+  "input": "box_in.geo",
+  "parms": {
+   "density": 2.0,
+   "sizing": 1
+  }
+ },
+ {
+  "case": "grid_adaptive_max05",
+  "houdini": {
+   "all_tris": true,
+   "area_in": 100.0,
+   "area_out": 100.0,
+   "boundary_edges": 72,
+   "edge_groups": {},
+   "edge_max": 0.67211,
+   "edge_mean": 0.49149,
+   "edge_min": 0.32453,
+   "edge_sd": 0.06986,
+   "edges": 1539,
+   "max_dist": 0.0,
+   "nonmanifold_edges": 0,
+   "points": 538,
+   "prims": 1002
+  },
+  "input": "grid_in.geo",
+  "parms": {
+   "maxsize": 0.5,
+   "sizing": 1,
+   "usemaxsize": 1
+  }
+ }
+]

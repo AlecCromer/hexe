@@ -35,7 +35,8 @@ fn reverse_normals_toggle_on_a_closed_box() {
     let c = cube();
     let dir = [1.0, 0.0, 0.0];
     let on = cook("mirror", &[("dir", PV::V3(dir)), ("dist", PV::F(2.0))], Some(&c)).unwrap();
-    let off = cook("mirror", &[("dir", PV::V3(dir)), ("dist", PV::F(2.0)), ("reverse", PV::B(false))], Some(&c)).unwrap();
+    let off =
+        cook("mirror", &[("dir", PV::V3(dir)), ("dist", PV::F(2.0)), ("reverse", PV::B(false))], Some(&c)).unwrap();
     assert_eq!((on.point_count, on.prims.len()), (16, 12));
     for i in 0..6 {
         let src = newell(&c, i);

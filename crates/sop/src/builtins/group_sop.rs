@@ -44,6 +44,8 @@ pub fn spec() -> Vec<ParamSpec> {
             ("vertex", "Vertices"),
             ("edge", "Edges"),
         ]),
+        // Number tab: `groupnumber` off = the pattern is ignored (Houdini; a .hip keeps a stale pattern there)
+        ParamSpec::new("groupnumber", ParamValue::B(true)).label("Enable Number"),
         ParamSpec::new("pattern", ParamValue::S(String::new())).label("Pattern"),
         ParamSpec::new("bbox", ParamValue::B(false)).label("Keep in Bounding Box"),
         ParamSpec::new("bbox_size", ParamValue::V3([1.0, 1.0, 1.0])).label("Size").range(0.0, 10.0),
@@ -57,6 +59,18 @@ pub fn spec() -> Vec<ParamSpec> {
             ("intersect", "Intersect with Existing"),
             ("subtract", "Subtract from Existing"),
         ]),
+        // Edges tab (edge groups only; Houdini parm names so .hip values import as-is)
+        ParamSpec::new("groupedges", ParamValue::B(false)).label("Enable Edges"),
+        ParamSpec::new("dominedgeangle", ParamValue::B(false)).label("Use Min Edge Angle"),
+        ParamSpec::new("minedgeangle", ParamValue::F(20.0)).label("Min Edge Angle").range(0.0, 180.0),
+        ParamSpec::new("domaxedgeangle", ParamValue::B(false)).label("Use Max Edge Angle"),
+        ParamSpec::new("maxedgeangle", ParamValue::F(20.0)).label("Max Edge Angle").range(0.0, 180.0),
+        ParamSpec::new("edgeanglebetweenedges", ParamValue::B(false)).label("Edge Angle Uses Angle Between Edges"),
+        ParamSpec::new("dominedgelen", ParamValue::B(false)).label("Use Min Edge Length"),
+        ParamSpec::new("minedgelen", ParamValue::F(0.0)).label("Min Edge Length").range(0.0, 10.0),
+        ParamSpec::new("domaxedgelen", ParamValue::B(false)).label("Use Max Edge Length"),
+        ParamSpec::new("maxedgelen", ParamValue::F(0.0)).label("Max Edge Length").range(0.0, 10.0),
+        ParamSpec::new("unshared", ParamValue::B(false)).label("Unshared Edges"),
     ]
 }
 pub fn new() -> Box<SopNode> {
@@ -289,14 +303,18 @@ pub(super) fn compact(src: &Detail, keep_pt: &[bool], keep_prim: &[bool], who: &
             mask: pick(g.class).iter().map(|&i| g.mask.get(i).copied().unwrap_or(false)).collect(),
         })
         .collect();
-    Ok(Detail {
+    let mut out = Detail {
         point_count: u32::try_from(pidx.len()).map_err(|_| failed(who, "point id overflow"))?,
         vertex_point,
         prims,
         attrs,
         groups,
+        edge_groups: Vec::new(),
         skipped_attribs: src.skipped_attribs.clone(),
-    })
+    };
+    let lists: Vec<Vec<usize>> = pidx.iter().map(|&i| vec![i]).collect();
+    super::meshutil::follow_edge_groups(src, &super::meshutil::inverse_lists(src.point_count, &lists), &mut out);
+    Ok(out)
 }
 
 /// Unit Houdini normal of a prim (`meshutil::newell_corners`); `None` for non-polygons / < 3 corners / zero or non-finite area / bad ids.
@@ -379,12 +397,186 @@ fn positions(d: &Detail, class: AttrClass) -> Vec<Option<V3>> {
 fn param_err(n: &str, what: &str) -> CookError {
     bad("group", format!("`{n}`: {what}"))
 }
+/// One polygon edge of the source: first-seen orientation, the prims using it, its length.
+struct MeshEdge {
+    ends: [u32; 2],
+    prims: Vec<usize>,
+    len: f64,
+}
+/// Every polygon edge (prim order, then corner order), each once.
+fn mesh_edges(d: &Detail) -> Vec<MeshEdge> {
+    let p = d.p();
+    let mut at = std::collections::HashMap::new();
+    let mut out: Vec<MeshEdge> = Vec::new();
+    for (q, pr) in d.prims.iter().enumerate() {
+        let closed = match pr.kind {
+            hexe_geo::PrimKind::Poly { closed } => closed,
+            _ => continue,
+        };
+        let pts: Vec<u32> = pr.verts.clone().filter_map(|v| d.vertex_point.get(v as usize).copied()).collect();
+        let n = pts.len();
+        let segs = if closed && n > 2 { n } else { n.saturating_sub(1) };
+        for k in 0..segs {
+            let (a, b) = (pts[k], pts[(k + 1) % n]);
+            if a == b {
+                continue;
+            }
+            let i = *at.entry((a.min(b), a.max(b))).or_insert_with(|| {
+                let len = match (p.get(a as usize), p.get(b as usize)) {
+                    (Some(x), Some(y)) => (0..3).map(|c| f64::from(x[c] - y[c]).powi(2)).sum::<f64>().sqrt(),
+                    _ => 0.0,
+                };
+                out.push(MeshEdge { ends: [a, b], prims: Vec::new(), len });
+                out.len() - 1
+            });
+            if let Some(e) = out.get_mut(i)
+                && e.prims.last() != Some(&q)
+            {
+                e.prims.push(q);
+            }
+        }
+    }
+    out
+}
+/// Newell normal of prim `q` (unnormalised; zero for degenerate / non-poly).
+fn newell(d: &Detail, q: usize) -> V3 {
+    let p = d.p();
+    let Some(pr) = d.prims.get(q) else { return [0.0; 3] };
+    let pts: Vec<V3> = pr
+        .verts
+        .clone()
+        .filter_map(|v| d.vertex_point.get(v as usize))
+        .filter_map(|&i| p.get(i as usize))
+        .map(|&x| widen(x))
+        .collect();
+    let mut n = [0.0; 3];
+    for k in 0..pts.len() {
+        let (a, b) = (pts[k], pts[(k + 1) % pts.len()]);
+        n[0] += (a[1] - b[1]) * (a[2] + b[2]);
+        n[1] += (a[2] - b[2]) * (a[0] + b[0]);
+        n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    n
+}
+fn sub(a: V3, b: V3) -> V3 {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+fn angle_deg(a: V3, b: V3) -> Option<f64> {
+    let (la, lb) = (dot(a, a).sqrt(), dot(b, b).sqrt());
+    (la > 0.0 && lb > 0.0).then(|| (dot(a, b) / (la * lb)).clamp(-1.0, 1.0).acos().to_degrees())
+}
+
+/// Edge groups (`grouptype` edge). Rules measured against Houdini 20.5 (legacy `group` SOP, hython, sphere / box /
+/// folded grid; every case matched edge for edge):
+/// * Number tab (`groupnumber`): `pattern` tokens `*` (every edge), `pA-B-C...` (the path's consecutive pairs), or an
+///   existing edge group's name.
+/// * Edges tab (`groupedges`), families OR-ed with each other and with the pattern: edge ANGLE = angle between the Newell
+///   normals of its two prims (edges without exactly 2 prims never qualify), min / max both inclusive and AND-ed; with
+///   `edgeanglebetweenedges` an edge qualifies when ANY edge sharing one of its points spreads within min / max of it
+///   (angle at the shared point); LENGTH min / max inclusive, AND-ed; `unshared` = edges used by one prim.
+/// * Nothing enabled = empty group. `merge_op` vs an existing same-named edge group. Bounding / normal tabs on edges:
+///   not modelled (error).
+fn cook_edges(p: &ParamSet, inputs: &[Arc<Detail>], name: &str) -> Result<Arc<Detail>, CookError> {
+    let tog = |k: &str| p.toggle(k).ok_or_else(|| param_err(k, "missing or not a toggle"));
+    let num = |k: &str| {
+        p.float(k).filter(|v| v.is_finite()).map(f64::from).ok_or_else(|| param_err(k, "missing or not a finite float"))
+    };
+    if tog("bbox")? || tog("normal")? {
+        return Err(CookError::Unsupported("group: bounding / normal criteria on edge groups are not modelled".into()));
+    }
+    let merge = p.menu("merge_op").ok_or_else(|| param_err("merge_op", "missing or not a menu"))?;
+    if merge > MERGE_SUBTRACT {
+        return Err(param_err("merge_op", &format!("menu index {merge} out of range")));
+    }
+    let empty = Arc::new(Detail::default());
+    let d: &Arc<Detail> = inputs.first().unwrap_or(&empty);
+    let edges = mesh_edges(d);
+    let key = |[a, b]: [u32; 2]| (a.min(b), a.max(b));
+    let mut picked: Vec<[u32; 2]> = Vec::new();
+    // Number tab
+    if p.toggle("groupnumber").unwrap_or(true) {
+        for tok in p.string("pattern").unwrap_or("").split_whitespace() {
+            if tok == "*" {
+                picked.extend(edges.iter().map(|e| e.ends));
+            } else if let Some(path) = tok.strip_prefix('p') {
+                let ids: Result<Vec<u32>, _> = path.split('-').map(str::parse::<u32>).collect();
+                let ids = ids.map_err(|_| param_err("pattern", &format!("bad edge path `{tok}`")))?;
+                picked.extend(ids.windows(2).map(|w| [w[0], w[1]]));
+            } else if let Some(g) = d.edge_group(tok) {
+                picked.extend(g.edges.iter().copied());
+            } else {
+                return Err(CookError::Failed(format!("group: unknown edge group `{tok}`")));
+            }
+        }
+    }
+    // Edges tab
+    if tog("groupedges")? {
+        let (dmin_a, dmax_a, between) = (tog("dominedgeangle")?, tog("domaxedgeangle")?, tog("edgeanglebetweenedges")?);
+        let (min_a, max_a) = (num("minedgeangle")? - ANGLE_EPS, num("maxedgeangle")? + ANGLE_EPS);
+        let (dmin_l, dmax_l, unshared) = (tog("dominedgelen")?, tog("domaxedgelen")?, tog("unshared")?);
+        let (min_l, max_l) = (num("minedgelen")?, num("maxedgelen")?);
+        let in_angle = |a: f64| (!dmin_a || a >= min_a) && (!dmax_a || a <= max_a);
+        let normals: Vec<V3> = (0..d.prims.len()).map(|q| newell(d, q)).collect();
+        let mut at_point: std::collections::HashMap<u32, Vec<usize>> = std::collections::HashMap::new();
+        if between {
+            for (i, e) in edges.iter().enumerate() {
+                for &pt in &e.ends {
+                    at_point.entry(pt).or_default().push(i);
+                }
+            }
+        }
+        let pos = |i: u32| d.p().get(i as usize).map(|&x| widen(x));
+        for (i, e) in edges.iter().enumerate() {
+            let angle_ok = (dmin_a || dmax_a)
+                && if between {
+                    // any edge sharing a point, measured at that point
+                    e.ends.iter().any(|&pt| {
+                        let other = |f: &MeshEdge| if f.ends[0] == pt { f.ends[1] } else { f.ends[0] };
+                        let (Some(o), Some(c)) = (pos(other(e)), pos(pt)) else { return false };
+                        at_point.get(&pt).into_iter().flatten().filter(|&&j| j != i).any(|&j| {
+                            edges
+                                .get(j)
+                                .and_then(|f| pos(other(f)))
+                                .and_then(|o2| angle_deg(sub(o, c), sub(o2, c)))
+                                .is_some_and(in_angle)
+                        })
+                    })
+                } else if let [q0, q1] = e.prims[..] {
+                    angle_deg(normals[q0], normals[q1]).is_some_and(in_angle)
+                } else {
+                    false
+                };
+            let len_ok = (dmin_l || dmax_l) && (!dmin_l || e.len >= min_l) && (!dmax_l || e.len <= max_l);
+            if angle_ok || len_ok || (unshared && e.prims.len() == 1) {
+                picked.push(e.ends);
+            }
+        }
+    }
+    // merge with an existing same-named edge group
+    let new: std::collections::HashSet<(u32, u32)> = picked.iter().map(|&e| key(e)).collect();
+    let old: Vec<[u32; 2]> = d.edge_group(name).map(|g| g.edges.clone()).unwrap_or_default();
+    let result: Vec<[u32; 2]> = match merge {
+        MERGE_UNION => old.iter().copied().chain(picked.iter().copied()).collect(),
+        MERGE_INTERSECT => old.iter().copied().filter(|&e| new.contains(&key(e))).collect(),
+        MERGE_SUBTRACT => old.iter().copied().filter(|&e| !new.contains(&key(e))).collect(),
+        _ => picked,
+    };
+    let mut out = (**d).clone();
+    out.set_edge_group(name, result);
+    Ok(Arc::new(out))
+}
+
 impl Node<Detail> for GroupSop {
     fn type_name(&self) -> &'static str {
         "group"
     }
+    /// Houdini: only the first input is required.
+    fn min_inputs(&self) -> usize {
+        1
+    }
     fn inputs(&self) -> &[InputSpec] {
-        &[InputSpec { name: "input0" }]
+        // Houdini input labels; the Bounding Object (Bounding tab "use bounding object") is not modelled yet
+        &[InputSpec { name: "Source data" }, InputSpec { name: "Bounding Object" }]
     }
     fn params(&self) -> &[ParamSpec] {
         &self.specs
@@ -399,7 +591,7 @@ impl Node<Detail> for GroupSop {
             GT_POINT => AttrClass::Point,
             GT_PRIM => AttrClass::Prim,
             GT_VERTEX => AttrClass::Vertex,
-            GT_EDGE => return Err(CookError::Unsupported("group: edge groups are not modelled".into())),
+            GT_EDGE => return cook_edges(p, inputs, name),
             m => return Err(param_err("grouptype", &format!("menu index {m} out of range"))),
         };
         let merge = p.menu("merge_op").ok_or_else(|| param_err("merge_op", "missing or not a menu"))?;
@@ -426,7 +618,13 @@ impl Node<Detail> for GroupSop {
         let empty = Arc::new(Detail::default());
         let d: &Arc<Detail> = inputs.first().unwrap_or(&empty);
         let n = d.class_len(class);
-        let mut new = parse_pattern(d, class, pattern, "group")?.unwrap_or_else(|| vec![true; n]);
+        // Number tab off: no pattern criterion; with no other criterion either, nothing is grouped (Houdini)
+        let number = p.toggle("groupnumber").unwrap_or(true);
+        let mut new = if number {
+            parse_pattern(d, class, pattern, "group")?.unwrap_or_else(|| vec![true; n])
+        } else {
+            vec![use_box || use_normal; n]
+        };
         if use_box {
             let (c, h) = (widen(center), widen(size));
             let inside = |q: &V3| (0..3).all(|k| (q[k] - c[k]).abs() <= h[k].abs() * 0.5);
@@ -505,6 +703,86 @@ mod tests {
         run("group", ov, Some(d))
     }
 
+    /// Edge-group counts recorded from Houdini 20.5 hython (legacy `group`, entity edge, Number off, Edges on) on the
+    /// polymesh-triangles sphere rows 20 x cols 20 (hexe's sphere is point-for-point Houdini's there).
+    #[test]
+    fn edge_groups_match_houdini_on_the_triangle_sphere() {
+        let sphere = Arc::new(
+            crate::load_scene(r#"{"nodes":[{"name":"s","type":"sphere","params":{"type":2,"surftype":3,"rows":20,"cols":20}}],"display":"s"}"#)
+                .map(|(mut g, id)| g.cook(id, 0.0).expect("sphere cooks"))
+                .expect("scene"),
+        );
+        let b = |v: bool| ParamValue::B(v);
+        let f = |v: f32| ParamValue::F(v);
+        let base = [("grouptype", ParamValue::Menu(GT_EDGE)), ("groupnumber", b(false)), ("groupedges", b(true))];
+        type Case<'a> = (&'a str, Vec<(&'a str, ParamValue)>, usize);
+        let cases: Vec<Case> = vec![
+            ("min = max = 20 (your file)", vec![("dominedgeangle", b(true)), ("domaxedgeangle", b(true))], 0),
+            ("min 10", vec![("dominedgeangle", b(true)), ("minedgeangle", f(10.0))], 220),
+            ("max 10", vec![("domaxedgeangle", b(true)), ("maxedgeangle", f(10.0))], 860),
+            (
+                "5..15",
+                vec![
+                    ("dominedgeangle", b(true)),
+                    ("minedgeangle", f(5.0)),
+                    ("domaxedgeangle", b(true)),
+                    ("maxedgeangle", f(15.0)),
+                ],
+                520,
+            ),
+            (
+                "length 0.3..0.6",
+                vec![
+                    ("dominedgelen", b(true)),
+                    ("minedgelen", f(0.3)),
+                    ("domaxedgelen", b(true)),
+                    ("maxedgelen", f(0.6)),
+                ],
+                220,
+            ),
+            (
+                "length >= 0.3 OR angle >= 10",
+                vec![
+                    ("dominedgelen", b(true)),
+                    ("minedgelen", f(0.3)),
+                    ("dominedgeangle", b(true)),
+                    ("minedgeangle", f(10.0)),
+                ],
+                440,
+            ),
+            (
+                "between edges <= 30",
+                vec![("edgeanglebetweenedges", b(true)), ("domaxedgeangle", b(true)), ("maxedgeangle", f(30.0))],
+                420,
+            ),
+            (
+                "between edges >= 30",
+                vec![("edgeanglebetweenedges", b(true)), ("dominedgeangle", b(true)), ("minedgeangle", f(30.0))],
+                1080,
+            ),
+            ("unshared (closed sphere)", vec![("unshared", b(true))], 0),
+            ("nothing enabled", vec![], 0),
+        ];
+        for (what, extra, want) in cases {
+            let ov: Vec<(&str, ParamValue)> = base.iter().cloned().chain(extra).collect();
+            let d = grp(&sphere, &ov).expect("cooks");
+            assert_eq!(d.edge_group("group1").map(|g| g.edges.len()), Some(want), "{what}");
+        }
+        // Number tab: pattern paths and `*`; off = ignored (the stale pattern in your .hip)
+        let path = grp(&sphere, &[("grouptype", ParamValue::Menu(GT_EDGE)), ("pattern", s("p98-99-100 p5-6"))])
+            .expect("cooks");
+        assert_eq!(path.edge_group("group1").unwrap().edges, vec![[98, 99], [99, 100], [5, 6]]);
+        let all = grp(&sphere, &[("grouptype", ParamValue::Menu(GT_EDGE)), ("pattern", s("*"))]).expect("cooks");
+        assert_eq!(all.edge_group("group1").unwrap().edges.len(), 1080);
+        let off = grp(
+            &sphere,
+            &[("grouptype", ParamValue::Menu(GT_EDGE)), ("groupnumber", b(false)), ("pattern", s("p1-2"))],
+        )
+        .expect("cooks");
+        assert!(off.edge_group("group1").unwrap().edges.is_empty());
+        assert!(grp(&sphere, &[("grouptype", ParamValue::Menu(GT_EDGE)), ("pattern", s("p1-x"))]).is_err());
+    }
+
     #[test]
     fn params_and_defaults() {
         let n = new();
@@ -515,6 +793,7 @@ mod tests {
             [
                 "groupname",
                 "grouptype",
+                "groupnumber",
                 "pattern",
                 "bbox",
                 "bbox_size",
@@ -522,7 +801,18 @@ mod tests {
                 "normal",
                 "dir",
                 "angle",
-                "merge_op"
+                "merge_op",
+                "groupedges",
+                "dominedgeangle",
+                "minedgeangle",
+                "domaxedgeangle",
+                "maxedgeangle",
+                "edgeanglebetweenedges",
+                "dominedgelen",
+                "minedgelen",
+                "domaxedgelen",
+                "maxedgelen",
+                "unshared"
             ]
         );
         assert_eq!(n.params()[0].default, s("group1"));
@@ -639,11 +929,16 @@ mod tests {
         assert_eq!(go(MERGE_SUBTRACT, "2-5"), [0, 1]);
     }
     #[test]
-    fn vertex_group_edge_unsupported_and_hostile_params() {
+    fn vertex_group_and_hostile_params() {
         let b = cube();
         let v = grp(&b, &[("grouptype", ParamValue::Menu(GT_VERTEX)), ("pattern", s("0-4"))]).expect("cooks");
         assert_eq!(mask(&v, AttrClass::Vertex, "group1"), [0, 1, 2, 3, 4]);
-        assert!(matches!(grp(&b, &[("grouptype", ParamValue::Menu(GT_EDGE))]), Err(CookError::Unsupported(_))));
+        // an edge group with no criterion enabled is empty (Houdini); bounding / normal on edges are not modelled
+        let e =
+            grp(&b, &[("grouptype", ParamValue::Menu(GT_EDGE)), ("groupnumber", ParamValue::B(false))]).expect("cooks");
+        assert!(e.edge_group("group1").is_some_and(|g| g.edges.is_empty()));
+        let bb = grp(&b, &[("grouptype", ParamValue::Menu(GT_EDGE)), ("bbox", ParamValue::B(true))]);
+        assert!(matches!(bb, Err(CookError::Unsupported(_))));
         for (k, val) in [
             ("grouptype", ParamValue::Menu(9)),
             ("merge_op", ParamValue::Menu(9)),

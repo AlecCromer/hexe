@@ -3,7 +3,7 @@
 //! inclusive; `$F` frame variables in the path. Oracle: file written, reload == input, input passes through.
 mod common;
 use common::*;
-use hexe_geo::{read_any, AttrClass, AttrData, Attribute, Detail, TypeInfo};
+use hexe_geo::{AttrClass, AttrData, Attribute, Detail, TypeInfo, read_any};
 use hexe_graph::{CookError, ParamValue as PV};
 use std::sync::Arc;
 
@@ -58,7 +58,10 @@ fn writes_bgeo_and_obj_by_extension() {
         }
     }
     // .bgeo is lossless for attributes
-    assert_eq!(read_any(dir.join("out.bgeo")).unwrap().attr(AttrClass::Point, "Cd"), input.attr(AttrClass::Point, "Cd"));
+    assert_eq!(
+        read_any(dir.join("out.bgeo")).unwrap().attr(AttrClass::Point, "Cd"),
+        input.attr(AttrClass::Point, "Cd")
+    );
 }
 
 #[test]

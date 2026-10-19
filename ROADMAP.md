@@ -11,6 +11,48 @@ Rules: numbers come from tools (`parity`, `oracle`, `size`, `perf`), never from 
 - [ ] UI: work PORT-TODO.md (Houdini camera mapping, hotkeys H/W/P/N/D/Cmd+S, point/prim numbers, script/VEX pane, spreadsheet)
 - [ ] P0: intake done, first fixture proven, thinnest vertical slice (input → one op → output = oracle match)
 
+### Open work from the 2026-10-18 editor session (driven by user .hip scenes; nothing committed yet)
+- [x] **Nested /obj containers** (`obj › asset1 › geo1`): done 2026-10-18 (ledger `obj-containers`):
+  object kinds + containers in model.rs (saved / loaded), .hip containers with their notes, file positions + flags,
+  dive in / `u` / path-bar links. Back / forward still walks only obj <-> sop, not container depth.
+- [ ] **Single-geo .hip name**: a .hip with ONE geo and no container still loads as `geo1` (should keep its object name).
+- [ ] **Spare parameters** (ledger `ui-spare-parms`, planned): Edit Parameter Interface, every Houdini parm type.
+- [ ] **Larger user scenes cook**: multi-object /obj networks, network boxes, For-Each pairs and Copy to Points load,
+  but every display chain hits a node with no hexe twin (attribadjustfloat / color / integer, copyxform, pack,
+  enumerate, remesh (doc: sidefx.com/docs/houdini/nodes/sop/remesh.html), orientalongcurve, scatteralign, material,
+  attribvop, attribfrommap, polywire, texture, vellum*, Labs tree tools, solver, filecache) -> the cook errors honestly;
+  each is its own SOP atom. `join` done 2026-10-19 (ledger `sop-join`, zero-diff vs Houdini on recorded synthetic cases).
+  Other blockers seen: sphere `freq` above 100; groupcreate edge / vertex groups; non-poly primitive-type menus;
+  parm expressions that query geometry (`detail()`, `point()`, `$N`, `$CEX`) keep the saved value (hip-expr notes).
+- [ ] Debt found 2026-10-18, not this session's: `polyreduce feature_edges_hold_their_line` assertions had been commented
+  out by a collapsed line; restored, they FAIL (drift with features 0.056 > without 0.027). `xtask assets`: untracked
+  `apps/hexe-tauri/src-tauri/icons/icon.ico` has no ATTRIBUTION row. `xtask parity`: sop-group evidence fn missing.
+
+Next, as asked:
+- [ ] **PolyReduce 1.0 parameter set + panel** (hython dump of `polyreduce` v1: reduce "Polygons", creases "Features",
+  radio tabs `stdswitcher` Percentage / Number / Distance / Edge List with percentage "Keep %", numpolys "Keep #",
+  objpath / distance / minpercent, collapseedges / limitedgecollapse / numedgecollapse; optimizationbias 1, borderweight 0,
+  creaseweight 0, lengthweight 0, attribweight 0, topologicalweight 0, meshinvert on, triangulate on, keepedges off,
+  originalpoints off, referframe / framereference, referinput). Replace hexe's `target` / `finalcount` /
+  `preserveboundary` (borderweight = weighted boundary quadric, keepedges = hard boundary, originalpoints = endpoint
+  collapse, meshinvert = flip rejection on/off); non-default unmodelled ones = explicit error. Param pane needs radio-tab
+  folders (a `ParamSpec` folder hint through `ParamInfo`), sliders, and group-name fields with a dropdown of the input's groups.
+- [ ] PolyReduce output parity: counts match Houdini on the file (218 pts / 432 tris) but the collapse order / positions
+  are hexe's own QEM; feature-edge weighting is Garland-Heckbert constraint planes (Houdini's exact rule undocumented).
+
+Known gaps left behind (all give an explicit error or are documented, none silent):
+- [ ] Group SOP: Bounding Object input declared but unused; bounding / normal tabs and Edge Depth on edge groups;
+  point / prim group viewport highlight (edge groups highlight only); legacy Group's other tabs vs hython unverified.
+- [ ] Sphere: Rows / Columns curve connectivities; triangle connectivities with unique pole points.
+- [ ] Objects: per-object undo (Houdini's is global); Null `at` position, object positions / flags EDITED in the UI are
+  editor state (file values load, edits not saved); no Tree View pane; shelf `box_object1` naming only on an empty network.
+- [ ] Viewport: no shaded + wireframe mode (edges only in W or when selected).
+- [ ] Sticky notes / network boxes / node colours: all drawn, read-only (no editing, box auto-fit, minimize toggle).
+- [ ] File browser: no file-type preview, sequences, "relative path" option; $JOB = $HIP.
+- [ ] Spec: `spec/behaviour/cook-model.md` records hou's connect-time cycle rejection; the editor now allows wired loops
+  (cook flags them) - add the editor row.
+- [ ] Env-bound failures on this Windows box (unrelated): rop_geometry script test, motion stub.sh, behaviours/*.json.
+
 ## Session log
 - T2a: app = Tauri (`apps/hexe-tauri`); egui `apps/hexe` retired, port backlog in apps/hexe-tauri/PORT-TODO.md; bundle config on (Hexe / org.gaia-systems.hexe, app+dmg).
 | date | agent | hours | atom (ledger id) | result | CI |
@@ -21,3 +63,8 @@ Rules: numbers come from tools (`parity`, `oracle`, `size`, `perf`), never from 
 | 2026-10-10 | ghoul-sonnet (promote-1b) | 0.4 | sop-polyfill / sop-revolve / sop-sweep shipped; sop-skin pinned partial; gap notes on 8 rows | hython zero-diff on 4+4+6 recorded cases (polyfill quad fan/odd holes, revolve+skin quad winding, sweep frame/mitre/caps/uv); skin resample + polybevel patches + boolean order + convert icosphere + noise/RNG rows stay partial | green |
 | 2026-10-10 | ghoul-sonnet (trio) | 0.3 | knife: cut-point mint rule found (closing edge first) -> P zero-diff on 5 cases, grid case zero-diff; skin: edge-midpoint resample rule (longest f32 edge) implemented, residual = circle f32 noise; uvlayout: stat-uv oracle, sizes+coverage pass, layout extent gap | hython sop-knife-grid/sop-skin-2ring/sop-uvlayout-stat recorded; knife slot rule + skin tie order + uvlayout 3x2 pack stay partial | green |
 | 2026-10-10 | ghoul-sonnet (stat-oracle) | 0.6 | oracle modes `stat` / `stat-disp` (xtask + compare.py); sop-scatter / sop-noise / sop-mountain / sop-curve shipped | scatter 4 cases + noise 3 + mountain 3 pass the statistical oracle (counts exact; bbox/NN/std or |disp| mean+std within 5 %, worst 4.2 %); curve 5 cases zero-diff vs a real curve::2.0 twin (savedstashgeo); hexe scatter loses default N/sourceprim, gains countperprim; noise/mountain perlin gains are FITTED to the recorded cases (UNVERIFIED beyond); streams stay non-reproducible | green |
+| 2026-10-18 | claude-opus (hexe-5d) | 2.5 | sop-dot network dots (engine `dot` + .hip dots + editor) + /obj wiring, wire select/delete, reverse drag, loop-cut, display-disc layering, rounded Null | .hip dots: wires through dots 1/6 -> 6/6 kept, cook == Houdini; sop-dot partial (no /obj dots); Windows box: pre-existing fmt/clippy/test-path drift fixed, 16 env-bound tests (gaia-motion venv, rop shell scripts, debug-server) fail here before and after | windows-baseline |
+| 2026-10-18 | claude-opus (editor UX) | ~8 | UI session (no ledger atom; uncommitted): infinite 5x5 grid + labels, TAB menu (/obj categories, ghost placement, wire insert, label search), box/wire select + delete, F frame (network + viewport selection), File > Open browser ($HIP), drag-and-drop, rename-in-place + numbering, back/forward, wired loops + red !, multi Geometry objects (per-object networks/undo, multi-object file), .hip nested geos + notes, sphere triangle connectivities (hython-matched), edge groups (geo + Group Edges tab, hython-matched counts), PolyReduce 3 inputs + feature edges | a sphere -> group -> polyreduce .hip cooks end to end (polyreduce 218/432 == Houdini); open items listed under Gaps | not run (cargo xtask ci); crate tests green except 3 env-bound |
+| 2026-10-18 | claude-opus-5.5 | ~3 | ui-node-flags, sop-control, obj-containers, hip-foreach (+ ui-spare-parms planned): bypass / template (ghost) / display flags, required-input arrow + dashed optional wires, slat line removed, Null object = control + point1 network, Add SOP point list, /obj containers from .hip (object-level assets), network boxes + node colours drawn, For-Each blockpath pairing, second-output wires dropped with a note | nested-asset .hip: /obj/<asset>/<geo> + notes, cooks 218/432; a five-object .hip loads (network boxes, 3 For-Each pairs) but its display chains stop at no-twin SOPs | ci: fmt + clippy green (fixed 4 pre-existing clippy errors); test red only on env-bound Windows failures + restored polyreduce assertion; assets / parity red on pre-existing rows; app driven live (debug server + screenshots); nothing committed |
+| 2026-10-19 | claude-opus-5.5 | ~1.5 | sop-join (P1, partial): Join SOP, every rule derived from hython 20.5.522 probes (oracle/houdini/join/) | recorded synthetic arcs2 + arcs7 zero-diff vs Houdini (P + vertex order, fixtures/sop-join); 13 tests | fmt + clippy green; join tests green; parity / assets red only on the pre-existing sop-group + icon.ico rows; not committed |
+| 2026-10-19 | claude-opus-5.5 | ~2 | hip-expr (P1, partial): .chn channels parsed, HScript evaluator (hexe_graph::hscript), import evaluates expression parms at the saved frame; `hexe open --exprs` | semantics checked with hou.hscriptExpression; 8 tests; geometry-query expressions keep the saved value + note | fmt + clippy green; graph tests green; not committed |

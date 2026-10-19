@@ -54,6 +54,10 @@ impl Node<Detail> for Merge {
     fn type_name(&self) -> &'static str {
         "merge"
     }
+    /// Houdini: only the first input is required.
+    fn min_inputs(&self) -> usize {
+        1
+    }
     fn inputs(&self) -> &[InputSpec] {
         &INPUTS
     }

@@ -524,7 +524,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let out = dir.join("file-rop-out.obj");
         let _ = std::fs::remove_file(&out);
-        let json = json.replace("file-rop-out.obj", out.to_str().unwrap());
+        // forward slashes: a Windows path pasted raw into the JSON string would be read as `\U...` escapes
+        let json = json.replace("file-rop-out.obj", &out.to_str().unwrap().replace('\\', "/"));
         let (_, p, pr) = cook_scene_in(&json, 0.0, Some(&root.join("examples"))).unwrap();
         assert_eq!((p, pr), (6, 8));
         let back = hexe_geo::read_any(&out).unwrap();

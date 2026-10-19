@@ -287,6 +287,10 @@ impl Node<Detail> for Sweep {
     fn type_name(&self) -> &'static str {
         OP
     }
+    /// Houdini: only the first input is required.
+    fn min_inputs(&self) -> usize {
+        1
+    }
     fn inputs(&self) -> &[InputSpec] {
         &INPUTS
     }

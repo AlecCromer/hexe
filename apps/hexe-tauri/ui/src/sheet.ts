@@ -2,11 +2,19 @@
 // (only the visible window is in the DOM; pages of PAGE rows are fetched lazily via the `spreadsheet` command and dropped
 // on every cook).
 import type { SheetData, SheetClass } from "./api";
-import { pagesFor, showing, visibleRange } from "./sheetwin";
+import { headerLabel, pagesFor, showing, visibleRange } from "./sheetwin";
 
 const PAGE = 200;
 const ROW_H = 18;
 const TABS: [SheetClass, string][] = [["point", "Points"], ["vertex", "Vertices"], ["prim", "Primitives"], ["detail", "Detail"]];
+
+/** class buttons: points (dot cloud), vertices (corner dot), primitives (diamond), detail (colour wheel) */
+const CLASS_ICON: Record<SheetClass, string> = {
+  point: '<svg viewBox="0 0 20 20"><g fill="#e8d27a"><circle cx="5" cy="6" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="15" cy="11" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></g></svg>',
+  vertex: '<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.5" fill="none" stroke="#d58fd5" stroke-width="2"/></svg>',
+  prim: '<svg viewBox="0 0 20 20"><path d="M10 2l8 8-8 8-8-8z" fill="#e6c25a"/><path d="M10 2v16M2 10h16" stroke="#8a6d1f"/></svg>',
+  detail: '<svg viewBox="0 0 20 20"><path d="M10 10V2a8 8 0 018 8z" fill="#e05a4f"/><path d="M10 10h8a8 8 0 01-12 6.9z" fill="#e6c25a"/><path d="M10 10L6 16.9A8 8 0 0110 2z" fill="#5a9be0"/></svg>',
+};
 
 export type Fetch = (cls: SheetClass, offset: number, limit: number) => Promise<SheetData>;
 
@@ -31,11 +39,19 @@ export class Spreadsheet {
   private gen = 0; // bumped on invalidate: stale fetches are dropped
   private pending = new Set<number>();
 
+  private node = el("span", "sh-nodename");
+
   constructor(host: HTMLElement, private fetch: Fetch) {
+    // Houdini bar: "Node: <name>" · class icon buttons (count in the tooltip) · "showing N of M"
     const bar = el("div", "sh-bar");
+    const lab = el("span", "sh-node");
+    lab.append(el("b", "", "Node: "), this.node);
+    bar.append(lab, el("span", "sh-gap"));
     for (const [c, label] of TABS) {
-      const b = el("button", "sh-tab", label);
+      const b = el("button", "sh-tab");
       b.dataset.class = c;
+      b.title = label;
+      b.innerHTML = CLASS_ICON[c];
       b.addEventListener("click", () => this.select(c));
       this.tabs.set(c, b);
       bar.append(b);
@@ -47,6 +63,11 @@ export class Spreadsheet {
     new ResizeObserver(() => this.render()).observe(this.scroller);
     host.replaceChildren(bar, this.scroller);
     this.mark();
+  }
+
+  /** name of the node whose geometry is shown (the display node) */
+  setNode(name: string | null): void {
+    this.node.textContent = name ?? "(none)";
   }
 
   private mark(): void {
@@ -75,7 +96,7 @@ export class Spreadsheet {
     this.head.replaceChildren();
     this.body.replaceChildren();
     this.info.textContent = msg;
-    this.tabs.forEach((b, c) => { b.textContent = TABS.find((t) => t[0] === c)?.[1] ?? c; });
+    this.tabs.forEach((b, c) => { b.title = TABS.find((t) => t[0] === c)?.[1] ?? c; });
   }
 
   private async fetchPage(p: number, gen: number): Promise<void> {
@@ -92,7 +113,7 @@ export class Spreadsheet {
         this.info.textContent = showing(s.total);
         const c = s.counts;
         const n: Record<SheetClass, number> = { point: c.point, vertex: c.vertex, prim: c.prim, detail: c.detail };
-        this.tabs.forEach((b, k) => { b.textContent = `${TABS.find((t) => t[0] === k)?.[1]} ${n[k]}`; });
+        this.tabs.forEach((b, k) => { b.title = `${TABS.find((t) => t[0] === k)?.[1]} (${n[k]})`; });
       }
     } catch (e) {
       if (gen === this.gen) this.clearTable(typeof e === "string" ? e : String(e));
@@ -109,7 +130,7 @@ export class Spreadsheet {
     if (need.length) Promise.all(need.map((p) => this.fetchPage(p, gen))).then(() => { if (gen === this.gen) this.render(); });
     if (!this.head.firstChild) {
       const tr = el("tr");
-      this.columns.forEach((c) => tr.append(el("th", "", c)));
+      this.columns.forEach((c, i) => { const th = el("th", i === 0 ? "idx" : "", headerLabel(c, i)); th.title = c; tr.append(th); });
       this.head.append(tr);
     }
     const rows: HTMLElement[] = [];

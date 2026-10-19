@@ -262,6 +262,64 @@ pub(super) struct Remap {
     pub vert_src: Vec<Option<usize>>,
     pub prim_src: Vec<Option<usize>>,
 }
+/// Source point -> output point (the first output point made from it) from per-output source lists.
+pub(super) fn inverse_lists(n_src: u32, src_of: &[Vec<usize>]) -> Vec<Option<u32>> {
+    let mut inv = vec![None; n_src as usize];
+    for (o, s) in src_of.iter().enumerate() {
+        for &i in s {
+            if let Some(slot) = inv.get_mut(i).filter(|x| x.is_none()) {
+                *slot = u32::try_from(o).ok();
+            }
+        }
+    }
+    inv
+}
+/// Same from one optional source per output point.
+pub(super) fn inverse_opts(n_src: u32, src_of: &[Option<usize>]) -> Vec<Option<u32>> {
+    let mut inv = vec![None; n_src as usize];
+    for (o, s) in src_of.iter().enumerate() {
+        if let Some(slot) = s.and_then(|i| inv.get_mut(i)).filter(|x| x.is_none()) {
+            *slot = u32::try_from(o).ok();
+        }
+    }
+    inv
+}
+/// Every edge of `d`'s polygons as an unordered pair (consecutive corners, plus the closing one of closed polys).
+pub(super) fn mesh_edge_set(d: &Detail) -> std::collections::HashSet<(u32, u32)> {
+    let mut s = std::collections::HashSet::new();
+    for pr in &d.prims {
+        let pts: Vec<u32> = pr.verts.clone().filter_map(|v| d.vertex_point.get(v as usize).copied()).collect();
+        let closed = matches!(pr.kind, PrimKind::Poly { closed: true });
+        let n = pts.len();
+        for k in 0..n {
+            if k + 1 == n && !(closed && n > 2) {
+                break;
+            }
+            let (a, b) = (pts[k], pts[(k + 1) % n]);
+            if a != b {
+                s.insert((a.min(b), a.max(b)));
+            }
+        }
+    }
+    s
+}
+/// Edge groups follow a point renumbering (`inv`: source point -> output point): an edge keeps when both ends map and
+/// the mapped pair is still an edge of `out`; collapsed / deleted / no-longer-adjacent edges drop. Groups stay (maybe empty).
+pub(super) fn follow_edge_groups(src: &Detail, inv: &[Option<u32>], out: &mut Detail) {
+    if src.edge_groups.is_empty() {
+        return;
+    }
+    let live = mesh_edge_set(out);
+    for g in &src.edge_groups {
+        let edges: Vec<[u32; 2]> = g
+            .edges
+            .iter()
+            .filter_map(|&[a, b]| Some([(*inv.get(a as usize)?)?, (*inv.get(b as usize)?)?]))
+            .filter(|&[a, b]| live.contains(&(a.min(b), a.max(b))))
+            .collect();
+        out.set_edge_group(&g.name, edges);
+    }
+}
 /// Output `Detail` from new topology + positions; every attribute and group of `src` follows `rm`.
 pub(super) fn rebuild(
     op: &str,
@@ -278,6 +336,7 @@ pub(super) fn rebuild(
         prims,
         attrs: Vec::with_capacity(src.attrs.len()),
         groups: Vec::with_capacity(src.groups.len()),
+        edge_groups: Vec::new(),
         skipped_attribs: src.skipped_attribs.clone(),
     };
     for a in &src.attrs {
@@ -301,6 +360,7 @@ pub(super) fn rebuild(
         out.groups.push(Group { name: g.name.clone(), class: g.class, mask });
     }
     *out.p_mut() = p;
+    follow_edge_groups(src, &inverse_lists(src.point_count, &rm.point_src), &mut out);
     Ok(out)
 }
 
@@ -324,6 +384,7 @@ pub(super) fn rebuild_w(
         prims,
         attrs: Vec::with_capacity(src.attrs.len()),
         groups: Vec::with_capacity(src.groups.len()),
+        edge_groups: Vec::new(),
         skipped_attribs: src.skipped_attribs.clone(),
     };
     for a in &src.attrs {
@@ -346,6 +407,18 @@ pub(super) fn rebuild_w(
         out.groups.push(Group { name: g.name.clone(), class: g.class, mask });
     }
     *out.p_mut() = p;
+    // exact copies (a single weight-1 source) carry edge-group ends; blended new points do not
+    let copies: Vec<Vec<usize>> = point_w
+        .iter()
+        .map(|w| {
+            if let [(i, x)] = w.as_slice() {
+                if (*x - 1.0).abs() < 1e-12 { vec![*i] } else { Vec::new() }
+            } else {
+                Vec::new()
+            }
+        })
+        .collect();
+    follow_edge_groups(src, &inverse_lists(src.point_count, &copies), &mut out);
     Ok(out)
 }
 #[cfg(test)]

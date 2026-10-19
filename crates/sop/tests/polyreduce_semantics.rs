@@ -33,7 +33,10 @@ fn ball() -> Arc<Detail> {
     let mut s = Detail::default();
     s.add_points(1);
     s.vertex_point.push(0);
-    s.prims.push(hexe_geo::Prim { kind: hexe_geo::PrimKind::Sphere { xform: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] }, verts: 0..1 });
+    s.prims.push(hexe_geo::Prim {
+        kind: hexe_geo::PrimKind::Sphere { xform: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] },
+        verts: 0..1,
+    });
     cook("convert", &[("lodu", PV::F(2.0)), ("lodv", PV::F(2.0))], Some(&Arc::new(s))).unwrap()
 }
 
@@ -56,9 +59,17 @@ fn percentage_and_count_targets() {
     assert!(q.prims.len() <= 36 && !q.prims.is_empty(), "25%: got {}", q.prims.len());
     invariants(&q);
     let hard = cook("polyreduce", &[("percentage", PV::F(25.0))], Some(&s)).unwrap();
-    assert!(hard.prims.len() < 72 && hard.prims.len() >= q.prims.len(), "hard boundary: still reduces, floor above free");
+    assert!(
+        hard.prims.len() < 72 && hard.prims.len() >= q.prims.len(),
+        "hard boundary: still reduces, floor above free"
+    );
     invariants(&hard);
-    let c = cook("polyreduce", &[("target", PV::Menu(1)), ("finalcount", PV::I(40)), ("preserveboundary", PV::B(false))], Some(&s)).unwrap();
+    let c = cook(
+        "polyreduce",
+        &[("target", PV::Menu(1)), ("finalcount", PV::I(40)), ("preserveboundary", PV::B(false))],
+        Some(&s),
+    )
+    .unwrap();
     assert!(c.prims.len() <= 40 && !c.prims.is_empty(), "count 40: got {}", c.prims.len());
     invariants(&c);
     // 100% keeps everything (nothing to reduce)
@@ -72,7 +83,10 @@ fn boundary_is_preserved_and_shape_stays_in_bbox() {
     let o = cook("polyreduce", &[], Some(&s)).unwrap();
     // corners of the sheet are boundary points: still present at their original positions
     for corner in [[0.0, 0.0], [12.0, 0.0], [0.0, 12.0], [12.0, 12.0]] {
-        assert!(o.p().iter().any(|p| (p[0] - corner[0]).abs() < 1e-4 && (p[1] - corner[1]).abs() < 1e-4), "corner {corner:?}");
+        assert!(
+            o.p().iter().any(|p| (p[0] - corner[0]).abs() < 1e-4 && (p[1] - corner[1]).abs() < 1e-4),
+            "corner {corner:?}"
+        );
     }
     let (lo, hi) = (s.bbox(), o.bbox());
     for k in 0..2 {

@@ -2,7 +2,7 @@
 //! plain JSON objects are accepted too. Everything is bounds-checked; hostile input → `Err`, never panic.
 
 use crate::error::{MAX_ELEMS, check_len, count_of};
-use crate::{AttrClass, AttrData, Attribute, Basis, Detail, GeoError, Group, Prim, PrimKind, TypeInfo};
+use crate::{AttrClass, AttrData, Attribute, Basis, Detail, GeoError, Group, PointId, Prim, PrimKind, TypeInfo};
 use serde_json::Value;
 
 pub(crate) type Kv<'a> = Vec<(&'a str, &'a Value)>;
@@ -688,5 +688,36 @@ pub(crate) fn detail_from_value(root: &Value) -> Result<Detail, GeoError> {
             read_groups(g, class, n as usize, &mut d.groups)?;
         }
     }
+    if let Some(g) = find(&top, "edgegroups") {
+        read_edge_groups(g, &mut d)?;
+    }
     Ok(d)
+}
+
+/// `"edgegroups": [[["name", n], ["points", [a, b, c, d, ...]]], ...]` (Houdini 20.5): consecutive point pairs.
+fn read_edge_groups(v: &Value, d: &mut Detail) -> Result<(), GeoError> {
+    let Value::Array(entries) = v else { return syn("edgegroups: expected array") };
+    for e in entries {
+        let mut merged: Vec<(&str, &Value)> = Vec::new();
+        match e {
+            Value::Array(a) if !a.is_empty() && a.iter().all(|x| x.is_array() || x.is_object()) => {
+                for part in a {
+                    merged.extend(need_kv(part, "edge group part")?);
+                }
+            }
+            other => merged.extend(need_kv(other, "edge group")?),
+        }
+        let Some(name) = find(&merged, "name").and_then(Value::as_str) else { return syn("edge group without name") };
+        let pts = find(&merged, "points").map(ints).transpose()?.unwrap_or_default();
+        if pts.len() % 2 != 0 {
+            return Err(GeoError::Count(format!("edge group `{name}`: odd point list ({})", pts.len())));
+        }
+        if let Some(bad) = pts.iter().find(|&&p| p < 0 || p >= i64::from(d.point_count)) {
+            return Err(GeoError::Count(format!("edge group `{name}`: point {bad} out of range")));
+        }
+        let edges: Vec<[PointId; 2]> =
+            pts.as_chunks::<2>().0.iter().map(|c| [c[0] as PointId, c[1] as PointId]).collect();
+        d.set_edge_group(name, edges);
+    }
+    Ok(())
 }

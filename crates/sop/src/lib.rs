@@ -12,14 +12,20 @@
 mod builtins;
 #[cfg(test)]
 mod cook_model_oracle;
+mod hip_expr;
 mod hip_import;
 mod registry;
 mod scene;
+pub use builtins::dot_sop::{NAME_BASE as DOT_NAME_BASE, TYPE_NAME as DOT_TYPE};
 pub use builtins::render_frames;
-pub use hip_import::{GeoImport, HipImport, hexe_type, import_hip, import_scene, is_hip_path};
+pub use hip_expr::channel_report as hip_channel_report;
+pub use hip_import::{
+    ContainerImport, GeoImport, HIP_PX, HipImport, ObjMeta, hexe_type, import_hip, import_scene, is_hip_path,
+};
 pub use registry::{CtorFn, Registry, SopNode, SpecFn};
 pub use scene::{
-    Loaded, SceneError, fill_unwired, load_scene, load_scene_in, load_scene_with, load_scene_with_base, save_scene,
+    Loaded, MAX_UI_ITEMS, SceneError, UiBox, UiExtra, UiNote, fill_unwired, load_scene, load_scene_in, load_scene_with,
+    load_scene_with_base, save_scene, save_scene_ext,
 };
 
 /// Registry of every built-in SOP (`builtins.rs`).

@@ -590,6 +590,7 @@ impl Node<Detail> for PolyExtrude {
             prims: o.prims,
             attrs: Vec::new(),
             groups: Vec::new(),
+            edge_groups: Vec::new(),
             skipped_attribs: Vec::new(),
         };
         let map_for = |c: AttrClass| -> Option<&[Option<usize>]> {
@@ -617,6 +618,7 @@ impl Node<Detail> for PolyExtrude {
             }
             out.groups.push(g);
         }
+        super::meshutil::follow_edge_groups(src, &super::meshutil::inverse_opts(src.point_count, &point_src), &mut out);
         Ok(Arc::new(out))
     }
 }

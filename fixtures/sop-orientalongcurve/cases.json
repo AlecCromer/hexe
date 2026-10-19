@@ -1,0 +1,148 @@
+{
+ "attrib_up": {
+  "upvectortype": 4
+ },
+ "custom_end": {
+  "endupvectorx": 1.0,
+  "endupvectory": 0.0,
+  "endupvectorz": 0.0,
+  "upvectortype": 5,
+  "upvectorx": 0.3,
+  "upvectory": 0.2,
+  "upvectorz": 1.0,
+  "useendupvector": 1
+ },
+ "default": {},
+ "diff": {
+  "tangenttype": 1
+ },
+ "discontinuous": {
+  "continuousclosed": 0
+ },
+ "euler_mix": {
+  "applypitch": 1,
+  "applyroll": 1,
+  "applyyaw": 1,
+  "group": "0-7 9-11",
+  "incpitch": 90.0,
+  "incroll": 10.0,
+  "incyaw": 20.0,
+  "pitch": -20.0,
+  "pitchper": 3,
+  "rOrd": 5,
+  "roll": 5.0,
+  "rollper": 0,
+  "yaw": 15.0,
+  "yawper": 1
+ },
+ "euler_xyz": {
+  "applypitch": 1,
+  "applyyaw": 1,
+  "incpitch": 40.0,
+  "pitch": 12.0,
+  "pitchper": 4,
+  "yaw": 33.0
+ },
+ "extrap_avg": {
+  "extrapolateendtangents": 1
+ },
+ "extrap_diff": {
+  "extrapolateendtangents": 1,
+  "tangenttype": 1
+ },
+ "extrap_next": {
+  "extrapolateendtangents": 1,
+  "tangenttype": 3
+ },
+ "extrap_prev": {
+  "extrapolateendtangents": 1,
+  "tangenttype": 2
+ },
+ "group": {
+  "group": "sel"
+ },
+ "next": {
+  "tangenttype": 3
+ },
+ "none": {
+  "applyroll": 1,
+  "roll": 25.0,
+  "tangenttype": 4
+ },
+ "normal_avg": {
+  "upvectoratstart": 0
+ },
+ "normal_end": {
+  "useendupvector": 1
+ },
+ "outputs_point": {
+  "outputquaternion": 1,
+  "outputtransform3": 1,
+  "outputtransform4": 1,
+  "outputtranslation": 1,
+  "outputxaxis": 1,
+  "transform3name": "xf3",
+  "transform4name": "xf4",
+  "translationname": "tr"
+ },
+ "outputs_vertex": {
+  "class": 1,
+  "outputquaternion": 1,
+  "outputtransform3": 1,
+  "outputtransform4": 1,
+  "outputtranslation": 1,
+  "outputxaxis": 1,
+  "transform3name": "xf3",
+  "transform4name": "xf4",
+  "translationname": "tr"
+ },
+ "prev": {
+  "tangenttype": 2
+ },
+ "roll_attrib": {
+  "applyroll": 1,
+  "incroll": 90.0,
+  "rollper": 2
+ },
+ "roll_distance_open": {
+  "applyroll": 1,
+  "continuousclosed": 0,
+  "incroll": 20.0,
+  "rollper": 1
+ },
+ "roll_edge": {
+  "applyroll": 1,
+  "incroll": 10.0,
+  "rollper": 0
+ },
+ "roll_full": {
+  "applyroll": 1,
+  "fulltwists": 1,
+  "incroll": 45.0,
+  "roll": 30.0
+ },
+ "scale_stretch": {
+  "maxstretcharoundturns": 3.0,
+  "outputquaternion": 1,
+  "outputtransform3": 1,
+  "outputtransform4": 1,
+  "outputtranslation": 1,
+  "outputxaxis": 1,
+  "scale": 2.5,
+  "stretcharoundturns": 1,
+  "transform3name": "xf3",
+  "transform4name": "xf4",
+  "translationname": "tr"
+ },
+ "x_avg": {
+  "upvectoratstart": 0,
+  "upvectortype": 1
+ },
+ "y_end": {
+  "upvectortype": 2,
+  "useendupvector": 1
+ },
+ "z_start": {
+  "upvectortype": 3
+ }
+}

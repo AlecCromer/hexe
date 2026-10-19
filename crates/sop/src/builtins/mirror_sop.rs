@@ -68,7 +68,8 @@ impl Node<Detail> for Mirror {
         let (keep, reverse, consolidate) =
             (toggle(p, "keepOriginal")?, toggle(p, "reverse")?, toggle(p, "consolidate")?);
         let tol = float(p, "consolidatetol")?;
-        let (make_grp, grp_name) = (toggle(p, "createoutputgroup")?, p.string("outputgroup").unwrap_or_default().trim());
+        let (make_grp, grp_name) =
+            (toggle(p, "createoutputgroup")?, p.string("outputgroup").unwrap_or_default().trim());
         if make_grp && (grp_name.is_empty() || grp_name.contains(char::is_whitespace)) {
             return Err(bad("`outputgroup` must be one non-empty token when `createoutputgroup` is on".to_string()));
         }
@@ -116,7 +117,13 @@ impl Node<Detail> for Mirror {
         let mut out_pos: Vec<V3> = (0..np).filter(|&i| !drop_rest || used[i]).map(|i| pos[i]).collect();
         let mut newidx: Vec<usize> = if drop_rest {
             let mut r = 0;
-            (0..np).map(|i| { let v = r; r += usize::from(used[i]); v }).collect()
+            (0..np)
+                .map(|i| {
+                    let v = r;
+                    r += usize::from(used[i]);
+                    v
+                })
+                .collect()
         } else {
             (0..np).collect()
         };

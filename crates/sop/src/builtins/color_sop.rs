@@ -11,6 +11,7 @@
 //!
 //! * `colortype` `bbox` (2): Cd = element position normalised into the input bbox (flat axis -> 0). `deleteallcolorattribs` (off)
 //!   removes every-class `Cd` first; `enable` (on) off = no colour written (delete-only use).
+//!
 //! Not modelled: ramp-from-attribute colour type, alpha, `overridecd`.
 use super::attribs::{class_param, set_attr};
 use super::group_sop::{bad, parse_pattern};
@@ -35,9 +36,11 @@ pub fn spec() -> Vec<ParamSpec> {
         ]),
         ParamSpec::new("deleteallcolorattribs", ParamValue::B(false)).label("Delete All Existing Color Attributes"),
         ParamSpec::new("enable", ParamValue::B(true)).label("Set Color Attribute"),
-        ParamSpec::new("colortype", ParamValue::Menu(CONSTANT))
-            .label("Color Type")
-            .menu(&[("constant", "Constant"), ("random", "Random"), ("bbox", "Bounding Box")]),
+        ParamSpec::new("colortype", ParamValue::Menu(CONSTANT)).label("Color Type").menu(&[
+            ("constant", "Constant"),
+            ("random", "Random"),
+            ("bbox", "Bounding Box"),
+        ]),
         ParamSpec::new("color", ParamValue::V3([1.0; 3])).label("Color"),
         ParamSpec::new("seed", ParamValue::F(0.0)).label("Seed").range(0.0, 10.0),
     ]
@@ -85,7 +88,9 @@ impl Node<Detail> for Color {
         }
         let color = p.vec3("color").ok_or_else(|| bad(WHO, "`color` missing or not a vector"))?;
         let seed = p.float("seed").filter(|s| s.is_finite()).ok_or_else(|| bad(WHO, "`seed` missing or not finite"))?;
-        let del = p.toggle("deleteallcolorattribs").ok_or_else(|| bad(WHO, "`deleteallcolorattribs` missing or not a toggle"))?;
+        let del = p
+            .toggle("deleteallcolorattribs")
+            .ok_or_else(|| bad(WHO, "`deleteallcolorattribs` missing or not a toggle"))?;
         let enable = p.toggle("enable").ok_or_else(|| bad(WHO, "`enable` missing or not a toggle"))?;
         let Some(src) = inputs.first() else { return Ok(Arc::default()) };
         if !del && !enable {

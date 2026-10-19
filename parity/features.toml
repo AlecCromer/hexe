@@ -1799,3 +1799,126 @@ evidence = [
   "crates/sop/src/hip_import.rs::hip_hostile_inputs_are_errors",
 ]
 notes = "H40: cpio (odc/newc) + gzip reader -> HipScene IR -> hexe scenes (one per /obj geo with SOPs); no-twin SOPs kept as `unsupported:<type>` (wired, parms kept, cook = Unsupported); `hexe-cli open` + Tauri graph_load (.hip route). Corpus fixtures/hip/MANIFEST.md: 12 Houdini-20.5 help/files hips parse 12/12 full graph; cook vs hython 13 MATCH / 5 HEXE-ERR / 7 UNSUPPORTED-NODE over 25 geo containers (hython twin, install-gated). NOT: MIME-wrapped hips (explicit error), HDA/digital-asset internals, subnets/TOP/VOP networks (skipped, listed), keyframes (value at save time, flagged animated), for-each blocks, hexe twins with fewer input ports than Houdini (dropped_wires reported)."
+
+# --- network editor: network dots (Houdini __dotN wire waypoints)
+[[feature]]
+id = "sop-dot"
+title = "Network dots: `dot` waypoint node (Houdini __dotN): pass-through, fan-out, chains, pin flag; .hip import; editor Alt-drop / click-to-wire / delete-through"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["dot"]
+evidence = [
+  "crates/sop/src/builtins/dot_sop.rs::dot_passes_input_through_same_arc_pinned_or_not",
+  "crates/sop/src/builtins/dot_sop.rs::dot_fans_out_and_chains_in_a_graph",
+  "crates/graph/src/hip.rs::network_dots_parse_and_dot_sources_lose_their_parens",
+  "crates/sop/src/hip_import.rs::hip_network_dots_import_wired_and_cook_like_houdini",
+  "apps/hexe-tauri/src-tauri/src/model.rs::dots_insert_fan_out_delete_through_and_round_trip",
+  "apps/hexe-tauri/src-tauri/src/model.rs::dots_never_inherit_the_display_flag",
+]
+notes = "Houdini 20.5.522 (hython) facts: dots are `<net>/__dotN.networkdotinit` flat JSON (posx/posy = centre, pinned, color, input `src out flag`), node inputs name them `(__dotN)`; hou inputs() resolve THROUGH dots; destroy() rewires the dot's source to every consumer; new dots take the lowest free __dotN; unwired unpinned dots survive save/load. Before this row a .hip with dots LOST every wire through them (`outside the network`). hexe: type `dot` (1 input, Arc pass-through, `pinned` param kept for round-trip, no cook effect), saved like any node (ui.pos = centre); Session::dot_add = dot + wires as ONE undo step (rollback on a refused wire); delete = rewire through (chains resolve); never the display flag (set_display refuses, fallback skips dots, first-node auto-display skips dots). Fixture fixtures/hip/authored-dots.hip (HouNC, own scene, author identity scrubbed, see hip-author.py) cooks EQUAL to Houdini (16 pts / 12 prims). UI (bun tests netlogic.test.ts dot ports/drops/arrows, geom.test.ts roundedPath; driven live in hexe-tauri 2026-10-18): Alt held mid-drag or Alt-click on a sticky wire drops a dot and the wire continues; click a dot = sticky wire, click nothing = cancel; drag = move; Alt-click wire = dot on it; Alt-click dot = delete-through; segments touching a dot straight, segments running up show a flow arrow. NOT: /obj-level dots (/obj objects + wires are editor-only, unsaved), dot colour (`FROMOUTPUT` only), pin toggle on the dot itself (param pane only), Houdini's auto-removal of unpinned dots when their wires go, writing .hip."
+
+# --- network editor: node flags, required inputs, Null object, object-level containers, For-Each pairing (2026-10-18)
+[[feature]]
+id = "ui-node-flags"
+title = "SOP node flags: bypass (left, yellow), template (purple, one per network, ghosted in the viewport), display/render (blue, one per network); required-input arrow; optional inputs = dashed wires"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = []
+evidence = [
+  "apps/hexe-tauri/src-tauri/src/model.rs::bypass_is_undoable_and_required_inputs_are_reported",
+]
+notes = "Engine bypass existed (graph set_bypass, scene + .hip round-trip); now a Tauri command (`set_bypass`, one undo step, dots refused) + NodeView.bypass. `Node::min_inputs` (default = every input) says which inputs are required: polyreduce / group / merge / switch / boolean / sweep / matchsize = 1, add = 0; unregistered (`unsupported:`) nodes = first input. UI (bun tests netlogic.test.ts missingInputs / optionalInput / blockPairs; driven live 2026-10-18): bypass strip left + halo arc, bypassed body yellow; template purple, single per network (kept per object), viewport ghost = see-through shaded surface + faint edges + sphere/tube proxies; display = template looks displayed; small red down-arrow over an unwired required input; dashed wire into an optional input; slat line over the body removed. NOT: lock flag, render flag separate from display, selectable-template distinct from template, template flag saved with the scene."
+
+[[feature]]
+id = "sop-control"
+title = "Control SOP (`control`): Null object indicator, axis cross +-Uniform Scale (0..10), green"
+area = "A"
+tier = "P2"
+status = "partial"
+commands = ["control"]
+evidence = [
+  "crates/sop/src/builtins/control_sop.rs::six_axis_lines_reach_scale_from_the_centre",
+  "crates/sop/src/builtins/control_sop.rs::hostile_scale_is_an_error",
+  "apps/hexe-tauri/src-tauri/src/model.rs::null_object_holds_control_and_point1",
+]
+notes = "Null objects are now real objects (Rust network): `control` (display flag) + `point1` (Add SOP, one point at the origin). The viewport draws each visible Null's control cook as its indicator at the Null's position (green; selected = yellow). The Add SOP param pane shows Number of Points + Point N rows (x y z, Weight shown read-only = 1: no point weights in hexe; bun pointlist.test.ts). UNVERIFIED vs Houdini: the Control SOP's other params (colour, display icon shapes), point1's role."
+
+[[feature]]
+id = "obj-containers"
+title = "/obj object kinds + containers: subnets / digital assets hold objects (dive in, path bar, notes), .hip containers imported"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = []
+evidence = [
+  "apps/hexe-tauri/src-tauri/src/model.rs::containers_hold_objects_round_trip_and_delete_with_them",
+  "apps/hexe-tauri/src-tauri/src/model.rs::null_object_holds_control_and_point1",
+]
+notes = "Session.meta: per object kind (geo / null / subnet), container (`net`), file position, display / selectable flags; saved in multi-object files, sanitized on load (unknown kind = error, container loop / missing container -> /obj). .hip: non-geo object containers (an object-level asset holding a geo) become `subnet` objects with their sticky notes, geos inside keep their container; object positions + flags come from the file. Editor: double-click a container = dive in, `u` / path bar = up, deleting a container deletes what is inside. Driven live in the app on scenes with nested asset containers and five-object /obj networks. Network boxes + node colours now reach the editor (GraphView.boxes / colors). NOT: HDA definitions / parameters / locked contents, object transforms, saving container positions edited in the UI."
+
+[[feature]]
+id = "hip-foreach"
+title = ".hip For-Each import: Block End iteration settings + blockpath pairing -> hexe Block Begin method / End begin + mode"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = []
+evidence = [
+  "crates/sop/src/hip_import.rs::block_pairs_move_iteration_settings_onto_the_begin",
+]
+notes = "Houdini keeps itermethod (pieces / count / auto), class, useattrib + attrib, iterations, method (merge / feedback) on the End and links the pair by blockpath; hexe keeps the method on the Begin. Auto = pieces when the Begin extracts pieces, else count. Wires from a second output (Vellum, Labs tree tools) are dropped with a note (hexe nodes have one output). Editor draws a dotted link per pair. UNVERIFIED vs hython: metadata / fetch-input begin modes, start value / increment, max iterations, stop condition."
+
+[[feature]]
+id = "ui-spare-parms"
+title = "Spare parameters (Edit Parameter Interface): add user parms of every Houdini parm type to any node"
+area = "A"
+tier = "P2"
+status = "planned"
+commands = []
+evidence = []
+notes = "Requested 2026-10-18 (item 9): nodes keep their locked parms; users add parms (Angle, Button, Color, Float/Int vectors, File, Folder, Ramp, String, Toggle, Menu, Operator Path, ...). Not started."
+
+[[feature]]
+id = "sop-join"
+title = "Join SOP (`join`): polygons / polylines joined end to end (blend + tolerance + bias, closest ends, subgroups, loop, keep, only connected)"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = ["join"]
+evidence = [
+  "crates/sop/src/builtins/join_sop.rs::recorded_arcs_match_houdini_exactly",
+  "crates/sop/src/builtins/join_sop.rs::defaults_blend_two_curves_into_one_shared_point",
+  "crates/sop/src/builtins/join_sop.rs::tolerance_cuts_both_end_segments_in_houdini_point_order",
+  "crates/sop/src/builtins/join_sop.rs::bias_weights_the_next_prim_by_one_minus_bias_with_attributes",
+  "crates/sop/src/builtins/join_sop.rs::proximity_flips_the_first_pair_then_only_the_next_prim",
+  "crates/sop/src/builtins/join_sop.rs::proximity_ties_within_1e5_keep_the_earlier_choice",
+  "crates/sop/src/builtins/join_sop.rs::blend_after_flip_reuses_the_first_prims_point_slot",
+  "crates/sop/src/builtins/join_sop.rs::single_point_prim_and_closed_input_follow_houdini",
+  "crates/sop/src/builtins/join_sop.rs::loop_blend_drops_the_first_point_and_starts_at_its_cut",
+  "crates/sop/src/builtins/join_sop.rs::joinop_subgroups_match_houdini",
+  "crates/sop/src/builtins/join_sop.rs::group_parm_keeps_the_rest_first_and_keep_prims_copies",
+  "crates/sop/src/builtins/join_sop.rs::only_connected_follows_shared_points_without_flips",
+  "crates/sop/src/builtins/join_sop.rs::hostile_inputs_are_errors_or_passthrough",
+]
+notes = "hython 20.5.522 probes in oracle/houdini/join/ derive every rule in the module doc: blend moves the chain's last point to last*bias + next*(1-bias) and cuts both joint segments at tolerance t (t=1: no cuts, t=0 = no blend), points / vertices / attrs follow the weights, prim attrs from the first prim; proximity = closest of 4 end pairs for the first pair (distance ties within 1e-5, order (end,start) (start,start) (end,end) (start,end)), later prims flip only; joinop group (runs of N, singles untouched first) / skip (residues mod N, all when 2N > n); loop with blend drops the first point; output = untouched prims + points first, joined prims appended. RECORDED: synthetic arcs2 (2 x 127-pt arcs, vertex order against point order, near-tied ends, t .727) + arcs7 (7 arcs, t 1) zero-diff vs Houdini (P 1e-5 + vertex order; fixtures/sop-join from oracle/houdini/join/sop_join_cases.py). GAPS: surfaces / NURBS / Bezier joins (dir, knotmult) = Unsupported; blend off 'fillet' is a straight segment for polys (Houdini probes agree), unprobed for curves; shared-end-point inputs without onlyconnected walk a Houdini order not derived; onlyconnected never prepends."
+
+[[feature]]
+id = "hip-expr"
+title = ".hip channel expressions: .chn sections parsed, HScript expressions (ch refs, math, strings) evaluated at import"
+area = "A"
+tier = "P1"
+status = "partial"
+commands = []
+evidence = [
+  "crates/graph/src/hscript.rs::channel_reference_expressions_evaluate",
+  "crates/graph/src/hscript.rs::operators_precedence_and_degrees",
+  "crates/graph/src/hscript.rs::geometry_queries_and_python_are_unsupported_not_errors",
+  "crates/graph/src/hscript.rs::hostile_expressions_are_errors",
+  "crates/graph/src/hip.rs::chn_section_reads_expressions_keys_and_python",
+  "crates/sop/src/hip_expr.rs::relative_paths_resolve_like_houdini",
+  "crates/sop/src/hip_expr.rs::sibling_references_evaluate_at_the_saved_frame",
+  "crates/sop/src/hip_expr.rs::reference_cycles_stop_with_a_note",
+]
+notes = "Saved .parm values of expression parms are stale, so import evaluates the .chn expression at the saved frame. HScript rules checked with hou.hscriptExpression (20.5.522): left-assoc ^, trig in degrees, no ?:, round = floor(x+.5), smooth/fit/acos edge cases, string + concatenates, /0 and %0 -> 0, trailing backslash = continuation (oracle/houdini/hscript_continuation.py); ch() of a menu = item index, ramp interp tokens 0..6. Compare tool: oracle/houdini/hip_exprs.py vs `hexe open --exprs`. GAPS: geometry queries (detail/point/$N/$CEX ...), node-local vars, opinputpath, python channels, keyframe functions, `{}` blocks -> kept saved value with an import note."

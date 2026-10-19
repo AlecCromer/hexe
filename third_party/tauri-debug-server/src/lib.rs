@@ -545,7 +545,14 @@ fn screenshot_bytes<R: tauri::Runtime>(app: tauri::AppHandle<R>, label: &str) ->
     let (tx, rx) = mpsc::channel::<Result<Vec<u8>, String>>();
     window
         .with_webview(move |webview| {
+            // `PlatformWebview::inner()` (the WKWebView ptr) only exists on Apple targets.
+            #[cfg(target_os = "macos")]
             capture_webview_png(webview.inner(), tx);
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = webview;
+                capture_webview_png(std::ptr::null_mut(), tx);
+            }
         })
         .map_err(|e| format!("with_webview failed: {e}"))?;
     match rx.recv_timeout(Duration::from_secs(10)) {

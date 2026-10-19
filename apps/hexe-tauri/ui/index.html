@@ -7,29 +7,127 @@
   </head>
   <body>
     <div id="app">
-      <header id="bar">
-        <b class="brand">hexe</b>
-        <input id="path" spellcheck="false" placeholder="scene.json / .ens / .nmc path" />
-        <button id="open">Open</button>
-        <button id="save">Save</button>
-        <button id="new">New</button>
-        <span class="sep"></span>
-        <label title="W (viewport hover)"><input type="checkbox" id="wire" /> wireframe</label>
-        <label><input type="checkbox" id="pts" checked /> points</label>
-        <label title="point size">pt <input type="range" id="ptsize" min="1" max="20" value="6" /></label>
-<button id="fit" title="H / F">Fit</button><input id="fitx" value="*background*" size="11" title="Fit ignores prim groups matching these globs (comma separated, empty = none)" />
-<span class="sep"></span>
-<label id="timeline" title="timeline $F: the display cook runs at time = ($F - 1) / fps (motion SOP scrubs its clip)">F <input type="number" id="frame" min="1" max="1000000" step="1" value="1" /> <input type="range" id="frameslider" min="1" max="360" value="1" /> <span id="fpslab">30 fps</span></label>
-<button id="pick" title="S (viewport hover): pick points - click / drag-box">Pick</button>
-<button id="grpsel" title="new group SOP from the picked points" disabled>Group from selection</button>
-        <span id="status"></span>
-      </header>
-      <section id="viewport" class="pane"></section>
-      <div id="side">
-<section id="params" class="pane"></section>
-<section id="sheet" class="pane"></section>
-</div>
-      <section id="network" class="pane" tabindex="0"></section>
+      <!-- menu bar: real menus only (File / Edit / Windows / Help) + scene path -->
+      <nav id="menubar">
+        <div class="menu"><button class="mtop">File</button>
+          <div class="mdrop">
+            <button id="new" class="mi">New</button>
+            <button id="open" class="mi">Open...<kbd>Ctrl+O</kbd></button>
+            <button id="save" class="mi">Save<kbd>Ctrl+S</kbd></button>
+          </div>
+        </div>
+        <div class="menu"><button class="mtop">Edit</button>
+          <div class="mdrop">
+            <button class="mi" data-cmd="undo">Undo<kbd>Ctrl+Z</kbd></button>
+            <button class="mi" data-cmd="redo">Redo<kbd>Ctrl+Shift+Z</kbd></button>
+          </div>
+        </div>
+        <div class="menu"><button class="mtop">Windows</button>
+          <div class="mdrop">
+            <button class="mi" data-tab="sceneview">Scene View</button>
+            <button class="mi" data-tab="sheetview">Geometry Spreadsheet</button>
+          </div>
+        </div>
+        <div class="menu"><button class="mtop">Help</button>
+          <div class="mdrop help">
+            <div class="mi">Tab / right-click canvas<kbd>TAB menu</kbd></div>
+            <div class="mi">Right-click node / D<kbd>display flag</kbd></div>
+            <div class="mi">H / F<kbd>frame all</kbd></div>
+            <div class="mi">W · P · N<kbd>wire · pt# · prim#</kbd></div>
+            <div class="mi">S<kbd>pick points</kbd></div>
+            <div class="mi">R<kbd>re-cook</kbd></div>
+          </div>
+        </div>
+        <!-- desktop + radial menu selectors (Houdini layout); only the current entries exist in hexe, the rest are listed disabled -->
+        <div class="menu combo"><button class="mtop"><svg viewBox="0 0 16 16"><rect x="1.5" y="1.5" width="13" height="13" fill="none" /><path d="M6 1.5v13M6 8h8.5" /></svg>Build<span class="carets">▴▾</span></button>
+          <div class="mdrop radio" data-list="Animate,*Build,Games,Grooming,Image,LookDev,Modeling,Output,Solaris,SolarisLookDev,TOPs,Technical,TechnicalWide,Terrain,Textport|New Desktop,Save Current Desktop,Save Current Desktop As...,Save All Desktops,Reload Current Desktop|Desktops Manager...|Reset Main Menu to Top,Reset Shelf to Top,Reset Playbar to Bottom,Reset Status Bar to Bottom"></div>
+        </div>
+        <div class="menu combo"><button class="mtop"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" /><circle cx="8" cy="8" r="2" /><path d="M8 0v4M8 12v4M0 8h4M12 8h4" /></svg>Main<span class="carets">▴▾</span></button>
+          <div class="mdrop radio" data-list="#Character,Capture Paint,Crowds,Muscle,Rigging,#Dynamics,Cloth,Dynamics,Particle Fluids,Grains,Oceans,Particles,Pyro,Rigid Bodies,Solids,Vellum Brush,#Hair,Hair,Grooming,Guide Tools,#Layout,Layout Brush,Brush Selector,#Modeling,Curve Modeling,Curve Sop,Modeling,Poly Modeling,Sculpt,UV Editing,#Standard,*Main,Snapping,View,#Terrain,Terrain,Deform,#Utility,Insertion Points|Edit Current..."></div>
+        </div>
+        <div class="desk" title="scene file (.json / .ens / .nmc) - Enter opens"><span class="desk-ico"></span><input id="path" spellcheck="false" placeholder="untitled  (scene.json / .ens / .nmc path)" /></div>
+      </nav>
+
+      <!-- shelf: tabs + tool buttons, built from the live node types (shelf.ts) -->
+      <div id="shelf"><div id="shelfL" class="shelfset"></div><div id="shelfR" class="shelfset"></div></div>
+
+      <!-- left: Scene View / Geometry Spreadsheet -->
+      <section id="leftpane" class="panel">
+        <div class="ptabs"><button class="ptab on" data-tab="sceneview">Scene View</button><button class="ptab" data-tab="sheetview">Geometry Spreadsheet</button></div>
+        <div class="pathbar" data-crumbs="scene"></div>
+        <div class="tabbody">
+          <div id="sceneview" class="tabpage on">
+            <div class="vtoolbar">
+              <div id="opbar" class="opbar"></div>
+              <label class="tb" title="point size"><span>pt</span><input type="range" id="ptsize" min="1" max="20" value="6" /></label>
+              <label class="tb" title="Fit ignores prim groups matching these globs (comma separated, empty = none)"><span>fit excl</span><input id="fitx" value="*background*" size="11" /></label>
+              <span class="grow"></span>
+              <button id="grpsel" class="tb txt" title="new group SOP from the picked points" disabled>Group from selection</button>
+            </div>
+            <div class="vbody">
+              <div class="vtools left">
+                <button class="ib" id="selmode" title="Select (Esc)"><svg viewBox="0 0 20 20"><path d="M5 3l10 7-4.5 1 2.5 5-2 1-2.5-5L5 15z" /></svg></button>
+                <button class="ib" id="pick" title="S (viewport hover): pick points - click / drag-box"><svg viewBox="0 0 20 20"><circle cx="6" cy="7" r="2" /><circle cx="13" cy="5" r="2" /><circle cx="10" cy="13" r="2" /><rect x="2.5" y="2.5" width="15" height="15" fill="none" stroke-dasharray="2 2" /></svg></button>
+                <span class="vsep"></span>
+                <button class="ib" id="fit" title="Frame all (H / F)"><svg viewBox="0 0 20 20"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4" fill="none" /><rect x="7" y="7" width="6" height="6" /></svg></button>
+              </div>
+              <div class="vwrap">
+                <section id="viewport" class="pane"></section>
+                <div class="vp-title"><svg viewBox="0 0 20 20"><path d="M2 6h11v8H2zM13 9l5-3v8l-5-3z" /></svg><span id="vptitle">View</span></div>
+                <div class="vp-pills"><span>Persp</span><span>No cam</span></div>
+                <div class="vp-hint" id="vphint">Left mouse tumbles. Middle pans. Right dollies. H frames all. W wireframe. P / N point / prim numbers. S picks points.</div>
+              </div>
+              <div class="vtools right">
+                <label class="ib tog" title="Wireframe (W)"><input type="checkbox" id="wire" /><svg viewBox="0 0 20 20"><path d="M10 2l7 4v8l-7 4-7-4V6zM3 6l7 4 7-4M10 10v8" fill="none" /></svg></label>
+                <label class="ib tog" title="Points"><input type="checkbox" id="pts" checked /><svg viewBox="0 0 20 20"><circle cx="5" cy="5" r="2" /><circle cx="15" cy="6" r="2" /><circle cx="6" cy="15" r="2" /><circle cx="14" cy="14" r="2" /></svg></label>
+                <button class="ib" id="ptnums" title="Point numbers (P)"><svg viewBox="0 0 20 20"><text x="10" y="14" text-anchor="middle">P#</text></svg></button>
+                <button class="ib" id="primnums" title="Primitive numbers (N)"><svg viewBox="0 0 20 20"><text x="10" y="14" text-anchor="middle">N#</text></svg></button>
+              </div>
+            </div>
+          </div>
+          <div id="sheetview" class="tabpage"><section id="sheet" class="pane"></section></div>
+        </div>
+      </section>
+
+      <div id="right">
+        <section id="parampane" class="panel">
+          <div class="ptabs"><button class="ptab on">Parameters</button></div>
+          <div class="pathbar" data-crumbs="param"></div>
+          <section id="params" class="pane"></section>
+        </section>
+        <section id="netpane" class="panel">
+          <div class="ptabs"><button class="ptab on" id="nettab">/obj</button></div>
+          <div class="pathbar" data-crumbs="net"></div>
+          <div class="netmenu">
+            <button id="netadd" title="TAB menu">Add</button>
+            <button data-cmd="undo" title="Ctrl+Z">Undo</button>
+            <button data-cmd="redo" title="Ctrl+Shift+Z">Redo</button>
+          </div>
+          <section id="network" class="pane" tabindex="0"></section>
+        </section>
+      </div>
+
+      <!-- playbar -->
+      <footer id="playbar">
+        <div class="pb-row">
+          <div class="transport">
+            <button class="ib" id="tstart" title="Jump to start"><svg viewBox="0 0 20 20"><path d="M4 4h2v12H4zM16 4v12L7 10z" /></svg></button>
+            <button class="ib" id="tback" title="Step back"><svg viewBox="0 0 20 20"><path d="M14 4v12L5 10z" /></svg></button>
+            <button class="ib" id="tstop" title="Stop"><svg viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" /></svg></button>
+            <button class="ib" id="tplay" title="Play"><svg viewBox="0 0 20 20"><path d="M6 4v12l9-6z" /></svg></button>
+            <button class="ib" id="tend" title="Jump to end"><svg viewBox="0 0 20 20"><path d="M4 4v12l9-6zM14 4h2v12h-2z" /></svg></button>
+            <label id="timeline" title="timeline $F: the display cook runs at time = ($F - 1) / fps (motion SOP scrubs its clip)"><input type="number" id="frame" min="1" max="1000000" step="1" value="1" /></label>
+          </div>
+          <div class="ruler"><div id="ticks"></div><input type="range" id="frameslider" min="1" max="240" value="1" /></div>
+          <span id="fpslab">30 fps</span>
+        </div>
+        <div class="pb-row small">
+          <span class="lbl">Range</span>
+          <input type="number" id="fstart" value="1" min="1" title="start frame" />
+          <input type="number" id="fend" value="240" min="2" title="end frame" />
+        </div>
+      </footer>
+      <div id="bar"><span id="status"></span><span class="grow"></span><span class="auto">Auto Update</span></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

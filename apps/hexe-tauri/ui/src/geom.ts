@@ -127,10 +127,55 @@ export function bounds(pos: ArrayLike<number>): Bounds | null {
 }
 
 /** Network editor geometry shared by render + hit-testing. */
-export const NODE_W = 150;
-export const NODE_H = 40;
+export const NODE_W = 100;
+export const NODE_H = 30;
 export const inPort = (x: number, y: number, i: number, n: number): [number, number] => [x + (NODE_W * (i + 1)) / (n + 1), y];
 export const outPort = (x: number, y: number): [number, number] => [x + NODE_W / 2, y + NODE_H];
+/** Network dot (Houdini `__dotN`, node type `dot`): a ball whose (x, y) is its CENTRE; its input and output both sit there. */
+export const DOT_R = 7;
+export const isDot = (n: { type?: string }): boolean => n.type === "dot";
+type Placed = { type: string; x: number; y: number; inputs: unknown[] };
+export const nodeIn = (n: Placed, i: number): [number, number] => (isDot(n) ? [n.x, n.y] : inPort(n.x, n.y, i, n.inputs.length));
+export const nodeOut = (n: Placed): [number, number] => (isDot(n) ? [n.x, n.y] : outPort(n.x, n.y));
+/** Body rectangle `[x0, y0, x1, y1]` hit-tests use: the node box, or a dot's ball (+3 px grab slack). */
+export function nodeRect(n: { type?: string; x: number; y: number }): [number, number, number, number] {
+  if (!isDot(n)) return [n.x, n.y, n.x + NODE_W, n.y + NODE_H];
+  const r = DOT_R + 3;
+  return [n.x - r, n.y - r, n.x + r, n.y + r];
+}
+/** Closed polygon with corner `i` rounded by radius `r[i]` (a quadratic through the vertex), each radius clamped to half of
+ *  its two sides so neighbouring roundings never cross. `""` for < 3 points or non-finite input. */
+export function roundedPath(pts: [number, number][], r: number[]): string {
+  const n = pts.length;
+  if (n < 3 || !pts.flat().every(Number.isFinite)) return "";
+  const k = (v: number) => Math.round(v * 100) / 100;
+  const at = (i: number) => pts[(i + n) % n];
+  const toward = (p: [number, number], q: [number, number], d: number): [number, number] => {
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+    return [p[0] + ((q[0] - p[0]) * d) / l, p[1] + ((q[1] - p[1]) * d) / l];
+  };
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const v = at(i), a = at(i - 1), b = at(i + 1);
+    const rr = Math.max(0, Math.min(r[i] ?? 0, Math.hypot(v[0] - a[0], v[1] - a[1]) / 2, Math.hypot(b[0] - v[0], b[1] - v[1]) / 2));
+    const p = toward(v, a, rr), q = toward(v, b, rr);
+    d += `${i ? "L" : "M"}${k(p[0])},${k(p[1])} Q${k(v[0])},${k(v[1])} ${k(q[0])},${k(q[1])} `;
+  }
+  return `${d}Z`;
+}
+/** Straight segment (wires into / out of a dot). */
+export const linePath = (a: [number, number], b: [number, number]): string => `M${a[0]},${a[1]} L${b[0]},${b[1]}`;
+/** Flow arrow (closed triangle path) at the midpoint of a wire running UP the network (`b` above `a`); `null` otherwise.
+ *  `straight` = `linePath`, else the `wirePath` bezier: its t = 0.5 point is the chord midpoint, its tangent there (dx, dy - d). */
+export function wireArrow(a: [number, number], b: [number, number], straight: boolean): string | null {
+  if (![...a, ...b].every(Number.isFinite) || !(b[1] < a[1] - 1)) return null;
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+  const dx = b[0] - a[0], dy = b[1] - a[1] - (straight ? 0 : Math.max(30, Math.abs(b[1] - a[1]) / 2));
+  const l = Math.hypot(dx, dy);
+  const ux = dx / l, uy = dy / l, s = 6;
+  const r = (v: number) => Math.round(v * 10) / 10;
+  return `M${r(mx + ux * s)},${r(my + uy * s)} L${r(mx - ux * s - uy * s * 0.75)},${r(my - uy * s + ux * s * 0.75)} L${r(mx - ux * s + uy * s * 0.75)},${r(my - uy * s - ux * s * 0.75)} Z`;
+}
 /** Cubic bezier from an output (bottom) to an input (top). */
 export function wirePath(a: [number, number], b: [number, number]): string {
   const d = Math.max(30, Math.abs(b[1] - a[1]) / 2);

@@ -86,6 +86,11 @@ pub struct BlockIter {
 pub trait Node<T: Payload>: Send + Sync {
     fn type_name(&self) -> &'static str;
     fn inputs(&self) -> &[InputSpec];
+    /// Inputs `0..min_inputs()` must be wired for the node to mean anything (the editor draws their wires solid and marks
+    /// an unwired one with a red arrow); the rest are optional (dashed wires). Default: every input is required.
+    fn min_inputs(&self) -> usize {
+        self.inputs().len()
+    }
     fn params(&self) -> &[ParamSpec];
     /// `true` → output depends on `ctx.time`; cache is keyed on time (and so is everything downstream).
     fn time_dependent(&self) -> bool {

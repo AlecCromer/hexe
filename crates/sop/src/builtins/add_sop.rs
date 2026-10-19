@@ -53,6 +53,10 @@ impl Node<Detail> for Add {
     fn inputs(&self) -> &[InputSpec] {
         &INPUTS
     }
+    /// Houdini: the input is optional (no input = only the added points).
+    fn min_inputs(&self) -> usize {
+        0
+    }
     fn params(&self) -> &[ParamSpec] {
         &self.specs
     }

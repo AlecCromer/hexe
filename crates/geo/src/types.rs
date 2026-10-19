@@ -133,6 +133,13 @@ pub struct Group {
     pub mask: Vec<bool>,
 }
 
+/// An edge group (Houdini `edgegroups`): edges are point PAIRS, unordered (2-3 = 3-2), each listed once, in insertion order.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EdgeGroup {
+    pub name: String,
+    pub edges: Vec<[PointId; 2]>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Detail {
     pub point_count: u32,
@@ -140,6 +147,8 @@ pub struct Detail {
     pub prims: Vec<Prim>,
     pub attrs: Vec<Attribute>,
     pub groups: Vec<Group>,
+    /// Edge groups (point pairs; not tied to prims). Point-renumbering nodes remap or drop them (`meshutil::rebuild`).
+    pub edge_groups: Vec<EdgeGroup>,
     /// Attributes present in the source but with no `AttrData` form (`dict`, `stringarray`, ...): `(class, name, source type)`.
     /// Never silent: readers push here instead of dropping. Not written back by `write_geo_json`.
     pub skipped_attribs: Vec<(AttrClass, String, String)>,
