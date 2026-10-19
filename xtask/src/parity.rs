@@ -44,7 +44,7 @@ pub struct Feature {
 const TIERS: &[&str] = &["P0", "P1", "P2", "P3", "N/A"];
 const STATUSES: &[&str] = &["planned", "partial", "shipped", "na"];
 
-/// Source text of every .rs file under apps/ and crates/ (path, text).
+/// Source text of every .rs file and every UI test file (`*.test.ts`) under apps/ and crates/ (path, text).
 fn sources(root: &Path) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut stack = vec![root.join("apps"), root.join("crates")];
@@ -54,7 +54,7 @@ fn sources(root: &Path) -> Vec<(String, String)> {
             let p = e.path();
             if p.is_dir() {
                 stack.push(p);
-            } else if p.extension().is_some_and(|x| x == "rs")
+            } else if (p.extension().is_some_and(|x| x == "rs") || p.to_string_lossy().ends_with(".test.ts"))
                 && let Ok(t) = std::fs::read_to_string(&p)
             {
                 out.push((p.strip_prefix(root).unwrap_or(&p).to_string_lossy().replace('\\', "/"), t));
@@ -98,7 +98,8 @@ pub fn validate(l: &Ledger, src: &[(String, String)]) -> Vec<String> {
                 errs.push(format!("{id}: evidence `{ev}` is not path::fn"));
                 continue;
             };
-            let needle = format!("fn {func}");
+            // Rust: `fn name`; a TypeScript test file: the `test("name"` call (bun test)
+            let needle = if path.ends_with(".ts") { format!("test(\"{func}\"") } else { format!("fn {func}") };
             let found = src.iter().any(|(p, t)| p == path && t.contains(&needle));
             if !found {
                 errs.push(format!("{id}: evidence `{ev}` not found (no `{needle}` in {path})"));
@@ -106,7 +107,7 @@ pub fn validate(l: &Ledger, src: &[(String, String)]) -> Vec<String> {
         }
         for cmd in &f.commands {
             let lit = format!("\"{cmd}\"");
-            if !src.iter().any(|(_, t)| t.contains(&lit)) {
+            if !src.iter().any(|(p, t)| p.ends_with(".rs") && t.contains(&lit)) {
                 errs.push(format!("{id}: command {lit} not found in apps/ or crates/"));
             }
         }
@@ -162,7 +163,10 @@ mod tests {
         toml::from_str(&t).unwrap()
     }
     fn src() -> Vec<(String, String)> {
-        vec![("crates/core/src/lib.rs".into(), "fn real_test() {}\nconst C: &str = \"cmd\";".into())]
+        vec![
+            ("crates/core/src/lib.rs".into(), "fn real_test() {}\nconst C: &str = \"cmd\";".into()),
+            ("apps/ui/a.test.ts".into(), "test(\"ui does a thing\", () => {});\nconst t = \"tsonly\";".into()),
+        ]
     }
 
     #[test]
@@ -173,6 +177,11 @@ mod tests {
         let bad = ledger("status = \"shipped\"\nevidence = [\"crates/core/src/lib.rs::ghost\"]\ncommands = [\"nope\"]");
         assert_eq!(validate(&bad, &src()).len(), 2);
         assert_eq!(validate(&ledger("status = \"shipped\""), &src()).len(), 1);
+        // a TypeScript test is cited by its test("name") title; commands must still be found in Rust
+        let ts = ledger(
+            "status = \"shipped\"\nevidence = [\"apps/ui/a.test.ts::ui does a thing\", \"apps/ui/a.test.ts::fn real_test\"]\ncommands = [\"tsonly\"]",
+        );
+        assert_eq!(validate(&ts, &src()).len(), 2);
     }
 
     #[test]

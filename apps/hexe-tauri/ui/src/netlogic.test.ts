@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { NodeView } from "./api";
 import { DOT_R, NODE_H, NODE_W, inPort, linePath, nodeIn, nodeOut, outPort, wireArrow } from "./geom";
-import { centred, clientToGraph, displayToggle, graphToHost, nodeAt, nodesInBox, brokenNodes, loopNodes, objChildDrop, objCycleCut, objInPort, objOutPort, fitView, objParentDrop, polylineInBox, resolveDrop, resolveDropUp, toggled, uniqueName, missingInputs, optionalInput, blockPairs } from "./netlogic";
+import { centred, clientToGraph, displayToggle, graphToHost, nodeAt, nodesInBox, brokenNodes, loopNodes, objChildDrop, objCycleCut, objInPort, objOutPort, fitView, objParentDrop, polylineInBox, resolveDrop, resolveDropUp, toggled, uniqueName, missingInputs, optionalInput, blockPairs, snapCentreX } from "./netlogic";
 
 const node = (id: number, x: number, y: number, inputs: string[]): NodeView => ({ id, type: "t", name: `n${id}`, x, y, inputs, required: inputs.length, bypass: false, params: {} });
 const A = node(1, 0, 0, []);
@@ -227,4 +227,24 @@ test("For-Each pairs: by the End's begin name, else the nearest Begin upstream; 
   const edges = [{ from: 1, to: 2 }, { from: 2, to: 3 }, { from: 4, to: 2 }, { from: 2, to: 5 }, { from: 7, to: 7 }];
   expect(blockPairs(nodes, edges)).toEqual([[1, 3], [1, 5]]); // end2: nearest upstream (x's first wire is from foreachA)
   expect(blockPairs(nodes, [{ from: 4, to: 5 }])).toEqual([[1, 3], [4, 5]]);
+});
+
+test("snap: a node dragged near the centre line of a node above / below centres on it, and lets go beyond the reach", () => {
+  const above = { id: 7, type: "t", x: 0, y: 0 };
+  const far = { id: 8, type: "t", x: 3, y: 400 };
+  // 5 units right of centre, 100 below: snaps 5 left onto `above` (the vertically nearest)
+  expect(snapCentreX({ type: "t", x: 5, y: 100 }, [above, far], 8)).toEqual({ dx: -5, to: 7 });
+  // just past the reach: free (easy to keep moving)
+  expect(snapCentreX({ type: "t", x: 8.5, y: 100 }, [above], 8)).toBeNull();
+  // side by side (vertical overlap) never snaps: lining up would stack them
+  expect(snapCentreX({ type: "t", x: 2, y: NODE_H / 2 }, [above], 8)).toBeNull();
+  // a dot centres on a node's centre (dot x is its centre)
+  expect(snapCentreX({ type: "dot", x: NODE_W / 2 + 3, y: 120 }, [above], 8)).toEqual({ dx: -3, to: 7 });
+  // nearest in y wins when several line up
+  expect(snapCentreX({ type: "t", x: 1, y: 300 }, [above, far], 8)).toEqual({ dx: 2, to: 8 });
+  // hostile: zero / NaN reach, NaN positions, no candidates
+  expect(snapCentreX({ type: "t", x: 0, y: 100 }, [above], 0)).toBeNull();
+  expect(snapCentreX({ type: "t", x: 0, y: 100 }, [above], Number.NaN)).toBeNull();
+  expect(snapCentreX({ type: "t", x: Number.NaN, y: 100 }, [above], 8)).toBeNull();
+  expect(snapCentreX({ type: "t", x: 0, y: 100 }, [], 8)).toBeNull();
 });

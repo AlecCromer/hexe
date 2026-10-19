@@ -185,7 +185,7 @@ input[type=checkbox] { padding: 0; }
 .node:has(.arc.disp:hover) .arc.info, .node:has(.dstrip:hover) .arc.info { opacity: .35; }
 .port { fill: #bdbdbd; stroke: none; cursor: crosshair; } .port:hover, .port.hot { fill: var(--acc); }
 .net-info { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; pointer-events: none; color: #cfcfcf; font-size: 14px; }
-.edge { fill: none; stroke: #c8c8c8; stroke-width: 1.5; } .edge.sel { stroke: #ffd24a; } .edge.pending { stroke: #d6ecff; stroke-width: 1.2; pointer-events: none; } .edge.pre:not(.sel) { stroke: #e8a0a8; stroke-width: 2.2; }
+.edge { fill: none; stroke: #c8c8c8; stroke-width: 1.5; } .edge.sel { stroke: #ffd24a; } .edge.pending { stroke: #d6ecff; stroke-width: 1.2; pointer-events: none; } .snapguide { fill: none; stroke: #7fc8ff; stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; } .edge.pre:not(.sel) { stroke: #e8a0a8; stroke-width: 2.2; }
 .edge-hit { fill: none; stroke: transparent; stroke-width: 12; cursor: pointer; }
 g:hover > .edge:not(.sel) { stroke: #f0f0f0; stroke-width: 2.2; }
 /* TAB menu (Houdini style): title, search row, category rows with flyouts, All, History */
@@ -250,12 +250,12 @@ g:hover > .edge:not(.sel) { stroke: #f0f0f0; stroke-width: 2.2; }
 .node:has(.arc.disp:hover) .arc.tmpl, .node:has(.dstrip:hover) .arc.tmpl, .node:has(.arc.info:hover) .arc.tmpl { opacity: .35; }
 .node.disp .dstrip { fill: #14b0f0; stroke: #0f8fc4; }
 .node text.nm { fill: #d8d8d8; }
-/* bypass flag: yellow strip on the left (off = body grey), halo arc top-left; a bypassed node's body turns yellow */
+/* bypass flag: yellow strip on the left (off = body grey), halo arc top-left; a bypassed node's body goes dark grey */
 .node .bstrip { fill: #d4d4d4; stroke: #8a8a8a; stroke-width: 1; cursor: pointer; }
 .node .bstrip:hover { fill: #f4eab0; }
 .node.byp .bstrip, .node.byp rect.lobe.bstrip { fill: #f2cf1d; stroke: #c9a812; }
-.node.byp rect.body { fill: #e8d77a; }
-.node.byp path.body.bt { fill: #d8cc7a; }
+.node.byp rect.body, .node.byp path.body.bt { fill: #3c3c3c; stroke: #2a2a2a; }
+.node.byp .nicon { opacity: .45; }
 .node .arc.byparc { fill: #2e2808; stroke: none; }
 .node.byp .arc.byparc { fill: #4d430c; }
 .node .arc.byparc:hover, .node:has(.bstrip:hover) .arc.byparc { fill: #6e6012; }

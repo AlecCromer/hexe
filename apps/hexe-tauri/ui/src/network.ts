@@ -11,7 +11,7 @@ import "./t3.css";
 import { api, msg } from "./api";
 import type { BoxView, GraphView, NodeType, NodeView, NoteView, ObjInfo, ObjKind } from "./api";
 import { DOT_R, NODE_H, NODE_W, inPort, isDot, linePath, nodeIn, nodeOut, nodeRect, roundedPath, wireArrow, wirePath } from "./geom";
-import { DROP_PX, centred, edgeKey, clientToGraph, displayToggle, graphToHost, nodeAt, nodesInBox, brokenNodes, loopNodes, objChildDrop, objCycleCut, objInPort, objOutPort, fitView, objParentDrop, polylineInBox, resolveDrop, resolveDropUp, toggled, uniqueName, missingInputs, optionalInput, blockPairs } from "./netlogic";
+import { DROP_PX, SNAP_PX, snapCentreX, centred, edgeKey, clientToGraph, displayToggle, graphToHost, nodeAt, nodesInBox, brokenNodes, loopNodes, objChildDrop, objCycleCut, objInPort, objOutPort, fitView, objParentDrop, polylineInBox, resolveDrop, resolveDropUp, toggled, uniqueName, missingInputs, optionalInput, blockPairs } from "./netlogic";
 import { grouped, groupedObj, labelOf, OBJ_TYPES, objLabelOf, pushHistory, searchTypes } from "./tabcats";
 import { nodeIcon } from "./shelf";
 
@@ -132,6 +132,8 @@ export class Network {
   private wires = s("g");
   private nodes = s("g");
   private pending = s("path", { class: "edge pending", d: "" });
+  /** dashed guide between a dragged node and the node it snapped to (vertical centre line) */
+  private snapGuide = s("path", { class: "snapguide", d: "" });
   private view = { x: 20, y: 20, k: 1 };
   private graph: GraphView = { nodes: [], edges: [], display: null };
   /** selected nodes; `primary` (last clicked) feeds the param pane */
@@ -382,7 +384,7 @@ export class Network {
   /** names to re-select once the next graph arrives (ids change across undo/redo) */
   private pendingNames: string[] | null = null;
   constructor(private host: HTMLElement, private types: NodeType[], private hooks: NetHooks) {
-    this.root.append(this.discs, this.wires, this.nodes, this.pending);
+    this.root.append(this.discs, this.wires, this.nodes, this.pending, this.snapGuide);
     this.svg.append(this.root);
     host.append(this.svg);
     currentNetwork = this;
@@ -561,7 +563,7 @@ export class Network {
       }
       const disp = this.graph.display === n.id;
       const tmpl = this.template === n.id;
-      // user node colour (Houdini colour palette) tints the body; a bypassed node keeps its yellow
+      // user node colour (Houdini colour palette) tints the body; a bypassed node is dark grey instead
       const uc = this.graph.colors?.[n.name], ucol = uc && !n.bypass ? `rgb(${uc.map((c) => Math.round(Math.min(1, Math.max(0, c)) * 255)).join(",")})` : null;
       const g = s("g", { class: `node${sel ? " sel" : ""}${disp ? " disp" : ""}${tmpl ? " tmpl" : ""}${n.bypass ? " byp" : ""}`, "data-node": n.id, transform: `translate(${n.x},${n.y})` });
       // Houdini SOP node: display disc behind the display node (in the disc layer, under the wires) (blue = display /
@@ -945,7 +947,13 @@ export class Network {
       const d = this.drag;
       if (d?.kind === "obj") {
         const o = this.objects.find((q) => q.id === d.id);
-        if (o) { o.pos = { x: this.mouse.x - d.dx, y: this.mouse.y - d.dy }; this.render(); }
+        if (o) {
+          const raw = { x: this.mouse.x - d.dx, y: this.mouse.y - d.dy };
+          const others = this.objects.flatMap((q) => (q.id !== o.id && q.pos ? [{ id: q.id, x: q.pos.x, y: q.pos.y }] : []));
+          const snap = this.snapTo(raw, others);
+          o.pos = { x: raw.x + (snap ? snap.dx : 0), y: raw.y };
+          this.render();
+        }
       } else if (d?.kind === "objwire") this.trackObjWire(d.from);
       else if (d?.kind === "objwireup") this.trackObjWireUp(d.child);
       else if (!d && this.objSticky) (this.objSticky.up ? this.trackObjWireUp(this.objSticky.id) : this.trackObjWire(this.objSticky.id));
@@ -969,8 +977,12 @@ export class Network {
     if (!d && this.sticky !== null) { this.trackWire(this.sticky); return; }
     if (!d) return;
     if (d.kind === "move") {
-      const dx = this.mouse.x - d.p0.x, dy = this.mouse.y - d.p0.y;
+      let dx = this.mouse.x - d.p0.x;
+      const dy = this.mouse.y - d.p0.y;
       if (!d.moved && Math.hypot(dx, dy) * this.view.k < 2) return;
+      // vertical-line snap: the grabbed node centres on an on-screen node above / below it when within SNAP_PX
+      const snap = this.snapMove(d, dx, dy);
+      if (snap) dx += snap.dx;
       for (const [id, [x, y]] of d.start) {
         const n = this.node(id);
         if (n) { n.x = x + dx; n.y = y + dy; }
@@ -986,6 +998,34 @@ export class Network {
     } else if (d.kind === "wireup") {
       this.trackWireUp(d.to, d.input);
     }
+  }
+  /** Snap for a node move: decided from the grabbed node's RAW position (`start + (dx, dy)`) against the visible nodes
+   *  that are not being moved, so it lets go as soon as the pointer moves on; draws / clears the guide line. */
+  private snapMove(d: Extract<Drag, { kind: "move" }>, dx: number, dy: number): { dx: number; to: number } | null {
+    const s0 = d.start.get(d.click);
+    const grabbed = this.node(d.click);
+    if (!s0 || !grabbed) { this.snapGuide.setAttribute("d", ""); return null; }
+    const moving = new Set(d.ids);
+    return this.snapTo({ type: grabbed.type, x: s0[0] + dx, y: s0[1] + dy }, this.graph.nodes.filter((n) => !moving.has(n.id)));
+  }
+  /** `snapCentreX` against the candidates on screen (zoom-aware reach); draws the guide line or clears it. */
+  private snapTo(
+    raw: { type?: string; x: number; y: number },
+    cands: readonly { id: number; type?: string; x: number; y: number }[],
+  ): { dx: number; to: number } | null {
+    const r = this.svg.getBoundingClientRect();
+    const a = this.toGraph(r.left, r.top), b = this.toGraph(r.right, r.bottom);
+    const visible = cands.filter((n) => {
+      const [x0, y0, x1, y1] = nodeRect(n);
+      return x1 >= a.x && x0 <= b.x && y1 >= a.y && y0 <= b.y;
+    });
+    const hit = snapCentreX(raw, visible, SNAP_PX / this.view.k);
+    const to = hit ? visible.find((n) => n.id === hit.to) : undefined;
+    if (!hit || !to) { this.snapGuide.setAttribute("d", ""); return null; }
+    const [tx0, ty0, tx1, ty1] = nodeRect(to);
+    const [, gy0, , gy1] = nodeRect(raw);
+    this.snapGuide.setAttribute("d", `M${(tx0 + tx1) / 2},${Math.min(ty0, gy0)}V${Math.max(ty1, gy1)}`);
+    return hit;
   }
   /** pending wire from `from`'s output to the pointer; the input it would land on lights up */
   private trackWire(from: number): void {
@@ -1150,6 +1190,7 @@ export class Network {
   private up(e: MouseEvent): void {
     const d = this.drag;
     this.drag = null;
+    this.snapGuide.setAttribute("d", "");
     if (d?.kind === "box") {
       this.boxEl.style.display = "none";
       const p1 = this.toGraph(e.clientX, e.clientY), hits = this.boxHits(d.p0, p1);

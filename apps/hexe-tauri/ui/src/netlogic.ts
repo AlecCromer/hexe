@@ -123,6 +123,37 @@ export function brokenNodes(edges: { from: number; to: number }[], roots: Iterab
   return out;
 }
 
+/** Snap reach while dragging a node, in SCREEN px (divide by the zoom for graph units): small, so moving on frees it. */
+export const SNAP_PX = 8;
+const centre = (n: { type?: string; x: number; y: number }): [number, number] => {
+  const [x0, y0, x1, y1] = nodeRect(n);
+  return [(x0 + x1) / 2, (y0 + y1) / 2];
+};
+/** Vertical-line snap for a dragged node `m` at its RAW (unsnapped) position: among `others` that sit wholly above or
+ *  below it (no vertical overlap), the vertically nearest one whose centre x is within `tol` graph units of `m`'s.
+ *  Returns how far to shift `m` in x so the centres line up, plus that node's id (for a guide line); `null` = no snap.
+ *  Being decided from the raw position each move, the snap lets go as soon as the pointer moves `tol` further. */
+export function snapCentreX(
+  m: { type?: string; x: number; y: number },
+  others: readonly { id: number; type?: string; x: number; y: number }[],
+  tol: number,
+): { dx: number; to: number } | null {
+  if (!(tol > 0)) return null;
+  const [mx, my] = centre(m);
+  const [, my0, , my1] = nodeRect(m);
+  let best: { dx: number; to: number; dy: number } | null = null;
+  for (const o of others) {
+    const [ox, oy] = centre(o);
+    const [, oy0, , oy1] = nodeRect(o);
+    if (!(oy1 <= my0 || oy0 >= my1)) continue; // side by side: lining up would stack them
+    const dx = ox - mx;
+    if (!(Math.abs(dx) <= tol)) continue; // also drops NaN
+    const dy = Math.abs(oy - my);
+    if (!best || dy < best.dy) best = { dx, to: o.id, dy };
+  }
+  return best && { dx: best.dx, to: best.to };
+}
+
 /** Node under graph point `p` (topmost = last drawn), `null` if none. */
 export function nodeAt(nodes: NodeView[], p: { x: number; y: number }): number | null {
   for (let i = nodes.length - 1; i >= 0; i--) {
